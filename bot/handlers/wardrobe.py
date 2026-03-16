@@ -67,6 +67,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Сначала пройди настройку: /start")
         return
 
+    # Дедупликация медиагруппы: обрабатываем только первое фото из альбома
+    media_group_id = update.message.media_group_id
+    if media_group_id:
+        redis_client = context.bot_data.get("redis")
+        if redis_client:
+            redis_key = f"media_group:{media_group_id}"
+            acquired = await redis_client.set(redis_key, "1", ex=10, nx=True)
+            if not acquired:
+                return  # уже обрабатывается первое фото из группы
+
     limit = _PLAN_LIMITS.get(user.plan, settings.daily_limits_free)
     if limit != -1 and user.daily_requests_used >= limit:
         await update.message.reply_text(t("error.rate_limit"))

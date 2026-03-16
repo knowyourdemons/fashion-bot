@@ -43,6 +43,7 @@ async def startup() -> None:
 
     # Запускаем Telegram Bot в webhook режиме
     tg_app = create_application()
+    tg_app.bot_data["redis"] = redis_client
     await tg_app.initialize()
 
     if settings.telegram_webhook_url:
