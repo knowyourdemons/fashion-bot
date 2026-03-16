@@ -7,7 +7,7 @@ from config import settings
 def create_application() -> Application:
     app = Application.builder().token(settings.telegram_bot_token).build()
 
-    from bot.handlers import wardrobe, feedback, billing, help, text
+    from bot.handlers import wardrobe, feedback, billing, help, text, debug
     from bot.handlers.onboarding import build_conversation_handler
     from bot.middleware.auth import AuthMiddleware
     from bot.middleware.typing import TypingMiddleware
@@ -20,6 +20,7 @@ def create_application() -> Application:
     app.add_handler(build_conversation_handler())
 
     # Command handlers
+    app.add_handler(CommandHandler("debug_reset", debug.handle_debug_reset))
     app.add_handler(CommandHandler("help", help.handle_help))
     app.add_handler(CommandHandler("wardrobe", wardrobe.handle_list))
     app.add_handler(CommandHandler("subscribe", billing.handle_subscribe))
