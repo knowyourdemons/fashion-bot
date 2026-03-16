@@ -16,6 +16,7 @@ imagehash==4.3.1
 uvicorn[standard]==0.32.1
 python-jose[cryptography]==3.3.0
 python-multipart==0.0.12
+timezonefinder==6.5.2
 
 # Dev/test
 pytest==8.3.3
