@@ -7,7 +7,7 @@ from config import settings
 def create_application() -> Application:
     app = Application.builder().token(settings.telegram_bot_token).build()
 
-    from bot.handlers import wardrobe, feedback, billing, help, text, debug
+    from bot.handlers import wardrobe, feedback, billing, help, text, debug, brief
     from bot.handlers.onboarding import build_conversation_handler
     from bot.middleware.auth import AuthMiddleware
     from bot.middleware.typing import TypingMiddleware
@@ -31,8 +31,10 @@ def create_application() -> Application:
     app.add_handler(MessageHandler(filters.PHOTO, wardrobe.handle_photo))
 
     # Callback queries (кнопки)
+    app.add_handler(CallbackQueryHandler(brief.handle_brief_feedback, pattern="^brief_feedback:"))
     app.add_handler(CallbackQueryHandler(feedback.handle_feedback, pattern="^feedback:"))
     app.add_handler(CallbackQueryHandler(billing.handle_plan_callback, pattern="^plan:"))
+    app.add_handler(CallbackQueryHandler(wardrobe.handle_wardrobe_page, pattern="^wardrobe:page:"))
 
     # Текстовые сообщения → стилист
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text.handle_text))

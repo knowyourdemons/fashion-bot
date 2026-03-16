@@ -7,7 +7,7 @@
   3. Дата рождения dd.mm.yyyy [mom_girl/mom_boy]
   4. Размер одежды [mom_girl/mom_boy]
   5. Размер обуви [mom_girl/mom_boy]
-  6. Город (геолокация / текст + саджжест) [все]
+  6. Город (геолокация / текст + Nominatim саджжест) [все]
   Финал → создать Child, onboarding_completed=True
 """
 import structlog
@@ -41,7 +41,16 @@ from services.i18n.ru import t
 logger = structlog.get_logger()
 
 # ── Состояния ──────────────────────────────────────────────────────────────
-SEGMENT, CHILD_NAME, CHILD_BIRTHDATE, CHILD_SIZE, CHILD_SHOE_SIZE, CITY, CITY_SUGGEST = range(7)
+(
+    SEGMENT,
+    CHILD_NAME,
+    CHILD_BIRTHDATE,
+    CHILD_SIZE,
+    CHILD_SHOE_SIZE,
+    CITY,
+    CITY_SUGGEST,
+    RESUME_CONFIRM,
+) = range(8)
 
 _STEP_TO_STATE: dict[str, int] = {
     "segment":         SEGMENT,
@@ -56,7 +65,6 @@ _STEP_TO_STATE: dict[str, int] = {
 _CITY_KEYBOARD_LABELS = {
     "📍 Определить автоматически",
     "✏️ Ввести вручную",
-    # старые варианты на случай resume
     "📍 Отправить геолокацию",
     "Ввести вручную",
 }
@@ -65,7 +73,6 @@ _CITY_KEYBOARD_LABELS = {
 # ── Вспомогательные функции ────────────────────────────────────────────────
 
 async def _save_user_fields(user: User, **fields) -> None:
-    """Обновляет поля User в БД и в кэше context.user_data."""
     async with AsyncWriteSession() as session:
         await session.execute(
             sa.update(User).where(User.id == user.id).values(**fields)
@@ -102,10 +109,8 @@ async def _ask_city(update: Update) -> None:
 
 
 async def _reverse_geocode(lat: float, lon: float) -> tuple[str, str]:
-    """Nominatim reverse geocoding + timezonefinder → (city, timezone)."""
     city = "Неизвестно"
     timezone = "Europe/Vilnius"
-
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
@@ -121,9 +126,9 @@ async def _reverse_geocode(lat: float, lon: float) -> tuple[str, str]:
                 or addr.get("county")
                 or "Неизвестно"
             )
+            logger.debug("geocode.reverse.ok", city=city)
     except Exception as e:
         logger.warning("geocode.reverse.failed", error=str(e))
-
     try:
         from timezonefinder import TimezoneFinder
         tz = TimezoneFinder().timezone_at(lat=lat, lng=lon)
@@ -131,12 +136,10 @@ async def _reverse_geocode(lat: float, lon: float) -> tuple[str, str]:
             timezone = tz
     except Exception as e:
         logger.warning("timezone.lookup.failed", error=str(e))
-
     return city, timezone
 
 
 async def _nominatim_search(query: str) -> list[dict]:
-    """Nominatim forward search → list of {display_name, lat, lon}."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
@@ -144,13 +147,15 @@ async def _nominatim_search(query: str) -> list[dict]:
                 params={"q": query, "format": "json", "limit": 3, "accept-language": "ru"},
                 headers={"User-Agent": "FashionBot/1.0"},
             )
+            data = resp.json()
+            logger.debug("nominatim.search.ok", query=query, count=len(data))
             return [
                 {
                     "display_name": r["display_name"],
                     "lat": float(r["lat"]),
                     "lon": float(r["lon"]),
                 }
-                for r in resp.json()
+                for r in data
             ]
     except Exception as e:
         logger.warning("nominatim.search.failed", error=str(e))
@@ -158,7 +163,6 @@ async def _nominatim_search(query: str) -> list[dict]:
 
 
 def _extract_city_tz(result: dict) -> tuple[str, str]:
-    """Из результата Nominatim → (city, timezone)."""
     city = result["display_name"].split(",")[0].strip()
     timezone = "Europe/Vilnius"
     try:
@@ -172,7 +176,6 @@ def _extract_city_tz(result: dict) -> tuple[str, str]:
 
 
 def _short_label(display_name: str) -> str:
-    """'Вильнюс, Вильнюсский уезд, Литва' → 'Вильнюс, Литва'."""
     parts = [p.strip() for p in display_name.split(",")]
     return f"{parts[0]}, {parts[-1]}" if len(parts) >= 2 else parts[0]
 
@@ -191,12 +194,37 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         )
         return ConversationHandler.END
 
-    # Возобновить с сохранённого шага
+    # Предложить продолжить с места или начать заново
     if user.onboarding_step and user.onboarding_step in _STEP_TO_STATE:
-        return await _resume_step(update, context, user)
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✅ Продолжить", callback_data="resume:yes"),
+            InlineKeyboardButton("🔄 Начать заново", callback_data="resume:no"),
+        ]])
+        await update.effective_message.reply_text(
+            "Продолжить с места где остановился?",
+            reply_markup=keyboard,
+        )
+        return RESUME_CONFIRM
 
     await _ask_segment(update)
     await _save_user_fields(user, onboarding_step="segment")
+    return SEGMENT
+
+
+async def handle_resume_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    user = context.user_data.get("db_user")
+
+    if query.data == "resume:yes":
+        return await _resume_step(update, context, user)
+
+    # Начать заново — сбросить step в БД и в контексте
+    for key in ("segment", "child_name", "child_birthdate", "child_size", "child_shoe_size",
+                "city", "timezone", "city_candidates"):
+        context.user_data.pop(key, None)
+    await _save_user_fields(user, onboarding_step="segment", segment=None)
+    await _ask_segment(update)
     return SEGMENT
 
 
@@ -207,24 +235,19 @@ async def _resume_step(update: Update, context: ContextTypes.DEFAULT_TYPE, user:
     if step == "segment":
         await _ask_segment(update)
         return SEGMENT
-
     if step == "child_name":
         q = t("onboarding.child_name") if segment == "mom_girl" else "Как зовут сына?"
         await update.effective_message.reply_text(q, reply_markup=ReplyKeyboardRemove())
         return CHILD_NAME
-
     if step == "child_birthdate":
         await update.effective_message.reply_text(t("onboarding.child_birthdate"))
         return CHILD_BIRTHDATE
-
     if step == "child_size":
         await update.effective_message.reply_text(t("onboarding.child_size"))
         return CHILD_SIZE
-
     if step == "child_shoe_size":
         await update.effective_message.reply_text(t("onboarding.child_shoe_size"))
         return CHILD_SHOE_SIZE
-
     # step == "city"
     await _ask_city(update)
     return CITY
@@ -246,7 +269,6 @@ async def handle_segment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await query.message.reply_text(q, reply_markup=ReplyKeyboardRemove())
         return CHILD_NAME
     else:
-        # pregnant / no_kids → сразу город
         await _save_user_fields(user, segment=segment, onboarding_step="city")
         await _ask_city(update)
         return CITY
@@ -259,7 +281,6 @@ async def handle_child_name(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if not name:
         await update.message.reply_text("Введи имя ребёнка:")
         return CHILD_NAME
-
     context.user_data["child_name"] = name
     user = context.user_data.get("db_user")
     await _save_user_fields(user, onboarding_step="child_birthdate")
@@ -276,7 +297,6 @@ async def handle_child_birthdate(update: Update, context: ContextTypes.DEFAULT_T
     except ValueError:
         await update.message.reply_text("Неверный формат. Введи дату в формате дд.мм.гггг:")
         return CHILD_BIRTHDATE
-
     context.user_data["child_birthdate"] = birthdate
     user = context.user_data.get("db_user")
     await _save_user_fields(user, onboarding_step="child_size")
@@ -304,7 +324,6 @@ async def handle_child_shoe_size(update: Update, context: ContextTypes.DEFAULT_T
     except ValueError:
         await update.message.reply_text("Введи размер обуви цифрой (например, 27):")
         return CHILD_SHOE_SIZE
-
     context.user_data["child_shoe_size"] = shoe_size
     user = context.user_data.get("db_user")
     await _save_user_fields(user, onboarding_step="city")
@@ -323,10 +342,8 @@ async def handle_city_location(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def handle_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Текстовый ввод города с Nominatim саджжестом."""
     text = update.message.text.strip()
 
-    # Кнопки ReplyKeyboard — показать промпт и ждать настоящего ввода
     if text in _CITY_KEYBOARD_LABELS:
         await update.message.reply_text("Введи название города:", reply_markup=ReplyKeyboardRemove())
         return CITY
@@ -350,7 +367,6 @@ async def handle_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         context.user_data["timezone"] = timezone
         return await _finish_onboarding(update, context)
 
-    # 2–3 варианта → InlineKeyboard для уточнения
     context.user_data["city_candidates"] = results
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(_short_label(r["display_name"]), callback_data=f"city_pick:{i}")]
@@ -361,7 +377,6 @@ async def handle_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def handle_city_suggest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Обработка выбора города из саджжеста."""
     query = update.callback_query
     await query.answer()
 
@@ -391,6 +406,17 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
     city = context.user_data.get("city", "")
     timezone = context.user_data.get("timezone", "Europe/Vilnius")
 
+    # Проверка обязательных полей для ребёнка
+    if segment in ("mom_girl", "mom_boy"):
+        required = ["child_name", "child_birthdate", "child_size", "child_shoe_size"]
+        missing = [k for k in required if not context.user_data.get(k)]
+        if missing:
+            logger.error("onboarding.missing_fields", missing=missing, user_id=str(user.id))
+            await update.effective_message.reply_text(
+                "Что-то пошло не так. Начни заново: /start"
+            )
+            return ConversationHandler.END
+
     try:
         async with AsyncWriteSession() as session:
             await session.execute(
@@ -408,8 +434,8 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 await create_child(
                     session,
                     user_id=user.id,
-                    name=context.user_data.get("child_name", ""),
-                    birthdate=context.user_data.get("child_birthdate"),
+                    name=context.user_data["child_name"],
+                    birthdate=context.user_data["child_birthdate"],
                     gender="girl" if segment == "mom_girl" else "boy",
                     current_size=context.user_data.get("child_size"),
                     shoe_size=context.user_data.get("child_shoe_size"),
@@ -422,9 +448,16 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user.city = city
         user.timezone = timezone
 
+        welcome = (
+            f"✅ Готово, {user.name}! Добро пожаловать 👗\n\n"
+            "Что умею:\n"
+            "📸 Пришли фото вещи → добавлю в гардероб\n"
+            "🌅 Morning Brief каждое утро — образ на день по погоде\n"
+            "👗 /wardrobe — твой гардероб\n"
+            "❓ /help — справка"
+        )
         await update.effective_message.reply_text(
-            t("onboarding.done"),
-            reply_markup=ReplyKeyboardRemove(),
+            welcome, reply_markup=ReplyKeyboardRemove()
         )
         logger.info(
             "onboarding.completed",
@@ -441,12 +474,28 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return ConversationHandler.END
 
 
+# ── /cancel fallback ───────────────────────────────────────────────────────
+
+async def handle_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    for key in ("segment", "child_name", "child_birthdate", "child_size",
+                "child_shoe_size", "city", "timezone", "city_candidates"):
+        context.user_data.pop(key, None)
+    await update.message.reply_text(
+        "Отменено. /start чтобы начать заново",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    return ConversationHandler.END
+
+
 # ── Сборка ConversationHandler ────────────────────────────────────────────
 
 def build_conversation_handler() -> ConversationHandler:
     return ConversationHandler(
         entry_points=[CommandHandler("start", handle_start)],
         states={
+            RESUME_CONFIRM: [
+                CallbackQueryHandler(handle_resume_confirm, pattern="^resume:"),
+            ],
             SEGMENT: [
                 CallbackQueryHandler(handle_segment, pattern="^segment:"),
             ],
@@ -470,6 +519,6 @@ def build_conversation_handler() -> ConversationHandler:
                 CallbackQueryHandler(handle_city_suggest, pattern="^city_pick:"),
             ],
         },
-        fallbacks=[CommandHandler("start", handle_start)],
+        fallbacks=[CommandHandler("cancel", handle_cancel)],
         allow_reentry=True,
     )

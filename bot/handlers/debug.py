@@ -37,6 +37,7 @@ async def handle_debug_reset(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 onboarding_step=None,
                 segment=None,
                 city=None,
+                timezone="Europe/Vilnius",
             )
         )
         await session.commit()
@@ -45,6 +46,7 @@ async def handle_debug_reset(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user.onboarding_step = None
     user.segment = None
     user.city = None
+    user.timezone = "Europe/Vilnius"
 
     logger.info("debug.reset", user_id=str(user.id))
     await update.message.reply_text("✅ Онбординг сброшен. Напиши /start")

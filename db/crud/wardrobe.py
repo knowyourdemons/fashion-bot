@@ -64,6 +64,32 @@ async def increment_wear_count(
     return result.scalar_one_or_none() is not None
 
 
+async def get_user_items(
+    session: AsyncSession, owner_id: uuid.UUID, owner_type: str = "user"
+) -> list[WardrobeItem]:
+    """Алиас get_owner_items для удобства."""
+    return await get_owner_items(session, owner_id, owner_type)
+
+
+async def create_item(session: AsyncSession, **kwargs) -> WardrobeItem:
+    """Алиас create для явного именования."""
+    return await create(session, **kwargs)
+
+
+async def update_wear_count(
+    session: AsyncSession, item_ids: list[uuid.UUID]
+) -> None:
+    """Bulk increment wear_count без оптимистичной блокировки (для feedback)."""
+    from datetime import date
+    if not item_ids:
+        return
+    await session.execute(
+        update(WardrobeItem)
+        .where(WardrobeItem.id.in_(item_ids), WardrobeItem.deleted_at.is_(None))
+        .values(wear_count=WardrobeItem.wear_count + 1, last_worn=date.today())
+    )
+
+
 async def soft_delete(session: AsyncSession, item_id: uuid.UUID) -> None:
     from datetime import datetime
     await session.execute(
