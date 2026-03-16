@@ -7,7 +7,7 @@
   3. Дата рождения dd.mm.yyyy [mom_girl/mom_boy]
   4. Размер одежды [mom_girl/mom_boy]
   5. Размер обуви [mom_girl/mom_boy]
-  6. Город (геолокация или ввод вручную) [все]
+  6. Город (геолокация / текст + саджжест) [все]
   Финал → создать Child, onboarding_completed=True
 """
 import structlog
@@ -41,7 +41,7 @@ from services.i18n.ru import t
 logger = structlog.get_logger()
 
 # ── Состояния ──────────────────────────────────────────────────────────────
-SEGMENT, CHILD_NAME, CHILD_BIRTHDATE, CHILD_SIZE, CHILD_SHOE_SIZE, CITY = range(6)
+SEGMENT, CHILD_NAME, CHILD_BIRTHDATE, CHILD_SIZE, CHILD_SHOE_SIZE, CITY, CITY_SUGGEST = range(7)
 
 _STEP_TO_STATE: dict[str, int] = {
     "segment":         SEGMENT,
@@ -50,6 +50,15 @@ _STEP_TO_STATE: dict[str, int] = {
     "child_size":      CHILD_SIZE,
     "child_shoe_size": CHILD_SHOE_SIZE,
     "city":            CITY,
+}
+
+# Тексты кнопок клавиатуры — не должны сохраняться как город
+_CITY_KEYBOARD_LABELS = {
+    "📍 Определить автоматически",
+    "✏️ Ввести вручную",
+    # старые варианты на случай resume
+    "📍 Отправить геолокацию",
+    "Ввести вручную",
 }
 
 
@@ -83,8 +92,8 @@ async def _ask_segment(update: Update) -> None:
 async def _ask_city(update: Update) -> None:
     keyboard = ReplyKeyboardMarkup(
         [
-            [KeyboardButton("📍 Отправить геолокацию", request_location=True)],
-            [KeyboardButton("Ввести вручную")],
+            [KeyboardButton("📍 Определить автоматически", request_location=True)],
+            [KeyboardButton("✏️ Ввести вручную")],
         ],
         resize_keyboard=True,
         one_time_keyboard=True,
@@ -101,7 +110,7 @@ async def _reverse_geocode(lat: float, lon: float) -> tuple[str, str]:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
                 "https://nominatim.openstreetmap.org/reverse",
-                params={"lat": lat, "lon": lon, "format": "json"},
+                params={"lat": lat, "lon": lon, "format": "json", "accept-language": "ru"},
                 headers={"User-Agent": "FashionBot/1.0"},
             )
             addr = resp.json().get("address", {})
@@ -126,25 +135,46 @@ async def _reverse_geocode(lat: float, lon: float) -> tuple[str, str]:
     return city, timezone
 
 
-async def _forward_geocode_timezone(city: str) -> str:
-    """Nominatim forward geocoding → timezone для города по имени."""
+async def _nominatim_search(query: str) -> list[dict]:
+    """Nominatim forward search → list of {display_name, lat, lon}."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
                 "https://nominatim.openstreetmap.org/search",
-                params={"q": city, "format": "json", "limit": 1},
+                params={"q": query, "format": "json", "limit": 3, "accept-language": "ru"},
                 headers={"User-Agent": "FashionBot/1.0"},
             )
-            data = resp.json()
-            if data:
-                lat = float(data[0]["lat"])
-                lon = float(data[0]["lon"])
-                from timezonefinder import TimezoneFinder
-                tz = TimezoneFinder().timezone_at(lat=lat, lng=lon)
-                return tz or "Europe/Vilnius"
+            return [
+                {
+                    "display_name": r["display_name"],
+                    "lat": float(r["lat"]),
+                    "lon": float(r["lon"]),
+                }
+                for r in resp.json()
+            ]
     except Exception as e:
-        logger.warning("geocode.forward.failed", error=str(e))
-    return "Europe/Vilnius"
+        logger.warning("nominatim.search.failed", error=str(e))
+        return []
+
+
+def _extract_city_tz(result: dict) -> tuple[str, str]:
+    """Из результата Nominatim → (city, timezone)."""
+    city = result["display_name"].split(",")[0].strip()
+    timezone = "Europe/Vilnius"
+    try:
+        from timezonefinder import TimezoneFinder
+        tz = TimezoneFinder().timezone_at(lat=result["lat"], lng=result["lon"])
+        if tz:
+            timezone = tz
+    except Exception as e:
+        logger.warning("timezone.lookup.failed", error=str(e))
+    return city, timezone
+
+
+def _short_label(display_name: str) -> str:
+    """'Вильнюс, Вильнюсский уезд, Литва' → 'Вильнюс, Литва'."""
+    parts = [p.strip() for p in display_name.split(",")]
+    return f"{parts[0]}, {parts[-1]}" if len(parts) >= 2 else parts[0]
 
 
 # ── Entry point ────────────────────────────────────────────────────────────
@@ -293,14 +323,60 @@ async def handle_city_location(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def handle_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Текстовый ввод города — сохраняем напрямую, без AI."""
-    city = update.message.text.strip()
-    if not city:
-        await update.message.reply_text(t("onboarding.city"), reply_markup=ReplyKeyboardRemove())
+    """Текстовый ввод города с Nominatim саджжестом."""
+    text = update.message.text.strip()
+
+    # Кнопки ReplyKeyboard — показать промпт и ждать настоящего ввода
+    if text in _CITY_KEYBOARD_LABELS:
+        await update.message.reply_text("Введи название города:", reply_markup=ReplyKeyboardRemove())
         return CITY
 
+    if not text:
+        await update.message.reply_text("Введи название города:")
+        return CITY
+
+    results = await _nominatim_search(text)
+
+    if not results:
+        await update.message.reply_text(
+            "Город не найден, попробуй ещё раз или напиши по-английски",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return CITY
+
+    if len(results) == 1:
+        city, timezone = _extract_city_tz(results[0])
+        context.user_data["city"] = city
+        context.user_data["timezone"] = timezone
+        return await _finish_onboarding(update, context)
+
+    # 2–3 варианта → InlineKeyboard для уточнения
+    context.user_data["city_candidates"] = results
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(_short_label(r["display_name"]), callback_data=f"city_pick:{i}")]
+        for i, r in enumerate(results)
+    ])
+    await update.message.reply_text("Уточни город:", reply_markup=keyboard)
+    return CITY_SUGGEST
+
+
+async def handle_city_suggest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Обработка выбора города из саджжеста."""
+    query = update.callback_query
+    await query.answer()
+
+    idx = int(query.data.split(":")[1])
+    candidates = context.user_data.get("city_candidates", [])
+
+    if idx >= len(candidates):
+        await query.message.reply_text(t("error.generic"))
+        return ConversationHandler.END
+
+    city, timezone = _extract_city_tz(candidates[idx])
     context.user_data["city"] = city
-    context.user_data["timezone"] = await _forward_geocode_timezone(city)
+    context.user_data["timezone"] = timezone
+
+    await query.message.edit_reply_markup(reply_markup=None)
     return await _finish_onboarding(update, context)
 
 
@@ -389,6 +465,9 @@ def build_conversation_handler() -> ConversationHandler:
             CITY: [
                 MessageHandler(filters.LOCATION, handle_city_location),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_city_text),
+            ],
+            CITY_SUGGEST: [
+                CallbackQueryHandler(handle_city_suggest, pattern="^city_pick:"),
             ],
         },
         fallbacks=[CommandHandler("start", handle_start)],
