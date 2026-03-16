@@ -41,7 +41,7 @@ from services.i18n.ru import t
 logger = structlog.get_logger()
 
 # ── Состояния ──────────────────────────────────────────────────────────────
-SEGMENT, CHILD_NAME, CHILD_BIRTHDATE, CHILD_SIZE, CHILD_SHOE_SIZE, CITY, CITY_MANUAL = range(7)
+SEGMENT, CHILD_NAME, CHILD_BIRTHDATE, CHILD_SIZE, CHILD_SHOE_SIZE, CITY = range(6)
 
 _STEP_TO_STATE: dict[str, int] = {
     "segment":         SEGMENT,
@@ -95,7 +95,7 @@ async def _ask_city(update: Update) -> None:
 async def _reverse_geocode(lat: float, lon: float) -> tuple[str, str]:
     """Nominatim reverse geocoding + timezonefinder → (city, timezone)."""
     city = "Неизвестно"
-    timezone = "Europe/Moscow"
+    timezone = "Europe/Vilnius"
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -141,10 +141,10 @@ async def _forward_geocode_timezone(city: str) -> str:
                 lon = float(data[0]["lon"])
                 from timezonefinder import TimezoneFinder
                 tz = TimezoneFinder().timezone_at(lat=lat, lng=lon)
-                return tz or "Europe/Moscow"
+                return tz or "Europe/Vilnius"
     except Exception as e:
         logger.warning("geocode.forward.failed", error=str(e))
-    return "Europe/Moscow"
+    return "Europe/Vilnius"
 
 
 # ── Entry point ────────────────────────────────────────────────────────────
@@ -292,16 +292,12 @@ async def handle_city_location(update: Update, context: ContextTypes.DEFAULT_TYP
     return await _finish_onboarding(update, context)
 
 
-async def handle_city_manual_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("Введи название города:", reply_markup=ReplyKeyboardRemove())
-    return CITY_MANUAL
-
-
-async def handle_city_manual(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def handle_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Текстовый ввод города — сохраняем напрямую, без AI."""
     city = update.message.text.strip()
     if not city:
-        await update.message.reply_text("Введи название города:")
-        return CITY_MANUAL
+        await update.message.reply_text(t("onboarding.city"), reply_markup=ReplyKeyboardRemove())
+        return CITY
 
     context.user_data["city"] = city
     context.user_data["timezone"] = await _forward_geocode_timezone(city)
@@ -317,7 +313,7 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     segment = context.user_data.get("segment") or (user.segment or "no_kids")
     city = context.user_data.get("city", "")
-    timezone = context.user_data.get("timezone", "Europe/Moscow")
+    timezone = context.user_data.get("timezone", "Europe/Vilnius")
 
     try:
         async with AsyncWriteSession() as session:
@@ -392,13 +388,7 @@ def build_conversation_handler() -> ConversationHandler:
             ],
             CITY: [
                 MessageHandler(filters.LOCATION, handle_city_location),
-                MessageHandler(
-                    filters.Regex(r"^Ввести вручную$") & filters.TEXT,
-                    handle_city_manual_prompt,
-                ),
-            ],
-            CITY_MANUAL: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_city_manual),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_city_text),
             ],
         },
         fallbacks=[CommandHandler("start", handle_start)],
