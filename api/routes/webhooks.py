@@ -1,6 +1,9 @@
-""/api/v1/webhooks/stripe|telegram"""
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
+from telegram import Update
+import structlog
+
 router = APIRouter()
+logger = structlog.get_logger()
 
 @router.post("/stripe")
 async def stripe_webhook(request: Request):
@@ -9,5 +12,8 @@ async def stripe_webhook(request: Request):
 
 @router.post("/telegram")
 async def telegram_webhook(request: Request):
-    # TODO: process Telegram update
+    tg_app = request.app.state.tg_app
+    data = await request.json()
+    update = Update.de_json(data, tg_app.bot)
+    await tg_app.process_update(update)
     return {"ok": True}

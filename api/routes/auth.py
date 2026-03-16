@@ -1,4 +1,3 @@
-"""POST /api/v1/auth/telegram"""
 from fastapi import APIRouter
 router = APIRouter()
 

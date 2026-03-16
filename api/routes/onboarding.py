@@ -1,4 +1,3 @@
-"""/api/v1/onboarding"""
 from fastapi import APIRouter
 router = APIRouter()
 

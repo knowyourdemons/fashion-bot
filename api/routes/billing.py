@@ -1,4 +1,3 @@
-""/api/v1/billing"""
 from fastapi import APIRouter
 router = APIRouter()
 

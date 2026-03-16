@@ -21,11 +21,13 @@ import structlog
 structlog.configure(
     processors=[
         structlog.stdlib.add_log_level,
-        structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.dev.ConsoleRenderer() if settings.environment == "dev"
         else structlog.processors.JSONRenderer(),
-    ]
+    ],
+    wrapper_class=structlog.make_filtering_bound_logger(20),
+    context_class=dict,
+    logger_factory=structlog.PrintLoggerFactory(),
 )
 
 # FastAPI приложение

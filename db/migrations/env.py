@@ -45,7 +45,7 @@ async def run_async_migrations() -> None:
     from config import settings
 
     connectable = async_engine_from_config(
-        {"sqlalchemy.url": settings.database_write_url},
+        {"sqlalchemy.url": settings.database_write_url + "?ssl=disable"},
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )

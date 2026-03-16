@@ -1,4 +1,3 @@
-"""CRUD /api/v1/wardrobe"""
 from fastapi import APIRouter
 router = APIRouter()
 
