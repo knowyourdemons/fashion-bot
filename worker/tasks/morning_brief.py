@@ -193,8 +193,13 @@ async def generate_brief(payload: dict) -> dict:
     season = _SEASONS[today.month]
     day_type = "садик" if today.weekday() < 5 else "прогулка"
 
+    from services.scoring import matrix_name_for_owner
+    from db.models.scoring_matrix import ScoringMatrix
+    from sqlalchemy import select as _sel
+
     child_briefs = []
     all_outfit_ids: list[str] = []
+    any_wow = False
 
     for child in children:
         async with AsyncReadSession() as session:
@@ -212,9 +217,33 @@ async def generate_brief(payload: dict) -> dict:
             continue
 
         all_outfit_ids.extend(str(i.id) for i in outfit)
+        scored = [float(i.score_item) for i in outfit if i.score_item]
+        outfit_score = round(sum(scored) / len(scored), 1) if scored else None
+
+        # WOW детектор
+        is_wow_outfit = bool(scored and sum(scored) / len(scored) >= 8.0)
+        wow_msg = ""
+        if is_wow_outfit:
+            matrix_name = matrix_name_for_owner(user, child)
+            async with AsyncReadSession() as session:
+                result = await session.execute(
+                    _sel(ScoringMatrix).where(
+                        ScoringMatrix.name == matrix_name,
+                        ScoringMatrix.is_active.is_(True),
+                    )
+                )
+                mx = result.scalar_one_or_none()
+            if mx:
+                wow_msg = mx.criteria.get("_wow_message", "")
+            any_wow = True
+
         lines = [f"👧 {child.name} ({day_type}):"]
         for item in outfit:
             lines.append(f"→ {item.type} ({item.color})")
+        if outfit_score is not None:
+            lines.append(f"⭐ Скор образа: {outfit_score}/10")
+        if wow_msg:
+            lines.append(wow_msg)
         child_briefs.append("\n".join(lines))
 
     # Текст бриф
@@ -246,6 +275,7 @@ async def generate_brief(payload: dict) -> dict:
             weather_summary=weather_line.strip(),
             outfit_description="\n".join(child_briefs),
             outfit_items=all_outfit_ids,
+            is_wow=any_wow,
         )
         await session.commit()
         brief_id = str(log.id)

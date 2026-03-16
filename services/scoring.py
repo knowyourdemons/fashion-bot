@@ -1,6 +1,7 @@
 """
 Скоринг вещи и образа согласно матрицам из БД.
 """
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -13,6 +14,49 @@ from db.models.scoring_matrix import ScoringMatrix
 from db.models.wardrobe import WardrobeItem
 
 logger = structlog.get_logger()
+
+
+# ── Standalone функции скоринга ─────────────────────────────────────────────
+
+def matrix_name_for_owner(user, child=None) -> str:
+    """Возвращает имя матрицы по сегменту/возрасту."""
+    if child:
+        age = (date.today() - child.birthdate).days // 365
+        if age < 3:
+            return "0-3"
+        if age < 7:
+            return "3-7"
+        if age < 12:
+            return "7-12"
+        return "12-16"
+
+    if getattr(user, "segment", None) == "pregnant":
+        trimester = getattr(user, "trimester", 1) or 1
+        return f"pregnant-{trimester}"
+
+    age = getattr(user, "age", None) or 30
+    if age < 25:
+        return "16-25"
+    if age < 35:
+        return "25-35"
+    if age < 45:
+        return "35-45"
+    return "45+"
+
+
+def calc_item_score(breakdown: dict, matrix: ScoringMatrix) -> float:
+    """Считает score_item по breakdown (значения 0-2) и матрице.
+
+    Формула: sum(value_i × weight_i) / max_score × 10
+    """
+    total = 0
+    for criterion, weight_info in matrix.criteria.items():
+        if criterion.startswith("_"):
+            continue
+        value = breakdown.get(criterion, 1)
+        clamped = max(0, min(int(value), 2))
+        total += clamped * weight_info["weight"]
+    return round((total / matrix.max_score) * 10, 2)
 
 # Скоринг образа (взрослые)
 OUTFIT_SCORE_WEIGHTS_ADULT = {

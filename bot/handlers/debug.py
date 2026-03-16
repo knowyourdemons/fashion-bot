@@ -38,15 +38,24 @@ async def handle_debug_reset(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 segment=None,
                 city=None,
                 timezone="Europe/Vilnius",
+                plan="premium",
+                daily_requests_used=0,
+                daily_requests_reset_at=None,
             )
         )
         await session.commit()
+
+    # Очистить кэш owner из bot_data
+    cache_key = f"owner:{user.id}"
+    context.application.bot_data.pop(cache_key, None)
 
     user.onboarding_completed = False
     user.onboarding_step = None
     user.segment = None
     user.city = None
     user.timezone = "Europe/Vilnius"
+    user.plan = "premium"
+    user.daily_requests_used = 0
 
     logger.info("debug.reset", user_id=str(user.id))
-    await update.message.reply_text("✅ Онбординг сброшен. Напиши /start")
+    await update.message.reply_text("✅ Сброшено. План → premium. Лимиты обнулены. /start")

@@ -36,6 +36,9 @@ app: FastAPI = create_app()
 
 @app.on_event("startup")
 async def startup() -> None:
+    from db.seeds.scoring_matrices import seed_scoring_matrices
+    await seed_scoring_matrices()
+
     redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
 
     # Инициализируем пул Anthropic

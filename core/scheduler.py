@@ -42,6 +42,15 @@ class Scheduler:
         from worker.tasks import gap_analysis, capsule_season, birthday_alert
         from worker.tasks import subscription_expiry, reminders, analytics_report
         from worker.tasks import unknown_items_report, taxonomy_review
+        from worker.tasks import daily_reset
+
+        # daily_reset — каждый день в полночь UTC
+        self._scheduler.add_job(
+            daily_reset.reset_daily_limits,
+            CronTrigger(hour=0, minute=0),
+            id="daily_reset",
+            replace_existing=True,
+        )
 
         # morning_brief — 07:00 по timezone юзера (запускается каждый час, фильтрует внутри)
         self._scheduler.add_job(

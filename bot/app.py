@@ -35,6 +35,8 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(feedback.handle_feedback, pattern="^feedback:"))
     app.add_handler(CallbackQueryHandler(billing.handle_plan_callback, pattern="^plan:"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_wardrobe_page, pattern="^wardrobe:page:"))
+    app.add_handler(CallbackQueryHandler(wardrobe.handle_photo_action, pattern="^photo_action:"))
+    app.add_handler(CallbackQueryHandler(wardrobe.handle_rate_mode, pattern="^rate_mode:"))
 
     # Текстовые сообщения → стилист
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text.handle_text))

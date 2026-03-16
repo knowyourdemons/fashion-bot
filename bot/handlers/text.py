@@ -12,6 +12,7 @@ from db.base import AsyncWriteSession
 from db.models.user import User
 from exceptions import FashionBotError, RateLimitError
 from services.i18n.ru import t
+from services.usage import get_limit_exceeded_msg
 
 logger = structlog.get_logger()
 
@@ -37,7 +38,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     # Проверка дневного лимита
     limit = _PLAN_LIMITS.get(user.plan, settings.daily_limits_free)
     if limit != -1 and user.daily_requests_used >= limit:
-        await update.message.reply_text(t("error.rate_limit"))
+        await update.message.reply_text(get_limit_exceeded_msg(user))
         return
 
     try:
