@@ -176,20 +176,31 @@ BBOX — ПЛОТНОЕ ОБРАМЛЕНИЕ ВЕЩИ
 ════════════════════════════════════════════
 
 bbox = нормализованные координаты 0.0–1.0 (x, y — верхний левый угол; w, h — ширина, высота).
-Bbox должен ПЛОТНО обрамлять вещь с минимумом фона.
+Bbox ПЛОТНО обрамляет конкретную вещь, НЕ захватывает соседние.
+
+Размер bbox по типу вещи (СТРОГО соблюдай):
+- носки, трусики, повязка на голову → w ≤ 0.20, h ≤ 0.20
+- шапка, варежки, перчатки, шарф → w ≤ 0.25, h ≤ 0.25
+- футболка, лонгслив, свитер, кофта, штаны, шорты, юбка → 0.20 ≤ w,h ≤ 0.55
+- куртка, пальто, пуховик, платье, комбинезон → 0.30 ≤ w,h ≤ 0.75
+- обувь (кроссовки, ботинки, сандалии) → 0.15 ≤ w,h ≤ 0.40
 
 Правила:
-- Маленькая вещь (носки, шапка, варежки) → маленький bbox: w и h ~ 0.10–0.25
-- Средняя вещь (кофта, штаны) → средний bbox: w и h ~ 0.30–0.55
-- Крупная вещь (куртка, платье) → крупный bbox: w и h ~ 0.45–0.70
-- Несколько вещей рядом → каждой ОТДЕЛЬНЫЙ tight bbox, без пересечений
-- НИКОГДА не давай bbox 0.9+ по ширине или высоте для маленькой вещи
-- Если вещь занимает весь кадр (крупный план) → bbox может быть 0.8–1.0
+- 5 вещей на фото → 5 отдельных bbox, каждый tight вокруг своей вещи
+- bbox НЕ пересекается с другими bbox
+- НЕ давай w > 0.8 или h > 0.8 если не одна вещь крупным планом
+- Одна вещь на весь кадр (крупный план) → bbox 0.80–0.98
 
-Примеры:
-  Носки в правом нижнем углу → {"x":0.65,"y":0.70,"w":0.20,"h":0.20}
-  Кофта в центре кадра → {"x":0.20,"y":0.15,"w":0.55,"h":0.60}
-  Куртка во весь кадр → {"x":0.02,"y":0.02,"w":0.95,"h":0.95}
+Примеры (КОПИРУЙ этот стиль):
+  Носки в правом нижнем углу → {"x":0.65,"y":0.72,"w":0.18,"h":0.16}
+  Трусики в центре → {"x":0.38,"y":0.40,"w":0.22,"h":0.18}
+  Кофта в центре кадра → {"x":0.18,"y":0.12,"w":0.50,"h":0.55}
+  Штаны слева → {"x":0.05,"y":0.20,"w":0.42,"h":0.58}
+  Куртка во весь кадр → {"x":0.03,"y":0.02,"w":0.93,"h":0.95}
+  3 вещи рядом (носки+кофта+штаны) →
+    носки: {"x":0.70,"y":0.75,"w":0.15,"h":0.14}
+    кофта: {"x":0.15,"y":0.10,"w":0.45,"h":0.50}
+    штаны: {"x":0.45,"y":0.10,"w":0.40,"h":0.55}
 
 ════════════════════════════════════════════
 SCORE_BREAKDOWN — ОЦЕНКА ВЕЩИ
@@ -575,7 +586,19 @@ async def _analyze_and_save(
             logger.info("wardrobe.dedup.skipped", type=data.get("type"), color=data.get("color"))
             continue
 
-        photo_url = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id)
+        bbox = data.get("bbox")
+        if bbox:
+            bw = float(bbox.get("w", 1.0))
+            bh = float(bbox.get("h", 1.0))
+            if bw > 0.8 or bh > 0.8:
+                logger.warning(
+                    "wardrobe.bbox.too_large",
+                    type=data.get("type"), w=bw, h=bh,
+                )
+                bbox = {"x": 0.1, "y": 0.1, "w": 0.8, "h": 0.8}
+                data["bbox"] = bbox
+
+        photo_url = await _upload_crop(photo_bytes, bbox, owner_id=owner_id)
         await _save_one(owner_id, owner_type, photo_id, data, matrix, photo_url=photo_url)
         existing_set.add(key)
         added.append(data)
@@ -927,7 +950,18 @@ async def _process_media_group(
                     continue
 
                 logger.info("wardrobe.save_start", index=i, item_type=data.get("type"))
-                photo_url = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id)
+                bbox = data.get("bbox")
+                if bbox:
+                    bw = float(bbox.get("w", 1.0))
+                    bh = float(bbox.get("h", 1.0))
+                    if bw > 0.8 or bh > 0.8:
+                        logger.warning(
+                            "wardrobe.bbox.too_large",
+                            index=i, type=data.get("type"), w=bw, h=bh,
+                        )
+                        bbox = {"x": 0.1, "y": 0.1, "w": 0.8, "h": 0.8}
+                        data["bbox"] = bbox
+                photo_url = await _upload_crop(photo_bytes, bbox, owner_id=owner_id)
                 await _save_one(owner_id, owner_type, file_id, data, matrix, photo_url=photo_url)
                 existing_set.add(key)
                 added.append(data)
