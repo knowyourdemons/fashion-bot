@@ -24,8 +24,21 @@ LABEL_BG = (230, 230, 230)
 TEXT_COLOR = (50, 50, 50)
 
 
-async def _download_tg_photo(client: httpx.AsyncClient, file_id: str) -> Optional[bytes]:
-    """Скачивает фото из Telegram по file_id."""
+async def _download_photo(
+    client: httpx.AsyncClient,
+    file_id: str,
+    photo_url: Optional[str] = None,
+) -> Optional[bytes]:
+    """Скачивает фото: R2 (если есть photo_url/r2_key), иначе Telegram file_id."""
+    if photo_url:
+        try:
+            from services.storage.r2_storage import get_r2_storage
+            r2 = get_r2_storage()
+            return await r2.get_photo(photo_url)
+        except Exception as e:
+            logger.warning("image_builder.r2_failed", key=photo_url, error=str(e))
+            # fallback на Telegram
+
     try:
         r = await client.get(
             f"https://api.telegram.org/bot{settings.telegram_bot_token}/getFile",
@@ -34,14 +47,14 @@ async def _download_tg_photo(client: httpx.AsyncClient, file_id: str) -> Optiona
         )
         r.raise_for_status()
         file_path = r.json()["result"]["file_path"]
-        r2 = await client.get(
+        r2_resp = await client.get(
             f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_path}",
             timeout=15.0,
         )
-        r2.raise_for_status()
-        return r2.content
+        r2_resp.raise_for_status()
+        return r2_resp.content
     except Exception as e:
-        logger.warning("image_builder.download_failed", file_id=file_id[:20], error=str(e))
+        logger.warning("image_builder.tg_download_failed", file_id=file_id[:20], error=str(e))
         return None
 
 
@@ -102,21 +115,24 @@ def _build_grid(cells: list[tuple[Image.Image, str]]) -> bytes:
 async def build_collage(
     photo_ids: list[str],
     labels: Optional[list[str]] = None,
+    photo_urls: Optional[list[Optional[str]]] = None,
 ) -> Optional[bytes]:
     """
-    Скачивает фото из Telegram по file_id, собирает коллаж grid 2×N.
-    Возвращает JPEG bytes или None если не удалось собрать ни одной ячейки.
+    Скачивает фото (из R2 по photo_url если есть, иначе Telegram file_id),
+    собирает коллаж grid 2×N. Возвращает JPEG bytes или None.
     """
     if not photo_ids:
         return None
 
     if labels is None:
         labels = [""] * len(photo_ids)
+    if photo_urls is None:
+        photo_urls = [None] * len(photo_ids)
 
     cells: list[tuple[Image.Image, str]] = []
     async with httpx.AsyncClient() as client:
-        for file_id, label in zip(photo_ids, labels):
-            data = await _download_tg_photo(client, file_id)
+        for file_id, label, purl in zip(photo_ids, labels, photo_urls):
+            data = await _download_photo(client, file_id, purl)
             if not data:
                 continue
             try:

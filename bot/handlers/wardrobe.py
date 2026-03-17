@@ -1,10 +1,13 @@
 """Wardrobe handlers."""
 import asyncio
 import base64
+import io
 import json
 import time
 import uuid
 from difflib import SequenceMatcher
+
+from PIL import Image
 
 import sentry_sdk
 import structlog
@@ -69,8 +72,13 @@ _VISION_SYSTEM = """Фото может быть в любой ориентац�
   "season": ["winter/spring/summer/autumn"],
   "occasion": ["everyday/sport/formal/home/outdoor"],
   "brand": null,
+  "bbox": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
   "score_breakdown": {"safety":1,"practicality":1,"durability":1,"age_authenticity":1,"ease_of_care":1,"colortype":1,"comfort":1,"versatility":1,"condition":1,"size_fit_score":1,"seasonality":1}
 }
+
+bbox — нормализованные координаты вещи на фото (0.0–1.0):
+  x, y — левый верхний угол; w, h — ширина и высота.
+  Пример: вещь занимает правую половину фото → {"x":0.5,"y":0.0,"w":0.5,"h":1.0}
 
 Для каждой вещи оцени score_breakdown по шкале 0-2:
 0 = плохо, 1 = нейтрально/не видно, 2 = отлично
@@ -129,6 +137,39 @@ def _default_score() -> tuple[dict, float]:
         "size_fit_score": 1, "seasonality": 1,
     }
     return breakdown, round((sum(breakdown.values()) / 15) * 10, 2)
+
+
+def _crop_bbox(image_bytes: bytes, bbox: dict) -> bytes:
+    """Вырезает вещь из фото по нормализованным координатам bbox."""
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    iw, ih = img.size
+    x = max(0.0, min(1.0, float(bbox.get("x", 0.0))))
+    y = max(0.0, min(1.0, float(bbox.get("y", 0.0))))
+    w = max(0.01, min(1.0 - x, float(bbox.get("w", 1.0))))
+    h = max(0.01, min(1.0 - y, float(bbox.get("h", 1.0))))
+    left = int(x * iw)
+    top = int(y * ih)
+    right = int((x + w) * iw)
+    bottom = int((y + h) * ih)
+    cropped = img.crop((left, top, right, bottom))
+    buf = io.BytesIO()
+    cropped.save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
+
+async def _upload_crop(photo_bytes: bytes, bbox: dict | None) -> str | None:
+    """Кропит по bbox и загружает в R2. Возвращает r2_key или None."""
+    if not bbox:
+        return None
+    try:
+        crop_bytes = _crop_bbox(photo_bytes, bbox)
+        from services.storage.r2_storage import get_r2_storage
+        r2 = get_r2_storage()
+        filename = f"{uuid.uuid4()}.jpg"
+        return await r2.upload_photo(crop_bytes, filename)
+    except Exception as e:
+        logger.warning("wardrobe.crop_upload_failed", error=str(e))
+        return None
 
 
 # ── Определить владельца вещи (пользователь или ребёнок) ───────────────────
@@ -279,6 +320,7 @@ async def _save_one(
     photo_id: str,
     data: dict,
     matrix=None,
+    photo_url: str | None = None,
 ) -> bool:
     """Сохраняет WardrobeItem."""
     category_group = data.get("category_group") or "top"
@@ -302,6 +344,7 @@ async def _save_one(
                 owner_id=owner_id,
                 owner_type=owner_type,
                 photo_id=photo_id,
+                photo_url=photo_url,
                 category_group=category_group,
                 category_code=data.get("category_code") or category_group,
                 type=data.get("type") or "вещь",
@@ -345,7 +388,7 @@ async def _analyze_and_save(
     bot,
     matrix=None,
 ) -> list[dict]:
-    """Скачать фото → Claude Vision → сохранить все WardrobeItem. Возвращает added."""
+    """Скачать фото → Claude Vision → crop по bbox → R2 → сохранить WardrobeItem."""
     tg_file = await bot.get_file(photo_id)
     photo_bytes = bytes(await tg_file.download_as_bytearray())
 
@@ -367,7 +410,8 @@ async def _analyze_and_save(
             logger.info("wardrobe.dedup.skipped", type=data.get("type"), color=data.get("color"))
             continue
 
-        await _save_one(owner_id, owner_type, photo_id, data, matrix)
+        photo_url = await _upload_crop(photo_bytes, data.get("bbox"))
+        await _save_one(owner_id, owner_type, photo_id, data, matrix, photo_url=photo_url)
         existing_set.add(key)
         added.append(data)
 
@@ -707,7 +751,8 @@ async def _process_media_group(
                     continue
 
                 logger.info("wardrobe.save_start", index=i, item_type=data.get("type"))
-                await _save_one(owner_id, owner_type, file_id, data, matrix)
+                photo_url = await _upload_crop(photo_bytes, data.get("bbox"))
+                await _save_one(owner_id, owner_type, file_id, data, matrix, photo_url=photo_url)
                 existing_set.add(key)
                 added.append(data)
                 logger.info("wardrobe.save_done", index=i)

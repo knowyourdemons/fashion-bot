@@ -606,17 +606,22 @@ async def generate_brief(payload: dict) -> dict:
             )
             collage_items_db = res.scalars().all()
 
-        # Дедупликация по photo_id
-        seen_photos: set[str] = set()
+        # Дедупликация по photo_id; если есть photo_url (R2 crop) — используем его
         photo_to_types: dict[str, list[str]] = {}
+        photo_to_url: dict[str, str | None] = {}
         for item in collage_items_db:
             if item.photo_id not in photo_to_types:
                 photo_to_types[item.photo_id] = []
+                photo_to_url[item.photo_id] = item.photo_url  # r2_key или None
             photo_to_types[item.photo_id].append(item.type)
 
+        collage_photo_urls: list[str | None] = []
         for photo_id, types in photo_to_types.items():
             collage_photo_ids.append(photo_id)
-            collage_labels.append(", ".join(types[:2]))  # макс 2 типа в подписи
+            collage_labels.append(", ".join(types[:2]))
+            collage_photo_urls.append(photo_to_url.get(photo_id))
+    else:
+        collage_photo_urls = []
 
     # Push send task
     redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
@@ -630,6 +635,7 @@ async def generate_brief(payload: dict) -> dict:
                 "brief_id": brief_id,
                 "collage_photo_ids": collage_photo_ids,
                 "collage_labels": collage_labels,
+                "collage_photo_urls": collage_photo_urls,
             },
             priority=QueuePriority.HIGH,
         )
@@ -665,12 +671,15 @@ async def send_morning_brief(payload: dict) -> dict:
             # Пробуем собрать коллаж
             collage_photo_ids = payload.get("collage_photo_ids", [])
             collage_labels = payload.get("collage_labels", [])
+            collage_photo_urls = payload.get("collage_photo_urls")
             collage_bytes = None
 
             if collage_photo_ids:
                 try:
                     from services.image_builder import build_collage
-                    collage_bytes = await build_collage(collage_photo_ids, collage_labels)
+                    collage_bytes = await build_collage(
+                        collage_photo_ids, collage_labels, collage_photo_urls
+                    )
                 except Exception as e:
                     logger.warning("morning_brief.collage_failed", error=str(e))
 

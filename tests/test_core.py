@@ -496,3 +496,76 @@ class TestSelectOutfit:
         result = self._select_outfit(items, "spring", self.today, temp_morning=10.0)
         if result["bottom"]:
             assert "джинс" in result["bottom"].type.lower()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# BBOX CROP
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestBboxCrop:
+    """Тесты кропа по bbox-координатам."""
+
+    def _crop(self, image_bytes: bytes, bbox: dict) -> bytes:
+        from bot.handlers.wardrobe import _crop_bbox
+        return _crop_bbox(image_bytes, bbox)
+
+    def test_full_bbox_returns_original_size(self):
+        """bbox на всё фото — размер не меняется."""
+        src = make_jpeg(800, 600)
+        result = self._crop(src, {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0})
+        img = Image.open(io.BytesIO(result))
+        assert img.size == (800, 600)
+
+    def test_half_width_crop(self):
+        """Правая половина — ширина 400, высота 600."""
+        src = make_jpeg(800, 600)
+        result = self._crop(src, {"x": 0.5, "y": 0.0, "w": 0.5, "h": 1.0})
+        img = Image.open(io.BytesIO(result))
+        assert img.size == (400, 600)
+
+    def test_quarter_crop(self):
+        """Верхний левый квадрант — 400×300."""
+        src = make_jpeg(800, 600)
+        result = self._crop(src, {"x": 0.0, "y": 0.0, "w": 0.5, "h": 0.5})
+        img = Image.open(io.BytesIO(result))
+        assert img.size == (400, 300)
+
+    def test_center_crop(self):
+        """Центральный кроп — правильные размеры."""
+        src = make_jpeg(1000, 1000)
+        result = self._crop(src, {"x": 0.25, "y": 0.25, "w": 0.5, "h": 0.5})
+        img = Image.open(io.BytesIO(result))
+        assert img.size == (500, 500)
+
+    def test_bbox_clamped_out_of_bounds(self):
+        """bbox за границами фото — не падает, возвращает допустимый JPEG."""
+        src = make_jpeg(400, 300)
+        result = self._crop(src, {"x": 0.8, "y": 0.8, "w": 0.5, "h": 0.5})
+        img = Image.open(io.BytesIO(result))
+        assert img.size[0] > 0 and img.size[1] > 0
+
+    def test_returns_jpeg_bytes(self):
+        """Результат — валидный JPEG."""
+        src = make_jpeg(200, 200)
+        result = self._crop(src, {"x": 0.1, "y": 0.1, "w": 0.8, "h": 0.8})
+        assert isinstance(result, bytes)
+        assert len(result) > 0
+        img = Image.open(io.BytesIO(result))
+        assert img.format == "JPEG"
+
+    def test_color_preserved_in_crop(self):
+        """Цвет пикселей сохраняется после кропа."""
+        # Красный квадрат 100×100 в левом верхнем углу изображения 200×200
+        canvas = Image.new("RGB", (200, 200), color=(200, 200, 200))
+        red_block = Image.new("RGB", (100, 100), color=(255, 0, 0))
+        canvas.paste(red_block, (0, 0))
+        buf = io.BytesIO()
+        canvas.save(buf, format="JPEG", quality=100)
+        src = buf.getvalue()
+
+        # Кропаем левый верхний квадрант (где красный блок)
+        result = self._crop(src, {"x": 0.0, "y": 0.0, "w": 0.5, "h": 0.5})
+        img = Image.open(io.BytesIO(result)).convert("RGB")
+        center_pixel = img.getpixel((50, 50))
+        # JPEG — не точное воспроизведение, проверяем доминирующий канал
+        assert center_pixel[0] > center_pixel[1] and center_pixel[0] > center_pixel[2]
