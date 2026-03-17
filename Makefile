@@ -19,5 +19,7 @@ lint:
 	mypy .
 
 deploy:
-	docker-compose -f docker/docker-compose.prod.yml up -d --build
-	docker-compose -f docker/docker-compose.prod.yml exec app alembic upgrade head
+	docker-compose -f docker/docker-compose.yml build
+	docker-compose -f docker/docker-compose.yml run --rm app pytest tests/ -v --asyncio-mode=auto --tb=short
+	docker-compose -f docker/docker-compose.yml up -d --remove-orphans
+	docker-compose -f docker/docker-compose.yml exec app alembic upgrade head
