@@ -307,11 +307,15 @@ def _select_outfit(
             all_items.append(result[key])
     all_items.extend(result["underwear_items"])
     result["all_items"] = all_items
+    result["temp"] = temp
 
     return result
 
 
 # ── Форматирование блока ребёнка ────────────────────────────────────────────
+
+_MISSING = " (в гардеробе нет — добавь фото 📸)"
+
 
 def _format_child_block(
     child_name: str,
@@ -320,6 +324,7 @@ def _format_child_block(
     outfit_score,
     wow_msg: str,
 ) -> str:
+    temp = outfit.get("temp", 15.0)
     lines = [f"👧 {child_name} ({day_type}):"]
 
     # Термобельё
@@ -343,36 +348,48 @@ def _format_child_block(
         lines.append("👙 Бельё: " + " ".join(underwear_parts))
 
     # Образ
-    if outfit["one_piece"] or outfit["top"] or outfit["bottom"]:
-        lines.append("👗 Образ:")
-        if outfit["one_piece"]:
-            i = outfit["one_piece"]
-            lines.append(f"→ 👗 {i.type} ({i.color})")
+    lines.append("👗 Образ:")
+    if outfit["one_piece"]:
+        i = outfit["one_piece"]
+        lines.append(f"→ 👗 {i.type} ({i.color})")
+    else:
+        if outfit["top"]:
+            i = outfit["top"]
+            lines.append(f"→ 👕 {i.type} ({i.color})")
         else:
-            if outfit["top"]:
-                i = outfit["top"]
-                lines.append(f"→ 👕 {i.type} ({i.color})")
-            if outfit["bottom"]:
-                i = outfit["bottom"]
-                lines.append(f"→ 👖 {i.type} ({i.color})")
-        if outfit["removable_layer"]:
-            i = outfit["removable_layer"]
-            lines.append(f"→ {i.type} ({i.color}) [снять вечером]")
+            lines.append(f"→ 👕 любой верх по сезону{_MISSING}")
+        if outfit["bottom"]:
+            i = outfit["bottom"]
+            lines.append(f"→ 👖 {i.type} ({i.color})")
+        else:
+            lines.append(f"→ 👖 любые штаны/юбка{_MISSING}")
+    if outfit["removable_layer"]:
+        i = outfit["removable_layer"]
+        lines.append(f"→ {i.type} ({i.color}) [снять вечером]")
 
     # Ноги
     leg_item = outfit["tights"] or outfit["socks"]
     if leg_item:
         lines.append(f"🧦 Ноги: → {leg_item.type} ({leg_item.color})")
+    elif temp < 10:
+        lines.append(f"🧦 Ноги: → 🧦 колготки или тёплые носки{_MISSING}")
 
     # Обувь
     if outfit["footwear"]:
         i = outfit["footwear"]
         lines.append(f"👟 Обувь: → {i.type} ({i.color})")
+    else:
+        lines.append(f"👟 Обувь: → 👟 любая закрытая обувь{_MISSING}")
 
     # Верхняя одежда
     if outfit["outerwear"]:
         i = outfit["outerwear"]
         lines.append(f"🧥 Верхняя одежда: → {i.type} ({i.color})")
+    elif temp <= 15:
+        if temp < 5:
+            lines.append(f"🧥 Верхняя одежда: → 🧥 тёплая куртка или пуховик{_MISSING}")
+        else:
+            lines.append(f"🧥 Верхняя одежда: → 🧥 любая куртка/ветровка{_MISSING}")
 
     # Аксессуары
     acc_parts = []
