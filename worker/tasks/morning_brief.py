@@ -323,8 +323,9 @@ def _format_child_block(
     outfit: dict,
     outfit_score,
     wow_msg: str,
+    temp: float | None = None,
 ) -> str:
-    temp = outfit.get("temp", 15.0)
+    temp = temp if temp is not None else outfit.get("temp", 15.0)
     lines = [f"👧 {child_name} ({day_type}):"]
 
     # Термобельё
