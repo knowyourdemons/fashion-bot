@@ -6,6 +6,7 @@ Morning Brief задача:
 """
 from datetime import date, datetime
 
+import json
 import httpx
 import pytz
 import structlog
@@ -606,20 +607,12 @@ async def generate_brief(payload: dict) -> dict:
             )
             collage_items_db = res.scalars().all()
 
-        # Дедупликация по photo_id; если есть photo_url (R2 crop) — используем его
-        photo_to_types: dict[str, list[str]] = {}
-        photo_to_url: dict[str, str | None] = {}
-        for item in collage_items_db:
-            if item.photo_id not in photo_to_types:
-                photo_to_types[item.photo_id] = []
-                photo_to_url[item.photo_id] = item.photo_url  # r2_key или None
-            photo_to_types[item.photo_id].append(item.type)
-
+        # Каждая вещь = отдельная ячейка с индивидуальным кропом из R2
         collage_photo_urls: list[str | None] = []
-        for photo_id, types in photo_to_types.items():
-            collage_photo_ids.append(photo_id)
-            collage_labels.append(", ".join(types[:2]))
-            collage_photo_urls.append(photo_to_url.get(photo_id))
+        for item in collage_items_db:
+            collage_photo_ids.append(item.photo_id)
+            collage_labels.append(item.type)
+            collage_photo_urls.append(item.photo_url)  # r2_key кропа
     else:
         collage_photo_urls = []
 
