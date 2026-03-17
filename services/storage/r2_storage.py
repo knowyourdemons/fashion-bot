@@ -41,7 +41,7 @@ class R2Storage(BaseStorage):
         )
         return response["Body"].read()
 
-    async def upload_photo(self, photo_bytes: bytes, filename: str, owner_id: str = "") -> str:
+    async def upload_photo(self, photo_bytes: bytes, filename: str, owner_id: str = "", content_type: str = "image/jpeg") -> str:
         """Загружает фото в R2. Возвращает r2_key."""
         import asyncio
         key = f"wardrobe/{owner_id}/{filename}" if owner_id else f"wardrobe/{filename}"
@@ -52,7 +52,7 @@ class R2Storage(BaseStorage):
                 Bucket=self._bucket,
                 Key=key,
                 Body=photo_bytes,
-                ContentType="image/jpeg",
+                ContentType=content_type,
             )
         )
         logger.info("r2.uploaded", key=key, size=len(photo_bytes))

@@ -70,19 +70,31 @@ async def _download_photo(
 
 
 def _fit_image(img: Image.Image, w: int, h: int) -> Image.Image:
-    """Вписывает изображение в ячейку с обрезкой по центру."""
+    """Вписывает изображение в ячейку на кремовом фоне (поддержка RGBA/PNG)."""
+    # Создаём фон цвета BG_COLOR
+    cell = Image.new("RGB", (w, h), BG_COLOR)
+
+    # Масштабируем с сохранением пропорций (fit, не crop)
     img_ratio = img.width / img.height
     cell_ratio = w / h
     if img_ratio > cell_ratio:
-        new_h = h
-        new_w = int(h * img_ratio)
-    else:
         new_w = w
         new_h = int(w / img_ratio)
-    img = img.resize((new_w, new_h), Image.LANCZOS)
-    left = (new_w - w) // 2
-    top = (new_h - h) // 2
-    return img.crop((left, top, left + w, top + h))
+    else:
+        new_h = h
+        new_w = int(h * img_ratio)
+    resized = img.resize((new_w, new_h), Image.LANCZOS)
+
+    # Центрируем на фоне
+    offset_x = (w - new_w) // 2
+    offset_y = (h - new_h) // 2
+
+    if resized.mode == "RGBA":
+        cell.paste(resized, (offset_x, offset_y), mask=resized.split()[3])
+    else:
+        cell.paste(resized.convert("RGB"), (offset_x, offset_y))
+
+    return cell
 
 
 def _build_grid(cells: list[tuple[Image.Image, str]]) -> bytes:
@@ -147,7 +159,9 @@ async def build_collage(
             if not data:
                 continue
             try:
-                img = Image.open(io.BytesIO(data)).convert("RGB")
+                img = Image.open(io.BytesIO(data))
+                if img.mode not in ("RGB", "RGBA"):
+                    img = img.convert("RGBA" if "A" in img.getbands() else "RGB")
                 img = _fit_image(img, CELL_W, CELL_H)
                 cells.append((img, label))
             except Exception as e:

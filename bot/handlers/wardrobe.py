@@ -303,15 +303,21 @@ def _crop_bbox(image_bytes: bytes, bbox: dict) -> bytes:
 
 
 async def _upload_crop(photo_bytes: bytes, bbox: dict | None, owner_id: uuid.UUID | None = None) -> str | None:
-    """Кропит по bbox и загружает в R2. Возвращает CDN URL или None."""
+    """Кропит по bbox → удаляет фон → загружает PNG в R2. Возвращает CDN URL или None."""
     if not bbox:
         return None
     try:
         crop_bytes = _crop_bbox(photo_bytes, bbox)
+        from services.image_processor import remove_background
+        png_bytes = await remove_background(crop_bytes)
+        # Определяем формат по результату: remove.bg возвращает PNG, fallback — JPEG
+        is_png = png_bytes[:4] == b'\x89PNG'
+        ext = "png" if is_png else "jpg"
+        content_type = "image/png" if is_png else "image/jpeg"
         from services.storage.r2_storage import get_r2_storage
         r2 = get_r2_storage()
-        filename = f"{uuid.uuid4()}.jpg"
-        key = await r2.upload_photo(crop_bytes, filename, owner_id=str(owner_id) if owner_id else "")
+        filename = f"{uuid.uuid4()}.{ext}"
+        key = await r2.upload_photo(png_bytes, filename, owner_id=str(owner_id) if owner_id else "", content_type=content_type)
         if settings.cloudflare_r2_cdn_url:
             return r2.get_public_url(key)
         return key
