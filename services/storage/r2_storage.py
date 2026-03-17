@@ -41,10 +41,10 @@ class R2Storage(BaseStorage):
         )
         return response["Body"].read()
 
-    async def upload_photo(self, photo_bytes: bytes, filename: str) -> str:
+    async def upload_photo(self, photo_bytes: bytes, filename: str, owner_id: str = "") -> str:
         """Загружает фото в R2. Возвращает r2_key."""
         import asyncio
-        key = f"wardrobe/{filename}"
+        key = f"wardrobe/{owner_id}/{filename}" if owner_id else f"wardrobe/{filename}"
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(
             None,
@@ -57,6 +57,11 @@ class R2Storage(BaseStorage):
         )
         logger.info("r2.uploaded", key=key, size=len(photo_bytes))
         return key
+
+    def get_public_url(self, key: str) -> str:
+        """Возвращает публичный CDN URL для ключа."""
+        cdn = settings.cloudflare_r2_cdn_url.rstrip("/")
+        return f"{cdn}/{key}"
 
     async def delete_photo(self, photo_key: str) -> None:
         import asyncio

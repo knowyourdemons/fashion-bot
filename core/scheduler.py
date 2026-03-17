@@ -42,7 +42,7 @@ class Scheduler:
         from worker.tasks import gap_analysis, capsule_season, birthday_alert
         from worker.tasks import subscription_expiry, reminders, analytics_report
         from worker.tasks import unknown_items_report, taxonomy_review
-        from worker.tasks import daily_reset
+        from worker.tasks import daily_reset, cleanup_r2
 
         # daily_reset — каждый день в полночь UTC
         self._scheduler.add_job(
@@ -137,5 +137,13 @@ class Scheduler:
             taxonomy_review.run,
             CronTrigger(month="3,6,9,12", day=1, hour=9, minute=0),
             id="taxonomy_review",
+            replace_existing=True,
+        )
+
+        # cleanup_r2 — ежедневно 03:00 UTC
+        self._scheduler.add_job(
+            cleanup_r2.run,
+            CronTrigger(hour=3, minute=0),
+            id="cleanup_r2",
             replace_existing=True,
         )

@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     cloudflare_r2_access_key: str = ""
     cloudflare_r2_secret_key: str = ""
     cloudflare_r2_endpoint: str = ""
+    cloudflare_r2_cdn_url: str = ""
 
     # Pricing
     basic_monthly_price: int = 5

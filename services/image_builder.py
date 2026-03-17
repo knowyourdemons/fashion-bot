@@ -29,15 +29,26 @@ async def _download_photo(
     file_id: str,
     photo_url: Optional[str] = None,
 ) -> Optional[bytes]:
-    """Скачивает фото: R2 (если есть photo_url/r2_key), иначе Telegram file_id."""
+    """Скачивает фото: CDN URL (http*), R2 boto3 (wardrobe/...), Telegram (fallback)."""
     if photo_url:
-        try:
-            from services.storage.r2_storage import get_r2_storage
-            r2 = get_r2_storage()
-            return await r2.get_photo(photo_url)
-        except Exception as e:
-            logger.warning("image_builder.r2_failed", key=photo_url, error=str(e))
-            # fallback на Telegram
+        if photo_url.startswith("http"):
+            # Новый формат: публичный CDN URL
+            try:
+                r = await client.get(photo_url, timeout=10.0)
+                r.raise_for_status()
+                return r.content
+            except Exception as e:
+                logger.warning("image_builder.cdn_failed", url=photo_url[:60], error=str(e))
+                # fallback на Telegram
+        else:
+            # Старый формат: r2_key (wardrobe/...)
+            try:
+                from services.storage.r2_storage import get_r2_storage
+                r2 = get_r2_storage()
+                return await r2.get_photo(photo_url)
+            except Exception as e:
+                logger.warning("image_builder.r2_failed", key=photo_url, error=str(e))
+                # fallback на Telegram
 
     try:
         r = await client.get(

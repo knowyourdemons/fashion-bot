@@ -302,8 +302,8 @@ def _crop_bbox(image_bytes: bytes, bbox: dict) -> bytes:
     return buf.getvalue()
 
 
-async def _upload_crop(photo_bytes: bytes, bbox: dict | None) -> str | None:
-    """Кропит по bbox и загружает в R2. Возвращает r2_key или None."""
+async def _upload_crop(photo_bytes: bytes, bbox: dict | None, owner_id: uuid.UUID | None = None) -> str | None:
+    """Кропит по bbox и загружает в R2. Возвращает CDN URL или None."""
     if not bbox:
         return None
     try:
@@ -311,7 +311,10 @@ async def _upload_crop(photo_bytes: bytes, bbox: dict | None) -> str | None:
         from services.storage.r2_storage import get_r2_storage
         r2 = get_r2_storage()
         filename = f"{uuid.uuid4()}.jpg"
-        return await r2.upload_photo(crop_bytes, filename)
+        key = await r2.upload_photo(crop_bytes, filename, owner_id=str(owner_id) if owner_id else "")
+        if settings.cloudflare_r2_cdn_url:
+            return r2.get_public_url(key)
+        return key
     except Exception as e:
         logger.warning("wardrobe.crop_upload_failed", error=str(e))
         return None
@@ -566,7 +569,7 @@ async def _analyze_and_save(
             logger.info("wardrobe.dedup.skipped", type=data.get("type"), color=data.get("color"))
             continue
 
-        photo_url = await _upload_crop(photo_bytes, data.get("bbox"))
+        photo_url = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id)
         await _save_one(owner_id, owner_type, photo_id, data, matrix, photo_url=photo_url)
         existing_set.add(key)
         added.append(data)
@@ -918,7 +921,7 @@ async def _process_media_group(
                     continue
 
                 logger.info("wardrobe.save_start", index=i, item_type=data.get("type"))
-                photo_url = await _upload_crop(photo_bytes, data.get("bbox"))
+                photo_url = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id)
                 await _save_one(owner_id, owner_type, file_id, data, matrix, photo_url=photo_url)
                 existing_set.add(key)
                 added.append(data)
