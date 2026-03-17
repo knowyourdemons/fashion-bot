@@ -351,6 +351,9 @@ async def _analyze_and_save(
 
     items_data = await _call_vision(photo_bytes)
 
+    # Дедупликация: загружаем существующие вещи
+    existing_set = await _load_existing_set(owner_id, owner_type)
+
     added: list[dict] = []
 
     for data in items_data:
@@ -359,7 +362,13 @@ async def _analyze_and_save(
             cg = "top"
         data["category_group"] = cg
 
+        key = _dedup_key(data)
+        if key in existing_set:
+            logger.info("wardrobe.dedup.skipped", type=data.get("type"), color=data.get("color"))
+            continue
+
         await _save_one(owner_id, owner_type, photo_id, data, matrix)
+        existing_set.add(key)
         added.append(data)
 
     return added
@@ -682,14 +691,24 @@ async def _process_media_group(
             items_data = await _call_vision(photo_bytes)
             logger.info("wardrobe.vision_done", index=i, items_count=len(items_data))
 
+            # Дедупликация: загружаем актуальный набор вещей
+            existing_set = await _load_existing_set(owner_id, owner_type)
+
             added: list[dict] = []
             for data in items_data:
                 cg = data.get("category_group") or "top"
                 if cg not in _VALID_CATEGORY_GROUPS:
                     cg = "top"
                 data["category_group"] = cg
+
+                key = _dedup_key(data)
+                if key in existing_set:
+                    logger.info("wardrobe.dedup.skipped", index=i, type=data.get("type"), color=data.get("color"))
+                    continue
+
                 logger.info("wardrobe.save_start", index=i, item_type=data.get("type"))
                 await _save_one(owner_id, owner_type, file_id, data, matrix)
+                existing_set.add(key)
                 added.append(data)
                 logger.info("wardrobe.save_done", index=i)
 
