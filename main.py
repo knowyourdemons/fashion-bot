@@ -39,6 +39,9 @@ async def startup() -> None:
     from db.seeds.scoring_matrices import seed_scoring_matrices
     await seed_scoring_matrices()
 
+    from db.seeds.translate_items import run_if_needed as translate_items
+    await translate_items()
+
     redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
 
     # Инициализируем пул Anthropic

@@ -27,8 +27,9 @@ def create_application() -> Application:
     app.add_handler(CommandHandler("plan", billing.handle_plan))
     app.add_handler(CommandHandler("cancel", billing.handle_cancel))
 
-    # Photo handler
+    # Photo handlers (сжатое фото и документ-изображение оригинального качества)
     app.add_handler(MessageHandler(filters.PHOTO, wardrobe.handle_photo))
+    app.add_handler(MessageHandler(filters.Document.IMAGE, wardrobe.handle_photo))
 
     # Callback queries (кнопки)
     app.add_handler(CallbackQueryHandler(brief.handle_brief_feedback, pattern="^brief_feedback:"))

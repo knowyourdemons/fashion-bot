@@ -4,6 +4,7 @@ import base64
 import json
 import time
 import uuid
+from difflib import SequenceMatcher
 
 import sentry_sdk
 import structlog
@@ -26,7 +27,7 @@ logger = structlog.get_logger()
 _VALID_CATEGORY_GROUPS = {
     "outerwear", "top", "bottom", "one_piece", "footwear",
     "accessory", "base_layer", "sportswear", "special",
-    "home_beach", "pregnant_specific",
+    "home_beach", "pregnant_specific", "underwear",
 }
 
 _CATEGORY_LABELS = {
@@ -41,6 +42,7 @@ _CATEGORY_LABELS = {
     "special": "Особый повод",
     "home_beach": "Дом/пляж",
     "pregnant_specific": "Для беременных",
+    "underwear": "Нижнее бельё",
 }
 
 _PLAN_LIMITS = {
@@ -52,39 +54,37 @@ _PLAN_LIMITS = {
 
 PAGE_SIZE = 20
 
-_VISION_SYSTEM = (
-    "Ты стилист. На фото может быть одна или несколько вещей.\n"
-    "Определи ВСЕ предметы одежды и обуви на фото и верни JSON массив.\n"
-    "Все названия, цвета и стили — ТОЛЬКО на русском языке.\n"
-    "НЕ включай: одеяла, игрушки, аксессуары для волос, подгузники,\n"
-    "постельное бельё, сумки, рюкзаки — всё что не носят на теле.\n"
-    "Если на фото нет одежды → верни пустой массив [].\n"
-    "Если одна вещь сфотографирована с разных сторон → добавляй только один раз.\n"
-    "Формат каждого элемента:\n"
-    '{"type":"...","color":"...","style":"...",'
-    '"category_group":"outerwear|top|bottom|one_piece|footwear|accessory|base_layer|sportswear|special",'
-    '"category_code":"...","season":["winter|spring|summer|autumn"],'
-    '"occasion":["everyday|sport|formal|home|outdoor"],"brand":null,'
-    '"score_breakdown":{'
-    '"safety":1,"practicality":1,"durability":1,"age_authenticity":1,'
-    '"ease_of_care":1,"colortype":1,"comfort":1,"versatility":1,'
-    '"condition":1,"size_fit_score":1,"seasonality":1}}\n'
-    "Для каждой вещи оцени критерии score_breakdown по шкале 0-2:\n"
-    "0=не соответствует, 1=частично/нейтрально, 2=отлично\n"
-    "safety: нет завязок/мелких деталей/острых краёв\n"
-    "practicality: тянется/застёжки/легко надевать\n"
-    "durability: плотность ткани/двойные швы\n"
-    "age_authenticity: соответствует возрасту\n"
-    "ease_of_care: машинная стирка/не гладить\n"
-    "colortype: подходит холодному цветотипу (Лето)\n"
-    "comfort: мягкие швы/свободный крой\n"
-    "versatility: сочетается с 3+ вещами\n"
-    "condition: состояние вещи на фото\n"
-    "size_fit_score: посадка по фигуре\n"
-    "seasonality: актуально текущему сезону\n"
-    "Оценивай только то что видно на фото. Остальное — 1.\n"
-    "Верни ТОЛЬКО JSON массив без markdown."
-)
+_VISION_SYSTEM = """Фото может быть в любой ориентации — горизонтальной или вертикальной.
+Определяй вещи независимо от их расположения на фото.
+
+Ты определяешь детскую одежду на фото для гардероба.
+
+Найди все вещи на фото и верни JSON массив. Каждая вещь:
+{
+  "type": "название строчными",
+  "color": "цвет строчными",
+  "style": "повседневный/спортивный/нарядный/домашний",
+  "category_group": "одна из: outerwear/top/bottom/one_piece/footwear/accessory/base_layer/underwear/sportswear/home_beach",
+  "category_code": "english_code",
+  "season": ["winter/spring/summer/autumn"],
+  "occasion": ["everyday/sport/formal/home/outdoor"],
+  "brand": null,
+  "score_breakdown": {"safety":1,"practicality":1,"durability":1,"age_authenticity":1,"ease_of_care":1,"colortype":1,"comfort":1,"versatility":1,"condition":1,"size_fit_score":1,"seasonality":1}
+}
+
+Категории:
+- underwear: трусики, майки нательные, термобельё (термолонгслив, термолеггинсы)
+  майка нательная (облегающая, тонкая, с принтом или без) → underwear, тип: майка
+  НЕ путать с футболкой (футболка свободнее)
+- base_layer: носки, колготки, пижама
+- top: футболка, лонгслив с принтом, кофта, свитер
+- bottom: штаны, шорты, юбка, леггинсы
+- one_piece: платье, комбинезон, ромпер
+- outerwear: куртка, пальто, жилет утеплённый
+- accessory: шапка, шарф, варежки
+- footwear: обувь (НЕ носки!)
+
+Верни ТОЛЬКО JSON массив, без markdown."""
 
 _RATE_SYSTEM = (
     "Ты стилист с насмотренностью Vogue Kids. Оцени образ на фото.\n"
@@ -181,6 +181,7 @@ async def _load_existing_set(owner_id: uuid.UUID, owner_type: str = "user") -> s
 async def _call_vision(photo_bytes: bytes) -> list[dict]:
     pool = get_anthropic_pool()
     response = await pool.create_message(
+        model="claude-sonnet-4-6",
         system=_VISION_SYSTEM,
         messages=[{
             "role": "user",
@@ -196,12 +197,17 @@ async def _call_vision(photo_bytes: bytes) -> list[dict]:
                 {"type": "text", "text": "Определи все вещи на фото."},
             ],
         }],
-        max_tokens=1024,
+        max_tokens=4096,
     )
 
     raw = response.content[0].text.strip() if response.content else "[]"
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+
+    if not raw.endswith("]"):
+        last_complete = raw.rfind("},")
+        if last_complete > 0:
+            raw = raw[:last_complete + 1] + "]"
 
     try:
         parsed = json.loads(raw)
@@ -212,6 +218,12 @@ async def _call_vision(photo_bytes: bytes) -> list[dict]:
     except json.JSONDecodeError:
         logger.warning("wardrobe.json_parse_failed", raw=raw[:200])
         parsed = []
+
+    for item in parsed:
+        if isinstance(item.get("type"), str):
+            item["type"] = item["type"].lower()
+        if isinstance(item.get("color"), str):
+            item["color"] = item["color"].lower()
 
     return parsed
 
@@ -242,13 +254,19 @@ async def _call_rate_vision(photo_bytes_list: list[bytes]) -> str:
 
 # ── Сохранить один item в БД ────────────────────────────────────────────────
 
+def _color_similar(a: str, b: str) -> bool:
+    """True если цвета почти идентичны (ratio > 0.95)."""
+    return SequenceMatcher(None, a.lower().strip(), b.lower().strip()).ratio() > 0.95
+
+
 async def _save_one(
     owner_id: uuid.UUID,
     owner_type: str,
     photo_id: str,
     data: dict,
     matrix=None,
-) -> None:
+) -> bool:
+    """Сохраняет WardrobeItem."""
     category_group = data.get("category_group") or "top"
     if category_group not in _VALID_CATEGORY_GROUPS:
         category_group = "top"
@@ -263,33 +281,45 @@ async def _save_one(
         score_breakdown, score_item = _default_score()
         score_version = "v1.0"
 
-    async with AsyncWriteSession() as session:
-        await create(
-            session,
-            owner_id=owner_id,
-            owner_type=owner_type,
-            photo_id=photo_id,
+    try:
+        async with AsyncWriteSession() as session:
+            await create(
+                session,
+                owner_id=owner_id,
+                owner_type=owner_type,
+                photo_id=photo_id,
+                category_group=category_group,
+                category_code=data.get("category_code") or category_group,
+                type=data.get("type") or "вещь",
+                color=data.get("color") or "неизвестный",
+                style=data.get("style") or "casual",
+                brand=data.get("brand"),
+                season=data.get("season") or ["spring", "summer", "autumn"],
+                occasion=data.get("occasion") or ["everyday"],
+                condition="новая",
+                wear_count=0,
+                keep=True,
+                wishlist=False,
+                quantity=1,
+                show_in_collage=True,
+                is_base_layer=(category_group == "base_layer"),
+                score_item=score_item,
+                score_breakdown=score_breakdown,
+                score_version=score_version,
+                score_notes="",
+            )
+            await session.commit()
+    except Exception as e:
+        logger.error(
+            "wardrobe.save_failed",
+            error=str(e),
+            exc_info=True,
+            owner_id=str(owner_id),
+            item_type=data.get("type"),
             category_group=category_group,
-            category_code=data.get("category_code") or category_group,
-            type=data.get("type") or "вещь",
-            color=data.get("color") or "неизвестный",
-            style=data.get("style") or "casual",
-            brand=data.get("brand"),
-            season=data.get("season") or ["spring", "summer", "autumn"],
-            occasion=data.get("occasion") or ["everyday"],
-            condition="новая",
-            wear_count=0,
-            keep=True,
-            wishlist=False,
-            quantity=1,
-            show_in_collage=True,
-            is_base_layer=(category_group == "base_layer"),
-            score_item=score_item,
-            score_breakdown=score_breakdown,
-            score_version=score_version,
-            score_notes="",
         )
-        await session.commit()
+        raise
+    return True
 
 
 # ── Ядро: анализ + сохранение одного фото ──────────────────────────────────
@@ -299,22 +329,15 @@ async def _analyze_and_save(
     owner_id: uuid.UUID,
     owner_type: str,
     bot,
-    existing_set: set,
     matrix=None,
-) -> tuple[list[dict], list[dict]]:
-    """Скачать фото → Claude Vision → сохранить новые WardrobeItem.
-
-    Returns:
-        (added, skipped) — списки dict с полями вещей.
-        existing_set обновляется in-place добавленными вещами.
-    """
+) -> list[dict]:
+    """Скачать фото → Claude Vision → сохранить все WardrobeItem. Возвращает added."""
     tg_file = await bot.get_file(photo_id)
     photo_bytes = bytes(await tg_file.download_as_bytearray())
 
     items_data = await _call_vision(photo_bytes)
 
     added: list[dict] = []
-    skipped: list[dict] = []
 
     for data in items_data:
         cg = data.get("category_group") or "top"
@@ -322,16 +345,10 @@ async def _analyze_and_save(
             cg = "top"
         data["category_group"] = cg
 
-        key = _dedup_key(data)
-        if key in existing_set:
-            skipped.append(data)
-            continue
-
         await _save_one(owner_id, owner_type, photo_id, data, matrix)
-        existing_set.add(key)
         added.append(data)
 
-    return added, skipped
+    return added
 
 
 # ── Оценка образа ───────────────────────────────────────────────────────────
@@ -361,7 +378,7 @@ async def _rate_photos(file_ids: list[str], mode: str, message, bot) -> None:
 
 async def _send_action_buttons(message, group_id: str) -> None:
     keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("📥 Добавить в гардероб", callback_data=f"photo_action:add:{group_id}"),
+        InlineKeyboardButton("👜 В гардероб", callback_data=f"photo_action:add:{group_id}"),
         InlineKeyboardButton("⭐ Оценить образ", callback_data=f"photo_action:rate:{group_id}"),
     ]])
     await message.reply_text("Что делаем с фото?", reply_markup=keyboard)
@@ -407,7 +424,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 existing = await get_owner_items(session, user.id, "user")
             if not existing:
                 await update.message.reply_text(
-                    "💡 Совет: можно отправить до 10 фото за раз — добавлю все вещи сразу!"
+                    "💡 Советы для лучшего результата:\n"
+                    "📱 Снимай вертикально\n"
+                    "🗂 До 10 вещей на фото\n"
+                    "💡 Раскладывай вещи так чтобы они не перекрывали друг друга"
                 )
                 await redis.set(tip_key, "1", ex=31_536_000)
 
@@ -421,7 +441,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await _handle_single_photo(update, context, user, owner_id, owner_type)
         return
 
-    file_id = update.message.photo[-1].file_id
+    if update.message.photo:
+        file_id = update.message.photo[-1].file_id
+    elif update.message.document:
+        file_id = update.message.document.file_id
+    else:
+        return
     media_group_id = update.message.media_group_id
 
     if not media_group_id:
@@ -455,8 +480,7 @@ async def _handle_single_photo(
 
         redis = context.bot_data.get("redis")
         matrix = await _get_scoring_matrix(redis, user, owner_id, owner_type)
-        existing_set = await _load_existing_set(owner_id, owner_type)
-        added, skipped = await _analyze_and_save(photo_id, owner_id, owner_type, context.bot, existing_set, matrix)
+        added = await _analyze_and_save(photo_id, owner_id, owner_type, context.bot, matrix)
 
         new_count = user.daily_requests_used + 1
         async with AsyncWriteSession() as session:
@@ -474,10 +498,7 @@ async def _handle_single_photo(
             lines.append(f"✅ Добавила {len(added)} вещей:")
             for d in added:
                 lines.append(f"→ {_item_label(d)}")
-        if skipped:
-            skipped_names = ", ".join(_item_label(d) for d in skipped)
-            lines.append(f"⏭ Пропустила {len(skipped)} (уже в гардеробе): {skipped_names}")
-        if not added and not skipped:
+        if not added:
             lines.append("🤔 На фото не найдено одежды")
 
         await update.message.reply_text("\n".join(lines))
@@ -491,7 +512,6 @@ async def _handle_single_photo(
             user_id=str(user.id),
             action="wardrobe.item.added",
             added=len(added),
-            skipped=len(skipped),
             duration_ms=duration_ms,
         )
 
@@ -625,10 +645,10 @@ async def _process_media_group(
     else:
         await message.reply_text(f"📸 Получила {total_received} фото. Начинаю анализ...")
 
-    progress_msg = await message.reply_text(f"🔍 Анализирую фото 1 из {total}...")
+    progress_text = f"🔍 Анализирую фото 1 из {total}..."
+    progress_msg = await message.reply_text(progress_text)
 
     matrix = await _get_scoring_matrix(context.bot_data.get("redis") if context else None, user, owner_id, owner_type)
-    existing_set = await _load_existing_set(owner_id, owner_type)
 
     photo_lines: list[str] = []
     total_added = 0
@@ -636,27 +656,35 @@ async def _process_media_group(
 
     for i, file_id in enumerate(to_process):
         try:
-            await progress_msg.edit_text(f"🔍 Анализирую фото {i + 1} из {total}...")
-            added, skipped = await _analyze_and_save(file_id, owner_id, owner_type, bot, existing_set, matrix)
+            logger.info("wardrobe.processing", index=i, file_id=file_id[:20])
+            new_progress = f"🔍 Анализирую фото {i + 1} из {total}..."
+            if new_progress != progress_text:
+                await progress_msg.edit_text(new_progress)
+                progress_text = new_progress
+
+            logger.info("wardrobe.vision_start", index=i)
+            tg_file = await bot.get_file(file_id)
+            photo_bytes = bytes(await tg_file.download_as_bytearray())
+            items_data = await _call_vision(photo_bytes)
+            logger.info("wardrobe.vision_done", index=i, items_count=len(items_data))
+
+            added: list[dict] = []
+            for data in items_data:
+                cg = data.get("category_group") or "top"
+                if cg not in _VALID_CATEGORY_GROUPS:
+                    cg = "top"
+                data["category_group"] = cg
+                logger.info("wardrobe.save_start", index=i, item_type=data.get("type"))
+                await _save_one(owner_id, owner_type, file_id, data, matrix)
+                added.append(data)
+                logger.info("wardrobe.save_done", index=i)
+
             successful_photos += 1
             total_added += len(added)
 
-            if added and skipped:
-                added_names = ", ".join(_item_label(d) for d in added)
-                skipped_names = ", ".join(_item_label(d) for d in skipped)
-                photo_lines.append(
-                    f"📷 Фото {i + 1}: {added_names} "
-                    f"(⏭ пропущено: {skipped_names})"
-                )
-            elif added:
+            if added:
                 names = ", ".join(_item_label(d) for d in added)
                 photo_lines.append(f"📷 Фото {i + 1}: {names}")
-            elif skipped:
-                skipped_names = ", ".join(_item_label(d) for d in skipped)
-                photo_lines.append(
-                    f"📷 Фото {i + 1}: уже в гардеробе (пропущено)"
-                    + (f" — {skipped_names}" if skipped_names else "")
-                )
             else:
                 photo_lines.append(f"📷 Фото {i + 1}: одежды не найдено")
 
@@ -666,12 +694,11 @@ async def _process_media_group(
                 action="wardrobe.item.added",
                 photo_index=i,
                 added=len(added),
-                skipped=len(skipped),
                 bulk=True,
             )
         except Exception as e:
             photo_lines.append(f"📷 Фото {i + 1}: ❌ не удалось распознать")
-            logger.warning("media_group.item_failed", index=i, error=str(e))
+            logger.error("media_group.item_failed", index=i, error=str(e), exc_info=True)
 
     for j in range(skipped_limit):
         photo_lines.append(f"📷 Фото {total + j + 1}: ⏭ пропущено (лимит запросов)")

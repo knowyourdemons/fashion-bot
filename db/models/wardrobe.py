@@ -30,7 +30,7 @@ class WardrobeItem(Base):
         Enum(
             "outerwear", "top", "bottom", "one_piece", "footwear",
             "accessory", "base_layer", "sportswear", "special",
-            "home_beach", "pregnant_specific",
+            "home_beach", "pregnant_specific", "underwear",
             name="category_group_enum",
         ),
         nullable=False,
