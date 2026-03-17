@@ -228,6 +228,38 @@ _RATE_SYSTEM = (
 )
 
 
+def _format_wardrobe_for_prompt(items: list) -> str:
+    """Форматирует список вещей гардероба для промпта."""
+    if not items:
+        return "гардероб пуст"
+    lines = []
+    for item in items[:50]:  # ограничение чтобы не переполнить контекст
+        lines.append(f"- {item.type}, {item.color}, {item.category_group}")
+    return "\n".join(lines)
+
+
+def _build_rate_prompt(wardrobe_items: list) -> str:
+    """Строит системный промпт стилиста с контекстом гардероба."""
+    wardrobe_str = _format_wardrobe_for_prompt(wardrobe_items)
+    return (
+        "Ты стилист. Оцени образ на фото (1-10).\n\n"
+        "Вещи на фото: определи сам\n"
+        f"Остальной гардероб:\n{wardrobe_str}\n\n"
+        "Структура ответа:\n"
+        "⭐ Оценка: X/10\n"
+        "✅ Что работает: (1-2 предложения)\n"
+        "❌ Что не работает: (конкретно)\n"
+        "👗 Рекомендация из гардероба:\n"
+        "   Замени [вещь на фото] на [вещь из гардероба] — это улучшит [цветовую гармонию/сезонность/стиль]\n\n"
+        "Правила:\n"
+        "- НЕ советуй купить то что уже есть в гардеробе\n"
+        "- Рекомендуй ТОЛЬКО вещи из списка гардероба, не придумывай\n"
+        "- Если образ уже идеальный (8+) — рекомендации не нужны\n"
+        "- Максимум 2 рекомендации\n"
+        "Язык: русский."
+    )
+
+
 def _dedup_key(data: dict) -> tuple:
     """Ключ дедупликации: (тип, цвет, категория) в нижнем регистре."""
     return (
@@ -398,7 +430,11 @@ async def _call_vision(photo_bytes: bytes) -> list[dict]:
 
 # ── Вызов Claude Vision → оценка образа ────────────────────────────────────
 
-async def _call_rate_vision(photo_bytes_list: list[bytes]) -> str:
+async def _call_rate_vision(
+    photo_bytes_list: list[bytes],
+    owner_id: uuid.UUID | None = None,
+    owner_type: str | None = None,
+) -> str:
     pool = get_anthropic_pool()
     content = []
     for photo_bytes in photo_bytes_list:
@@ -412,10 +448,17 @@ async def _call_rate_vision(photo_bytes_list: list[bytes]) -> str:
         })
     content.append({"type": "text", "text": "Оцени образ на фото."})
 
+    if owner_id and owner_type:
+        async with AsyncReadSession() as session:
+            wardrobe_items = await get_owner_items(session, owner_id, owner_type)
+        system_prompt = _build_rate_prompt(wardrobe_items)
+    else:
+        system_prompt = _RATE_SYSTEM
+
     response = await pool.create_message(
-        system=_RATE_SYSTEM,
+        system=system_prompt,
         messages=[{"role": "user", "content": content}],
-        max_tokens=256,
+        max_tokens=512,
     )
     return response.content[0].text.strip() if response.content else "Не удалось оценить образ"
 
@@ -533,20 +576,27 @@ async def _analyze_and_save(
 
 # ── Оценка образа ───────────────────────────────────────────────────────────
 
-async def _rate_photos(file_ids: list[str], mode: str, message, bot) -> None:
+async def _rate_photos(
+    file_ids: list[str],
+    mode: str,
+    message,
+    bot,
+    owner_id: uuid.UUID | None = None,
+    owner_type: str | None = None,
+) -> None:
     try:
         if mode == "single":
             photo_bytes_list = []
             for file_id in file_ids:
                 tg_file = await bot.get_file(file_id)
                 photo_bytes_list.append(bytes(await tg_file.download_as_bytearray()))
-            result = await _call_rate_vision(photo_bytes_list)
+            result = await _call_rate_vision(photo_bytes_list, owner_id=owner_id, owner_type=owner_type)
             await message.reply_text(f"⭐ Скор образа:\n{result}")
         else:
             for i, file_id in enumerate(file_ids, 1):
                 tg_file = await bot.get_file(file_id)
                 photo_bytes = bytes(await tg_file.download_as_bytearray())
-                result = await _call_rate_vision([photo_bytes])
+                result = await _call_rate_vision([photo_bytes], owner_id=owner_id, owner_type=owner_type)
                 await message.reply_text(f"📷 Фото {i}:\n{result}")
     except Exception as e:
         await message.reply_text("Не удалось оценить образ. Попробуй ещё раз.")
@@ -745,6 +795,7 @@ async def handle_photo_action(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
     elif action == "rate":
+        owner_id, owner_type = await _get_owner(user, context)
         if len(file_ids) > 1:
             keyboard = InlineKeyboardMarkup([[
                 InlineKeyboardButton("👗 Это один образ", callback_data=f"rate_mode:single:{group_id}"),
@@ -753,7 +804,7 @@ async def handle_photo_action(update: Update, context: ContextTypes.DEFAULT_TYPE
             await query.edit_message_text("Как оцениваем?", reply_markup=keyboard)
         else:
             await query.edit_message_text("⭐ Оцениваю...")
-            asyncio.create_task(_rate_photos(file_ids, "single", query.message, context.bot))
+            asyncio.create_task(_rate_photos(file_ids, "single", query.message, context.bot, owner_id=owner_id, owner_type=owner_type))
 
 
 # ── Callback: режим оценки ───────────────────────────────────────────────────
@@ -771,9 +822,12 @@ async def handle_rate_mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await query.edit_message_text("⏱ Время вышло. Отправь фото ещё раз.")
         return
 
+    user = context.user_data.get("db_user")
+    owner_id, owner_type = await _get_owner(user, context) if user else (None, None)
+
     file_ids = json.loads(raw if isinstance(raw, str) else raw.decode())
     await query.edit_message_text("⭐ Оцениваю...")
-    asyncio.create_task(_rate_photos(file_ids, mode, query.message, context.bot))
+    asyncio.create_task(_rate_photos(file_ids, mode, query.message, context.bot, owner_id=owner_id, owner_type=owner_type))
 
 
 # ── Обработка медиагруппы (добавление в гардероб) ──────────────────────────
