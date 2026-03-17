@@ -581,19 +581,68 @@ async def generate_brief(payload: dict) -> dict:
         await session.commit()
         brief_id = str(log.id)
 
+    # Собираем уникальные photo_id для коллажа (исключаем base_layer/underwear)
+    collage_items = [
+        i for i in sum([outfit["all_items"] for outfit in
+            # пересобираем all_items из child_briefs данных
+            # берём напрямую из последнего outfit
+            []], [])
+    ]
+    # Проще: берём вещи из БД по all_outfit_ids
+    collage_photo_ids: list[str] = []
+    collage_labels: list[str] = []
+    if all_outfit_ids:
+        from db.models.wardrobe import WardrobeItem as WI
+        from sqlalchemy import select as _select2
+        import uuid as _uuid2
+        async with AsyncReadSession() as session:
+            ids_uuid = [_uuid2.UUID(i) for i in all_outfit_ids]
+            res = await session.execute(
+                _select2(WI).where(
+                    WI.id.in_(ids_uuid),
+                    WI.show_in_collage.is_(True),
+                    WI.category_group.notin_(["base_layer", "underwear"]),
+                )
+            )
+            collage_items_db = res.scalars().all()
+
+        # Дедупликация по photo_id
+        seen_photos: set[str] = set()
+        photo_to_types: dict[str, list[str]] = {}
+        for item in collage_items_db:
+            if item.photo_id not in photo_to_types:
+                photo_to_types[item.photo_id] = []
+            photo_to_types[item.photo_id].append(item.type)
+
+        for photo_id, types in photo_to_types.items():
+            collage_photo_ids.append(photo_id)
+            collage_labels.append(", ".join(types[:2]))  # макс 2 типа в подписи
+
     # Push send task
     redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
     try:
         queue = RedisQueue(redis_client)
         await queue.push(
             "send_morning_brief",
-            {"telegram_id": user.telegram_id, "text": brief_text, "brief_id": brief_id},
+            {
+                "telegram_id": user.telegram_id,
+                "text": brief_text,
+                "brief_id": brief_id,
+                "collage_photo_ids": collage_photo_ids,
+                "collage_labels": collage_labels,
+            },
             priority=QueuePriority.HIGH,
         )
     finally:
         await redis_client.aclose()
 
-    logger.info("morning_brief.generated", user_id=str(user_id), brief_id=brief_id)
+    logger.info(
+        "morning_brief.generated",
+        user_id=str(user_id),
+        brief_id=brief_id,
+        outfit_ids_count=len(all_outfit_ids),
+        collage_photos_count=len(collage_photo_ids),
+    )
     return {"brief_id": brief_id}
 
 
@@ -613,12 +662,38 @@ async def send_morning_brief(payload: dict) -> dict:
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(
-                f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
-                json={"chat_id": telegram_id, "text": text, "reply_markup": reply_markup},
-            )
+            # Пробуем собрать коллаж
+            collage_photo_ids = payload.get("collage_photo_ids", [])
+            collage_labels = payload.get("collage_labels", [])
+            collage_bytes = None
+
+            if collage_photo_ids:
+                try:
+                    from services.image_builder import build_collage
+                    collage_bytes = await build_collage(collage_photo_ids, collage_labels)
+                except Exception as e:
+                    logger.warning("morning_brief.collage_failed", error=str(e))
+
+            if collage_bytes:
+                # Отправляем фото с caption и кнопками
+                import base64 as _b64
+                resp = await client.post(
+                    f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendPhoto",
+                    data={
+                        "chat_id": telegram_id,
+                        "caption": text,
+                        "reply_markup": json.dumps(reply_markup),
+                    },
+                    files={"photo": ("collage.jpg", collage_bytes, "image/jpeg")},
+                )
+            else:
+                # Фолбэк — просто текст
+                resp = await client.post(
+                    f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+                    json={"chat_id": telegram_id, "text": text, "reply_markup": reply_markup},
+                )
             resp.raise_for_status()
-        logger.info("morning_brief.sent", telegram_id=telegram_id, brief_id=brief_id)
+        logger.info("morning_brief.sent", telegram_id=telegram_id, brief_id=brief_id, has_collage=bool(collage_bytes))
         return {"sent": True}
     except Exception as e:
         logger.error("morning_brief.send_failed", telegram_id=telegram_id, error=str(e))
