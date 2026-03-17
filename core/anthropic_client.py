@@ -51,9 +51,13 @@ class AnthropicPool:
         max_tokens: int = 1024,
         model: str = PRIMARY_MODEL,
         use_cache: bool = False,
+        system: str | list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> anthropic.types.Message:
         """Отправляет запрос с автофейловером по ключам."""
+        if isinstance(system, str):
+            system = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+
         last_error: Exception | None = None
 
         for attempt in range(MAX_RETRIES):
@@ -63,13 +67,19 @@ class AnthropicPool:
             try:
                 await self._rate_limiter.check_api_key_rpm(key_id)
 
+                call_kwargs = dict(kwargs)
+                if system is not None:
+                    call_kwargs["system"] = system
+
                 response = await cb.call(
                     client.messages.create,
                     model=model,
                     max_tokens=max_tokens,
                     messages=messages,
-                    **kwargs,
+                    **call_kwargs,
                 )
+                cache_read = getattr(response.usage, "cache_read_input_tokens", 0)
+                cache_write = getattr(response.usage, "cache_creation_input_tokens", 0)
                 logger.info(
                     "anthropic.request.ok",
                     model=model,
@@ -78,6 +88,8 @@ class AnthropicPool:
                     input_tokens=response.usage.input_tokens,
                     output_tokens=response.usage.output_tokens,
                 )
+                if cache_read or cache_write:
+                    logger.info("anthropic.cache", cache_read=cache_read, cache_write=cache_write)
                 return response
 
             except RateLimitError:
