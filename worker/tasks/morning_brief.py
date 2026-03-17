@@ -13,6 +13,7 @@ import structlog
 
 from config import settings
 from worker.fast_worker import register
+from worker.tasks.style_config import get_placeholder_label, get_temp_regime
 
 logger = structlog.get_logger()
 
@@ -324,6 +325,8 @@ def _format_child_block(
     outfit_score,
     wow_msg: str,
     temp: float | None = None,
+    colortype: str = "default",
+    regime: str = "прохладно",
 ) -> str:
     temp = temp if temp is not None else outfit.get("temp", 15.0)
     lines = [f"👧 {child_name} ({day_type}):"]
@@ -358,12 +361,14 @@ def _format_child_block(
             i = outfit["top"]
             lines.append(f"→ 👕 {i.type} ({i.color})")
         else:
-            lines.append(f"→ 👕 любой верх по сезону{_MISSING}")
+            lbl = get_placeholder_label("top", colortype, regime)
+            lines.append(f"→ 👕 {lbl or 'любой верх по сезону'}")
         if outfit["bottom"]:
             i = outfit["bottom"]
             lines.append(f"→ 👖 {i.type} ({i.color})")
         else:
-            lines.append(f"→ 👖 любые штаны/юбка{_MISSING}")
+            lbl = get_placeholder_label("bottom", colortype, regime)
+            lines.append(f"→ 👖 {lbl or 'любые штаны/юбка'}")
     if outfit["removable_layer"]:
         i = outfit["removable_layer"]
         lines.append(f"→ {i.type} ({i.color}) [снять вечером]")
@@ -373,24 +378,25 @@ def _format_child_block(
     if leg_item:
         lines.append(f"🧦 Ноги: → {leg_item.type} ({leg_item.color})")
     elif temp < 10:
-        lines.append(f"🧦 Ноги: → 🧦 колготки или тёплые носки{_MISSING}")
+        lbl = get_placeholder_label("tights", colortype, regime)
+        lines.append(f"🧦 Ноги: → 🧦 {lbl or 'колготки или тёплые носки'}")
 
     # Обувь
     if outfit["footwear"]:
         i = outfit["footwear"]
         lines.append(f"👟 Обувь: → {i.type} ({i.color})")
     else:
-        lines.append(f"👟 Обувь: → 👟 любая закрытая обувь{_MISSING}")
+        lbl = get_placeholder_label("footwear", colortype, regime)
+        lines.append(f"👟 Обувь: → 👟 {lbl or 'любая закрытая обувь'}")
 
     # Верхняя одежда
     if outfit["outerwear"]:
         i = outfit["outerwear"]
         lines.append(f"🧥 Верхняя одежда: → {i.type} ({i.color})")
     elif temp <= 15:
-        if temp < 5:
-            lines.append(f"🧥 Верхняя одежда: → 🧥 тёплая куртка или пуховик{_MISSING}")
-        else:
-            lines.append(f"🧥 Верхняя одежда: → 🧥 любая куртка/ветровка{_MISSING}")
+        lbl = get_placeholder_label("outerwear", colortype, regime)
+        if lbl:
+            lines.append(f"🧥 Верхняя одежда: → 🧥 {lbl}")
 
     # Аксессуары
     acc_parts = []
@@ -520,8 +526,16 @@ async def generate_brief(payload: dict) -> dict:
 
     child_briefs = []
     all_outfit_ids: list[str] = []
+    all_outfit_slots: list[dict] = []
     any_wow = False
     global_warnings: list[str] = []
+
+    _slot_order = ["outerwear", "top", "bottom", "one_piece", "footwear", "hat", "tights"]
+    _slot_labels = {
+        "outerwear": "куртку", "top": "верх", "bottom": "низ",
+        "one_piece": "платье", "footwear": "обувь",
+        "hat": "шапку", "tights": "колготки",
+    }
 
     for child in children:
         async with AsyncReadSession() as session:
@@ -564,7 +578,50 @@ async def generate_brief(payload: dict) -> dict:
                 wow_msg = mx.criteria.get("_wow_message", "")
             any_wow = True
 
-        child_briefs.append(_format_child_block(child.name, day_type, outfit, outfit_score, wow_msg))
+        _temp = temp_m if temp_m is not None else 10.0
+        regime = get_temp_regime(_temp)
+        colortype = getattr(child, "colortype", None) or "default"
+
+        child_briefs.append(_format_child_block(
+            child.name, day_type, outfit, outfit_score, wow_msg,
+            temp=_temp, colortype=colortype, regime=regime,
+        ))
+
+        # Собираем outfit_slots для коллажа с плейсхолдерами
+        for slot_key in _slot_order:
+            item = outfit.get(slot_key)
+
+            # Логические исключения
+            if slot_key in ("top", "bottom") and outfit.get("one_piece"):
+                continue
+            if slot_key == "one_piece" and (outfit.get("top") or outfit.get("bottom")):
+                continue
+
+            if item and getattr(item, "show_in_collage", True):
+                all_outfit_slots.append({
+                    "slot": slot_key,
+                    "label": f"{item.type} {item.color}"[:20],
+                    "photo_id": item.photo_id,
+                    "photo_url": item.photo_url,
+                    "has_item": True,
+                })
+            else:
+                ph_label = get_placeholder_label(slot_key, colortype, regime)
+                if ph_label is None:
+                    continue  # слот не нужен при данной погоде
+                if " — " in ph_label:
+                    color_part = ph_label.split(" — ", 1)[1]  # "лавандовую 📸"
+                else:
+                    color_part = "📸"
+                short_label = _slot_labels.get(slot_key, slot_key)
+                all_outfit_slots.append({
+                    "slot": slot_key,
+                    "short_label": short_label,
+                    "label": color_part,
+                    "photo_id": None,
+                    "photo_url": None,
+                    "has_item": False,
+                })
 
     # ── Заголовок с погодой ──────────────────────────────────────────────
     weather_line = ""
@@ -573,10 +630,22 @@ async def generate_brief(payload: dict) -> dict:
         se = "+" if (temp_e or 0) >= 0 else ""
         weather_line = f"🌡 {user.city}: {sm}{temp_m}°C → вечером {se}{temp_e}°C"
 
+    # Слить температурный warning в weather_line (избежать дублирования)
+    # outfit["warnings"] содержит "🌡 Утром X°C → вечером Y°C — одень слоями!"
+    # — температура уже есть в weather_line, нужна только подсказка
+    extra_warnings = []
+    for warn in global_warnings:
+        if warn.startswith("🌡"):
+            if weather_line:
+                weather_line += " — одень слоями! 🎽"
+            # иначе просто пропустить — температура уже в weather_line
+        else:
+            extra_warnings.append(warn)
+
     header = f"🌅 Доброе утро, {user.name}!"
     if weather_line:
         header += f"\n{weather_line}"
-    for warn in global_warnings:
+    for warn in extra_warnings:
         header += f"\n{warn}"
 
     brief_text = (
@@ -644,6 +713,7 @@ async def generate_brief(payload: dict) -> dict:
                 "telegram_id": user.telegram_id,
                 "text": brief_text,
                 "brief_id": brief_id,
+                "outfit_slots": all_outfit_slots,
                 "collage_photo_ids": collage_photo_ids,
                 "collage_labels": collage_labels,
                 "collage_photo_urls": collage_photo_urls,
@@ -685,11 +755,20 @@ async def send_morning_brief(payload: dict) -> dict:
             collage_photo_urls = payload.get("collage_photo_urls")
             collage_bytes = None
 
-            if collage_photo_ids:
+            outfit_slots = payload.get("outfit_slots")
+            if outfit_slots:
+                try:
+                    from services.image_builder import build_collage
+                    collage_bytes = await build_collage(outfit_slots=outfit_slots)
+                except Exception as e:
+                    logger.warning("morning_brief.collage_failed", error=str(e))
+            elif collage_photo_ids:
                 try:
                     from services.image_builder import build_collage
                     collage_bytes = await build_collage(
-                        collage_photo_ids, collage_labels, collage_photo_urls
+                        photo_ids=collage_photo_ids,
+                        labels=collage_labels,
+                        photo_urls=collage_photo_urls,
                     )
                 except Exception as e:
                     logger.warning("morning_brief.collage_failed", error=str(e))

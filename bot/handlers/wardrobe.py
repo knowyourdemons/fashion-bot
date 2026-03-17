@@ -311,14 +311,44 @@ def _crop_bbox(image_bytes: bytes, bbox: dict) -> bytes:
     return buf.getvalue()
 
 
-async def _upload_crop(photo_bytes: bytes, bbox: dict | None, owner_id: uuid.UUID | None = None) -> str | None:
-    """Кропит по bbox → удаляет фон → загружает PNG в R2. Возвращает CDN URL или None."""
+def _check_crop_quality(png_bytes: bytes, min_ratio: float = 0.15) -> bool:
+    """
+    Проверяет что вещь занимает достаточно места в кропе.
+    Считает долю непрозрачных пикселей (альфа > 30).
+    Возвращает True если вещь >= min_ratio площади кропа.
+    """
+    try:
+        from PIL import Image as _Image
+        img = _Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+        pixels = list(img.getdata())
+        total = len(pixels)
+        opaque = sum(1 for p in pixels if p[3] > 30)
+        ratio = opaque / total if total > 0 else 0
+        return ratio >= min_ratio
+    except Exception:
+        return True  # fallback — не блокировать сохранение
+
+
+async def _upload_crop(
+    photo_bytes: bytes,
+    bbox: dict | None,
+    owner_id: uuid.UUID | None = None,
+) -> tuple[str | None, bool]:
+    """Кропит по bbox → удаляет фон → загружает PNG в R2.
+    Возвращает (CDN URL или None, good_crop: bool)."""
     if not bbox:
-        return None
+        return None, True
     try:
         crop_bytes = _crop_bbox(photo_bytes, bbox)
         from services.image_processor import remove_background
         png_bytes = await remove_background(crop_bytes)
+        # Проверяем качество кропа (доля непрозрачных пикселей)
+        good_crop = _check_crop_quality(png_bytes)
+        if not good_crop:
+            logger.warning(
+                "wardrobe.crop.low_quality",
+                action="show_in_collage=False",
+            )
         # Определяем формат по результату: remove.bg возвращает PNG, fallback — JPEG
         is_png = png_bytes[:4] == b'\x89PNG'
         ext = "png" if is_png else "jpg"
@@ -326,13 +356,16 @@ async def _upload_crop(photo_bytes: bytes, bbox: dict | None, owner_id: uuid.UUI
         from services.storage.r2_storage import get_r2_storage
         r2 = get_r2_storage()
         filename = f"{uuid.uuid4()}.{ext}"
-        key = await r2.upload_photo(png_bytes, filename, owner_id=str(owner_id) if owner_id else "", content_type=content_type)
-        if settings.cloudflare_r2_cdn_url:
-            return r2.get_public_url(key)
-        return key
+        key = await r2.upload_photo(
+            png_bytes, filename,
+            owner_id=str(owner_id) if owner_id else "",
+            content_type=content_type,
+        )
+        url = r2.get_public_url(key) if settings.cloudflare_r2_cdn_url else key
+        return url, good_crop
     except Exception as e:
         logger.warning("wardrobe.crop_upload_failed", error=str(e))
-        return None
+        return None, True
 
 
 # ── Определить владельца вещи (пользователь или ребёнок) ───────────────────
@@ -495,6 +528,7 @@ async def _save_one(
     data: dict,
     matrix=None,
     photo_url: str | None = None,
+    show_in_collage: bool = True,
 ) -> bool:
     """Сохраняет WardrobeItem."""
     category_group = data.get("category_group") or "top"
@@ -532,7 +566,7 @@ async def _save_one(
                 keep=True,
                 wishlist=False,
                 quantity=1,
-                show_in_collage=True,
+                show_in_collage=show_in_collage,
                 is_base_layer=(category_group == "base_layer"),
                 score_item=score_item,
                 score_breakdown=score_breakdown,
@@ -596,8 +630,9 @@ async def _analyze_and_save(
                 bbox = {"x": 0.1, "y": 0.1, "w": 0.8, "h": 0.8}
                 data["bbox"] = bbox
 
-        photo_url = await _upload_crop(photo_bytes, bbox, owner_id=owner_id)
-        await _save_one(owner_id, owner_type, photo_id, data, matrix, photo_url=photo_url)
+        photo_url, good_crop = await _upload_crop(photo_bytes, bbox, owner_id=owner_id)
+        await _save_one(owner_id, owner_type, photo_id, data, matrix,
+                        photo_url=photo_url, show_in_collage=good_crop)
         existing_set.add(key)
         added.append(data)
 
@@ -959,8 +994,9 @@ async def _process_media_group(
                         )
                         bbox = {"x": 0.1, "y": 0.1, "w": 0.8, "h": 0.8}
                         data["bbox"] = bbox
-                photo_url = await _upload_crop(photo_bytes, bbox, owner_id=owner_id)
-                await _save_one(owner_id, owner_type, file_id, data, matrix, photo_url=photo_url)
+                photo_url, good_crop = await _upload_crop(photo_bytes, bbox, owner_id=owner_id)
+                await _save_one(owner_id, owner_type, file_id, data, matrix,
+                                photo_url=photo_url, show_in_collage=good_crop)
                 existing_set.add(key)
                 added.append(data)
                 logger.info("wardrobe.save_done", index=i)
