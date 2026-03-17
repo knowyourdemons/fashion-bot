@@ -347,14 +347,14 @@ def _format_child_block(
         lines.append("👗 Образ:")
         if outfit["one_piece"]:
             i = outfit["one_piece"]
-            lines.append(f"→ {i.type} ({i.color})")
+            lines.append(f"→ 👗 {i.type} ({i.color})")
         else:
             if outfit["top"]:
                 i = outfit["top"]
-                lines.append(f"→ {i.type} ({i.color})")
+                lines.append(f"→ 👕 {i.type} ({i.color})")
             if outfit["bottom"]:
                 i = outfit["bottom"]
-                lines.append(f"→ {i.type} ({i.color})")
+                lines.append(f"→ 👖 {i.type} ({i.color})")
         if outfit["removable_layer"]:
             i = outfit["removable_layer"]
             lines.append(f"→ {i.type} ({i.color}) [снять вечером]")
@@ -602,7 +602,7 @@ async def generate_brief(payload: dict) -> dict:
                 _select2(WI).where(
                     WI.id.in_(ids_uuid),
                     WI.show_in_collage.is_(True),
-                    WI.category_group.notin_(["base_layer", "underwear"]),
+                    WI.category_group.notin_(["underwear"]),
                 )
             )
             collage_items_db = res.scalars().all()
