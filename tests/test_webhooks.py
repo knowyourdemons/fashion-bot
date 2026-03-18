@@ -35,7 +35,7 @@ class TestTelegramWebhookSecurity:
     def test_valid_secret_returns_200(self):
         """Правильный X-Telegram-Bot-Api-Secret-Token → 200."""
         app, _, TestClient = _make_test_app()
-        with patch("config.settings") as mock_s:
+        with patch("api.routes.webhooks.settings") as mock_s:
             mock_s.telegram_webhook_secret = "test_secret_token"
             with TestClient(app) as client:
                 resp = client.post(
@@ -48,7 +48,7 @@ class TestTelegramWebhookSecurity:
     def test_invalid_secret_returns_403(self):
         """Неправильный токен → 403."""
         app, _, TestClient = _make_test_app()
-        with patch("config.settings") as mock_s:
+        with patch("api.routes.webhooks.settings") as mock_s:
             mock_s.telegram_webhook_secret = "test_secret_token"
             with TestClient(app) as client:
                 resp = client.post(
@@ -61,7 +61,7 @@ class TestTelegramWebhookSecurity:
     def test_no_secret_header_returns_403(self):
         """Без заголовка → 403 (если secret задан в настройках)."""
         app, _, TestClient = _make_test_app()
-        with patch("config.settings") as mock_s:
+        with patch("api.routes.webhooks.settings") as mock_s:
             mock_s.telegram_webhook_secret = "test_secret_token"
             with TestClient(app) as client:
                 resp = client.post(
@@ -73,7 +73,7 @@ class TestTelegramWebhookSecurity:
     def test_no_secret_configured_allows_all(self):
         """Если telegram_webhook_secret не задан → запросы проходят."""
         app, _, TestClient = _make_test_app()
-        with patch("config.settings") as mock_s:
+        with patch("api.routes.webhooks.settings") as mock_s:
             mock_s.telegram_webhook_secret = ""
             with TestClient(app) as client:
                 resp = client.post(
@@ -100,7 +100,7 @@ class TestStripeWebhookSecurity:
         body = json.dumps({"type": "payment_intent.created"}).encode()
         sig_header = self._make_sig(secret, body)
 
-        with patch("config.settings") as mock_s:
+        with patch("api.routes.webhooks.settings") as mock_s:
             mock_s.stripe_webhook_secret = secret
             mock_s.telegram_webhook_secret = ""
             with TestClient(app) as client:
@@ -119,7 +119,7 @@ class TestStripeWebhookSecurity:
         app, _, TestClient = _make_test_app()
         body = json.dumps({"type": "checkout.session.completed"}).encode()
 
-        with patch("config.settings") as mock_s:
+        with patch("api.routes.webhooks.settings") as mock_s:
             mock_s.stripe_webhook_secret = "whsec_real_secret"
             mock_s.telegram_webhook_secret = ""
             with TestClient(app) as client:
@@ -138,7 +138,7 @@ class TestStripeWebhookSecurity:
         app, _, TestClient = _make_test_app()
         body = json.dumps({"type": "payment_intent.created"}).encode()
 
-        with patch("config.settings") as mock_s:
+        with patch("api.routes.webhooks.settings") as mock_s:
             mock_s.stripe_webhook_secret = ""
             mock_s.telegram_webhook_secret = ""
             with TestClient(app) as client:
@@ -161,7 +161,7 @@ class TestStripeWebhookSecurity:
         }
         body = json.dumps(event).encode()
 
-        with patch("config.settings") as mock_s:
+        with patch("api.routes.webhooks.settings") as mock_s:
             mock_s.stripe_webhook_secret = ""
             mock_s.telegram_webhook_secret = ""
             with patch("api.routes.webhooks._activate_premium_after_payment", new_callable=AsyncMock) as mock_activate:
