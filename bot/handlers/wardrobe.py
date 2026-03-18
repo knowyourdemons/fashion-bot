@@ -942,6 +942,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # ── Лимиты: фото в день и размер гардероба ───────────────────────────────
     _effective_plan = get_effective_plan(user)
     if _effective_plan != "admin":
+        # Первые 5 вещей — без лимита (онбординг через фото)
+        _owner_id_check, _owner_type_check = await _get_owner(user, context)
+        async with AsyncReadSession() as _session_check:
+            _existing_items = await get_owner_items(_session_check, _owner_id_check, _owner_type_check)
+        _skip_daily_limit = len(_existing_items) < 5
+
         from datetime import date as _date_ph
         _today_ph = _date_ph.today().isoformat()
         _photo_key = f"photos_day:{user.id}:{_today_ph}"
@@ -950,7 +956,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             _val = await redis.get(_photo_key)
             _photo_count = int(_val) if _val else 0
         _photo_limit = get_limit("photos_per_day", _effective_plan)
-        if _photo_count >= _photo_limit:
+        if not _skip_daily_limit and _photo_count >= _photo_limit:
             keyboard = InlineKeyboardMarkup([[
                 InlineKeyboardButton("✨ Получить безлимит →", callback_data="show_upgrade")
             ]])
@@ -961,10 +967,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
             return
 
-        # Проверить лимит размера гардероба
-        _owner_id_check, _owner_type_check = await _get_owner(user, context)
-        async with AsyncReadSession() as _session_check:
-            _existing_items = await get_owner_items(_session_check, _owner_id_check, _owner_type_check)
+        # Проверить лимит размера гардероба (используем _existing_items уже загруженный выше)
         _wardrobe_limit = get_limit("wardrobe_size", _effective_plan)
         if len(_existing_items) >= _wardrobe_limit:
             keyboard = InlineKeyboardMarkup([[

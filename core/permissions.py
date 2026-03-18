@@ -13,7 +13,7 @@ LIMITS: dict[str, dict[str, Any]] = {
         "photos_per_day":     3,
         "wardrobe_size":      30,
         "rate_per_day":       3,
-        "chat_per_day":       3,
+        "chat_per_day":       1,
         "outfit_req_per_day": 1,
         "brief_days":         [1, 3],   # вт=1, чт=3 (weekday, 0=пн)
         "brief_weekends":     False,
