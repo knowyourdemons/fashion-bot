@@ -35,11 +35,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not user:
         return
 
-    # Проверка дневного лимита
-    limit = _PLAN_LIMITS.get(user.plan, settings.daily_limits_free)
-    if limit != -1 and user.daily_requests_used >= limit:
-        await update.message.reply_text(get_limit_exceeded_msg(user))
-        return
+    # Проверка дневного лимита (не применяется во время онбординга)
+    if getattr(user, "onboarding_completed", True):
+        limit = _PLAN_LIMITS.get(user.plan, settings.daily_limits_free)
+        if limit != -1 and user.daily_requests_used >= limit:
+            await update.message.reply_text(get_limit_exceeded_msg(user))
+            return
 
     try:
         start = time.monotonic()

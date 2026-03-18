@@ -14,6 +14,7 @@ import structlog
 import sentry_sdk
 import httpx
 from datetime import datetime
+from config import settings
 
 import sqlalchemy as sa
 from telegram import (
@@ -50,7 +51,8 @@ logger = structlog.get_logger()
     CITY,
     CITY_SUGGEST,
     RESUME_CONFIRM,
-) = range(8)
+    ALSO_SELF,
+) = range(9)
 
 _STEP_TO_STATE: dict[str, int] = {
     "segment":         SEGMENT,
@@ -84,14 +86,10 @@ async def _save_user_fields(user: User, **fields) -> None:
 
 async def _ask_segment(update: Update) -> None:
     keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(t("onboarding.segment.mom_girl"), callback_data="segment:mom_girl"),
-            InlineKeyboardButton(t("onboarding.segment.mom_boy"),  callback_data="segment:mom_boy"),
-        ],
-        [
-            InlineKeyboardButton(t("onboarding.segment.pregnant"), callback_data="segment:pregnant"),
-            InlineKeyboardButton(t("onboarding.segment.no_kids"),  callback_data="segment:no_kids"),
-        ],
+        [InlineKeyboardButton(t("onboarding.segment.no_kids"),  callback_data="segment:no_kids")],
+        [InlineKeyboardButton(t("onboarding.segment.mom_girl"), callback_data="segment:mom_girl")],
+        [InlineKeyboardButton(t("onboarding.segment.mom_boy"),  callback_data="segment:mom_boy")],
+        [InlineKeyboardButton(t("onboarding.segment.pregnant"), callback_data="segment:pregnant")],
     ])
     await update.effective_message.reply_text(t("onboarding.start"), reply_markup=keyboard)
 
@@ -188,10 +186,22 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         return ConversationHandler.END
 
     if user.onboarding_completed:
-        await update.effective_message.reply_text(
-            f"Привет, {user.name}! Пришли фото вещи или /wardrobe",
-            reply_markup=ReplyKeyboardRemove(),
-        )
+        if user.telegram_id in settings.admin_ids_list:
+            await update.effective_message.reply_text(
+                f"👑 Admin режим\n\n"
+                f"Привет, {user.name}!\n\n"
+                f"Команды:\n"
+                f"/wardrobe — гардероб\n"
+                f"/brief — утренний бриф\n"
+                f"/subscribe — подписка\n"
+                f"/debug — дебаг",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+        else:
+            await update.effective_message.reply_text(
+                f"Привет, {user.name}! Пришли фото вещи или /wardrobe",
+                reply_markup=ReplyKeyboardRemove(),
+            )
         return ConversationHandler.END
 
     # Предложить продолжить с места или начать заново
@@ -265,13 +275,31 @@ async def handle_segment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if segment in ("mom_girl", "mom_boy"):
         await _save_user_fields(user, segment=segment, onboarding_step="child_name")
-        q = t("onboarding.child_name") if segment == "mom_girl" else "Как зовут сына?"
-        await query.message.reply_text(q, reply_markup=ReplyKeyboardRemove())
-        return CHILD_NAME
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Только для ребёнка", callback_data="also_self:no")],
+            [InlineKeyboardButton("Для себя и ребёнка", callback_data="also_self:yes")],
+        ])
+        await query.message.reply_text("Хочешь вести гардероб и для себя тоже? 👗", reply_markup=keyboard)
+        return ALSO_SELF
     else:
         await _save_user_fields(user, segment=segment, onboarding_step="city")
         await _ask_city(update)
         return CITY
+
+
+# ── Шаг 1б: Для себя тоже? ────────────────────────────────────────────────
+
+async def handle_also_self(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    context.user_data["also_self"] = query.data.split(":")[1] == "yes"
+    user = context.user_data.get("db_user")
+    segment = context.user_data.get("segment") or (user.segment if user else None)
+
+    q = t("onboarding.child_name") if segment == "mom_girl" else "Как зовут сына?"
+    await query.message.reply_text(q, reply_markup=ReplyKeyboardRemove())
+    return CHILD_NAME
 
 
 # ── Шаг 2: Имя ребёнка ────────────────────────────────────────────────────
@@ -306,8 +334,22 @@ async def handle_child_birthdate(update: Update, context: ContextTypes.DEFAULT_T
 
 # ── Шаг 4: Размер одежды ──────────────────────────────────────────────────
 
+_AGE_TO_SIZE = {
+    1: 86, 2: 92, 3: 98, 4: 104,
+    5: 110, 6: 116, 7: 122, 8: 128,
+    9: 134, 10: 140, 11: 146, 12: 152,
+}
+
+
 async def handle_child_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    size = update.message.text.strip()
+    text = update.message.text.strip()
+    size = text
+    try:
+        val = int(text)
+        if 1 <= val <= 12:
+            size = str(_AGE_TO_SIZE[val])
+    except ValueError:
+        pass
     context.user_data["child_size"] = size
     user = context.user_data.get("db_user")
     await _save_user_fields(user, onboarding_step="child_shoe_size")
@@ -317,12 +359,24 @@ async def handle_child_size(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 # ── Шаг 5: Размер обуви ───────────────────────────────────────────────────
 
-async def handle_child_shoe_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.message.text.strip()
+def _parse_shoe_size(text: str) -> float | None:
+    """Принимает размер обуви целым или дробным (18–50). Примеры: 26, 26.5, 26,5"""
     try:
-        shoe_size = int(text)
+        normalized = text.strip().replace(",", ".")
+        size = float(normalized)
+        if 18 <= size <= 50:
+            return size
+        return None
     except ValueError:
-        await update.message.reply_text("Введи размер обуви цифрой (например, 27):")
+        return None
+
+
+async def handle_child_shoe_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    shoe_size = _parse_shoe_size(update.message.text)
+    if shoe_size is None:
+        await update.message.reply_text(
+            "Введи размер обуви числом от 18 до 50\nНапример: 26, 26.5 или 36"
+        )
         return CHILD_SHOE_SIZE
     context.user_data["child_shoe_size"] = shoe_size
     user = context.user_data.get("db_user")
@@ -498,6 +552,9 @@ def build_conversation_handler() -> ConversationHandler:
             ],
             SEGMENT: [
                 CallbackQueryHandler(handle_segment, pattern="^segment:"),
+            ],
+            ALSO_SELF: [
+                CallbackQueryHandler(handle_also_self, pattern="^also_self:"),
             ],
             CHILD_NAME: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_child_name),
