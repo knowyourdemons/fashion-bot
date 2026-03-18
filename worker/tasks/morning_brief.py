@@ -88,6 +88,32 @@ def _get_temp_regime(temp: float) -> str:
         return "сильный_мороз"
 
 
+# ── Нужны ли колготки ───────────────────────────────────────────────────────
+
+def _needs_tights(outfit: dict, temp: float) -> bool:
+    """Колготки нужны только под платье/юбку при прохладной погоде.
+    Под леггинсы/штаны/шорты — не нужны."""
+    if temp >= 15:
+        return False
+
+    one_piece = outfit.get("one_piece")
+    bottom = outfit.get("bottom")
+
+    if one_piece:
+        return True
+
+    if bottom:
+        bottom_type = (getattr(bottom, "type", None) or "").lower()
+        if any(w in bottom_type for w in ["юбка", "skirt"]):
+            return True
+        if any(w in bottom_type for w in [
+            "леггинс", "штаны", "шорты", "брюки", "джинсы", "лосины"
+        ]):
+            return False
+
+    return temp < 10
+
+
 # ── Выбор образа по температуре ─────────────────────────────────────────────
 
 def _select_outfit(
@@ -243,20 +269,25 @@ def _select_outfit(
 
     # ── СЛОЙ 3: Колготки/носки ─────────────────────────────────────────────
     if temp <= 15:
-        tights = (
-            _first_any("base_layer", ["колготк", "tights"])
-            or _first_any("footwear", ["колготк", "tights"])
-        )
-        if tights and temp <= 5:
-            warm = next(
-                (i for i in available
-                 if i.category_group in ("base_layer", "footwear")
-                 and any(w in (i.type or "").lower() for w in ["колготк", "tights"])
-                 and any(w in (i.type or "").lower() for w in ["плотн", "тёплые", "warm", "thick"])),
-                tights,
+        if _needs_tights(result, temp):
+            tights = (
+                _first_any("base_layer", ["колготк", "tights"])
+                or _first_any("footwear", ["колготк", "tights"])
             )
-            tights = warm
-        result["tights"] = tights
+            if tights and temp <= 5:
+                warm = next(
+                    (i for i in available
+                     if i.category_group in ("base_layer", "footwear")
+                     and any(w in (i.type or "").lower() for w in ["колготк", "tights"])
+                     and any(w in (i.type or "").lower() for w in ["плотн", "тёплые", "warm", "thick"])),
+                    tights,
+                )
+                tights = warm
+            result["tights"] = tights
+        result["socks"] = (
+            _first_any("base_layer", ["носк", "socks", "гольф"])
+            or _first_any("footwear", ["носк", "socks", "гольф"])
+        )
     else:
         result["socks"] = (
             _first_any("base_layer", ["носк", "socks", "гольф"])

@@ -1192,22 +1192,17 @@ async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYP
 
     buttons = []
     if children:
-        if owner_type == "user":
-            for child in children:
-                buttons.append([InlineKeyboardButton(
-                    f"Переключить на {child.name}",
-                    callback_data=f"set_owner:child:{child.id}"
-                )])
-        else:
+        if owner_type == "child":
             buttons.append([InlineKeyboardButton(
-                "👤 Мои вещи",
-                callback_data="set_owner:user"
+                "👗 Мои вещи",
+                callback_data="switch_owner:user"
             )])
-            for child in (c for c in children if c.id != owner_id):
-                buttons.append([InlineKeyboardButton(
-                    f"Переключить на {child.name}",
-                    callback_data=f"set_owner:child:{child.id}"
-                )])
+        else:
+            child_name = children[0].name if children else "ребёнка"
+            buttons.append([InlineKeyboardButton(
+                f"👧 Вещи {child_name}",
+                callback_data="switch_owner:child"
+            )])
 
     # Считаем вещи и средний скор для заголовка
     async with AsyncReadSession() as session:
@@ -1230,8 +1225,8 @@ async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
 
-async def handle_set_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Callback: переключить владельца гардероба."""
+async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: переключить владельца гардероба (без показа списка вещей)."""
     query = update.callback_query
     await query.answer()
 
@@ -1240,34 +1235,39 @@ async def handle_set_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     redis = context.bot_data.get("redis")
-    parts = query.data.split(":", 2)  # set_owner:user OR set_owner:child:{uuid}
-    new_mode = parts[1]
+    parts = query.data.split(":")  # switch_owner:user OR switch_owner:child
+    target = parts[1] if len(parts) > 1 else "child"
 
-    if new_mode == "user":
-        owner_id, owner_type = user.id, "user"
-        owner_name = user.name
-        redis_val = "user"
+    if target == "user":
+        cache_key = f"owner:{user.id}"
+        context.bot_data[cache_key] = (user.id, "user")
+        if redis:
+            await redis.set(f"owner_mode:{user.id}", "user", ex=86400 * 30)
+        owner_name = f"твои вещи 👗"
     else:
-        import uuid as _uuid
-        child_id = _uuid.UUID(parts[2])
-        owner_id, owner_type = child_id, "child"
-        redis_val = f"child:{child_id}"
         async with AsyncReadSession() as session:
             from db.crud.children import get_children
             children = await get_children(session, user.id)
-        child = next((c for c in children if c.id == child_id), None)
-        owner_name = child.name if child else "Ребёнок"
+        if not children:
+            await query.message.reply_text(
+                "Нет детей в профиле.",
+                reply_markup=get_main_menu(),
+            )
+            return
+        child = children[0]
+        cache_key = f"owner:{user.id}"
+        context.bot_data[cache_key] = (child.id, "child")
+        if redis:
+            await redis.set(
+                f"owner_mode:{user.id}",
+                f"child:{child.id}",
+                ex=86400 * 30,
+            )
+        owner_name = f"вещи {child.name} 👧"
 
-    if redis:
-        try:
-            await redis.set(f"owner_mode:{user.id}", redis_val, ex=86400 * 30)
-        except Exception as e:
-            logger.error("set_owner.redis_failed", error=str(e))
-
-    await query.message.reply_text(
-        f"✅ Гардероб переключён на *{owner_name}*", parse_mode="Markdown"
+    await query.edit_message_text(
+        f"✅ Переключено на {owner_name}"
     )
-    await _show_wardrobe_page(query.message, user, 0, owner_id=owner_id, owner_type=owner_type)
 
 
 
@@ -1307,7 +1307,7 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
 
     try:
         from services.weather import WeatherService
-        from worker.tasks.morning_brief import _select_outfit, _get_temp_regime, _SEASONS
+        from worker.tasks.morning_brief import _select_outfit, _get_temp_regime, _SEASONS, _needs_tights
         from worker.tasks.style_config import get_placeholder_label
         from services.image_builder import build_collage
 
@@ -1381,6 +1381,8 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
             if outfit_key == "one_piece" and (outfit.get("top") or outfit.get("bottom")):
                 continue
             if slot in seen_slots:
+                continue
+            if slot == "tights" and not _needs_tights(outfit, temp_m):
                 continue
             item = outfit.get(outfit_key)
             if item and getattr(item, "show_in_collage", True):

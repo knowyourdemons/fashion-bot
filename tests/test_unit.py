@@ -248,3 +248,43 @@ class TestOutfitLimits:
     def test_premium_limit(self):
         from bot.handlers.wardrobe import OUTFIT_DAY_LIMIT_PREMIUM
         assert OUTFIT_DAY_LIMIT_PREMIUM == 5
+
+
+# ── _needs_tights ──────────────────────────────────────────────────────────
+
+class TestNeedsTights:
+    def _make_item(self, type_name):
+        from unittest.mock import MagicMock
+        item = MagicMock()
+        item.type = type_name
+        return item
+
+    def test_леггинсы_не_нужны(self):
+        from worker.tasks.morning_brief import _needs_tights
+        outfit = {"bottom": self._make_item("леггинсы розовые")}
+        assert not _needs_tights(outfit, 10.0), "Под леггинсы колготки не нужны"
+
+    def test_штаны_не_нужны(self):
+        from worker.tasks.morning_brief import _needs_tights
+        outfit = {"bottom": self._make_item("штаны спортивные")}
+        assert not _needs_tights(outfit, 5.0), "Под штаны колготки не нужны"
+
+    def test_юбка_нужны_при_холоде(self):
+        from worker.tasks.morning_brief import _needs_tights
+        outfit = {"bottom": self._make_item("юбка розовая")}
+        assert _needs_tights(outfit, 10.0), "Под юбку при +10 колготки нужны"
+
+    def test_юбка_не_нужны_при_тепле(self):
+        from worker.tasks.morning_brief import _needs_tights
+        outfit = {"bottom": self._make_item("юбка розовая")}
+        assert not _needs_tights(outfit, 20.0), "Под юбку при +20 колготки не нужны"
+
+    def test_платье_нужны_при_холоде(self):
+        from worker.tasks.morning_brief import _needs_tights
+        outfit = {"one_piece": self._make_item("платье лавандовое")}
+        assert _needs_tights(outfit, 10.0), "Под платье при +10 колготки нужны"
+
+    def test_жара_никогда_не_нужны(self):
+        from worker.tasks.morning_brief import _needs_tights
+        outfit = {"one_piece": self._make_item("платье")}
+        assert not _needs_tights(outfit, 25.0), "При +25 колготки не нужны никогда"

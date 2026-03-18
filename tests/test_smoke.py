@@ -21,7 +21,7 @@ def test_import_wardrobe():
     assert hasattr(wardrobe, "handle_wardrobe_menu")
     assert hasattr(wardrobe, "handle_outfit_request")
     assert hasattr(wardrobe, "handle_list_callback")
-    assert hasattr(wardrobe, "handle_set_owner")
+    assert hasattr(wardrobe, "handle_switch_owner")
     assert hasattr(wardrobe, "_check_crop_quality")
     assert hasattr(wardrobe, "_fix_bbox")
 
