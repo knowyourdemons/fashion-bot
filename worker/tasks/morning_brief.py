@@ -22,6 +22,27 @@ from services.brief_formatter import _format_item, _format_child_block
 
 logger = structlog.get_logger()
 
+# ── Заголовок коллажа ─────────────────────────────────────────────────────────
+_DAY_NAMES = {0: "Пн", 1: "Вт", 2: "Ср", 3: "Чт", 4: "Пт", 5: "Сб", 6: "Вс"}
+_MONTH_NAMES = {1: "янв", 2: "фев", 3: "мар", 4: "апр", 5: "мая",
+                6: "июн", 7: "июл", 8: "авг", 9: "сен", 10: "окт", 11: "ноя", 12: "дек"}
+
+
+def _weather_emoji(temp, precip: float = 0) -> str:
+    if precip and precip > 50:
+        return "🌧"
+    if temp is None:
+        return "🌤"
+    if temp > 25:
+        return "☀️"
+    if temp > 15:
+        return "🌤"
+    if temp > 5:
+        return "🌥"
+    if temp > 0:
+        return "❄️"
+    return "🥶"
+
 
 # ── [Функции перенесены в services/] ────────────────────────────────────────
 # _SEASONS, _geocode_city, _get_weather  → services/brief_weather.py
@@ -235,10 +256,21 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
                     "adult": True,
                 })
 
+    # Заголовок коллажа для взрослых
+    precip_e_adult = weather.get("precip_evening", 0)
+    _emoji = _weather_emoji(temp_m, precip_e_adult or 0)
+    _sign = "+" if (temp_m or 0) >= 0 else ""
+    _day_ctx = "выходной" if today.weekday() >= 5 else "будний день"
+    collage_header = f"{_emoji} {_DAY_NAMES[today.weekday()]}, {today.day} {_MONTH_NAMES[today.month]} · {_sign}{temp_m:.0f}°C · {_day_ctx}"
+
     collage_bytes_val = None
     if outfit_slots:
         try:
-            collage_bytes_val = await build_collage(outfit_slots=outfit_slots)
+            collage_bytes_val = await build_collage(
+                outfit_slots=outfit_slots,
+                theme="adult",
+                header_text=collage_header,
+            )
         except Exception as e:
             logger.warning("brief.adult.collage_failed", error=str(e))
 
@@ -462,15 +494,18 @@ async def generate_brief(payload: dict) -> dict:
             if slot == "tights" and not tights_needed:
                 continue
 
+            _child_gender = getattr(child, "gender", "girl") or "girl"
             item = outfit.get(outfit_key)
             if item and getattr(item, "show_in_collage", True):
                 seen_slots.add(slot)
                 all_outfit_slots.append({
                     "slot": slot,
+                    "item_type": item.type,
                     "label": _format_item(item)[:20],
                     "photo_id": item.photo_id,
                     "photo_url": item.photo_url,
                     "has_item": True,
+                    "gender": _child_gender,
                 })
             else:
                 ph_label = get_placeholder_label(slot, colortype, regime)
@@ -486,6 +521,7 @@ async def generate_brief(payload: dict) -> dict:
                     "photo_id": None,
                     "photo_url": None,
                     "has_item": False,
+                    "gender": _child_gender,
                 })
 
     # ── Заголовок с погодой ──────────────────────────────────────────────
@@ -496,6 +532,20 @@ async def generate_brief(payload: dict) -> dict:
         weather_line = f"{user.city}: {sm}{temp_m}°C → вечером {se}{temp_e}°C"
     else:
         logger.warning("brief.weather.empty", city=user.city)
+
+    # Заголовок коллажа — берём из первого ребёнка
+    _first_child = children[0] if children else None
+    _emoji_h = _weather_emoji(temp_m, precip_e or 0)
+    _sign_h = "+" if (temp_m or 0) >= 0 else ""
+    if _first_child:
+        collage_header = (
+            f"{_emoji_h} {_DAY_NAMES[today.weekday()]}, {today.day} {_MONTH_NAMES[today.month]}"
+            f" · {_sign_h}{temp_m:.0f}°C · {_first_child.name}, {day_type}"
+        )
+        collage_theme = "boy" if getattr(_first_child, "gender", "girl") == "boy" else "girl"
+    else:
+        collage_header = ""
+        collage_theme = "girl"
 
     header = f"🌅 Доброе утро, {user.name}!\n"
     if weather_line:
@@ -564,6 +614,8 @@ async def generate_brief(payload: dict) -> dict:
                 "collage_photo_ids": collage_photo_ids,
                 "collage_labels": collage_labels,
                 "collage_photo_urls": collage_photo_urls,
+                "collage_header": collage_header,
+                "collage_theme": collage_theme,
             },
             priority=QueuePriority.HIGH,
         )
@@ -614,12 +666,18 @@ async def send_morning_brief(payload: dict) -> dict:
                 collage_photo_ids = payload.get("collage_photo_ids", [])
                 collage_labels = payload.get("collage_labels", [])
                 collage_photo_urls = payload.get("collage_photo_urls")
+                collage_header = payload.get("collage_header", "")
+                collage_theme = payload.get("collage_theme", "girl")
 
                 outfit_slots = payload.get("outfit_slots")
                 if outfit_slots:
                     try:
                         from services.image_builder import build_collage
-                        collage_bytes = await build_collage(outfit_slots=outfit_slots)
+                        collage_bytes = await build_collage(
+                            outfit_slots=outfit_slots,
+                            theme=collage_theme,
+                            header_text=collage_header,
+                        )
                     except Exception as e:
                         logger.warning("morning_brief.collage_failed", error=str(e))
                 elif collage_photo_ids:
@@ -629,6 +687,8 @@ async def send_morning_brief(payload: dict) -> dict:
                             photo_ids=collage_photo_ids,
                             labels=collage_labels,
                             photo_urls=collage_photo_urls,
+                            theme=collage_theme,
+                            header_text=collage_header,
                         )
                     except Exception as e:
                         logger.warning("morning_brief.collage_failed", error=str(e))

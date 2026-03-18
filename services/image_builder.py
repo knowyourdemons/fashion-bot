@@ -27,6 +27,8 @@ RADIUS        = 18
 SHADOW_OFFSET = 5
 SHADOW_BLUR   = 9
 MAX_LONG_SIDE = 1200
+HEADER_H      = 60   # высота заголовка над grid
+FOOTER_H      = 35   # высота футера под grid
 
 # ── Цвета ────────────────────────────────────────────────────────────────────
 BG_COLOR       = (250, 246, 255)   # #FAF6FF — мягкий лавандовый
@@ -37,6 +39,51 @@ LABEL_TEXT     = (139, 123, 139)   # #8B7B8B — приглушённый лил
 LABEL_DIVIDER  = (230, 222, 240)   # линия-разделитель
 PLACEHOLDER_BG = (240, 238, 240)   # #F0EEF0 — фон плейсхолдера
 SILHOUETTE_CLR = (200, 192, 204)   # #C8C0CC — сиреневато-серый силуэт
+FOOTER_TEXT_CLR = (220, 215, 228)  # очень светло-серый для футера
+
+# ── Темы градиента (по полу/аудитории) ───────────────────────────────────────
+_THEMES = {
+    "girl":  {"top": (250, 246, 255), "bot": (255, 240, 248)},  # лавандовый→розовый
+    "boy":   {"top": (240, 248, 245), "bot": (235, 245, 252)},  # мятный→голубой
+    "adult": {"top": (255, 250, 245), "bot": (250, 245, 240)},  # бежевый→персик
+}
+
+# ── Эмодзи и подписи по слоту ────────────────────────────────────────────────
+_SLOT_EMOJI = {
+    "outerwear": "🧥", "top": "👚", "bottom": "👖",
+    "one_piece": "👗", "footwear": "👟",
+    "hat": "🧢", "scarf": "🧣", "gloves": "🧤",
+    "tights": "🧦", "socks": "🧦", "base_layer": "🧦",
+    "underwear": "👙", "accessory": "🎀",
+    "thermal_top": "🧤", "thermal_bottom": "🧤",
+}
+
+
+def format_collage_label(slot: str, item_type: str) -> str:
+    """Короткая подпись с эмодзи: '👚 Свитшот'."""
+    emoji = _SLOT_EMOJI.get(slot, "👕")
+    short = (item_type or "").split()[0].capitalize()[:14]
+    return f"{emoji} {short}"
+
+
+# ── Кэш теней ────────────────────────────────────────────────────────────────
+_shadow_cache: dict = {}
+
+
+def _get_shadow_template(w: int, h: int) -> Image.Image:
+    """Возвращает кэшированный шаблон тени для карточки размером w×h."""
+    key = (w, h)
+    if key not in _shadow_cache:
+        pad = SHADOW_BLUR * 3
+        shadow = Image.new("RGBA", (w + pad * 2, h + pad * 2), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(shadow)
+        draw.rounded_rectangle(
+            [(pad + SHADOW_OFFSET, pad + SHADOW_OFFSET),
+             (pad + w + SHADOW_OFFSET - 1, pad + h + SHADOW_OFFSET - 1)],
+            radius=RADIUS, fill=(*SHADOW_FILL, 90),
+        )
+        _shadow_cache[key] = shadow.filter(ImageFilter.GaussianBlur(SHADOW_BLUR))
+    return _shadow_cache[key]
 
 
 # ── Загрузка фото ────────────────────────────────────────────────────────────
@@ -114,17 +161,10 @@ def _fit_item(img: Image.Image, max_w: int, max_h: int) -> Image.Image:
 
 
 def _draw_shadow(canvas: Image.Image, x: int, y: int, w: int, h: int) -> None:
-    """Рисует мягкую тень под карточкой."""
-    shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(shadow)
-    draw.rounded_rectangle(
-        [(x + SHADOW_OFFSET, y + SHADOW_OFFSET),
-         (x + w + SHADOW_OFFSET - 1, y + h + SHADOW_OFFSET - 1)],
-        radius=RADIUS,
-        fill=(*SHADOW_FILL, 90),
-    )
-    shadow = shadow.filter(ImageFilter.GaussianBlur(SHADOW_BLUR))
-    canvas.alpha_composite(shadow)
+    """Рисует мягкую тень под карточкой (использует кэшированный шаблон)."""
+    tmpl = _get_shadow_template(w, h)
+    pad = SHADOW_BLUR * 3
+    canvas.alpha_composite(tmpl, (x - pad, y - pad))
 
 
 def _draw_card(canvas: Image.Image, img: Image.Image,
@@ -162,24 +202,27 @@ def _draw_card(canvas: Image.Image, img: Image.Image,
     canvas.alpha_composite(card, (x, y))
 
 
-def _make_gradient_bg(w: int, h: int) -> Image.Image:
-    """Мягкий вертикальный градиент: #FAF6FF → #FFF0F8."""
-    top = (250, 246, 255)
-    bot = (255, 240, 248)
+def _make_gradient_bg(w: int, h: int, theme: str = "girl") -> Image.Image:
+    """Мягкий вертикальный градиент. Цвета определяются темой (girl/boy/adult)."""
+    colors = _THEMES.get(theme, _THEMES["girl"])
+    top_c = colors["top"]
+    bot_c = colors["bot"]
     base = Image.new("RGB", (w, h))
+    draw = ImageDraw.Draw(base)
     for y in range(h):
         t = y / max(h - 1, 1)
-        r = int(top[0] + (bot[0] - top[0]) * t)
-        g = int(top[1] + (bot[1] - top[1]) * t)
-        b = int(top[2] + (bot[2] - top[2]) * t)
-        ImageDraw.Draw(base).line([(0, y), (w, y)], fill=(r, g, b))
+        r = int(top_c[0] + (bot_c[0] - top_c[0]) * t)
+        g = int(top_c[1] + (bot_c[1] - top_c[1]) * t)
+        b = int(top_c[2] + (bot_c[2] - top_c[2]) * t)
+        draw.line([(0, y), (w, y)], fill=(r, g, b))
     return base.convert("RGBA")
 
 
 # ── Плейсхолдеры (детские силуэты, только PIL) ───────────────────────────────
 
 def _draw_silhouette(draw: ImageDraw.ImageDraw, slot: str,
-                     size: int = 300, color: tuple = SILHOUETTE_CLR) -> None:
+                     size: int = 300, color: tuple = SILHOUETTE_CLR,
+                     gender: str = "girl") -> None:
     """Рисует детский силуэт одежды на size×size холсте."""
     cx = size // 2
 
@@ -202,10 +245,19 @@ def _draw_silhouette(draw: ImageDraw.ImageDraw, slot: str,
         draw.rounded_rectangle([cx+8, 110, cx+48, 220], radius=10, fill=color)
 
     elif slot == "one_piece":
-        draw.rounded_rectangle([cx-45, 80, cx+45, 155], radius=10, fill=color)
-        draw.polygon([(cx-45, 150), (cx+45, 150), (cx+75, 230), (cx-75, 230)], fill=color)
-        draw.rounded_rectangle([cx-35, 75, cx-15, 95], radius=5, fill=color)
-        draw.rounded_rectangle([cx+15, 75, cx+35, 95], radius=5, fill=color)
+        if gender == "boy":
+            # Комбинезон: нагрудник + две штанины + лямки
+            draw.rounded_rectangle([cx-45, 80, cx+45, 140], radius=10, fill=color)
+            draw.rounded_rectangle([cx-43, 135, cx-8, 220], radius=10, fill=color)
+            draw.rounded_rectangle([cx+8, 135, cx+43, 220], radius=10, fill=color)
+            draw.rectangle([cx-30, 70, cx-20, 85], fill=color)
+            draw.rectangle([cx+20, 70, cx+30, 85], fill=color)
+        else:
+            # Платье (для девочки)
+            draw.rounded_rectangle([cx-45, 80, cx+45, 155], radius=10, fill=color)
+            draw.polygon([(cx-45, 150), (cx+45, 150), (cx+75, 230), (cx-75, 230)], fill=color)
+            draw.rounded_rectangle([cx-35, 75, cx-15, 95], radius=5, fill=color)
+            draw.rounded_rectangle([cx+15, 75, cx+35, 95], radius=5, fill=color)
 
     elif slot == "footwear":
         draw.ellipse([cx-55, 175, cx+55, 215], fill=color)
@@ -293,28 +345,28 @@ def _draw_adult_silhouette(draw: ImageDraw.ImageDraw, slot: str,
         draw.rounded_rectangle([pad, pad, size - pad, size - pad], radius=20, fill=color)
 
 
-_SLOT_LABELS_RU = {
-    "outerwear": "добавь куртку",
-    "top":       "добавь верх",
-    "bottom":    "добавь низ",
-    "one_piece": "добавь платье",
-    "footwear":  "добавь обувь",
-    "accessory": "добавь шапку",
-    "hat":       "добавь шапку",
-    "tights":    "добавь колготки",
-    "base_layer":"добавь колготки",
+_SLOT_LABELS_RU: dict = {
+    "outerwear": "добавь куртку 📸",
+    "top":       "добавь верх 📸",
+    "bottom":    "добавь низ 📸",
+    "one_piece": {"girl": "добавь платье 📸", "boy": "добавь комбинезон 📸", "adult": "добавь платье 📸"},
+    "footwear":  "добавь обувь 📸",
+    "accessory": "добавь шапку 📸",
+    "hat":       "добавь шапку 📸",
+    "tights":    "добавь колготки 📸",
+    "base_layer":"добавь колготки 📸",
 }
 
 
 def _make_placeholder(slot: str, label: str, size: int = THUMB_SIZE,
-                      adult: bool = False) -> Image.Image:
+                      adult: bool = False, gender: str = "girl") -> Image.Image:
     """Ячейка-плейсхолдер: силуэт на сером фоне (adult=True → взрослые пропорции)."""
     img = Image.new("RGBA", (size, size), PLACEHOLDER_BG + (255,))
     draw = ImageDraw.Draw(img)
     if adult:
         _draw_adult_silhouette(draw, slot, size)
     else:
-        _draw_silhouette(draw, slot, size)
+        _draw_silhouette(draw, slot, size, gender=gender)
 
     try:
         font = ImageFont.truetype(
@@ -322,7 +374,12 @@ def _make_placeholder(slot: str, label: str, size: int = THUMB_SIZE,
     except Exception:
         font = ImageFont.load_default()
 
-    text = _SLOT_LABELS_RU.get(slot, f"добавь {label}")
+    raw = _SLOT_LABELS_RU.get(slot, f"добавь {label}")
+    if isinstance(raw, dict):
+        g_key = "adult" if adult else gender
+        text = raw.get(g_key, raw.get("girl", f"добавь {label}"))
+    else:
+        text = raw
     try:
         bbox_t = draw.textbbox((0, 0), text, font=font)
         text_w = bbox_t[2] - bbox_t[0]
@@ -337,7 +394,8 @@ def _make_placeholder(slot: str, label: str, size: int = THUMB_SIZE,
 
 # ── Grid ─────────────────────────────────────────────────────────────────────
 
-def _build_grid(images: list, labels: list) -> Image.Image:
+def _build_grid(images: list, labels: list, theme: str = "girl",
+                header_text: str = "", footer_text: str = "") -> Image.Image:
     """Собирает сетку карточек. Возвращает PIL Image (RGB)."""
     n = len(images)
     if n == 0:
@@ -351,6 +409,10 @@ def _build_grid(images: list, labels: list) -> Image.Image:
 
     canvas_w = cols * card_w + (cols - 1) * GRID_GAP + OUTER_PAD * 2
     canvas_h = rows * card_h + (rows - 1) * GRID_GAP + OUTER_PAD * 2
+    if header_text:
+        canvas_h += HEADER_H
+    if footer_text:
+        canvas_h += FOOTER_H
 
     scale = 1.0
     long_side = max(canvas_w, canvas_h)
@@ -361,7 +423,10 @@ def _build_grid(images: list, labels: list) -> Image.Image:
         card_w = int(card_w * scale)
         card_h = int(card_h * scale)
 
-    canvas = _make_gradient_bg(canvas_w, canvas_h)
+    header_px = int(HEADER_H * scale) if header_text else 0
+    footer_px = int(FOOTER_H * scale) if footer_text else 0
+
+    canvas = _make_gradient_bg(canvas_w, canvas_h, theme)
 
     try:
         font_size = max(11, int(15 * scale))
@@ -373,15 +438,58 @@ def _build_grid(images: list, labels: list) -> Image.Image:
     gap = int(GRID_GAP * scale)
     outer = int(OUTER_PAD * scale)
 
+    # Заголовок
+    if header_text:
+        try:
+            hfont_size = max(14, int(36 * scale))
+            hfont = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", hfont_size)
+        except Exception:
+            hfont = ImageFont.load_default()
+        hd = ImageDraw.Draw(canvas)
+        try:
+            bbox = hfont.getbbox(header_text)
+            tw = bbox[2] - bbox[0]
+            th = bbox[3] - bbox[1]
+        except Exception:
+            tw = len(header_text) * 10
+            th = hfont_size
+        tx = max(4, (canvas_w - tw) // 2)
+        ty = max(2, (header_px - th) // 2)
+        hd.text((tx, ty), header_text, fill=LABEL_TEXT + (255,), font=hfont)
+
+    # Карточки (сдвинуты вниз на header_px)
     for idx, (img, label) in enumerate(zip(images, labels)):
         col = idx % cols
         row = idx // cols
         x = outer + col * (card_w + gap)
-        y = outer + row * (card_h + gap)
+        y = outer + header_px + row * (card_h + gap)
         _draw_shadow(canvas, x, y, card_w, card_h)
         _draw_card(canvas, img, x, y, card_w, card_h, label, font)
 
-    final = Image.new("RGB", canvas.size, BG_COLOR)
+    # Футер
+    if footer_text:
+        try:
+            ffont_size = max(10, int(22 * scale))
+            ffont = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", ffont_size)
+        except Exception:
+            ffont = ImageFont.load_default()
+        fd = ImageDraw.Draw(canvas)
+        try:
+            bbox = ffont.getbbox(footer_text)
+            tw = bbox[2] - bbox[0]
+            th = bbox[3] - bbox[1]
+        except Exception:
+            tw = len(footer_text) * 8
+            th = ffont_size
+        tx = max(4, (canvas_w - tw) // 2)
+        grid_bottom = outer + header_px + rows * card_h + (rows - 1) * gap
+        ty = grid_bottom + max(2, (footer_px - th) // 2)
+        fd.text((tx, ty), footer_text, fill=FOOTER_TEXT_CLR + (255,), font=ffont)
+
+    bg_color = _THEMES.get(theme, _THEMES["girl"])["top"]
+    final = Image.new("RGB", canvas.size, bg_color)
     final.paste(canvas.convert("RGB"), mask=canvas.split()[3])
     return final
 
@@ -393,6 +501,9 @@ async def build_collage(
     photo_ids: Optional[list] = None,
     labels: Optional[list] = None,
     photo_urls: Optional[list] = None,
+    theme: str = "girl",
+    header_text: str = "",
+    footer_text: str = "Касси · fashioncastle.app",
 ) -> Optional[bytes]:
     """
     Собирает коллаж.
@@ -407,9 +518,16 @@ async def build_collage(
         async with httpx.AsyncClient(timeout=15.0) as client:
             for slot_data in outfit_slots:
                 slot_key = slot_data.get("slot", "top")
-                lbl = slot_data.get("label") or ""
-
+                raw_lbl = slot_data.get("label") or ""
                 is_adult = slot_data.get("adult", False)
+                gender = slot_data.get("gender", "girl")
+                # Короткая подпись с эмодзи для вещей
+                if slot_data.get("has_item"):
+                    item_type = slot_data.get("item_type") or raw_lbl
+                    display_lbl = format_collage_label(slot_key, item_type)
+                else:
+                    display_lbl = raw_lbl
+
                 if slot_data.get("has_item"):
                     photo_bytes = await _download_photo(
                         client,
@@ -420,18 +538,18 @@ async def build_collage(
                         try:
                             thumb = _make_thumb(photo_bytes)
                             thumbs.append(thumb)
-                            final_labels.append(lbl)
+                            final_labels.append(display_lbl)
                             continue
                         except Exception as e:
                             logger.warning("image_builder.decode_failed", error=str(e))
                     # Не удалось скачать → плейсхолдер
-                    ph = _make_placeholder(slot_key, lbl, adult=is_adult)
+                    ph = _make_placeholder(slot_key, raw_lbl, adult=is_adult, gender=gender)
                     thumbs.append(ph)
-                    final_labels.append(lbl)
+                    final_labels.append(display_lbl)
                 else:
-                    ph = _make_placeholder(slot_key, lbl, adult=is_adult)
+                    ph = _make_placeholder(slot_key, raw_lbl, adult=is_adult, gender=gender)
                     thumbs.append(ph)
-                    final_labels.append(lbl)
+                    final_labels.append(display_lbl)
     else:
         # ── Старый режим: photo_ids ────────────────────────────────────────
         if not photo_ids:
@@ -457,7 +575,8 @@ async def build_collage(
         return None
 
     try:
-        grid = _build_grid(thumbs, final_labels)
+        grid = _build_grid(thumbs, final_labels, theme=theme,
+                           header_text=header_text, footer_text=footer_text)
         buf = io.BytesIO()
         grid.save(buf, format="JPEG", quality=88, optimize=True)
         return buf.getvalue()
