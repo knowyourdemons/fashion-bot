@@ -228,7 +228,7 @@ class TestChatLimits:
     # Лимиты чата хранятся в core.permissions (не как константы в text.py)
     def test_free_limit_5(self):
         from core.permissions import get_limit
-        assert get_limit("chat_per_day", "free") == 3
+        assert get_limit("chat_per_day", "free") == 1
 
     def test_premium_limit_20(self):
         from core.permissions import get_limit
@@ -452,7 +452,7 @@ class TestPermissions:
         from core.permissions import get_limit
         assert get_limit("photos_per_day", "free") == 3
         assert get_limit("wardrobe_size", "free") == 30
-        assert get_limit("chat_per_day", "free") == 3
+        assert get_limit("chat_per_day", "free") == 1
 
     def test_лимиты_premium_больше_free(self):
         from core.permissions import get_limit

@@ -50,7 +50,7 @@ def test_import_text():
     from core.permissions import get_limit
     assert hasattr(text, "handle_text")
     # Лимиты чата теперь в core.permissions, не как константы в text.py
-    assert get_limit("chat_per_day", "free") == 3
+    assert get_limit("chat_per_day", "free") == 1
     assert get_limit("chat_per_day", "premium") == 20
 
 
