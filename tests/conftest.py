@@ -38,16 +38,19 @@ if "pytz" not in sys.modules:
     _pytz_mock.timezone = lambda tz: _dt.timezone.utc
     sys.modules["pytz"] = _pytz_mock
 
-# config.settings должен быть реальным объектом, не MagicMock,
-# чтобы не сломать тесты permissions (которые его импортируют напрямую).
+# config: try to import the real config module (works in Docker with env vars set).
+# Fall back to a minimal MagicMock config only when real import fails (local dev without .env).
 if "config" not in sys.modules:
-    _cfg = types.ModuleType("config")
-    _settings = MagicMock()
-    _settings.environment = "dev"
-    _settings.admin_telegram_ids = ""
-    _settings.admin_ids_list = []
-    _cfg.settings = _settings
-    sys.modules["config"] = _cfg
+    try:
+        import config as _real_config  # noqa: F401 — side effect: adds to sys.modules
+    except Exception:
+        _cfg = types.ModuleType("config")
+        _settings = MagicMock()
+        _settings.environment = "dev"
+        _settings.admin_telegram_ids = ""
+        _settings.admin_ids_list = []
+        _cfg.settings = _settings
+        sys.modules["config"] = _cfg
 
 
 # ── Фикстуры пользователя ──────────────────────────────────────────────────
