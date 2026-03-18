@@ -527,28 +527,18 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
     # Совет стилиста через Haiku
     outer_advice = _REGIME_OUTER_ADVICE.get(regime, "куртка")
 
-    _no_markdown = "Не используй markdown (# * _ и т.д.). Только обычный текст."
-    # "мороз" подходит только при отрицательных температурах
-    _regime_label = regime
-    if regime in ("мороз", "сильный_мороз") and temp_m > 0:
-        _regime_label = "холодно"
-    _temp_ctx = (
-        f"Температура утром {temp_m:.0f}°C, вечером {temp_e:.0f}°C. "
-        f"Режим: {_regime_label}. "
-    )
-
     if items:
         wardrobe_context = ", ".join(
             f"{i.type} {i.color}" for i in
             sorted(items, key=lambda x: float(x.score_item or 0), reverse=True)[:10]
         )
         prompt = (
-            f"{_temp_ctx}"
+            f"Погода: {sm}{temp_m:.0f}°C, {regime}. "
             f"Цветотип: {colortype}. "
             f"Гардероб: {wardrobe_context}. "
             f"Дай короткий (2-3 предложения) совет по образу на день "
             f"используя вещи из гардероба. Говори на русском, тон дружелюбный. "
-            f"{_no_markdown}"
+            f"Не используй markdown символы (# * _ и т.д.). Только обычный текст."
         )
     else:
         palette = COLORTYPE_PALETTES.get(colortype, COLORTYPE_PALETTES.get("default", {}))
@@ -556,11 +546,11 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
         outer_colors = palette.get("outerwear", ["нейтральный"])
         color_hint = f"{top_colors[0]} верх и {outer_colors[0]} {outer_advice}"
         prompt = (
-            f"{_temp_ctx}"
+            f"Погода: {sm}{temp_m:.0f}°C, {regime}. "
             f"Цветотип: {colortype}. "
             f"Дай короткий (2-3 предложения) совет по образу на день. "
             f"Рекомендуй {color_hint}. Говори на русском, тон дружелюбный. "
-            f"{_no_markdown}"
+            f"Не используй markdown символы (# * _ и т.д.). Только обычный текст."
         )
 
     try:
@@ -579,9 +569,7 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
         stylist_advice = advice_resp.content[0].text.strip()
     except Exception as e:
         logger.warning("brief.adult.haiku_failed", error=str(e))
-        _temp_str = f"{sm}{temp_m:.0f}°C"
-        _eve_str = f"{'+'if temp_e>=0 else ''}{temp_e:.0f}°C"
-        stylist_advice = f"Сегодня {_temp_str} утром и {_eve_str} вечером — выбери {outer_advice} ✨"
+        stylist_advice = f"Сегодня {sm}{temp_m:.0f}°C — выбери {outer_advice} ✨"
 
     # Приветствие
     _hour = datetime.now().hour
