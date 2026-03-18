@@ -198,54 +198,56 @@ def test_wardrobe_balance_no_roles():
 
 
 # ── Тесты комментариев (мок Haiku) ────────────────────────────────────────────
+# Используем asyncio.run() вместо @pytest.mark.asyncio чтобы избежать
+# конфликта с session-scoped event_loop из conftest.py.
 
-@pytest.mark.asyncio
-async def test_generate_item_comment_returns_string():
+def test_generate_item_comment_returns_string():
+    import asyncio
     from services.scoring_comment import generate_item_comment
     pool = MockAnthropicPool(response_text="Отличная базовая вещь!")
-    comment = await generate_item_comment(
+    comment = asyncio.run(generate_item_comment(
         pool, "футболка", "белый", 8.0, "base", "Лето", True, "3 синих топа", None, None, None, ""
-    )
+    ))
     assert isinstance(comment, str)
     assert len(comment) > 5
     assert "8.0" not in comment  # цифра не должна просочиться
 
 
-@pytest.mark.asyncio
-async def test_generate_item_comment_no_numeric_score():
+def test_generate_item_comment_no_numeric_score():
     """Комментарий не содержит числа скора."""
+    import asyncio
     from services.scoring_comment import generate_item_comment
     pool = MockAnthropicPool(response_text="Красивая вещь!")
-    comment = await generate_item_comment(
+    comment = asyncio.run(generate_item_comment(
         pool, "джинсы", "синий", 6.5, "base", "Зима", False, "", None, None, None, ""
-    )
+    ))
     assert "6.5" not in comment
     assert "/10" not in comment
 
 
-@pytest.mark.asyncio
-async def test_generate_outfit_comment_wow():
+def test_generate_outfit_comment_wow():
+    import asyncio
     from services.scoring_comment import generate_outfit_comment
     pool = MockAnthropicPool(response_text="✨ Отличный образ!")
-    comment = await generate_outfit_comment(
+    comment = asyncio.run(generate_outfit_comment(
         pool, ["свитер розовый", "джинсы синие"], "+10°C", "садик",
         9.0, True, "Алиса", "girl", 4, "", ["WOW!"]
-    )
+    ))
     assert isinstance(comment, str)
 
 
-@pytest.mark.asyncio
-async def test_generate_outfit_comment_fallback_on_error():
+def test_generate_outfit_comment_fallback_on_error():
     """При ошибке API возвращается fallback-строка, не исключение."""
+    import asyncio
     from services.scoring_comment import generate_outfit_comment
 
     class FailPool:
         async def create_message(self, **kwargs):
             raise RuntimeError("API недоступен")
 
-    comment = await generate_outfit_comment(
+    comment = asyncio.run(generate_outfit_comment(
         FailPool(), ["куртка", "свитер"], "+5°C", "прогулка",
         7.0, False, None, None, None, "", []
-    )
+    ))
     assert isinstance(comment, str)
     assert len(comment) > 0
