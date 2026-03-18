@@ -659,9 +659,9 @@ class TestGapAnalysis:
         ep = get_effective_plan(u)
         assert can_gap_analysis(ep) is True
 
-    @pytest.mark.asyncio
-    async def test_gap_few_items(self):
+    def test_gap_few_items(self):
         """Меньше 5 вещей → возвращает None без вызова Claude."""
+        import asyncio
         from services.gap_analysis import build_shopping_list
         from unittest.mock import AsyncMock, MagicMock
 
@@ -674,14 +674,13 @@ class TestGapAnalysis:
         redis = AsyncMock()
         redis.get.return_value = None
 
-        result = await build_shopping_list(user, [1, 2, 3], redis)
+        result = asyncio.run(build_shopping_list(user, [1, 2, 3], redis))
         assert result is None
-        # lock не устанавливался
         redis.set.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_gap_cache_hit(self):
+    def test_gap_cache_hit(self):
         """Если в Redis есть кэш — Claude не вызывается."""
+        import asyncio
         from services.gap_analysis import build_shopping_list
         from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -693,20 +692,19 @@ class TestGapAnalysis:
 
         cached_text = "1. Белая рубашка\n2. Синие джинсы"
         redis = AsyncMock()
-        # Первый .get — lock key (нет), второй .get — cache key (есть)
         redis.get.side_effect = [None, cached_text.encode()]
 
         items = [MagicMock(score_item=5.0) for _ in range(5)]
 
         with patch("core.anthropic_client.get_anthropic_pool") as mock_pool:
-            result = await build_shopping_list(user, items, redis)
+            result = asyncio.run(build_shopping_list(user, items, redis))
 
         assert result == cached_text
         mock_pool.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_gap_lock(self):
+    def test_gap_lock(self):
         """Если lock активен — возвращает 'lock'."""
+        import asyncio
         from services.gap_analysis import build_shopping_list
         from unittest.mock import AsyncMock, MagicMock
 
@@ -717,12 +715,12 @@ class TestGapAnalysis:
         redis.get.return_value = b"1"  # lock активен
 
         items = [MagicMock() for _ in range(5)]
-        result = await build_shopping_list(user, items, redis)
+        result = asyncio.run(build_shopping_list(user, items, redis))
         assert result == "lock"
 
-    @pytest.mark.asyncio
-    async def test_gap_owner_mom_girl(self):
+    def test_gap_owner_mom_girl(self):
         """segment='mom_girl' → промпт содержит 'Детский гардероб'."""
+        import asyncio
         from services.gap_analysis import build_shopping_list
         from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -733,7 +731,7 @@ class TestGapAnalysis:
         user.segment = "mom_girl"
 
         redis = AsyncMock()
-        redis.get.return_value = None  # нет lock, нет кэша
+        redis.get.return_value = None
 
         items = [
             MagicMock(
@@ -755,7 +753,7 @@ class TestGapAnalysis:
         mock_pool.create_message = mock_create_message
 
         with patch("core.anthropic_client.get_anthropic_pool", return_value=mock_pool):
-            result = await build_shopping_list(user, items, redis)
+            result = asyncio.run(build_shopping_list(user, items, redis))
 
         assert captured, "Claude должен был быть вызван"
         prompt = captured[0]["messages"][0]["content"]
