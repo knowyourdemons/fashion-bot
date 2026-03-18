@@ -52,12 +52,9 @@ logger = structlog.get_logger()
     CITY,
     CITY_SUGGEST,
     RESUME_CONFIRM,
-<<<<<<< HEAD
     ALSO_SELF,
-=======
     ASK_COLORTYPE,
->>>>>>> 1d07f611829c008383f98f24d95e48e64a7b7bd7
-) = range(9)
+) = range(10)
 
 _STEP_TO_STATE: dict[str, int] = {
     "segment":         SEGMENT,
@@ -223,24 +220,7 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         return ConversationHandler.END
 
     if user.onboarding_completed:
-<<<<<<< HEAD
-        if user.telegram_id in settings.admin_ids_list:
-            await update.effective_message.reply_text(
-                f"👑 Admin режим\n\n"
-                f"Привет, {user.name}!\n\n"
-                f"Команды:\n"
-                f"/wardrobe — гардероб\n"
-                f"/brief — утренний бриф\n"
-                f"/subscribe — подписка\n"
-                f"/debug — дебаг",
-                reply_markup=ReplyKeyboardRemove(),
-            )
-        else:
-            await update.effective_message.reply_text(
-                f"Привет, {user.name}! Пришли фото вещи или /wardrobe",
-                reply_markup=ReplyKeyboardRemove(),
-            )
-=======
+
         from datetime import datetime as _dt
         _hour = _dt.now().hour
         if _hour < 12:
@@ -270,7 +250,7 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         await update.effective_message.reply_text(
             _welcome, reply_markup=get_main_menu()
         )
->>>>>>> 1d07f611829c008383f98f24d95e48e64a7b7bd7
+
         return ConversationHandler.END
 
     # Предложить продолжить с места или начать заново
