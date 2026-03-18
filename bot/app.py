@@ -1,5 +1,8 @@
 """Telegram Application — регистрация handlers."""
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
+    PreCheckoutQueryHandler, filters,
+)
 
 from config import settings
 
@@ -48,8 +51,13 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(brief.handle_brief_feedback, pattern="^brief_feedback:"))
     app.add_handler(CallbackQueryHandler(feedback.handle_feedback, pattern="^feedback:"))
     app.add_handler(CallbackQueryHandler(billing.handle_plan_callback, pattern="^plan:"))
-    app.add_handler(CallbackQueryHandler(billing.handle_plan_callback, pattern="^subscribe:"))
     app.add_handler(CallbackQueryHandler(billing.handle_stay_free, pattern="^stay_free$"))
+    app.add_handler(CallbackQueryHandler(billing.handle_pay_stars, pattern="^pay_stars:"))
+    app.add_handler(CallbackQueryHandler(billing.handle_pay_stripe, pattern="^pay_stripe:"))
+
+    # Stars payments
+    app.add_handler(PreCheckoutQueryHandler(billing.handle_pre_checkout))
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, billing.handle_successful_payment))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_wardrobe_page, pattern="^wardrobe:page:"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_photo_action, pattern="^photo_action:"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_rate_mode, pattern="^rate_mode:"))

@@ -227,3 +227,67 @@ def test_subscription_expiry_updated():
     import inspect
     src = inspect.getsource(run)
     assert "trial_ends_at" in src, "subscription_expiry должен проверять trial_ends_at"
+
+
+def test_stripe_provider_importable():
+    from billing.stripe_provider import StripeProvider
+    assert callable(getattr(StripeProvider, "create_invoice", None))
+
+
+def test_yukassa_stub_importable():
+    from billing.yukassa_provider import YuKassaProvider
+    p = YuKassaProvider()
+    import pytest
+    with pytest.raises(NotImplementedError):
+        import asyncio
+        asyncio.get_event_loop().run_until_complete(
+            p.create_invoice("1", "premium", "monthly")
+        )
+
+
+def test_paddle_stub_importable():
+    from billing.paddle_provider import PaddleProvider
+    p = PaddleProvider()
+    import pytest
+    with pytest.raises(NotImplementedError):
+        import asyncio
+        asyncio.get_event_loop().run_until_complete(
+            p.create_invoice("1", "premium", "monthly")
+        )
+
+
+def test_stars_billing_handlers_importable():
+    from bot.handlers.billing import (
+        handle_pay_stars, handle_pay_stripe,
+        handle_successful_payment, handle_pre_checkout,
+        _stars_keyboard,
+    )
+    assert callable(handle_pay_stars)
+    assert callable(handle_pay_stripe)
+    assert callable(handle_successful_payment)
+    assert callable(handle_pre_checkout)
+    kb = _stars_keyboard()
+    assert len(kb.inline_keyboard) >= 3  # минимум 3 ряда Stars
+
+
+def test_stars_keyboard_amounts():
+    from bot.handlers.billing import _stars_keyboard
+    from core.permissions import PRICES
+    kb = _stars_keyboard()
+    labels = [btn.text for row in kb.inline_keyboard for btn in row]
+    assert any("700" in l for l in labels), "monthly 700 stars должен быть"
+    assert any("5500" in l for l in labels), "yearly 5500 stars должен быть"
+
+
+def test_stripe_webhook_importable():
+    from api.routes.webhooks import stripe_webhook, _activate_premium_after_payment
+    assert callable(stripe_webhook)
+    assert callable(_activate_premium_after_payment)
+
+
+def test_app_has_precheckout_handler():
+    from bot.app import create_application
+    from telegram.ext import PreCheckoutQueryHandler
+    app = create_application()
+    handler_types = [type(h) for h in app.handlers.get(0, [])]
+    assert PreCheckoutQueryHandler in handler_types, "PreCheckoutQueryHandler must be registered"
