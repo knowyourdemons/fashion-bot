@@ -54,6 +54,7 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(wardrobe.handle_switch_owner, pattern="^switch_owner:"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_outfit_request, pattern="^outfit_request$"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_list_callback, pattern="^show_wardrobe_list$"))
+    app.add_handler(CallbackQueryHandler(wardrobe.handle_add_items_hint, pattern="^add_items_hint$"))
 
     # Текстовые сообщения → стилист — group=2 (после меню-хендлеров)
     _menu_texts = filters.Regex("^(👗 Гардероб|⭐ Оценить образ|⚙️ Профиль|❓ Помощь)$")

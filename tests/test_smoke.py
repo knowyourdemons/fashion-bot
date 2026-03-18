@@ -109,6 +109,12 @@ def test_import_style_config():
     assert callable(_needs_tights)
 
 
+def test_handle_switch_owner_exists():
+    from bot.handlers.wardrobe import handle_switch_owner, handle_add_items_hint
+    assert callable(handle_switch_owner)
+    assert callable(handle_add_items_hint)
+
+
 def test_rate_system_prompts_exist():
     from bot.handlers.wardrobe import _RATE_SYSTEM_CHILD, _RATE_SYSTEM_ADULT
     assert len(_RATE_SYSTEM_CHILD) > 500, "CHILD промпт слишком короткий"

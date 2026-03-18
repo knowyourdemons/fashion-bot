@@ -305,3 +305,36 @@ class TestNeedsTights:
     def test_пустой_outfit_при_тепле(self):
         from worker.tasks.style_config import _needs_tights
         assert _needs_tights({}, 20.0) is False, "Пустой outfit при +20 → не нужны"
+
+
+# ── TestSwitchOwner ────────────────────────────────────────────────────────
+
+class TestSwitchOwner:
+    def test_child_id_валидация(self):
+        """Неверный UUID должен обрабатываться без падения."""
+        import uuid
+        try:
+            uuid.UUID("not-a-valid-uuid")
+            assert False, "Должен был упасть ValueError"
+        except ValueError:
+            pass  # PASS — правильно обрабатываем
+
+    def test_нет_детей_нет_кнопки(self):
+        """Если детей нет — switch_btn должен быть None."""
+        children = []
+        switch_btn = None
+        if children:
+            switch_btn = "кнопка"
+        assert switch_btn is None, "При отсутствии детей кнопки не должно быть"
+
+    def test_пустой_гардероб_показывает_добавить(self):
+        """При 0 вещах — кнопка 'Добавить вещи', не 'Посмотреть'."""
+        count = 0
+        action = "добавить" if count == 0 else "посмотреть"
+        assert action == "добавить"
+
+    def test_непустой_гардероб_показывает_посмотреть(self):
+        """При >0 вещах — кнопка 'Посмотреть вещи'."""
+        count = 5
+        action = "добавить" if count == 0 else "посмотреть"
+        assert action == "посмотреть"

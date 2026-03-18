@@ -1316,7 +1316,7 @@ async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Callback: переключить владельца гардероба (без показа списка вещей)."""
+    """Callback: переключить владельца, обновить кнопки в том же сообщении."""
     query = update.callback_query
     await query.answer()
 
@@ -1330,48 +1330,98 @@ async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE
     target = parts[1] if len(parts) > 1 else "child"
     child_id_str = parts[2] if len(parts) > 2 else None
 
+    # Загрузить детей один раз для валидации и формирования кнопок
+    async with AsyncReadSession() as session:
+        from db.crud.children import get_children as _gc
+        children = await _gc(session, user.id)
+
     if target == "user":
-        cache_key = f"owner:{user.id}"
-        context.bot_data[cache_key] = (user.id, "user")
-        if redis:
-            await redis.set(f"owner_mode:{user.id}", "user", ex=86400 * 30)
-        owner_name = "твои вещи 👗"
-    else:
-        if child_id_str:
+        new_owner_id = user.id
+        new_owner_type = "user"
+        owner_label = f"👗 Гардероб: {user.name}"
+    elif target == "child" and child_id_str:
+        try:
             child_id = _uuid.UUID(child_id_str)
-        else:
-            async with AsyncReadSession() as session:
-                from db.crud.children import get_children
-                children = await get_children(session, user.id)
-            if not children:
-                await query.message.reply_text(
-                    "Нет детей в профиле.",
-                    reply_markup=get_main_menu(),
-                )
-                return
-            child_id = children[0].id
-        async with AsyncReadSession() as session:
-            from db.crud.children import get_children
-            children = await get_children(session, user.id)
+        except ValueError:
+            await query.answer("Ошибка: неверный ID")
+            return
+        # Валидация — child должен принадлежать этому пользователю
         child = next((c for c in children if c.id == child_id), None)
         if not child:
-            await query.message.reply_text("Ребёнок не найден.", reply_markup=get_main_menu())
+            await query.answer("Ребёнок не найден")
             return
-        cache_key = f"owner:{user.id}"
-        context.bot_data[cache_key] = (child.id, "child")
-        if redis:
-            await redis.set(
-                f"owner_mode:{user.id}",
-                f"child:{child.id}",
-                ex=86400 * 30,
-            )
-        owner_name = f"вещи {child.name} 👧"
+        new_owner_id = child_id
+        new_owner_type = "child"
+        owner_label = f"👧 Гардероб: {child.name}"
+    else:
+        return
 
-    msg = f"✅ Переключено на {owner_name}\nОтправь фото чтобы добавить вещи 📸"
+    # Сохранить новый owner в кеш и Redis
+    cache_key = f"owner:{user.id}"
+    context.bot_data[cache_key] = (new_owner_id, new_owner_type)
+    if redis:
+        mode_val = f"child:{new_owner_id}" if new_owner_type == "child" else "user"
+        await redis.set(f"owner_mode:{user.id}", mode_val, ex=86400 * 30)
+
+    # Загрузить вещи нового owner для count
+    async with AsyncReadSession() as session:
+        items = await get_owner_items(session, new_owner_id, new_owner_type)
+    count = len(items)
+    scored = [float(i.score_item) for i in items if i.score_item]
+    avg_str = f" · ⭐ {round(sum(scored)/len(scored), 1)}" if scored else ""
+
+    # Заголовок
+    if count == 0:
+        header = (
+            f"✅ Переключено\n"
+            f"{owner_label} · 0 вещей\n"
+            f"Пришли фото чтобы добавить вещи 📸"
+        )
+    else:
+        header = f"✅ Переключено\n{owner_label} · {count} вещей{avg_str}"
+
+    # Кнопка переключения на другого owner
+    if new_owner_type == "child":
+        switch_btn = InlineKeyboardButton("👗 Мои вещи", callback_data="switch_owner:user")
+    elif children:
+        child = children[0]
+        switch_btn = InlineKeyboardButton(
+            f"👧 Вещи {child.name}",
+            callback_data=f"switch_owner:child:{child.id}"
+        )
+    else:
+        switch_btn = None
+
+    # Кнопка действия
+    if count == 0:
+        action_btn = InlineKeyboardButton("📸 Добавить вещи", callback_data="add_items_hint")
+    else:
+        action_btn = InlineKeyboardButton("👀 Посмотреть вещи", callback_data="show_wardrobe_list")
+
+    keyboard_rows = [[
+        InlineKeyboardButton("🌤 Образ дня", callback_data="outfit_request"),
+        action_btn,
+    ]]
+    if switch_btn:
+        keyboard_rows.append([switch_btn])
+
+    new_markup = InlineKeyboardMarkup(keyboard_rows)
+
     try:
-        await query.edit_message_text(msg)
-    except Exception:
-        await query.message.reply_text(msg, reply_markup=get_main_menu())
+        await query.edit_message_text(header, reply_markup=new_markup)
+    except Exception as e:
+        if "not modified" not in str(e).lower():
+            await query.message.reply_text(header, reply_markup=new_markup)
+
+
+async def handle_add_items_hint(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: подсказка как добавить вещи (при пустом гардеробе)."""
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text(
+        "📸 Просто пришли фото вещей — добавлю в гардероб!",
+        reply_markup=get_main_menu(),
+    )
 
 
 
