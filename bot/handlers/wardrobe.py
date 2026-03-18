@@ -1325,16 +1325,19 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
 
         child = children[0]
 
-        # Погода
-        temp_m, temp_e = 10.0, 10.0
-        if user.city and redis:
-            try:
+        # Погода — fallback 10/12°C если город не задан или сервис недоступен
+        temp_m, temp_e = 10.0, 12.0
+        try:
+            if user.city and redis:
                 svc = WeatherService(redis)
                 wd = await svc.get(user.city)
                 temp_m = float(wd.temp_c)
                 temp_e = float(wd.evening_temp)
-            except Exception as we:
-                logger.warning("outfit_request.weather_failed", error=str(we))
+                logger.info("outfit_request.weather_ok",
+                    city=user.city, temp_m=temp_m, temp_e=temp_e)
+        except Exception as we:
+            logger.warning("outfit_request.weather_failed",
+                error=str(we), city=getattr(user, "city", None))
 
         # Вещи ребёнка
         async with AsyncReadSession() as session:

@@ -34,9 +34,9 @@ from telegram.ext import (
     filters,
 )
 
-from db.base import AsyncWriteSession
+from db.base import AsyncWriteSession, AsyncReadSession
 from db.models.user import User
-from db.crud.children import create_child
+from db.crud.children import create_child, get_children
 from services.i18n.ru import t
 
 logger = structlog.get_logger()
@@ -231,8 +231,7 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         else:
             greeting = "Добрый вечер"
         async with AsyncReadSession() as _session:
-            from db.crud.children import get_children as _gc
-            _children = await _gc(_session, user.id)
+            _children = await get_children(_session, user.id)
         _child_name = _children[0].name if _children else None
         if _child_name:
             _welcome = (

@@ -128,7 +128,10 @@ class WeatherService:
 
         cached = await self._redis.get(key)
         if cached:
-            return WeatherData(json.loads(cached))
+            _cached_data = json.loads(cached)
+            if "data" in _cached_data and "current_condition" not in _cached_data:
+                _cached_data = _cached_data["data"]
+            return WeatherData(_cached_data)
 
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
@@ -138,6 +141,9 @@ class WeatherService:
             resp.raise_for_status()
             data = resp.json()
 
+        # wttr.in может возвращать {"data": {...}} — разворачиваем
+        if "data" in data and "current_condition" not in data:
+            data = data["data"]
         await self._redis.set(key, json.dumps(data), ex=3600)
         logger.info("weather.fetched", city=city)
         return WeatherData(data)
