@@ -680,9 +680,22 @@ async def _analyze_and_save(
             continue
 
         _fix_bbox(data)
-        bbox = data.get("bbox")
+        bbox = data.get("bbox") or {}
+        bw = float(bbox.get("w", 0.5))
+        bh = float(bbox.get("h", 0.5))
 
-        photo_url, good_crop = await _upload_crop(photo_bytes, bbox, owner_id=owner_id)
+        # Переклассификация: маленькая "шапка" → носки
+        if (data.get("category_group") == "accessory" and
+                any(w in (data.get("type") or "").lower()
+                    for w in ["шапка", "шапочка", "hat"]) and
+                bw <= 0.2 and bh <= 0.2):
+            logger.info("wardrobe.reclassify",
+                from_type=data.get("type"), to_type="носки",
+                reason="small_bbox_accessory")
+            data["category_group"] = "base_layer"
+            data["type"] = "носки"
+
+        photo_url, good_crop = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id)
         await _save_one(owner_id, owner_type, photo_id, data, matrix,
                         photo_url=photo_url, show_in_collage=good_crop)
         existing_set.add(key)
@@ -1036,8 +1049,19 @@ async def _process_media_group(
 
                 logger.info("wardrobe.save_start", index=i, item_type=data.get("type"))
                 _fix_bbox(data)
-                bbox = data.get("bbox")
-                photo_url, good_crop = await _upload_crop(photo_bytes, bbox, owner_id=owner_id)
+                _bbox = data.get("bbox") or {}
+                _bw = float(_bbox.get("w", 0.5))
+                _bh = float(_bbox.get("h", 0.5))
+                if (data.get("category_group") == "accessory" and
+                        any(w in (data.get("type") or "").lower()
+                            for w in ["шапка", "шапочка", "hat"]) and
+                        _bw <= 0.2 and _bh <= 0.2):
+                    logger.info("wardrobe.reclassify",
+                        from_type=data.get("type"), to_type="носки",
+                        reason="small_bbox_accessory")
+                    data["category_group"] = "base_layer"
+                    data["type"] = "носки"
+                photo_url, good_crop = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id)
                 await _save_one(owner_id, owner_type, file_id, data, matrix,
                                 photo_url=photo_url, show_in_collage=good_crop)
                 existing_set.add(key)
