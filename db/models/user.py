@@ -39,6 +39,7 @@ class User(Base):
     stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     subscription_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     plan_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    trial_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     trial_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     plan_paused_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     payment_provider: Mapped[Optional[str]] = mapped_column(
@@ -63,6 +64,7 @@ class User(Base):
     # Onboarding
     onboarding_step: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    colortype: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
 
     # Soft delete
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

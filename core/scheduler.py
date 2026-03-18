@@ -41,8 +41,9 @@ class Scheduler:
         from worker.tasks import morning_brief, growth_alert, declutter
         from worker.tasks import gap_analysis, capsule_season, birthday_alert
         from worker.tasks import subscription_expiry, reminders, analytics_report
+        from worker.tasks import evening_push
         from worker.tasks import unknown_items_report, taxonomy_review
-        from worker.tasks import daily_reset
+        from worker.tasks import daily_reset, cleanup_r2
 
         # daily_reset — каждый день в полночь UTC
         self._scheduler.add_job(
@@ -76,10 +77,10 @@ class Scheduler:
             replace_existing=True,
         )
 
-        # gap_analysis — 15-е число 10:00 UTC (Batch API)
+        # gap_analysis — 1-е число 09:00 UTC
         self._scheduler.add_job(
             gap_analysis.run,
-            CronTrigger(day=15, hour=10, minute=0),
+            CronTrigger(day=1, hour=9, minute=0),
             id="gap_analysis",
             replace_existing=True,
         )
@@ -105,6 +106,14 @@ class Scheduler:
             subscription_expiry.run,
             CronTrigger(hour=9, minute=0),
             id="subscription_expiry",
+            replace_existing=True,
+        )
+
+        # evening_push — ежедневно 20:00 UTC
+        self._scheduler.add_job(
+            evening_push.run,
+            CronTrigger(hour=20, minute=0),
+            id="evening_push",
             replace_existing=True,
         )
 
@@ -137,5 +146,13 @@ class Scheduler:
             taxonomy_review.run,
             CronTrigger(month="3,6,9,12", day=1, hour=9, minute=0),
             id="taxonomy_review",
+            replace_existing=True,
+        )
+
+        # cleanup_r2 — ежедневно 03:00 UTC
+        self._scheduler.add_job(
+            cleanup_r2.run,
+            CronTrigger(hour=3, minute=0),
+            id="cleanup_r2",
             replace_existing=True,
         )

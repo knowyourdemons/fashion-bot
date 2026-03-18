@@ -1,0 +1,7 @@
+tunnel: fashion-bot
+credentials-file: /etc/cloudflared/ffefb980-63ca-4830-85c2-a93b87a79541.json
+
+ingress:
+  - hostname: bot.fashioncastle.app
+    service: http://app:8000
+  - service: http_status:404

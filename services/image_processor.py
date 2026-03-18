@@ -87,3 +87,32 @@ def preprocess(
 def to_base64(image_bytes: bytes) -> str:
     import base64
     return base64.standard_b64encode(image_bytes).decode()
+
+
+async def remove_background(image_bytes: bytes) -> bytes:
+    """
+    Удаляет фон через remove.bg API. Возвращает PNG bytes с прозрачностью.
+    При ошибке или незаданном ключе — возвращает оригинал.
+    """
+    import httpx
+    import structlog
+    from config import settings
+
+    log = structlog.get_logger()
+
+    if not settings.removebg_api_key:
+        return image_bytes
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post(
+                "https://api.remove.bg/v1.0/removebg",
+                headers={"X-Api-Key": settings.removebg_api_key},
+                data={"size": "auto"},
+                files={"image_file": ("image.jpg", image_bytes, "image/jpeg")},
+            )
+            r.raise_for_status()
+            return r.content
+    except Exception as e:
+        log.warning("remove_background.failed", error=str(e))
+        return image_bytes

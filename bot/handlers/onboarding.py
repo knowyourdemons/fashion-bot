@@ -8,7 +8,8 @@
   4. Размер одежды [mom_girl/mom_boy]
   5. Размер обуви [mom_girl/mom_boy]
   6. Город (геолокация / текст + Nominatim саджжест) [все]
-  Финал → создать Child, onboarding_completed=True
+  7. Цветотип [все]
+  Финал → создать Child, onboarding_completed=True → показать главное меню
 """
 import structlog
 import sentry_sdk
@@ -34,9 +35,9 @@ from telegram.ext import (
     filters,
 )
 
-from db.base import AsyncWriteSession
+from db.base import AsyncWriteSession, AsyncReadSession
 from db.models.user import User
-from db.crud.children import create_child
+from db.crud.children import create_child, get_children
 from services.i18n.ru import t
 
 logger = structlog.get_logger()
@@ -51,7 +52,11 @@ logger = structlog.get_logger()
     CITY,
     CITY_SUGGEST,
     RESUME_CONFIRM,
+<<<<<<< HEAD
     ALSO_SELF,
+=======
+    ASK_COLORTYPE,
+>>>>>>> 1d07f611829c008383f98f24d95e48e64a7b7bd7
 ) = range(9)
 
 _STEP_TO_STATE: dict[str, int] = {
@@ -61,6 +66,7 @@ _STEP_TO_STATE: dict[str, int] = {
     "child_size":      CHILD_SIZE,
     "child_shoe_size": CHILD_SHOE_SIZE,
     "city":            CITY,
+    "colortype":       ASK_COLORTYPE,
 }
 
 # Тексты кнопок клавиатуры — не должны сохраняться как город
@@ -70,6 +76,24 @@ _CITY_KEYBOARD_LABELS = {
     "📍 Отправить геолокацию",
     "Ввести вручную",
 }
+
+_COLORTYPE_MAP = {
+    "🌸 Весна": "Весна",
+    "☀️ Лето": "Лето",
+    "🍂 Осень": "Осень",
+    "❄️ Зима": "Зима",
+    "🤷 Не знаю": None,
+}
+
+_COLORTYPE_KEYBOARD = ReplyKeyboardMarkup(
+    [
+        ["🌸 Весна", "☀️ Лето"],
+        ["🍂 Осень", "❄️ Зима"],
+        ["🤷 Не знаю"],
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=True,
+)
 
 
 # ── Вспомогательные функции ────────────────────────────────────────────────
@@ -104,6 +128,18 @@ async def _ask_city(update: Update) -> None:
         one_time_keyboard=True,
     )
     await update.effective_message.reply_text(t("onboarding.city"), reply_markup=keyboard)
+
+
+async def _ask_colortype(update: Update) -> None:
+    await update.effective_message.reply_text(
+        "🎨 Какой у тебя цветотип?\n\n"
+        "🌸 Весна — тёплый, светлый (персик, золото, коралл)\n"
+        "☀️ Лето — холодный, мягкий (лаванда, пудра, мята)\n"
+        "🍂 Осень — тёплый, глубокий (горчица, терракота, олива)\n"
+        "❄️ Зима — холодный, яркий (белый, чёрный, фуксия)\n\n"
+        "Не знаю — пропустить",
+        reply_markup=_COLORTYPE_KEYBOARD,
+    )
 
 
 async def _reverse_geocode(lat: float, lon: float) -> tuple[str, str]:
@@ -181,11 +217,13 @@ def _short_label(display_name: str) -> str:
 # ── Entry point ────────────────────────────────────────────────────────────
 
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    from bot.handlers.menu import get_main_menu
     user = context.user_data.get("db_user")
     if not user:
         return ConversationHandler.END
 
     if user.onboarding_completed:
+<<<<<<< HEAD
         if user.telegram_id in settings.admin_ids_list:
             await update.effective_message.reply_text(
                 f"👑 Admin режим\n\n"
@@ -202,6 +240,37 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
                 f"Привет, {user.name}! Пришли фото вещи или /wardrobe",
                 reply_markup=ReplyKeyboardRemove(),
             )
+=======
+        from datetime import datetime as _dt
+        _hour = _dt.now().hour
+        if _hour < 12:
+            greeting = "Доброе утро"
+        elif _hour < 18:
+            greeting = "Добрый день"
+        else:
+            greeting = "Добрый вечер"
+        _segment = getattr(user, "segment", "no_kids") or "no_kids"
+        _child_name = None
+        if _segment in ("mom_girl", "mom_boy"):
+            async with AsyncReadSession() as _session:
+                _children = await get_children(_session, user.id)
+            _child_name = _children[0].name if _children else None
+        if _child_name:
+            _welcome = (
+                f"{greeting}, {user.name}! 👋\n"
+                f"Рада видеть тебя и {_child_name} ✨\n"
+                f"Чем могу помочь сегодня?"
+            )
+        else:
+            _welcome = (
+                f"{greeting}, {user.name}! 👋\n"
+                f"Рада видеть тебя снова ✨\n"
+                f"Чем могу помочь сегодня?"
+            )
+        await update.effective_message.reply_text(
+            _welcome, reply_markup=get_main_menu()
+        )
+>>>>>>> 1d07f611829c008383f98f24d95e48e64a7b7bd7
         return ConversationHandler.END
 
     # Предложить продолжить с места или начать заново
@@ -231,7 +300,7 @@ async def handle_resume_confirm(update: Update, context: ContextTypes.DEFAULT_TY
 
     # Начать заново — сбросить step в БД и в контексте
     for key in ("segment", "child_name", "child_birthdate", "child_size", "child_shoe_size",
-                "city", "timezone", "city_candidates"):
+                "city", "timezone", "city_candidates", "colortype"):
         context.user_data.pop(key, None)
     await _save_user_fields(user, onboarding_step="segment", segment=None)
     await _ask_segment(update)
@@ -258,6 +327,9 @@ async def _resume_step(update: Update, context: ContextTypes.DEFAULT_TYPE, user:
     if step == "child_shoe_size":
         await update.effective_message.reply_text(t("onboarding.child_shoe_size"))
         return CHILD_SHOE_SIZE
+    if step == "colortype":
+        await _ask_colortype(update)
+        return ASK_COLORTYPE
     # step == "city"
     await _ask_city(update)
     return CITY
@@ -392,7 +464,9 @@ async def handle_city_location(update: Update, context: ContextTypes.DEFAULT_TYP
     city, timezone = await _reverse_geocode(loc.latitude, loc.longitude)
     context.user_data["city"] = city
     context.user_data["timezone"] = timezone
-    return await _finish_onboarding(update, context)
+    await _save_user_fields(context.user_data["db_user"], onboarding_step="colortype")
+    await _ask_colortype(update)
+    return ASK_COLORTYPE
 
 
 async def handle_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -419,7 +493,9 @@ async def handle_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         city, timezone = _extract_city_tz(results[0])
         context.user_data["city"] = city
         context.user_data["timezone"] = timezone
-        return await _finish_onboarding(update, context)
+        await _save_user_fields(context.user_data["db_user"], onboarding_step="colortype")
+        await _ask_colortype(update)
+        return ASK_COLORTYPE
 
     context.user_data["city_candidates"] = results
     keyboard = InlineKeyboardMarkup([
@@ -446,12 +522,25 @@ async def handle_city_suggest(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["timezone"] = timezone
 
     await query.message.edit_reply_markup(reply_markup=None)
+    await _save_user_fields(context.user_data["db_user"], onboarding_step="colortype")
+    await _ask_colortype(update)
+    return ASK_COLORTYPE
+
+
+# ── Шаг 7: Цветотип ───────────────────────────────────────────────────────
+
+async def handle_colortype(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text.strip()
+    # Принять любой текст — если не в карте, то None (пропустить)
+    colortype = _COLORTYPE_MAP.get(text)
+    context.user_data["colortype"] = colortype
     return await _finish_onboarding(update, context)
 
 
 # ── Финал ─────────────────────────────────────────────────────────────────
 
 async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    from bot.handlers.menu import get_main_menu
     user = context.user_data.get("db_user")
     if not user:
         return ConversationHandler.END
@@ -459,6 +548,7 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
     segment = context.user_data.get("segment") or (user.segment or "no_kids")
     city = context.user_data.get("city", "")
     timezone = context.user_data.get("timezone", "Europe/Vilnius")
+    colortype = context.user_data.get("colortype")
 
     # Проверка обязательных полей для ребёнка
     if segment in ("mom_girl", "mom_boy"):
@@ -479,21 +569,46 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 .values(
                     city=city,
                     timezone=timezone,
+                    colortype=colortype,
                     onboarding_step=None,
                     onboarding_completed=True,
                 )
             )
 
             if segment in ("mom_girl", "mom_boy"):
-                await create_child(
-                    session,
-                    user_id=user.id,
-                    name=context.user_data["child_name"],
-                    birthdate=context.user_data["child_birthdate"],
-                    gender="girl" if segment == "mom_girl" else "boy",
-                    current_size=context.user_data.get("child_size"),
-                    shoe_size=context.user_data.get("child_shoe_size"),
+                from db.models.child import Child as _Child
+                child_name = context.user_data["child_name"]
+                child_birthdate = context.user_data["child_birthdate"]
+                child_gender = "girl" if segment == "mom_girl" else "boy"
+                child_size = context.user_data.get("child_size")
+                child_shoe = context.user_data.get("child_shoe_size")
+                existing = await session.execute(
+                    sa.select(_Child).where(
+                        _Child.user_id == user.id,
+                        _Child.deleted_at.is_(None),
+                    ).order_by(_Child.created_at.asc()).limit(1)
                 )
+                existing_child = existing.scalar_one_or_none()
+                if existing_child:
+                    await session.execute(
+                        sa.update(_Child).where(_Child.id == existing_child.id).values(
+                            name=child_name,
+                            birthdate=child_birthdate,
+                            gender=child_gender,
+                            current_size=child_size,
+                            shoe_size=child_shoe,
+                        )
+                    )
+                else:
+                    await create_child(
+                        session,
+                        user_id=user.id,
+                        name=child_name,
+                        birthdate=child_birthdate,
+                        gender=child_gender,
+                        current_size=child_size,
+                        shoe_size=child_shoe,
+                    )
 
             await session.commit()
 
@@ -501,23 +616,27 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user.onboarding_step = None
         user.city = city
         user.timezone = timezone
+        user.colortype = colortype
 
+        _CT_NAMES = {"spring": "Весна 🌸", "summer": "Лето ☀️", "autumn": "Осень 🍂", "winter": "Зима ❄️"}
+        colortype_text = f"\n🎨 Цветотип: {_CT_NAMES.get(colortype, colortype)}" if colortype else ""
         welcome = (
-            f"✅ Готово, {user.name}! Добро пожаловать 👗\n\n"
+            f"✅ Готово, {user.name}! Добро пожаловать 👗{colortype_text}\n\n"
             "Что умею:\n"
             "📸 Пришли фото вещи → добавлю в гардероб\n"
             "🌅 Morning Brief каждое утро — образ на день по погоде\n"
-            "👗 /wardrobe — твой гардероб\n"
-            "❓ /help — справка"
+            "👗 Нажми кнопку Гардероб → список вещей\n"
+            "❓ Помощь — справка"
         )
         await update.effective_message.reply_text(
-            welcome, reply_markup=ReplyKeyboardRemove()
+            welcome, reply_markup=get_main_menu()
         )
         logger.info(
             "onboarding.completed",
             user_id=str(user.id),
             segment=segment,
             city=city,
+            colortype=colortype,
         )
 
     except Exception as e:
@@ -532,7 +651,7 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def handle_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     for key in ("segment", "child_name", "child_birthdate", "child_size",
-                "child_shoe_size", "city", "timezone", "city_candidates"):
+                "child_shoe_size", "city", "timezone", "city_candidates", "colortype"):
         context.user_data.pop(key, None)
     await update.message.reply_text(
         "Отменено. /start чтобы начать заново",
@@ -574,6 +693,9 @@ def build_conversation_handler() -> ConversationHandler:
             ],
             CITY_SUGGEST: [
                 CallbackQueryHandler(handle_city_suggest, pattern="^city_pick:"),
+            ],
+            ASK_COLORTYPE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_colortype),
             ],
         },
         fallbacks=[CommandHandler("cancel", handle_cancel)],

@@ -8,11 +8,19 @@ STRINGS: dict[str, str] = {
     "error.not_found": "Не найдено.",
 
     # Онбординг
+<<<<<<< HEAD
     "onboarding.start": "Для кого будем подбирать образы? 👗\n\nВыбери один вариант — потом можно изменить",
     "onboarding.segment.mom_girl": "👧 Для дочки",
     "onboarding.segment.mom_boy": "👦 Для сына",
     "onboarding.segment.pregnant": "🤰 Жду малыша",
     "onboarding.segment.no_kids": "👩 Для себя",
+=======
+    "onboarding.start": "Привет! Я Касси 👗\n\nПомогу собрать стильный гардероб для всей семьи.\nДавай начнём — это займёт минуту!\n\nС чего начнём?",
+    "onboarding.segment.mom_girl": "Мама девочки",
+    "onboarding.segment.mom_boy": "Мама мальчика",
+    "onboarding.segment.pregnant": "Беременная",
+    "onboarding.segment.no_kids": "Без детей",
+>>>>>>> 1d07f611829c008383f98f24d95e48e64a7b7bd7
     "onboarding.child_name": "Как зовут дочку?",
     "onboarding.child_birthdate": "Дата рождения? (дд.мм.гггг)",
     "onboarding.child_size": "Размер одежды ребёнка? 👗\n\nВведи размер (например: 86, 92, 104, 116)\nИли возраст (1–12), если не знаешь размер",
@@ -58,6 +66,19 @@ STRINGS: dict[str, str] = {
     "reminder.3days": "Привет! Не забывай про Morning Brief 👗",
     "reminder.7days": "Твой гардероб скучает — загляни?",
     "reminder.30days": "Давно не виделись! Есть новые вещи?",
+
+    # Шоппинг-лист
+    "shopping.premium_only": (
+        "🛍 Шоппинг-лист доступен на Premium.\n\n"
+        "Касси проанализирует гардероб и скажет что купить "
+        "с учётом сезона и цветотипа.\n\n"
+        "👉 /subscribe — 14 дней бесплатно"
+    ),
+    "shopping.too_few_items": "Добавь хотя бы 5 вещей в гардероб, и я смогу сделать анализ 📸",
+    "shopping.generating": "🔍 Анализирую гардероб...",
+    "shopping.header": "🛍 Что стоит купить этой {season}:\n\n{list}",
+    "shopping.empty_result": "Гардероб выглядит хорошо — пока ничего срочного докупать не нужно 👍",
+    "shopping.error": "Не удалось проанализировать гардероб. Попробуй позже.",
 
     # Помощь
     "help.text": (

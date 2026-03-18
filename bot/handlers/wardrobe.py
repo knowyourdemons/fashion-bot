@@ -1,10 +1,13 @@
 """Wardrobe handlers."""
 import asyncio
 import base64
+import io
 import json
 import time
 import uuid
 from difflib import SequenceMatcher
+
+from PIL import Image
 
 import sentry_sdk
 import structlog
@@ -19,8 +22,10 @@ from db.crud.wardrobe import create, get_owner_items
 from db.models.user import User
 from exceptions import FashionBotError, RateLimitError
 from services.i18n.ru import t
+from bot.handlers.menu import get_main_menu
 from services.scoring import ScoringService, matrix_name_for_owner, calc_item_score
 from services.usage import get_limit_exceeded_msg, get_usage_str
+from core.permissions import get_effective_plan, get_limit
 
 logger = structlog.get_logger()
 
@@ -53,58 +58,312 @@ _PLAN_LIMITS = {
 }
 
 PAGE_SIZE = 20
+OUTFIT_DAY_LIMIT_FREE = 2
+OUTFIT_DAY_LIMIT_PREMIUM = 5
 
-_VISION_SYSTEM = """Фото может быть в любой ориентации — горизонтальной или вертикальной.
-Определяй вещи независимо от их расположения на фото.
+RATE_LIMIT_FREE = 5
+RATE_LIMIT_PREMIUM = 20
 
-Ты определяешь детскую одежду на фото для гардероба.
 
-Найди все вещи на фото и верни JSON массив. Каждая вещь:
+_VISION_SYSTEM = """Ты определяешь детскую одежду на фото и добавляешь её в гардероб.
+Фото может быть горизонтальным или вертикальным — определяй вещи независимо от ориентации.
+Вещи могут лежать на ковре, висеть, быть сложены стопкой или надеты на ребёнка.
+
+════════════════════════════════════════════
+ФОРМАТ ОТВЕТА
+════════════════════════════════════════════
+
+Верни ТОЛЬКО JSON массив, без markdown, без пояснений. Каждая вещь:
 {
   "type": "название строчными",
   "color": "цвет строчными",
   "style": "повседневный/спортивный/нарядный/домашний",
-  "category_group": "одна из: outerwear/top/bottom/one_piece/footwear/accessory/base_layer/underwear/sportswear/home_beach",
+  "category_group": "outerwear/top/bottom/one_piece/footwear/accessory/base_layer/underwear/sportswear/home_beach",
   "category_code": "english_code",
   "season": ["winter/spring/summer/autumn"],
   "occasion": ["everyday/sport/formal/home/outdoor"],
   "brand": null,
-  "score_breakdown": {"safety":1,"practicality":1,"durability":1,"age_authenticity":1,"ease_of_care":1,"colortype":1,"comfort":1,"versatility":1,"condition":1,"size_fit_score":1,"seasonality":1}
+  "bbox": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+  "score_breakdown": {
+    "safety": 1, "practicality": 1, "durability": 1, "age_authenticity": 1,
+    "ease_of_care": 1, "colortype": 1, "comfort": 1, "versatility": 1,
+    "condition": 1, "size_fit_score": 1, "seasonality": 1
+  }
 }
 
-Для каждой вещи оцени score_breakdown по шкале 0-2:
-0 = плохо, 1 = нейтрально/не видно, 2 = отлично
-- safety: завязки/острые детали → 0, безопасно → 2
-- practicality: резинка/застёжки → 2, сложный крой → 0
-- durability: плотная ткань → 2, тонкая → 0
-- age_authenticity: детский крой/принт → 2, взрослый → 0
-- ease_of_care: синтетика → 2, деликатный → 0, хлопок → 1
-- colortype: холодные пастели → 2, тёплые земляные → 0, нейтральные → 1
-- comfort: мягкий трикотаж → 2, жёсткий → 0
-- versatility: базовые цвета → 2, яркий принт → 0, нейтральный → 1
-- condition: новая/без пятен → 2, ношеная → 0, обычная → 1
-- size_fit_score: на ребёнке/сидит хорошо → 2, не на ребёнке → 1
-- seasonality: подходит весне (март) → 2, не по сезону → 0
+════════════════════════════════════════════
+КЛАССИФИКАЦИЯ ПО ФОРМЕ — ГЛАВНОЕ ПРАВИЛО
+════════════════════════════════════════════
 
-Категории:
-- underwear: трусики, майки нательные, термобельё (термолонгслив, термолеггинсы)
-  майка нательная (облегающая, тонкая, с принтом или без) → underwear, тип: майка
-  НЕ путать с футболкой (футболка свободнее)
-- base_layer: носки, колготки, пижама
-- top: футболка, лонгслив с принтом, кофта, свитер
-- bottom: штаны, шорты, юбка, леггинсы
-- one_piece: платье, комбинезон, ромпер
-- outerwear: куртка, пальто, жилет утеплённый
-- accessory: шапка, шарф, варежки
-- footwear: обувь (НЕ носки!)
+Определяй категорию ТОЛЬКО по форме и функции вещи, не по декору:
 
-Верни ТОЛЬКО JSON массив, без markdown."""
+TOP (есть рукава + туловищная часть):
+  футболка, лонгслив, кофта, свитер, худи, свитшот, олимпийка, водолазка,
+  блузка, рубашка, боди с рукавами
+  → УШКИ на капюшоне, принт, аппликация НЕ меняют категорию — это всё равно TOP
 
-_RATE_SYSTEM = (
-    "Ты стилист с насмотренностью Vogue Kids. Оцени образ на фото.\n"
-    "Верни оценку от 1 до 10 и краткий комментарий (максимум 3 строки).\n"
-    "Что работает, что нет, как улучшить. Язык: русский."
+BOTTOM (надевается на ноги, есть поясная часть):
+  штаны, брюки, джинсы, шорты, юбка, леггинсы, бриджи, комбинезон-штаны
+
+ONE_PIECE (цельная вещь: туловище + ноги или юбка):
+  платье, сарафан, комбинезон, ромпер, боди-комбинезон
+
+OUTERWEAR (верхняя одежда, надевается поверх):
+  куртка, пальто, пуховик, жилет утеплённый, ветровка, плащ, дождевик
+
+BASE_LAYER (надевается на ноги/тело без поясной части, облегающее):
+  носки, гольфы, колготки, пижама, термобельё (кальсоны)
+  → Носки/колготки = base_layer ВСЕГДА, независимо от рисунка и декора
+
+UNDERWEAR (нательное бельё):
+  трусики, трусы, боксёры, майка нательная (облегающая, тонкая)
+  → майка нательная ≠ футболка (футболка свободнее, плотнее)
+
+ACCESSORY (ТОЛЬКО надевается НА голову — форма купола/цилиндра/берета):
+  шапка, шапка-ушанка, берет, балаклава, шарф, варежки, перчатки, повязка на голову
+  → шапка имеет форму купола или цилиндра и надевается ТОЛЬКО на голову
+  → декоративные ушки на свитшоте или кофте — это НЕ шапка
+
+FOOTWEAR (обувь):
+  ботинки, сапоги, кроссовки, туфли, сандалии, балетки, угги, тапочки
+  → НЕ носки, НЕ колготки
+
+════════════════════════════════════════════
+ЗАПРЕЩЁННЫЕ ОШИБКИ
+════════════════════════════════════════════
+
+ОШИБКА: Свитшот/кофта/худи с ушками или принтом → accessory (шапка)
+ПРАВИЛО: Есть рукава + туловище → TOP, даже если есть ушки, рожки, принт заяц
+
+ОШИБКА: Носки/колготки → accessory
+ПРАВИЛО: Носки и колготки = base_layer ВСЕГДА
+
+ОШИБКА: Колготки → лонгслив (top)
+ПРАВИЛО: Колготки длинные тонкие для ног → base_layer; лонгслив = рукава + туловище → top
+
+ОШИБКА: Маленький предмет с бантиком на ковре → шапка
+ПРАВИЛО: Определяй по ФОРМЕ: маленький плоский предмет с бантиком → носки (base_layer)
+
+НОСКИ vs ШАПКА — главная ошибка:
+- Носки = два маленьких трубчатых предмета, часто лежат ПАРОЙ
+- Носки НЕ надеваются на голову, всегда base_layer
+- Маленький предмет с бантиком лежащий на полу/ковре → это НОСКИ, не шапка
+- Шапка = ОДИН предмет куполообразной формы, надевается на голову
+- Шапка НИКОГДА не лежит парой рядом с другой шапкой
+- Розовый предмет с бантиком на полу = носки, НЕ шапка
+- Если сомневаешься между носками и шапкой → выбирай НОСКИ
+
+ОШИБКА: Добавлять вещи которых нет на фото
+ПРАВИЛО: Только то что реально видно. Не угадывай по контексту.
+
+════════════════════════════════════════════
+ПРИМЕРЫ ПРАВИЛЬНОЙ КЛАССИФИКАЦИИ
+════════════════════════════════════════════
+
+✅ Розовый свитшот с ушками зайца на капюшоне:
+   category_group: "top", type: "свитшот с ушками", color: "розовый"
+   (есть рукава + туловище → top, ушки = декор)
+
+✅ Носки с бантиком на ковре:
+   category_group: "base_layer", type: "носки", color: "белый"
+   (маленький предмет для ног → base_layer)
+
+✅ Два маленьких розовых предмета с бантиком лежат на полу:
+   category_group: "base_layer", type: "носки с бантом", color: "розовый"
+   bbox: {"x":..., "y":..., "w":0.12, "h":0.11} — маленький, w≤0.15 h≤0.15 для каждого
+   (лежат парой, маленькие, с бантиком → носки, НЕ шапка)
+
+✅ Колготки далматинец (чёрные пятна на белом):
+   category_group: "base_layer", type: "колготки", color: "белый с чёрным"
+   (для ног, облегающие → base_layer, НЕ лонгслив)
+
+✅ Балаклава сиреневая:
+   category_group: "accessory", type: "балаклава", color: "сиреневый"
+   (надевается на голову → accessory)
+
+✅ Майка нательная в горошек:
+   category_group: "underwear", type: "майка", color: "белый в горошек"
+   (нательная, облегающая → underwear, НЕ футболка)
+
+✅ Куртка стёганая с принтом:
+   category_group: "outerwear", type: "куртка стёганая", color: "синий"
+   (верхняя одежда → outerwear)
+
+✅ Леггинсы с сердечками:
+   category_group: "bottom", type: "леггинсы", color: "розовый"
+   (штаны на ноги с поясной частью → bottom)
+
+════════════════════════════════════════════
+BBOX — ПЛОТНОЕ ОБРАМЛЕНИЕ ВЕЩИ
+════════════════════════════════════════════
+
+bbox = нормализованные координаты 0.0–1.0 (x, y — верхний левый угол; w, h — ширина, высота).
+Bbox ПЛОТНО обрамляет ТОЛЬКО эту конкретную вещь.
+
+РАЗМЕР bbox по типу вещи — СТРОГО соблюдать верхние пределы:
+- носки, трусики, шапка, повязка на голову → w ≤ 0.15, h ≤ 0.15
+- варежки, перчатки, шарф → w ≤ 0.20, h ≤ 0.20
+- футболка, лонгслив, свитер, кофта, свитшот → w 0.20–0.45, h 0.20–0.45
+- штаны, шорты, юбка, леггинсы → w 0.20–0.40, h 0.30–0.60
+- куртка, пальто, пуховик, комбинезон, платье → w 0.30–0.60, h 0.40–0.70
+- обувь (кроссовки, ботинки, сандалии) → w 0.15–0.30, h 0.10–0.25
+
+ПРАВИЛА — нарушение недопустимо:
+1. bbox обрамляет ТОЛЬКО одну вещь — НЕ захватывать соседние
+2. Если вещь лежит рядом с другой — bbox заканчивается ТАМ ГДЕ НАЧИНАЕТСЯ соседняя
+3. НЕ давай w > 0.70 или h > 0.70 если на фото больше одной вещи
+4. Одна вещь крупным планом на весь кадр → bbox 0.80–0.98
+
+ЦВЕТ — определять ТОЛЬКО по пикселям внутри bbox:
+- Если рядом лежит розовая вещь и она попала в bbox свитшота → это НЕ цвет свитшота
+- Смотреть на основную вещь, игнорировать то что за границей bbox
+- Сомневаешься в цвете → называй по доминирующему пятну внутри bbox
+
+Примеры (КОПИРУЙ этот стиль):
+  Носки в правом нижнем углу → {"x":0.65,"y":0.72,"w":0.13,"h":0.12}
+  Трусики в центре → {"x":0.40,"y":0.42,"w":0.14,"h":0.13}
+  Кофта в центре кадра → {"x":0.18,"y":0.12,"w":0.44,"h":0.43}
+  Штаны слева → {"x":0.05,"y":0.20,"w":0.38,"h":0.55}
+  Куртка во весь кадр → {"x":0.03,"y":0.02,"w":0.93,"h":0.95}
+  Свитшот серый слева + леггинсы розовые справа:
+    свитшот: {"x":0.02,"y":0.10,"w":0.42,"h":0.43}
+    леггинсы: {"x":0.52,"y":0.10,"w":0.38,"h":0.58}
+  3 вещи рядом (носки+кофта+штаны):
+    носки:  {"x":0.70,"y":0.75,"w":0.13,"h":0.12}
+    кофта:  {"x":0.15,"y":0.10,"w":0.43,"h":0.44}
+    штаны:  {"x":0.45,"y":0.10,"w":0.38,"h":0.55}
+
+════════════════════════════════════════════
+SCORE_BREAKDOWN — ОЦЕНКА ВЕЩИ
+════════════════════════════════════════════
+
+Шкала 0–2 для каждого критерия:
+0 = плохо/не подходит, 1 = нейтрально/не видно, 2 = отлично
+
+- safety:          завязки/шнурки на шее → 0; кнопки/молния → 1; без опасных деталей → 2
+- practicality:    сложный крой/пуговицы → 0; обычные застёжки → 1; резинка/быстро надеть → 2
+- durability:      тонкая прозрачная ткань → 0; обычная → 1; плотный трикотаж/деним → 2
+- age_authenticity: взрослый крой, нет детского → 0; нейтрально → 1; детский крой/принт → 2
+- ease_of_care:    деликатная стирка, сухая чистка → 0; хлопок → 1; синтетика/смесь → 2
+- colortype:       тёплые земляные тона → 0; нейтральные → 1; холодные пастели/яркие → 2
+- comfort:         жёсткая ткань, тугая резинка → 0; обычная → 1; мягкий трикотаж → 2
+- versatility:     яркий принт/спецодежда → 0; нейтральный → 1; базовые цвета → 2
+- condition:       пятна/дыры/сильный износ → 0; обычная → 1; новая/отличное состояние → 2
+- size_fit_score:  не на ребёнке, не видно посадки → 1; на ребёнке, хорошо сидит → 2
+- seasonality:     не по сезону (лето в январе) → 0; универсальная → 1; по сезону → 2
+
+════════════════════════════════════════════
+ГАЛЛЮЦИНАЦИИ — СТРОГИЕ ПРАВИЛА
+════════════════════════════════════════════
+
+- Добавляй ТОЛЬКО вещи которые реально видны на фото
+- Не угадывай вещи по контексту ("здесь должны быть носки к этим штанам")
+- Если вещь сильно перекрыта другой — определяй только по видимой части
+- Если не уверен в типе — пропусти вещь, не угадывай
+- Если видишь аксессуар на свитшоте (принт, нашивка) — это часть свитшота, не отдельная вещь
+- Максимум вещей на одном фото: 15 (если больше — бери самые чётко видимые)"""
+
+_RATE_SYSTEM_CHILD = (
+    "Ты стилист детской моды с насмотренностью Vogue Kids. Оцени образ ребёнка на фото.\n\n"
+    "Если на фото виден только фрагмент образа (только ноги, только верх, только лицо):\n"
+    "- Честно напиши: 'Вижу только часть образа'\n"
+    "- Оцени только видимые элементы, не домысливай\n"
+    "- Попроси прислать полное фото для полной оценки\n"
+    "Для полной оценки нужно видеть весь образ от головы до ног.\n"
+    "Оценивай ВСЕ видимые элементы: головной убор, верхняя одежда, низ, обувь — не пропускай ни один видимый.\n\n"
+    "Структура ответа:\n"
+    "⭐ Оценка: X/10\n"
+    "✅ Что работает: (1-2 предложения)\n"
+    "❌ Что улучшить: (конкретно)\n\n"
+    "Язык: русский."
 )
+
+_RATE_SYSTEM_ADULT = (
+    "Ты персональный стилист. Оцени образ взрослого человека на фото.\n\n"
+    "Если на фото виден только фрагмент образа (только ноги, только верх, только лицо):\n"
+    "- Честно напиши: 'Вижу только часть образа'\n"
+    "- Оцени только видимые элементы, не домысливай\n"
+    "- Попроси прислать фото в полный рост для полной оценки\n"
+    "Для полной оценки нужно видеть весь образ от головы до ног.\n"
+    "Оценивай ВСЕ видимые элементы: верхняя одежда, низ, обувь, аксессуары.\n\n"
+    "Структура ответа — строго такая:\n"
+    "⭐ Оценка: X/10\n"
+    "✅ Что работает: (1-2 предложения — цвет, силуэт, сочетание)\n"
+    "❌ Что улучшить: (конкретно и конструктивно)\n"
+    "👗 Замена: [вещь на фото] → [вещь из гардероба]\n"
+    "   Причина: улучшит [цветовую гармонию/стиль/баланс]\n\n"
+    "Правила:\n"
+    "- Оцениваешь образ взрослого — применяй критерии взрослой моды\n"
+    "- Рекомендуй ТОЛЬКО вещи из гардероба пользователя если он не пуст\n"
+    "- Если гардероб пуст — давай общие рекомендации без конкретных замен\n"
+    "- Если оценка 8 или выше — раздел 'Замена' не нужен, только похвали\n"
+    "- Максимум 2 замены\n"
+    "- Тон: дружелюбный, как подруга-стилист\n"
+    "- НЕ упоминай детей и детскую моду\n"
+    "Язык: русский."
+)
+
+
+def _build_rate_prompt(wardrobe_items: list, owner_type: str = "child") -> str:
+    """Строит системный промпт стилиста с топ-20 вещей гардероба по score."""
+    top_items = sorted(
+        [i for i in wardrobe_items if i.score_item],
+        key=lambda x: float(x.score_item),
+        reverse=True,
+    )[:20]
+    if top_items:
+        wardrobe_context = ", ".join(f"{i.type} {i.color}" for i in top_items)
+    else:
+        wardrobe_context = "гардероб пуст"
+
+    if owner_type == "child":
+        return (
+            "Ты стилист детской моды. Оцени образ ребёнка на фото.\n\n"
+            "Если на фото виден только фрагмент образа (только ноги, только верх):\n"
+            "- Честно напиши: 'Вижу только часть образа'\n"
+            "- Оцени только видимые элементы, не домысливай\n"
+            "- Попроси прислать полное фото\n"
+            "Оценивай ВСЕ видимые элементы: головной убор, верхняя одежда, низ, обувь.\n\n"
+            f"Гардероб ребёнка (лучшие вещи):\n{wardrobe_context}\n\n"
+            "Структура ответа — строго такая:\n"
+            "⭐ Оценка: X/10\n"
+            "✅ Что работает: (1-2 предложения)\n"
+            "❌ Что улучшить: (конкретно)\n"
+            "👗 Замена: [вещь на фото] → [точное название из гардероба выше]\n"
+            "   Причина: улучшит [цветовую гармонию/сезонность/стиль]\n\n"
+            "Правила:\n"
+            "- В разделе 'Замена' используй ТОЛЬКО вещи из списка гардероба выше\n"
+            "- Если нужной замены нет в гардеробе — пропусти раздел 'Замена'\n"
+            "- Если оценка 8 или выше — раздел 'Замена' не нужен, только похвали\n"
+            "- Максимум 2 замены\n"
+            "- НЕ советуй покупать вещи которые уже есть в гардеробе\n"
+            "Язык: русский."
+        )
+    else:
+        return (
+            "Ты персональный стилист. Оцени образ взрослого человека на фото.\n\n"
+            "Если на фото виден только фрагмент образа (только ноги, только верх):\n"
+            "- Честно напиши: 'Вижу только часть образа'\n"
+            "- Оцени только видимые элементы, не домысливай\n"
+            "- Попроси прислать фото в полный рост\n"
+            "Оценивай ВСЕ видимые элементы: верхняя одежда, низ, обувь, аксессуары.\n\n"
+            f"Гардероб пользователя (лучшие вещи для рекомендаций):\n{wardrobe_context}\n\n"
+            "Структура ответа — строго такая:\n"
+            "⭐ Оценка: X/10\n"
+            "✅ Что работает: (1-2 предложения — цвет, силуэт, сочетание)\n"
+            "❌ Что улучшить: (конкретно и конструктивно)\n"
+            "👗 Замена: [вещь на фото] → [точное название из гардероба выше]\n"
+            "   Причина: улучшит [цветовую гармонию/стиль/баланс]\n\n"
+            "Правила:\n"
+            "- Оцениваешь образ взрослого — применяй критерии взрослой моды\n"
+            "- В разделе 'Замена' используй ТОЛЬКО вещи из гардероба выше\n"
+            "- Если гардероб пуст — давай общие рекомендации без конкретных замен\n"
+            "- Если оценка 8 или выше — раздел 'Замена' не нужен, только похвали\n"
+            "- Максимум 2 замены\n"
+            "- Тон: дружелюбный, как подруга-стилист\n"
+            "- НЕ упоминай детей и детскую моду\n"
+            "Язык: русский."
+        )
 
 
 def _dedup_key(data: dict) -> tuple:
@@ -121,6 +380,44 @@ def _item_label(data: dict) -> str:
     return f"{data.get('color', '')} {data.get('type', 'вещь')}".strip()
 
 
+def _fix_bbox(data: dict) -> dict:
+    """Центрирует и ужимает bbox если он слишком велик для данного типа вещи."""
+    bbox = data.get("bbox")
+    if not bbox:
+        return data
+    bw = float(bbox.get("w", 0.5))
+    bh = float(bbox.get("h", 0.5))
+    item_type = (data.get("type") or "").lower()
+    cg = data.get("category_group", "top")
+
+    if cg in ("base_layer", "underwear") or any(
+        w in item_type for w in ["носки", "трусик", "шапка", "повязка"]
+    ):
+        max_dim = 0.25
+    elif cg in ("outerwear", "one_piece"):
+        max_dim = 0.75
+    else:
+        max_dim = 0.55
+
+    if bw > max_dim or bh > max_dim:
+        logger.warning(
+            "wardrobe.bbox.oversized",
+            item_type=item_type, cg=cg,
+            w=bw, h=bh, max_dim=max_dim,
+            action="crop_tightened",
+        )
+        cx = float(bbox.get("x", 0.1)) + bw / 2
+        cy = float(bbox.get("y", 0.1)) + bh / 2
+        new_dim = max_dim * 0.8
+        data["bbox"] = {
+            "x": max(0.0, min(1.0 - new_dim, cx - new_dim / 2)),
+            "y": max(0.0, min(1.0 - new_dim, cy - new_dim / 2)),
+            "w": new_dim,
+            "h": new_dim,
+        }
+    return data
+
+
 def _default_score() -> tuple[dict, float]:
     breakdown = {
         "safety": 1, "practicality": 1, "durability": 1,
@@ -131,25 +428,107 @@ def _default_score() -> tuple[dict, float]:
     return breakdown, round((sum(breakdown.values()) / 15) * 10, 2)
 
 
+def _crop_bbox(image_bytes: bytes, bbox: dict) -> bytes:
+    """Вырезает вещь из фото по нормализованным координатам bbox."""
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    iw, ih = img.size
+    x = max(0.0, min(1.0, float(bbox.get("x", 0.0))))
+    y = max(0.0, min(1.0, float(bbox.get("y", 0.0))))
+    w = max(0.01, min(1.0 - x, float(bbox.get("w", 1.0))))
+    h = max(0.01, min(1.0 - y, float(bbox.get("h", 1.0))))
+    left = int(x * iw)
+    top = int(y * ih)
+    right = int((x + w) * iw)
+    bottom = int((y + h) * ih)
+    cropped = img.crop((left, top, right, bottom))
+    buf = io.BytesIO()
+    cropped.save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
+
+def _check_crop_quality(png_bytes: bytes, min_ratio: float = 0.15) -> bool:
+    """
+    Проверяет что вещь занимает достаточно места в кропе.
+    Считает долю непрозрачных пикселей (альфа > 30).
+    Возвращает True если вещь >= min_ratio площади кропа.
+    """
+    try:
+        from PIL import Image as _Image
+        img = _Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+        pixels = list(img.getdata())
+        total = len(pixels)
+        opaque = sum(1 for p in pixels if p[3] > 30)
+        ratio = opaque / total if total > 0 else 0
+        return ratio >= min_ratio
+    except Exception:
+        return True  # fallback — не блокировать сохранение
+
+
+async def _upload_crop(
+    photo_bytes: bytes,
+    bbox: dict | None,
+    owner_id: uuid.UUID | None = None,
+) -> tuple[str | None, bool]:
+    """Кропит по bbox → удаляет фон → загружает PNG в R2.
+    Возвращает (CDN URL или None, good_crop: bool)."""
+    if not bbox:
+        return None, True
+    try:
+        crop_bytes = _crop_bbox(photo_bytes, bbox)
+        from services.image_processor import remove_background
+        png_bytes = await remove_background(crop_bytes)
+        # Проверяем качество кропа (доля непрозрачных пикселей)
+        good_crop = _check_crop_quality(png_bytes)
+        if not good_crop:
+            logger.warning(
+                "wardrobe.crop.low_quality",
+                action="show_in_collage=False",
+            )
+        # Определяем формат по результату: remove.bg возвращает PNG, fallback — JPEG
+        is_png = png_bytes[:4] == b'\x89PNG'
+        ext = "png" if is_png else "jpg"
+        content_type = "image/png" if is_png else "image/jpeg"
+        from services.storage.r2_storage import get_r2_storage
+        r2 = get_r2_storage()
+        filename = f"{uuid.uuid4()}.{ext}"
+        key = await r2.upload_photo(
+            png_bytes, filename,
+            owner_id=str(owner_id) if owner_id else "",
+            content_type=content_type,
+        )
+        url = r2.get_public_url(key) if settings.cloudflare_r2_cdn_url else key
+        return url, good_crop
+    except Exception as e:
+        logger.warning("wardrobe.crop_upload_failed", error=str(e))
+        return None, True
+
+
 # ── Определить владельца вещи (пользователь или ребёнок) ───────────────────
 
 async def _get_owner(user, context) -> tuple:
-    cache_key = f"owner:{user.id}"
-    cached = context.bot_data.get(cache_key)
-    if cached:
-        return cached
+    """Получить текущего владельца гардероба. Приоритет: Redis owner_mode → segment."""
+    redis = context.bot_data.get("redis")
+    if redis:
+        try:
+            mode = await redis.get(f"owner_mode:{user.id}")
+            if mode:
+                mode = mode if isinstance(mode, str) else mode.decode()
+                if mode == "user":
+                    return (user.id, "user")
+                elif mode.startswith("child:"):
+                    import uuid as _uuid
+                    child_id = _uuid.UUID(mode[6:])
+                    return (child_id, "child")
+        except Exception:
+            pass
 
     async with AsyncReadSession() as session:
         from db.crud.children import get_children
         children = await get_children(session, user.id)
 
     if user.segment in ("mom_girl", "mom_boy") and children:
-        owner = (children[0].id, "child")
-    else:
-        owner = (user.id, "user")
-
-    context.bot_data[cache_key] = owner
-    return owner
+        return (children[0].id, "child")
+    return (user.id, "user")
 
 
 # ── Загрузить матрицу скоринга для владельца ───────────────────────────────
@@ -244,7 +623,11 @@ async def _call_vision(photo_bytes: bytes) -> list[dict]:
 
 # ── Вызов Claude Vision → оценка образа ────────────────────────────────────
 
-async def _call_rate_vision(photo_bytes_list: list[bytes]) -> str:
+async def _call_rate_vision(
+    photo_bytes_list: list[bytes],
+    owner_id: uuid.UUID | None = None,
+    owner_type: str | None = None,
+) -> str:
     pool = get_anthropic_pool()
     content = []
     for photo_bytes in photo_bytes_list:
@@ -258,10 +641,17 @@ async def _call_rate_vision(photo_bytes_list: list[bytes]) -> str:
         })
     content.append({"type": "text", "text": "Оцени образ на фото."})
 
+    if owner_id and owner_type:
+        async with AsyncReadSession() as session:
+            wardrobe_items = await get_owner_items(session, owner_id, owner_type)
+        system_prompt = _build_rate_prompt(wardrobe_items, owner_type=owner_type)
+    else:
+        system_prompt = _RATE_SYSTEM_CHILD
+
     response = await pool.create_message(
-        system=_RATE_SYSTEM,
+        system=system_prompt,
         messages=[{"role": "user", "content": content}],
-        max_tokens=256,
+        max_tokens=512,
     )
     return response.content[0].text.strip() if response.content else "Не удалось оценить образ"
 
@@ -279,6 +669,8 @@ async def _save_one(
     photo_id: str,
     data: dict,
     matrix=None,
+    photo_url: str | None = None,
+    show_in_collage: bool = True,
 ) -> bool:
     """Сохраняет WardrobeItem."""
     category_group = data.get("category_group") or "top"
@@ -302,6 +694,7 @@ async def _save_one(
                 owner_id=owner_id,
                 owner_type=owner_type,
                 photo_id=photo_id,
+                photo_url=photo_url,
                 category_group=category_group,
                 category_code=data.get("category_code") or category_group,
                 type=data.get("type") or "вещь",
@@ -315,7 +708,7 @@ async def _save_one(
                 keep=True,
                 wishlist=False,
                 quantity=1,
-                show_in_collage=True,
+                show_in_collage=show_in_collage,
                 is_base_layer=(category_group == "base_layer"),
                 score_item=score_item,
                 score_breakdown=score_breakdown,
@@ -345,11 +738,14 @@ async def _analyze_and_save(
     bot,
     matrix=None,
 ) -> list[dict]:
-    """Скачать фото → Claude Vision → сохранить все WardrobeItem. Возвращает added."""
+    """Скачать фото → Claude Vision → crop по bbox → R2 → сохранить WardrobeItem."""
     tg_file = await bot.get_file(photo_id)
     photo_bytes = bytes(await tg_file.download_as_bytearray())
 
     items_data = await _call_vision(photo_bytes)
+
+    # Дедупликация: загружаем существующие вещи
+    existing_set = await _load_existing_set(owner_id, owner_type)
 
     added: list[dict] = []
 
@@ -359,7 +755,31 @@ async def _analyze_and_save(
             cg = "top"
         data["category_group"] = cg
 
-        await _save_one(owner_id, owner_type, photo_id, data, matrix)
+        key = _dedup_key(data)
+        if key in existing_set:
+            logger.info("wardrobe.dedup.skipped", type=data.get("type"), color=data.get("color"))
+            continue
+
+        _fix_bbox(data)
+        bbox = data.get("bbox") or {}
+        bw = float(bbox.get("w", 0.5))
+        bh = float(bbox.get("h", 0.5))
+
+        # Переклассификация: маленькая "шапка" → носки
+        if (data.get("category_group") == "accessory" and
+                any(w in (data.get("type") or "").lower()
+                    for w in ["шапка", "шапочка", "hat"]) and
+                bw <= 0.2 and bh <= 0.2):
+            logger.info("wardrobe.reclassify",
+                from_type=data.get("type"), to_type="носки",
+                reason="small_bbox_accessory")
+            data["category_group"] = "base_layer"
+            data["type"] = "носки"
+
+        photo_url, good_crop = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id)
+        await _save_one(owner_id, owner_type, photo_id, data, matrix,
+                        photo_url=photo_url, show_in_collage=good_crop)
+        existing_set.add(key)
         added.append(data)
 
     return added
@@ -367,23 +787,35 @@ async def _analyze_and_save(
 
 # ── Оценка образа ───────────────────────────────────────────────────────────
 
-async def _rate_photos(file_ids: list[str], mode: str, message, bot) -> None:
+async def _rate_photos(
+    file_ids: list[str],
+    mode: str,
+    message,
+    bot,
+    owner_id: uuid.UUID | None = None,
+    owner_type: str | None = None,
+) -> None:
     try:
         if mode == "single":
             photo_bytes_list = []
             for file_id in file_ids:
+                logger.info("rate.photo_source",
+                    file_id=file_id[:20], source="telegram_original")
                 tg_file = await bot.get_file(file_id)
-                photo_bytes_list.append(bytes(await tg_file.download_as_bytearray()))
-            result = await _call_rate_vision(photo_bytes_list)
-            await message.reply_text(f"⭐ Скор образа:\n{result}")
+                photo_bytes = bytes(await tg_file.download_as_bytearray())
+                logger.info("rate.download_ok",
+                    file_id=file_id[:20], size=len(photo_bytes))
+                photo_bytes_list.append(photo_bytes)
+            result = await _call_rate_vision(photo_bytes_list, owner_id=owner_id, owner_type=owner_type)
+            await message.reply_text(f"⭐ Скор образа:\n{result}", reply_markup=get_main_menu())
         else:
             for i, file_id in enumerate(file_ids, 1):
                 tg_file = await bot.get_file(file_id)
                 photo_bytes = bytes(await tg_file.download_as_bytearray())
-                result = await _call_rate_vision([photo_bytes])
-                await message.reply_text(f"📷 Фото {i}:\n{result}")
+                result = await _call_rate_vision([photo_bytes], owner_id=owner_id, owner_type=owner_type)
+                await message.reply_text(f"📷 Фото {i}:\n{result}", reply_markup=get_main_menu())
     except Exception as e:
-        await message.reply_text("Не удалось оценить образ. Попробуй ещё раз.")
+        await message.reply_text("Не удалось оценить образ. Попробуй ещё раз.", reply_markup=get_main_menu())
         logger.error("rate_photos.error", error=str(e))
         sentry_sdk.capture_exception(e)
 
@@ -428,7 +860,107 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Сначала пройди настройку: /start")
         return
 
+    # Режим оценки образа (из кнопки меню)
+    if context.user_data.get("awaiting_rate_photo"):
+        context.user_data.pop("awaiting_rate_photo")
+
+        # Проверить лимит оценок
+        redis = context.bot_data.get("redis")
+        from datetime import date as _date_rate
+        today = _date_rate.today().isoformat()
+        rate_key = f"rate_limit:{user.id}:{today}"
+        effective_plan = get_effective_plan(user)
+        rate_limit = get_limit("rate_per_day", effective_plan)
+        rate_count = 0
+        if redis:
+            val = await redis.get(rate_key)
+            rate_count = int(val) if val else 0
+        if rate_count >= rate_limit:
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("✨ Получить безлимит →", callback_data="show_upgrade")
+            ]])
+            await update.message.reply_text(
+                f"✋ Лимит оценок на сегодня ({rate_limit}/день).\n"
+                f"Завтра снова доступно!",
+                reply_markup=keyboard,
+            )
+            return
+
+        if update.message.photo:
+            file_id = update.message.photo[-1].file_id
+        elif update.message.document:
+            file_id = update.message.document.file_id
+        else:
+            return
+        owner_id, owner_type = await _get_owner(user, context)
+        await update.message.reply_text("⭐ Оцениваю...")
+        asyncio.create_task(
+            _rate_photos([file_id], "single", update.message,
+                         context.bot, owner_id=owner_id, owner_type=owner_type)
+        )
+        # Увеличить счётчик после запуска оценки
+        if redis:
+            await redis.incr(rate_key)
+            await redis.expire(rate_key, 86400)
+        return
+
     redis = context.bot_data.get("redis")
+
+    # ── Лимиты: фото в день и размер гардероба ───────────────────────────────
+    _effective_plan = get_effective_plan(user)
+    if _effective_plan != "admin":
+        from datetime import date as _date_ph
+        _today_ph = _date_ph.today().isoformat()
+        _photo_key = f"photos_day:{user.id}:{_today_ph}"
+        _photo_count = 0
+        if redis:
+            _val = await redis.get(_photo_key)
+            _photo_count = int(_val) if _val else 0
+        _photo_limit = get_limit("photos_per_day", _effective_plan)
+        if _photo_count >= _photo_limit:
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("✨ Получить безлимит →", callback_data="show_upgrade")
+            ]])
+            await update.message.reply_text(
+                f"📸 Добавлено {_photo_count}/{_photo_limit} фото сегодня.\n"
+                f"Лимит восстановится завтра!",
+                reply_markup=keyboard,
+            )
+            return
+
+        # Проверить лимит размера гардероба
+        _owner_id_check, _owner_type_check = await _get_owner(user, context)
+        async with AsyncReadSession() as _session_check:
+            _existing_items = await get_owner_items(_session_check, _owner_id_check, _owner_type_check)
+        _wardrobe_limit = get_limit("wardrobe_size", _effective_plan)
+        if len(_existing_items) >= _wardrobe_limit:
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("✨ Расширить гардероб →", callback_data="show_upgrade")
+            ]])
+            await update.message.reply_text(
+                f"👗 В гардеробе {len(_existing_items)}/{_wardrobe_limit} вещей.\n"
+                f"Достигнут лимит для вашего плана.",
+                reply_markup=keyboard,
+            )
+            return
+
+    # ── Trial активация при первом фото ──────────────────────────────────────
+    if not getattr(user, "trial_started_at", None):
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+        from sqlalchemy import update as _sa_update
+        _now = _dt.now(_tz.utc)
+        async with AsyncWriteSession() as _ts:
+            _res = await _ts.execute(
+                _sa_update(User)
+                .where(User.id == user.id)
+                .where(User.trial_started_at.is_(None))
+                .values(trial_started_at=_now, trial_ends_at=_now + _td(days=14))
+            )
+            await _ts.commit()
+        if _res.rowcount > 0:
+            user.trial_started_at = _now
+            user.trial_ends_at = _now + _td(days=14)
+            logger.info("trial.activated", user_id=str(user.id))
 
     # Подсказка про bulk upload — один раз, если гардероб пуст
     if redis:
@@ -579,6 +1111,7 @@ async def handle_photo_action(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
     elif action == "rate":
+        owner_id, owner_type = await _get_owner(user, context)
         if len(file_ids) > 1:
             keyboard = InlineKeyboardMarkup([[
                 InlineKeyboardButton("👗 Это один образ", callback_data=f"rate_mode:single:{group_id}"),
@@ -587,7 +1120,32 @@ async def handle_photo_action(update: Update, context: ContextTypes.DEFAULT_TYPE
             await query.edit_message_text("Как оцениваем?", reply_markup=keyboard)
         else:
             await query.edit_message_text("⭐ Оцениваю...")
-            asyncio.create_task(_rate_photos(file_ids, "single", query.message, context.bot))
+            asyncio.create_task(_rate_photos(file_ids, "single", query.message, context.bot, owner_id=owner_id, owner_type=owner_type))
+
+
+
+# ── handle_rate_mode_text (кнопка Оценить образ из меню) ────────────────
+
+async def handle_rate_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    owner_id, owner_type = await _get_owner(user, context)
+
+    if owner_type == "child":
+        async with AsyncReadSession() as session:
+            from db.models.child import Child as _Child
+            from sqlalchemy import select as _sel
+            _res = await session.execute(_sel(_Child).where(_Child.id == owner_id))
+            _child = _res.scalar_one_or_none()
+        name = _child.name if _child else "ребёнка"
+        prompt = f"Оцениваю образ для <b>{name}</b> 👧\nПришли фото в полный рост!"
+    else:
+        prompt = "Оцениваю <b>твой</b> образ 👗\nПришли фото в полный рост!"
+
+    context.user_data["awaiting_rate_photo"] = True
+    await update.message.reply_text(prompt, parse_mode="HTML")
 
 
 # ── Callback: режим оценки ───────────────────────────────────────────────────
@@ -605,9 +1163,12 @@ async def handle_rate_mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await query.edit_message_text("⏱ Время вышло. Отправь фото ещё раз.")
         return
 
+    user = context.user_data.get("db_user")
+    owner_id, owner_type = await _get_owner(user, context) if user else (None, None)
+
     file_ids = json.loads(raw if isinstance(raw, str) else raw.decode())
     await query.edit_message_text("⭐ Оцениваю...")
-    asyncio.create_task(_rate_photos(file_ids, mode, query.message, context.bot))
+    asyncio.create_task(_rate_photos(file_ids, mode, query.message, context.bot, owner_id=owner_id, owner_type=owner_type))
 
 
 # ── Обработка медиагруппы (добавление в гардероб) ──────────────────────────
@@ -682,14 +1243,39 @@ async def _process_media_group(
             items_data = await _call_vision(photo_bytes)
             logger.info("wardrobe.vision_done", index=i, items_count=len(items_data))
 
+            # Дедупликация: загружаем актуальный набор вещей
+            existing_set = await _load_existing_set(owner_id, owner_type)
+
             added: list[dict] = []
             for data in items_data:
                 cg = data.get("category_group") or "top"
                 if cg not in _VALID_CATEGORY_GROUPS:
                     cg = "top"
                 data["category_group"] = cg
+
+                key = _dedup_key(data)
+                if key in existing_set:
+                    logger.info("wardrobe.dedup.skipped", index=i, type=data.get("type"), color=data.get("color"))
+                    continue
+
                 logger.info("wardrobe.save_start", index=i, item_type=data.get("type"))
-                await _save_one(owner_id, owner_type, file_id, data, matrix)
+                _fix_bbox(data)
+                _bbox = data.get("bbox") or {}
+                _bw = float(_bbox.get("w", 0.5))
+                _bh = float(_bbox.get("h", 0.5))
+                if (data.get("category_group") == "accessory" and
+                        any(w in (data.get("type") or "").lower()
+                            for w in ["шапка", "шапочка", "hat"]) and
+                        _bw <= 0.2 and _bh <= 0.2):
+                    logger.info("wardrobe.reclassify",
+                        from_type=data.get("type"), to_type="носки",
+                        reason="small_bbox_accessory")
+                    data["category_group"] = "base_layer"
+                    data["type"] = "носки"
+                photo_url, good_crop = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id)
+                await _save_one(owner_id, owner_type, file_id, data, matrix,
+                                photo_url=photo_url, show_in_collage=good_crop)
+                existing_set.add(key)
                 added.append(data)
                 logger.info("wardrobe.save_done", index=i)
 
@@ -734,6 +1320,357 @@ async def _process_media_group(
     )
 
 
+
+# ── handle_wardrobe_menu (кнопка Гардероб в меню) ───────────────────────────
+
+async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показать гардероб с кнопкой переключения владельца."""
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    async with AsyncReadSession() as session:
+        from db.crud.children import get_children
+        children = await get_children(session, user.id)
+
+    owner_id, owner_type = await _get_owner(user, context)
+
+    if owner_type == "user":
+        owner_name = user.name
+    else:
+        child = next((c for c in children if c.id == owner_id), None)
+        owner_name = child.name if child else "Ребёнок"
+
+    buttons = []
+    if children:
+        if owner_type == "child":
+            buttons.append([InlineKeyboardButton(
+                "👗 Мои вещи",
+                callback_data="switch_owner:user"
+            )])
+        else:
+            child = children[0]
+            buttons.append([InlineKeyboardButton(
+                f"👧 Вещи {child.name}",
+                callback_data=f"switch_owner:child:{child.id}"
+            )])
+
+    # Считаем вещи и средний скор для заголовка
+    async with AsyncReadSession() as session:
+        all_items = await get_owner_items(session, owner_id, owner_type)
+    item_count = len(all_items)
+    scored = [float(i.score_item) for i in all_items if i.score_item]
+    avg_score_str = f" · ⭐ {round(sum(scored)/len(scored), 1)}" if scored else ""
+
+    # Кнопки: образ дня + список; switch-кнопки ниже
+    top_row = [
+        InlineKeyboardButton("🌤 Образ дня", callback_data="outfit_request"),
+        InlineKeyboardButton("👀 Посмотреть вещи", callback_data="show_wardrobe_list"),
+    ]
+    markup = InlineKeyboardMarkup([top_row] + buttons)
+
+    await update.message.reply_text(
+        f"👗 Гардероб: *{owner_name}* · {item_count} вещей{avg_score_str}",
+        parse_mode="Markdown",
+        reply_markup=markup,
+    )
+
+
+async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: переключить владельца, обновить кнопки в том же сообщении."""
+    query = update.callback_query
+    await query.answer()
+
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    import uuid as _uuid
+    redis = context.bot_data.get("redis")
+    parts = query.data.split(":")  # switch_owner:user OR switch_owner:child:{uuid}
+    target = parts[1] if len(parts) > 1 else "child"
+    child_id_str = parts[2] if len(parts) > 2 else None
+
+    # Загрузить детей один раз для валидации и формирования кнопок
+    async with AsyncReadSession() as session:
+        from db.crud.children import get_children as _gc
+        children = await _gc(session, user.id)
+
+    if target == "user":
+        new_owner_id = user.id
+        new_owner_type = "user"
+        owner_label = f"👗 Гардероб: {user.name}"
+    elif target == "child" and child_id_str:
+        try:
+            child_id = _uuid.UUID(child_id_str)
+        except ValueError:
+            await query.answer("Ошибка: неверный ID")
+            return
+        # Валидация — child должен принадлежать этому пользователю
+        child = next((c for c in children if c.id == child_id), None)
+        if not child:
+            await query.answer("Ребёнок не найден")
+            return
+        new_owner_id = child_id
+        new_owner_type = "child"
+        owner_label = f"👧 Гардероб: {child.name}"
+    else:
+        return
+
+    # Сохранить новый owner в кеш и Redis
+    cache_key = f"owner:{user.id}"
+    context.bot_data[cache_key] = (new_owner_id, new_owner_type)
+    if redis:
+        mode_val = f"child:{new_owner_id}" if new_owner_type == "child" else "user"
+        await redis.set(f"owner_mode:{user.id}", mode_val, ex=86400 * 30)
+
+    # Загрузить вещи нового owner для count
+    async with AsyncReadSession() as session:
+        items = await get_owner_items(session, new_owner_id, new_owner_type)
+    count = len(items)
+    scored = [float(i.score_item) for i in items if i.score_item]
+    avg_str = f" · ⭐ {round(sum(scored)/len(scored), 1)}" if scored else ""
+
+    # Заголовок
+    if count == 0:
+        header = (
+            f"✅ Переключено\n"
+            f"{owner_label} · 0 вещей\n"
+            f"Пришли фото чтобы добавить вещи 📸"
+        )
+    else:
+        header = f"✅ Переключено\n{owner_label} · {count} вещей{avg_str}"
+
+    # Кнопка переключения на другого owner
+    if new_owner_type == "child":
+        switch_btn = InlineKeyboardButton("👗 Мои вещи", callback_data="switch_owner:user")
+    elif children:
+        child = children[0]
+        switch_btn = InlineKeyboardButton(
+            f"👧 Вещи {child.name}",
+            callback_data=f"switch_owner:child:{child.id}"
+        )
+    else:
+        switch_btn = None
+
+    # Кнопка действия
+    if count == 0:
+        action_btn = InlineKeyboardButton("📸 Добавить вещи", callback_data="add_items_hint")
+    else:
+        action_btn = InlineKeyboardButton("👀 Посмотреть вещи", callback_data="show_wardrobe_list")
+
+    keyboard_rows = [[
+        InlineKeyboardButton("🌤 Образ дня", callback_data="outfit_request"),
+        action_btn,
+    ]]
+    if switch_btn:
+        keyboard_rows.append([switch_btn])
+
+    new_markup = InlineKeyboardMarkup(keyboard_rows)
+
+    try:
+        await query.edit_message_text(header, reply_markup=new_markup)
+    except Exception as e:
+        if "not modified" not in str(e).lower():
+            await query.message.reply_text(header, reply_markup=new_markup)
+
+
+async def handle_add_items_hint(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: подсказка как добавить вещи (при пустом гардеробе)."""
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text(
+        "📸 Просто пришли фото вещей — добавлю в гардероб!",
+        reply_markup=get_main_menu(),
+    )
+
+
+
+# ── handle_outfit_request (кнопка Образ дня из Гардероба) ───────────────────
+
+async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    redis = context.bot_data.get("redis")
+    from datetime import date as _date, datetime as _datetime
+    import random as _random
+
+    today = _date.today().isoformat()
+    limit_key = f"outfit_req:{user.id}:{today}"
+    _ep_outfit = get_effective_plan(user)
+    day_limit = get_limit("outfit_req_per_day", _ep_outfit)
+
+    count = 0
+    if redis:
+        val = await redis.get(limit_key)
+        count = int(val) if val else 0
+
+    if count >= day_limit and _ep_outfit != "admin":
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✨ Получить безлимит →", callback_data="show_upgrade")
+        ]])
+        await query.message.reply_text(
+            f"✋ На сегодня лимит образов ({day_limit}/день).\n"
+            "Следующий образ — завтра утром в 07:00 🌅",
+            reply_markup=keyboard,
+        )
+        return
+
+    await query.message.reply_text("🌤 Собираю образ...")
+
+    try:
+        from services.weather import WeatherService
+        from worker.tasks.morning_brief import _select_outfit, _get_temp_regime, _SEASONS
+        from worker.tasks.style_config import get_placeholder_label, _needs_tights
+        from services.image_builder import build_collage
+
+        # Найти детей
+        async with AsyncReadSession() as session:
+            from db.crud.children import get_children as _get_children
+            children = await _get_children(session, user.id)
+
+        if not children:
+            await query.message.reply_text(
+                "Добавь ребёнка в профиле чтобы получать образы 👧",
+                reply_markup=get_main_menu(),
+            )
+            return
+
+        child = children[0]
+
+        # Погода — fallback 10/12°C если город не задан или сервис недоступен
+        temp_m, temp_e = 10.0, 12.0
+        try:
+            if user.city and redis:
+                svc = WeatherService(redis)
+                wd = await svc.get(user.city)
+                temp_m = float(wd.temp_c)
+                temp_e = float(wd.evening_temp)
+                logger.info("outfit_request.weather_ok",
+                    city=user.city, temp_m=temp_m, temp_e=temp_e)
+        except Exception as we:
+            logger.warning("outfit_request.weather_failed",
+                error=str(we), city=getattr(user, "city", None))
+
+        # Вещи ребёнка
+        async with AsyncReadSession() as session:
+            items = await get_owner_items(session, child.id, "child")
+
+        if not items:
+            await query.message.reply_text(
+                "Гардероб пуст — добавь вещи через фото 📸",
+                reply_markup=get_main_menu(),
+            )
+            return
+
+        # Полностью случайный seed при каждом запросе
+        import uuid as _uuid
+        _random.seed(str(_uuid.uuid4()))
+        items_shuffled = list(items)
+        _random.shuffle(items_shuffled)
+
+        today_date = _date.today()
+        season = _SEASONS[today_date.month]
+        outfit = _select_outfit(items_shuffled, season, today_date, temp_m, temp_e)
+
+        colortype = getattr(child, "colortype", None) or "default"
+        regime = _get_temp_regime(temp_m)
+
+        _outfit_key_to_slot = {
+            "outerwear": "outerwear", "top": "top", "bottom": "bottom",
+            "one_piece": "one_piece", "footwear": "footwear",
+            "hat": "hat", "tights": "tights", "socks": "tights",
+        }
+        _short_labels = {
+            "outerwear": "куртку", "top": "верх", "bottom": "низ",
+            "one_piece": "платье", "footwear": "обувь",
+            "hat": "шапку", "tights": "колготки",
+        }
+        tights_needed = _needs_tights(outfit, temp_m)
+        seen_slots: set = set()
+        all_slots = []
+        for outfit_key, slot in _outfit_key_to_slot.items():
+            if outfit_key in ("top", "bottom") and outfit.get("one_piece"):
+                continue
+            if outfit_key == "one_piece" and (outfit.get("top") or outfit.get("bottom")):
+                continue
+            if slot in seen_slots:
+                continue
+            if slot == "tights" and not tights_needed:
+                continue
+            item = outfit.get(outfit_key)
+            if item and getattr(item, "show_in_collage", True):
+                seen_slots.add(slot)
+                all_slots.append({
+                    "slot": slot,
+                    "label": f"{item.type} {item.color}"[:20],
+                    "photo_id": item.photo_id,
+                    "photo_url": item.photo_url,
+                    "has_item": True,
+                })
+            else:
+                ph_label = get_placeholder_label(slot, colortype, regime)
+                if ph_label is None:
+                    continue
+                seen_slots.add(slot)
+                color_part = ph_label.split(" — ", 1)[1] if " — " in ph_label else "(нет в гардеробе)"
+                all_slots.append({
+                    "slot": slot,
+                    "short_label": _short_labels.get(slot, slot),
+                    "label": color_part,
+                    "photo_id": None,
+                    "photo_url": None,
+                    "has_item": False,
+                })
+
+        sm = "+" if temp_m >= 0 else ""
+        temp_text = f"{sm}{temp_m:.0f}°C"
+
+        # Посчитать скор образа
+        outfit_score_str = ""
+        try:
+            all_items_in_outfit = [v for v in outfit.values()
+                                   if v and hasattr(v, "score_item") and v.score_item]
+            if all_items_in_outfit:
+                scores = [float(i.score_item) for i in all_items_in_outfit]
+                avg = sum(scores) / len(scores)
+                outfit_score_str = f"\n⭐ Скор: {avg:.1f}/10"
+        except Exception:
+            pass
+
+        caption = f"🌤 Образ для {child.name} · {temp_text}{outfit_score_str}"
+        outfit_warnings = outfit.get("warnings") or []
+        if outfit_warnings:
+            caption += "\n" + "\n".join(outfit_warnings)
+
+        collage_bytes = await build_collage(outfit_slots=all_slots)
+
+        if redis:
+            await redis.incr(limit_key)
+            await redis.expire(limit_key, 86400)
+
+        if collage_bytes:
+            await query.message.reply_photo(
+                photo=collage_bytes, caption=caption, reply_markup=get_main_menu()
+            )
+        else:
+            await query.message.reply_text(caption, reply_markup=get_main_menu())
+
+    except Exception as e:
+        logger.error("outfit_request.failed", error=str(e))
+        import sentry_sdk as _sentry
+        _sentry.capture_exception(e)
+        await query.message.reply_text(
+            "Не удалось собрать образ. Попробуй позже.",
+            reply_markup=get_main_menu(),
+        )
+
+
 # ── handle_list ─────────────────────────────────────────────────────────────
 
 async def handle_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -741,10 +1678,21 @@ async def handle_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not user:
         return
     page = context.user_data.get("wardrobe_page", 0)
-    await _show_wardrobe_page(update.message, user, page)
+    await _show_wardrobe_page(update.message, user, page, context=context)
     usage = get_usage_str(user)
     if usage:
         await update.message.reply_text(usage)
+
+
+async def handle_list_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback кнопка 📋 Посмотреть вещи из меню гардероба."""
+    query = update.callback_query
+    await query.answer()
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+    context.user_data["wardrobe_page"] = 0
+    await _show_wardrobe_page(query.message, user, 0, context=context)
 
 
 async def handle_wardrobe_page(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -755,13 +1703,20 @@ async def handle_wardrobe_page(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     page = int(query.data.split(":")[2])
     context.user_data["wardrobe_page"] = page
-    await _show_wardrobe_page(query.message, user, page)
+    await _show_wardrobe_page(query.message, user, page, context=context)
 
 
-async def _show_wardrobe_page(message, user, page: int) -> None:
+async def _show_wardrobe_page(message, user, page: int, owner_id=None, owner_type=None, context=None) -> None:
     try:
+        if owner_id is None:
+            if context is not None:
+                owner_id, owner_type = await _get_owner(user, context)
+            else:
+                owner_id, owner_type = user.id, "user"
+        elif owner_type is None:
+            owner_type = "user"
         async with AsyncReadSession() as session:
-            items = await get_owner_items(session, user.id, "user")
+            items = await get_owner_items(session, owner_id, owner_type)
 
         if not items:
             await message.reply_text(t("wardrobe.empty"))
@@ -797,3 +1752,63 @@ async def _show_wardrobe_page(message, user, page: int) -> None:
         await message.reply_text(t("error.generic"))
         logger.error("wardrobe.list.error", error=str(e), user_id=str(user.id))
         sentry_sdk.capture_exception(e)
+
+
+# ── Upgrade flow ─────────────────────────────────────────────────────────────
+
+async def handle_show_upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показать экран выбора плана."""
+    query = update.callback_query
+    await query.answer()
+    from core.permissions import PRICES, ULTRA_FEATURES
+
+    text = (
+        "✨ Касси Premium\n\n"
+        "📅 Бриф каждый день\n"
+        "👗 Образ дня без ограничений\n"
+        "📸 30 фото в день\n"
+        "⭐ 20 оценок образа\n"
+        "💬 20 вопросов стилисту\n"
+        "👧 До 3 детей\n\n"
+        "Выбери план:\n"
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(
+            f"📅 {PRICES['premium_monthly']['label']}",
+            callback_data="subscribe:monthly",
+        )],
+        [InlineKeyboardButton(
+            f"📅 {PRICES['premium_quarterly']['label']}",
+            callback_data="subscribe:quarterly",
+        )],
+        [InlineKeyboardButton(
+            f"📅 {PRICES['premium_yearly']['label']} ⭐",
+            callback_data="subscribe:yearly",
+        )],
+        [InlineKeyboardButton("🔒 Ultra — скоро!", callback_data="show_ultra")],
+    ])
+    await query.message.reply_text(text, reply_markup=keyboard)
+
+
+async def handle_show_ultra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показать информацию об Ultra плане."""
+    query = update.callback_query
+    await query.answer()
+    from core.permissions import ULTRA_FEATURES
+
+    text = "💎 Касси Ultra — скоро!\n\nВ разработке:\n"
+    for f in ULTRA_FEATURES:
+        text += f"  {f}\n"
+    text += "\nОставь контакт и мы уведомим о запуске!"
+
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔔 Уведомить меня", callback_data="notify_ultra")
+    ]])
+    await query.message.reply_text(text, reply_markup=keyboard)
+
+
+async def handle_notify_ultra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Заглушка: пользователь хочет узнать про Ultra."""
+    query = update.callback_query
+    await query.answer("Отлично! Уведомим тебя первой 🎉")
+    # TODO: сохранить в БД список желающих Ultra
