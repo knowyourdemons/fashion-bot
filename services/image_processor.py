@@ -15,7 +15,7 @@ from exceptions import DuplicateItemError, ImageTooLargeError
 
 MAX_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB
 MAX_DIMENSION = 1024
-PHASH_THRESHOLD = 10  # порог схожести хешей
+PHASH_THRESHOLD = 5  # порог схожести хешей (0=identical, 64=max diff; 5 = same photo with JPEG artifacts)
 
 
 def remove_exif(img: Image.Image) -> Image.Image:
