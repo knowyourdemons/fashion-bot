@@ -334,7 +334,22 @@ _MATRICES_V3 = [
 
 
 async def seed_scoring_matrices() -> None:
-    """Обновляет матрицы до v3.0: апдейт существующих по name, вставка новых."""
+    """Обновляет матрицы до v3.0: апдейт существующих по name, вставка новых.
+    Всегда деактивирует старые gender=all детские матрицы (0-3, 3-7, 7-12, 12-16).
+    """
+    # Деактивировать старые gender-neutral детские матрицы (идемпотентно)
+    _old_child_names = {"0-3", "3-7", "7-12", "12-16"}
+    async with AsyncWriteSession() as session:
+        deactivated = await session.execute(
+            update(ScoringMatrix)
+            .where(ScoringMatrix.name.in_(_old_child_names))
+            .values(is_active=False)
+        )
+        await session.commit()
+        if deactivated.rowcount:
+            logger.info("scoring_matrices.deactivated_old", count=deactivated.rowcount)
+
+    # Проверить нужен ли seed v3.0
     async with AsyncReadSession() as session:
         result = await session.execute(
             select(ScoringMatrix).where(ScoringMatrix.version == "v3.0").limit(1)
@@ -351,7 +366,6 @@ async def seed_scoring_matrices() -> None:
             )
             m = existing.scalar_one_or_none()
             if m:
-                # Обновить существующую матрицу
                 m.criteria = data["criteria"]
                 m.max_score = data["max_score"]
                 m.gender = data["gender"]
@@ -359,7 +373,6 @@ async def seed_scoring_matrices() -> None:
                 m.is_active = True
                 updated += 1
             else:
-                # Добавить новую (детские с полом)
                 session.add(ScoringMatrix(**data))
                 inserted += 1
         await session.commit()
