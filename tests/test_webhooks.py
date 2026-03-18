@@ -13,7 +13,7 @@ pytest.importorskip("fastapi", reason="fastapi not installed")
 def _make_test_app(telegram_secret: str = "test_secret_token"):
     """Создаёт тестовое FastAPI приложение с webhook router."""
     from fastapi import FastAPI
-    from fastapi.testclient import TestClient  # noqa: import inside fn to avoid httpx mock conflict
+    from fastapi.testclient import TestClient  # import inside fn to avoid httpx mock metaclass conflict
     from api.routes.webhooks import router
 
     app = FastAPI()
@@ -25,7 +25,7 @@ def _make_test_app(telegram_secret: str = "test_secret_token"):
     tg_app_mock.process_update = AsyncMock()
     app.state.tg_app = tg_app_mock
 
-    return app, tg_app_mock
+    return app, tg_app_mock, TestClient
 
 
 # ── Telegram webhook security ─────────────────────────────────────────────────
@@ -34,7 +34,7 @@ class TestTelegramWebhookSecurity:
 
     def test_valid_secret_returns_200(self):
         """Правильный X-Telegram-Bot-Api-Secret-Token → 200."""
-        app, _ = _make_test_app()
+        app, _, TestClient = _make_test_app()
         with patch("config.settings") as mock_s:
             mock_s.telegram_webhook_secret = "test_secret_token"
             with TestClient(app) as client:
@@ -47,7 +47,7 @@ class TestTelegramWebhookSecurity:
 
     def test_invalid_secret_returns_403(self):
         """Неправильный токен → 403."""
-        app, _ = _make_test_app()
+        app, _, TestClient = _make_test_app()
         with patch("config.settings") as mock_s:
             mock_s.telegram_webhook_secret = "test_secret_token"
             with TestClient(app) as client:
@@ -60,7 +60,7 @@ class TestTelegramWebhookSecurity:
 
     def test_no_secret_header_returns_403(self):
         """Без заголовка → 403 (если secret задан в настройках)."""
-        app, _ = _make_test_app()
+        app, _, TestClient = _make_test_app()
         with patch("config.settings") as mock_s:
             mock_s.telegram_webhook_secret = "test_secret_token"
             with TestClient(app) as client:
@@ -72,7 +72,7 @@ class TestTelegramWebhookSecurity:
 
     def test_no_secret_configured_allows_all(self):
         """Если telegram_webhook_secret не задан → запросы проходят."""
-        app, _ = _make_test_app()
+        app, _, TestClient = _make_test_app()
         with patch("config.settings") as mock_s:
             mock_s.telegram_webhook_secret = ""
             with TestClient(app) as client:
@@ -95,7 +95,7 @@ class TestStripeWebhookSecurity:
 
     def test_valid_stripe_signature_returns_200(self):
         """Корректная Stripe подпись → 200."""
-        app, _ = _make_test_app()
+        app, _, TestClient = _make_test_app()
         secret = "whsec_test"
         body = json.dumps({"type": "payment_intent.created"}).encode()
         sig_header = self._make_sig(secret, body)
@@ -116,7 +116,7 @@ class TestStripeWebhookSecurity:
 
     def test_invalid_stripe_signature_returns_400(self):
         """Неправильная Stripe подпись → 400."""
-        app, _ = _make_test_app()
+        app, _, TestClient = _make_test_app()
         body = json.dumps({"type": "checkout.session.completed"}).encode()
 
         with patch("config.settings") as mock_s:
@@ -135,7 +135,7 @@ class TestStripeWebhookSecurity:
 
     def test_no_stripe_secret_skips_verification(self):
         """Без stripe_webhook_secret верификация пропускается."""
-        app, _ = _make_test_app()
+        app, _, TestClient = _make_test_app()
         body = json.dumps({"type": "payment_intent.created"}).encode()
 
         with patch("config.settings") as mock_s:
@@ -151,7 +151,7 @@ class TestStripeWebhookSecurity:
 
     def test_checkout_completed_triggers_activation(self):
         """checkout.session.completed → вызывает _activate_premium_after_payment."""
-        app, _ = _make_test_app()
+        app, _, TestClient = _make_test_app()
         event = {
             "type": "checkout.session.completed",
             "data": {"object": {
