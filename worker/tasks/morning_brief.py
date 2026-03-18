@@ -13,7 +13,7 @@ import structlog
 
 from config import settings
 from worker.fast_worker import register
-from worker.tasks.style_config import get_placeholder_label, get_temp_regime, SLOT_EMOJI
+from worker.tasks.style_config import get_placeholder_label, get_temp_regime, SLOT_EMOJI, _needs_tights
 
 logger = structlog.get_logger()
 
@@ -86,32 +86,6 @@ def _get_temp_regime(temp: float) -> str:
         return "мороз"
     else:
         return "сильный_мороз"
-
-
-# ── Нужны ли колготки ───────────────────────────────────────────────────────
-
-def _needs_tights(outfit: dict, temp: float) -> bool:
-    """Колготки нужны только под платье/юбку при прохладной погоде.
-    Под леггинсы/штаны/шорты — не нужны."""
-    if temp >= 15:
-        return False
-
-    one_piece = outfit.get("one_piece")
-    bottom = outfit.get("bottom")
-
-    if one_piece:
-        return True
-
-    if bottom:
-        bottom_type = (getattr(bottom, "type", None) or "").lower()
-        if any(w in bottom_type for w in ["юбка", "skirt"]):
-            return True
-        if any(w in bottom_type for w in [
-            "леггинс", "штаны", "шорты", "брюки", "джинсы", "лосины"
-        ]):
-            return False
-
-    return temp < 10
 
 
 # ── Выбор образа по температуре ─────────────────────────────────────────────
@@ -621,6 +595,7 @@ async def generate_brief(payload: dict) -> dict:
             "tights":    "tights",
             "socks":     "tights",
         }
+        tights_needed = _needs_tights(outfit, _temp)
         seen_slots: set[str] = set()
         for outfit_key, slot in _outfit_key_to_slot.items():
             # Логические исключения
@@ -630,6 +605,8 @@ async def generate_brief(payload: dict) -> dict:
                 continue
             # Не дублировать слот (socks и tights → один tights)
             if slot in seen_slots:
+                continue
+            if slot == "tights" and not tights_needed:
                 continue
 
             item = outfit.get(outfit_key)

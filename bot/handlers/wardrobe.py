@@ -1198,10 +1198,10 @@ async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYP
                 callback_data="switch_owner:user"
             )])
         else:
-            child_name = children[0].name if children else "ребёнка"
+            child = children[0]
             buttons.append([InlineKeyboardButton(
-                f"👧 Вещи {child_name}",
-                callback_data="switch_owner:child"
+                f"👧 Вещи {child.name}",
+                callback_data=f"switch_owner:child:{child.id}"
             )])
 
     # Считаем вещи и средний скор для заголовка
@@ -1214,7 +1214,7 @@ async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     # Кнопки: образ дня + список; switch-кнопки ниже
     top_row = [
         InlineKeyboardButton("🌤 Образ дня", callback_data="outfit_request"),
-        InlineKeyboardButton("📋 Посмотреть вещи", callback_data="show_wardrobe_list"),
+        InlineKeyboardButton("👀 Посмотреть вещи", callback_data="show_wardrobe_list"),
     ]
     markup = InlineKeyboardMarkup([top_row] + buttons)
 
@@ -1234,27 +1234,39 @@ async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not user:
         return
 
+    import uuid as _uuid
     redis = context.bot_data.get("redis")
-    parts = query.data.split(":")  # switch_owner:user OR switch_owner:child
+    parts = query.data.split(":")  # switch_owner:user OR switch_owner:child:{uuid}
     target = parts[1] if len(parts) > 1 else "child"
+    child_id_str = parts[2] if len(parts) > 2 else None
 
     if target == "user":
         cache_key = f"owner:{user.id}"
         context.bot_data[cache_key] = (user.id, "user")
         if redis:
             await redis.set(f"owner_mode:{user.id}", "user", ex=86400 * 30)
-        owner_name = f"твои вещи 👗"
+        owner_name = "твои вещи 👗"
     else:
+        if child_id_str:
+            child_id = _uuid.UUID(child_id_str)
+        else:
+            async with AsyncReadSession() as session:
+                from db.crud.children import get_children
+                children = await get_children(session, user.id)
+            if not children:
+                await query.message.reply_text(
+                    "Нет детей в профиле.",
+                    reply_markup=get_main_menu(),
+                )
+                return
+            child_id = children[0].id
         async with AsyncReadSession() as session:
             from db.crud.children import get_children
             children = await get_children(session, user.id)
-        if not children:
-            await query.message.reply_text(
-                "Нет детей в профиле.",
-                reply_markup=get_main_menu(),
-            )
+        child = next((c for c in children if c.id == child_id), None)
+        if not child:
+            await query.message.reply_text("Ребёнок не найден.", reply_markup=get_main_menu())
             return
-        child = children[0]
         cache_key = f"owner:{user.id}"
         context.bot_data[cache_key] = (child.id, "child")
         if redis:
@@ -1265,9 +1277,11 @@ async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
         owner_name = f"вещи {child.name} 👧"
 
-    await query.edit_message_text(
-        f"✅ Переключено на {owner_name}"
-    )
+    msg = f"✅ Переключено на {owner_name}\nОтправь фото чтобы добавить вещи 📸"
+    try:
+        await query.edit_message_text(msg)
+    except Exception:
+        await query.message.reply_text(msg, reply_markup=get_main_menu())
 
 
 
@@ -1307,8 +1321,8 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
 
     try:
         from services.weather import WeatherService
-        from worker.tasks.morning_brief import _select_outfit, _get_temp_regime, _SEASONS, _needs_tights
-        from worker.tasks.style_config import get_placeholder_label
+        from worker.tasks.morning_brief import _select_outfit, _get_temp_regime, _SEASONS
+        from worker.tasks.style_config import get_placeholder_label, _needs_tights
         from services.image_builder import build_collage
 
         # Найти детей
@@ -1373,6 +1387,7 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
             "one_piece": "платье", "footwear": "обувь",
             "hat": "шапку", "tights": "колготки",
         }
+        tights_needed = _needs_tights(outfit, temp_m)
         seen_slots: set = set()
         all_slots = []
         for outfit_key, slot in _outfit_key_to_slot.items():
@@ -1382,7 +1397,7 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
                 continue
             if slot in seen_slots:
                 continue
-            if slot == "tights" and not _needs_tights(outfit, temp_m):
+            if slot == "tights" and not tights_needed:
                 continue
             item = outfit.get(outfit_key)
             if item and getattr(item, "show_in_collage", True):

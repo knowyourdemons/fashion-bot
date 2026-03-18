@@ -195,3 +195,27 @@ WOW_PHRASES = [
 
 def get_wow_phrase() -> str:
     return random.choice(WOW_PHRASES)
+
+
+def _needs_tights(outfit: dict, temp: float) -> bool:
+    """Колготки нужны только под платье/юбку при прохладной погоде.
+    Под леггинсы/штаны/шорты — не нужны."""
+    if temp >= 15:
+        return False
+
+    one_piece = outfit.get("one_piece")
+    bottom = outfit.get("bottom")
+
+    if one_piece:
+        return True
+
+    if bottom:
+        bottom_type = (getattr(bottom, "type", "") or "").lower()
+        if any(w in bottom_type for w in ["юбка", "skirt"]):
+            return True
+        if any(w in bottom_type for w in [
+            "леггинс", "штаны", "шорты", "брюки", "джинсы", "лосины"
+        ]):
+            return False
+
+    return temp < 10

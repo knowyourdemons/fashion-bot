@@ -101,11 +101,12 @@ def test_import_style_config():
     from worker.tasks.style_config import (
         get_placeholder_label, get_wow_phrase,
         COLORTYPE_PALETTES, SEASON_SLOT_TYPES,
-        WOW_PHRASES,
+        WOW_PHRASES, _needs_tights,
     )
     assert isinstance(COLORTYPE_PALETTES, dict)
     assert isinstance(WOW_PHRASES, list)
     assert len(WOW_PHRASES) >= 5
+    assert callable(_needs_tights)
 
 
 # ── DB models ─────────────────────────────────────────────────────────────
