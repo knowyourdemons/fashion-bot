@@ -14,12 +14,18 @@ def _mock_if_missing(*names: str) -> None:
 
 _mock_if_missing(
     "structlog",
-    "httpx",
     "redis", "redis.asyncio",
     "sentry_sdk", "sentry_sdk.integrations", "sentry_sdk.integrations.fastapi",
     "pydantic_settings",
     "worker.fast_worker",
 )
+# httpx: import real package if available; mock only if truly missing.
+# Mocking httpx as MagicMock causes metaclass conflicts in starlette.testclient.
+if "httpx" not in sys.modules:
+    try:
+        import httpx as _httpx_real  # noqa: F401
+    except ImportError:
+        sys.modules["httpx"] = MagicMock()
 
 # pytz нужно мокировать отдельно: telegram.constants импортирует UTC из pytz,
 # и если UTC будет MagicMock — datetime.datetime(tzinfo=UTC) упадёт с TypeError.

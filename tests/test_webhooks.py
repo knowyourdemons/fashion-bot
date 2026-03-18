@@ -5,15 +5,15 @@ import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
-from fastapi.testclient import TestClient
-from fastapi import FastAPI
+pytest.importorskip("fastapi", reason="fastapi not installed")
 
 
 # ── Вспомогательный mini-app для тестирования ────────────────────────────────
 
 def _make_test_app(telegram_secret: str = "test_secret_token"):
     """Создаёт тестовое FastAPI приложение с webhook router."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient  # noqa: import inside fn to avoid httpx mock conflict
     from api.routes.webhooks import router
 
     app = FastAPI()
