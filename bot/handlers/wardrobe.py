@@ -60,6 +60,9 @@ PAGE_SIZE = 20
 OUTFIT_DAY_LIMIT_FREE = 2
 OUTFIT_DAY_LIMIT_PREMIUM = 5
 
+RATE_LIMIT_FREE = 5
+RATE_LIMIT_PREMIUM = 20
+
 
 _VISION_SYSTEM = """Ты определяешь детскую одежду на фото и добавляешь её в гардероб.
 Фото может быть горизонтальным или вертикальным — определяй вещи независимо от ориентации.
@@ -259,7 +262,7 @@ SCORE_BREAKDOWN — ОЦЕНКА ВЕЩИ
 - Если видишь аксессуар на свитшоте (принт, нашивка) — это часть свитшота, не отдельная вещь
 - Максимум вещей на одном фото: 15 (если больше — бери самые чётко видимые)"""
 
-_RATE_SYSTEM = (
+_RATE_SYSTEM_CHILD = (
     "Ты стилист детской моды с насмотренностью Vogue Kids. Оцени образ ребёнка на фото.\n\n"
     "Если на фото виден только фрагмент образа (только ноги, только верх, только лицо):\n"
     "- Честно напиши: 'Вижу только часть образа'\n"
@@ -274,8 +277,33 @@ _RATE_SYSTEM = (
     "Язык: русский."
 )
 
+_RATE_SYSTEM_ADULT = (
+    "Ты персональный стилист. Оцени образ взрослого человека на фото.\n\n"
+    "Если на фото виден только фрагмент образа (только ноги, только верх, только лицо):\n"
+    "- Честно напиши: 'Вижу только часть образа'\n"
+    "- Оцени только видимые элементы, не домысливай\n"
+    "- Попроси прислать фото в полный рост для полной оценки\n"
+    "Для полной оценки нужно видеть весь образ от головы до ног.\n"
+    "Оценивай ВСЕ видимые элементы: верхняя одежда, низ, обувь, аксессуары.\n\n"
+    "Структура ответа — строго такая:\n"
+    "⭐ Оценка: X/10\n"
+    "✅ Что работает: (1-2 предложения — цвет, силуэт, сочетание)\n"
+    "❌ Что улучшить: (конкретно и конструктивно)\n"
+    "👗 Замена: [вещь на фото] → [вещь из гардероба]\n"
+    "   Причина: улучшит [цветовую гармонию/стиль/баланс]\n\n"
+    "Правила:\n"
+    "- Оцениваешь образ взрослого — применяй критерии взрослой моды\n"
+    "- Рекомендуй ТОЛЬКО вещи из гардероба пользователя если он не пуст\n"
+    "- Если гардероб пуст — давай общие рекомендации без конкретных замен\n"
+    "- Если оценка 8 или выше — раздел 'Замена' не нужен, только похвали\n"
+    "- Максимум 2 замены\n"
+    "- Тон: дружелюбный, как подруга-стилист\n"
+    "- НЕ упоминай детей и детскую моду\n"
+    "Язык: русский."
+)
 
-def _build_rate_prompt(wardrobe_items: list) -> str:
+
+def _build_rate_prompt(wardrobe_items: list, owner_type: str = "child") -> str:
     """Строит системный промпт стилиста с топ-20 вещей гардероба по score."""
     top_items = sorted(
         [i for i in wardrobe_items if i.score_item],
@@ -286,28 +314,55 @@ def _build_rate_prompt(wardrobe_items: list) -> str:
         wardrobe_context = ", ".join(f"{i.type} {i.color}" for i in top_items)
     else:
         wardrobe_context = "гардероб пуст"
-    return (
-        "Ты стилист детской моды. Оцени образ ребёнка на фото.\n\n"
-        "Если на фото виден только фрагмент образа (только ноги, только верх):\n"
-        "- Честно напиши: 'Вижу только часть образа'\n"
-        "- Оцени только видимые элементы, не домысливай\n"
-        "- Попроси прислать полное фото\n"
-        "Оценивай ВСЕ видимые элементы: головной убор, верхняя одежда, низ, обувь.\n\n"
-        f"Гардероб ребёнка (лучшие вещи):\n{wardrobe_context}\n\n"
-        "Структура ответа — строго такая:\n"
-        "⭐ Оценка: X/10\n"
-        "✅ Что работает: (1-2 предложения)\n"
-        "❌ Что улучшить: (конкретно)\n"
-        "👗 Замена: [вещь на фото] → [точное название из гардероба выше]\n"
-        "   Причина: улучшит [цветовую гармонию/сезонность/стиль]\n\n"
-        "Правила:\n"
-        "- В разделе 'Замена' используй ТОЛЬКО вещи из списка гардероба выше\n"
-        "- Если нужной замены нет в гардеробе — пропусти раздел 'Замена'\n"
-        "- Если оценка 8 или выше — раздел 'Замена' не нужен, только похвали\n"
-        "- Максимум 2 замены\n"
-        "- НЕ советуй покупать вещи которые уже есть в гардеробе\n"
-        "Язык: русский."
-    )
+
+    if owner_type == "child":
+        return (
+            "Ты стилист детской моды. Оцени образ ребёнка на фото.\n\n"
+            "Если на фото виден только фрагмент образа (только ноги, только верх):\n"
+            "- Честно напиши: 'Вижу только часть образа'\n"
+            "- Оцени только видимые элементы, не домысливай\n"
+            "- Попроси прислать полное фото\n"
+            "Оценивай ВСЕ видимые элементы: головной убор, верхняя одежда, низ, обувь.\n\n"
+            f"Гардероб ребёнка (лучшие вещи):\n{wardrobe_context}\n\n"
+            "Структура ответа — строго такая:\n"
+            "⭐ Оценка: X/10\n"
+            "✅ Что работает: (1-2 предложения)\n"
+            "❌ Что улучшить: (конкретно)\n"
+            "👗 Замена: [вещь на фото] → [точное название из гардероба выше]\n"
+            "   Причина: улучшит [цветовую гармонию/сезонность/стиль]\n\n"
+            "Правила:\n"
+            "- В разделе 'Замена' используй ТОЛЬКО вещи из списка гардероба выше\n"
+            "- Если нужной замены нет в гардеробе — пропусти раздел 'Замена'\n"
+            "- Если оценка 8 или выше — раздел 'Замена' не нужен, только похвали\n"
+            "- Максимум 2 замены\n"
+            "- НЕ советуй покупать вещи которые уже есть в гардеробе\n"
+            "Язык: русский."
+        )
+    else:
+        return (
+            "Ты персональный стилист. Оцени образ взрослого человека на фото.\n\n"
+            "Если на фото виден только фрагмент образа (только ноги, только верх):\n"
+            "- Честно напиши: 'Вижу только часть образа'\n"
+            "- Оцени только видимые элементы, не домысливай\n"
+            "- Попроси прислать фото в полный рост\n"
+            "Оценивай ВСЕ видимые элементы: верхняя одежда, низ, обувь, аксессуары.\n\n"
+            f"Гардероб пользователя (лучшие вещи для рекомендаций):\n{wardrobe_context}\n\n"
+            "Структура ответа — строго такая:\n"
+            "⭐ Оценка: X/10\n"
+            "✅ Что работает: (1-2 предложения — цвет, силуэт, сочетание)\n"
+            "❌ Что улучшить: (конкретно и конструктивно)\n"
+            "👗 Замена: [вещь на фото] → [точное название из гардероба выше]\n"
+            "   Причина: улучшит [цветовую гармонию/стиль/баланс]\n\n"
+            "Правила:\n"
+            "- Оцениваешь образ взрослого — применяй критерии взрослой моды\n"
+            "- В разделе 'Замена' используй ТОЛЬКО вещи из гардероба выше\n"
+            "- Если гардероб пуст — давай общие рекомендации без конкретных замен\n"
+            "- Если оценка 8 или выше — раздел 'Замена' не нужен, только похвали\n"
+            "- Максимум 2 замены\n"
+            "- Тон: дружелюбный, как подруга-стилист\n"
+            "- НЕ упоминай детей и детскую моду\n"
+            "Язык: русский."
+        )
 
 
 def _dedup_key(data: dict) -> tuple:
@@ -588,9 +643,9 @@ async def _call_rate_vision(
     if owner_id and owner_type:
         async with AsyncReadSession() as session:
             wardrobe_items = await get_owner_items(session, owner_id, owner_type)
-        system_prompt = _build_rate_prompt(wardrobe_items)
+        system_prompt = _build_rate_prompt(wardrobe_items, owner_type=owner_type)
     else:
-        system_prompt = _RATE_SYSTEM
+        system_prompt = _RATE_SYSTEM_CHILD
 
     response = await pool.create_message(
         system=system_prompt,
@@ -807,6 +862,25 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Режим оценки образа (из кнопки меню)
     if context.user_data.get("awaiting_rate_photo"):
         context.user_data.pop("awaiting_rate_photo")
+
+        # Проверить лимит оценок
+        redis = context.bot_data.get("redis")
+        from datetime import date as _date_rate
+        today = _date_rate.today().isoformat()
+        rate_key = f"rate_limit:{user.id}:{today}"
+        plan = getattr(user, "plan", "free") or "free"
+        rate_limit = RATE_LIMIT_PREMIUM if plan == "premium" else RATE_LIMIT_FREE
+        rate_count = 0
+        if redis:
+            val = await redis.get(rate_key)
+            rate_count = int(val) if val else 0
+        if rate_count >= rate_limit:
+            await update.message.reply_text(
+                f"✋ Лимит оценок на сегодня ({rate_limit}/день).",
+                reply_markup=get_main_menu(),
+            )
+            return
+
         if update.message.photo:
             file_id = update.message.photo[-1].file_id
         elif update.message.document:
@@ -819,6 +893,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             _rate_photos([file_id], "single", update.message,
                          context.bot, owner_id=owner_id, owner_type=owner_type)
         )
+        # Увеличить счётчик после запуска оценки
+        if redis:
+            await redis.incr(rate_key)
+            await redis.expire(rate_key, 86400)
         return
 
     redis = context.bot_data.get("redis")
@@ -991,10 +1069,22 @@ async def handle_rate_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     user = context.user_data.get("db_user")
     if not user:
         return
+
+    owner_id, owner_type = await _get_owner(user, context)
+
+    if owner_type == "child":
+        async with AsyncReadSession() as session:
+            from db.models.child import Child as _Child
+            from sqlalchemy import select as _sel
+            _res = await session.execute(_sel(_Child).where(_Child.id == owner_id))
+            _child = _res.scalar_one_or_none()
+        name = _child.name if _child else "ребёнка"
+        prompt = f"Оцениваю образ для <b>{name}</b> 👧\nПришли фото в полный рост!"
+    else:
+        prompt = "Оцениваю <b>твой</b> образ 👗\nПришли фото в полный рост!"
+
     context.user_data["awaiting_rate_photo"] = True
-    await update.message.reply_text(
-        "Отправь фото образа — оценю стиль и дам рекомендации! 👗"
-    )
+    await update.message.reply_text(prompt, parse_mode="HTML")
 
 
 # ── Callback: режим оценки ───────────────────────────────────────────────────

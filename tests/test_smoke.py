@@ -109,6 +109,27 @@ def test_import_style_config():
     assert callable(_needs_tights)
 
 
+def test_rate_system_prompts_exist():
+    from bot.handlers.wardrobe import _RATE_SYSTEM_CHILD, _RATE_SYSTEM_ADULT
+    assert len(_RATE_SYSTEM_CHILD) > 500, "CHILD промпт слишком короткий"
+    assert len(_RATE_SYSTEM_ADULT) > 500, "ADULT промпт слишком короткий"
+    assert "взрослого" in _RATE_SYSTEM_ADULT.lower(), \
+        "ADULT промпт должен упоминать взрослого"
+    assert "детск" in _RATE_SYSTEM_CHILD.lower() or \
+           "ребёнк" in _RATE_SYSTEM_CHILD.lower(), \
+        "CHILD промпт должен упоминать детей/ребёнка"
+    assert "НЕ упоминай детей" in _RATE_SYSTEM_ADULT, \
+        "ADULT промпт должен запрещать упоминание детей"
+
+
+def test_call_rate_vision_accepts_owner_type():
+    import inspect
+    from bot.handlers.wardrobe import _call_rate_vision
+    sig = inspect.signature(_call_rate_vision)
+    assert "owner_type" in sig.parameters, \
+        "_call_rate_vision должен принимать owner_type"
+
+
 # ── DB models ─────────────────────────────────────────────────────────────
 
 def test_import_db_models():
