@@ -59,9 +59,10 @@ class FakeUser:
 
 @dataclass
 class FakeMatrix:
-    """Мок ScoringMatrix для тестов calc_item_score."""
+    """Мок ScoringMatrix для тестов calc_item_score.
+    11 критериев × weight=2 × max_clamped=2 = max_score=44."""
     name: str = "3-7"
-    max_score: float = 22.0
+    max_score: float = 44.0  # sum(weight × 2) = 11 × 2 × 2 = 44
     criteria: dict = field(default_factory=lambda: {
         "safety":           {"weight": 2},
         "practicality":     {"weight": 2},
