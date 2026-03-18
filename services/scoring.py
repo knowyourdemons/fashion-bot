@@ -60,10 +60,29 @@ def calc_item_score(breakdown: dict, matrix: ScoringMatrix) -> float:
     return round((total / matrix.max_score) * 10, 2)
 
 def classify_role(item_type: str, item_color: str) -> str:
-    """Определяет роль вещи в гардеробе: base / accent / statement."""
-    neutral_colors = {"белый", "чёрный", "серый", "бежевый", "navy", "тёмно-синий", "коричневый"}
-    basic_types = {"футболка", "джинсы", "брюки", "юбка-карандаш", "рубашка", "водолазка", "лонгслив"}
-    statement_types = {"вечернее платье", "кожаная куртка", "пальто", "шуба"}
+    """Определяет роль вещи в гардеробе: base / accent / statement.
+
+    Включает русские и английские названия — Vision может вернуть любой язык.
+    """
+    neutral_colors = {
+        # русские
+        "белый", "чёрный", "серый", "бежевый", "navy", "тёмно-синий", "коричневый",
+        # английские
+        "white", "black", "gray", "grey", "beige", "dark blue", "dark navy", "brown",
+    }
+    basic_types = {
+        # русские
+        "футболка", "джинсы", "брюки", "юбка-карандаш", "рубашка", "водолазка", "лонгслив",
+        # английские
+        "t-shirt", "tshirt", "jeans", "trousers", "pants", "pencil skirt", "shirt",
+        "turtleneck", "longsleeve", "long sleeve",
+    }
+    statement_types = {
+        # русские
+        "вечернее платье", "кожаная куртка", "пальто", "шуба",
+        # английские
+        "evening dress", "gown", "leather jacket", "coat", "fur coat", "overcoat",
+    }
 
     color_lower = (item_color or "").lower()
     type_lower = (item_type or "").lower()

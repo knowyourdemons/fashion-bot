@@ -44,8 +44,11 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     from config import settings
 
+    # Strip query params — asyncpg doesn't support ssl=disable as URL param;
+    # inside Docker containers SSL is not needed.
+    raw_url = settings.database_write_url.split("?")[0]
     connectable = async_engine_from_config(
-        {"sqlalchemy.url": settings.database_write_url + "?ssl=disable"},
+        {"sqlalchemy.url": raw_url},
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
