@@ -1,411 +1,251 @@
 # Fashion Bot — CLAUDE.md
 
-<<<<<<< HEAD
 ## Инфраструктура
 - VPS: agent-farm-01, user=stas, ~/fashion-bot
-- Containers: docker-app-1 (FastAPI+PTB), docker-worker-1, 
-  docker-postgres-1, docker-redis-1
+- Containers: docker-app-1 (FastAPI+PTB), docker-worker-1, docker-postgres-1, docker-redis-1
 - GitHub: knowyourdemons/fashion-bot
 - Tunnel: bot.fashioncastle.app (именованный Cloudflare tunnel ✅)
 - Webhook: https://bot.fashioncastle.app/api/v1/webhooks/telegram
+- Тест-пользователи: Стас telegram_id=195169 (plan=admin), Алиса owner_id=acf0100d-ca11-4fce-815e-c516af11e710 (3г, девочка, Лето)
 
 ## Архитектура
-- FastAPI app (порт 8000) + python-telegram-bot webhook
-- Worker: отдельный процесс, очередь через Redis
-- БД: PostgreSQL (asyncpg + SQLAlchemy async)
-- Кэш: Redis
-- AI: Anthropic API через AnthropicPool (core/anthropic_client.py)
-- Два API ключа в пуле с watchdog (автопереключение при 429)
-
-## Стек
-- Python 3.12, PTB 22.x, SQLAlchemy 2.0, asyncpg
-- Vision: claude-sonnet-4-6
-- Чат/бриф/текст: claude-haiku-4-5-20251001
-- remove.bg size=small ($0.002/фото)
-- Prompt caching: ephemeral везде
-
-## Структура проекта
-- bot/handlers/ — Telegram handlers
-  - wardrobe.py — Vision, коллаж, owner switching, оценка образа
-  - onboarding.py — ConversationHandler онбординга
-  - subscription.py — /subscribe, /test_subscribe, Stars/Stripe
-  - text.py — Haiku чат стилиста
-  - start.py — /start handler
-- bot/middleware/ — auth, typing
-- worker/tasks/ — cron задачи
-  - morning_brief.py — бриф для детей и взрослых
-  - style_config.py — COLORTYPE_PALETTES, WOW_PHRASES, _needs_tights
-  - subscription_expiry.py — уведомления об окончании trial
-  - evening_push.py — вечерний push в 20:00
-- db/models/ — SQLAlchemy модели
-- db/crud/ — CRUD операции
-- services/
-  - image_builder.py — коллаж, силуэты (детские + взрослые)
-  - scoring.py, usage.py, i18n/
-- permissions.py — лимиты, планы, trial логика (ЦЕНТРАЛЬНЫЙ ФАЙЛ)
-
-## Ключевые соглашения
-- Все DB операции: AsyncWriteSession (запись) / AsyncReadSession (чтение)
-- Логирование: structlog (logger = structlog.get_logger())
-- Переменные окружения: через config.py (pydantic BaseSettings)
-- Строки интерфейса: services/i18n/ru.py через t("key")
-- Redis из bot: context.bot_data["redis"]
-- owner_id: child.id если segment=mom_girl/mom_boy, иначе user.id
-- Активный owner: _get_owner(user, context) → (owner_id, owner_type)
-
-## Модели БД
-- User: telegram_id, plan (free/premium/ultra/admin), segment, 
-  city, timezone, onboarding_completed, onboarding_step,
-  trial_started_at, trial_ends_at, plan_expires_at, payment_provider
-- Child: user_id, name, birthdate, gender, colortype, 
-  current_size, shoe_size
-- WardrobeItem: owner_id, owner_type (user/child), 
-  category_group, type, color, season, score_item, show_in_collage
-- ScoringMatrix: name, age_from, age_to, criteria (JSONB), max_score
-- BriefLog: user_id, date, outfit_items, feedback, is_wow
-
-## Планы и лимиты (permissions.py)
-- free: 3 фото/день, 15 вещей, 3 оценки, 3 чата, 1 образ, бриф вт/чт
-- premium ($9/мес): 30 фото, 500 вещей, 20 оценок, 20 чатов, 
-  5 образов, бриф каждый день
-- ultra: заглушка (шоппинг-лист, капсула, семья — в разработке)
-- admin: безлимит (telegram_id=195169)
-- Trial: 14 дней с первого фото → premium доступ
-- get_effective_plan(user) — учитывает trial и plan_expires_at
-
-## Платежи
-- Stripe: для Европы (картой + Apple/Google Pay)
-- Telegram Stars: универсально без юрлица
-- ЮKassa: заглушка (нужно ИП в РФ/РБ)
-- Paddle: заглушка (альтернатива без юрлица)
-- Цены: $9/мес, $22/3мес, $72/год | 700/1700/5500 Stars
-- После оплаты: _activate_premium_after_payment() в webhooks.py
-
-## Vision (добавление вещей)
-- Модель: claude-sonnet-4-6 (НЕ haiku — плохое качество)
-- Фото вертикально: качество распознавания лучше
-- Дедупликация: ОТКЛЮЧЕНА
-- Bbox валидация: w>0.8 или h>0.8 → центральный crop
-- remove.bg: size=small, затем → rembg u2net локально (v1.2)
-
-## Коллаж
-- image_builder.py: build_collage(outfit_slots)
-- Реальные вещи + плейсхолдеры с силуэтами
-- Детские силуэты: по возрасту и полу ребёнка
-- Взрослые силуэты: женские пропорции (грубые, TODO редизайн)
-- adult=True в outfit_slots → взрослые силуэты
-- show_in_collage=True если alpha ratio ≥15%
-
-## Бриф
-- Детский (mom_girl/mom_boy): Vision коллаж + Haiku текст
-- Взрослый (no_kids/pregnant): погода + Haiku совет по цветотипу
-- Free: бриф вт/чт | Premium: каждый день включая выходные
-- is_brief_day(plan, timezone) в permissions.py
-- Цветотипы: Весна/Лето/Осень/Зима → палитры в style_config.py
-
-## Тестирование
-- /test_subscribe — только для admin, тест платёжного флоу
-- Тесты: tests/test_smoke.py, test_unit.py, test_integration.py
-- Запуск: docker exec docker-app-1 python3 -m pytest /app/tests/ -v
-- 60+ тестов
-
-## Деплой
-- Рестарт app: docker restart docker-app-1
-- Рестарт worker: docker restart docker-worker-1
-- Worker sync (обязательно для morning_brief, style_config):
-  docker cp docker-app-1:/app/FILE /tmp/F && 
-  docker cp /tmp/F docker-worker-1:/app/FILE
-- Sync на хост: docker cp docker-app-1:/app/FILE ~/fashion-bot/FILE
-- Alembic: docker exec docker-app-1 alembic upgrade head
-- Backup: pg_dump cron ежедневно 3:00, хранить 7 дней
-
-## Тест-пользователи
-- Стас: telegram_id=195169, plan=admin
-- Алиса: owner_id=acf0100d-ca11-4fce-815e-c516af11e710, 3г, девочка, Лето
-- Город: Вильнюс, timezone: Europe/Vilnius
-
-## Известные баги / TODO
-- Силуэты (детские+взрослые) нарисованы грубо → редизайн SVG/иконки
-- /profile + /add_child — не реализовано
-- Онбординг сегменты обидные → переделать UX (в работе)
-- Размер обуви принимает только int → нужен float (26.5)
-- Лимиты применяются во время онбординга → фикс нужен
-- ЮKassa требует ИП/ООО → после открытия в РБ
-- Stripe price_id не заполнены в permissions.PRICES
-
-## Роадмап
-- Срочно: онбординг UX фикс, лимиты в онбординге, размер обуви
-- v1.1: силуэты редизайн, /profile, /add_child, онбординг resumable
-- v1.2: шоппинг-лист, growth_alert, capsule_season, wardrobe_analysis
-- v2.0: семейный аккаунт, Ultra план, ЮKassa после ИП
-=======
-Архитектурные заметки и правила для разработки.
-
-## Архитектура
-
 - **FastAPI** (порт 8000) + python-telegram-bot в режиме webhook
 - **Worker**: отдельный процесс (`python -m worker.consumer`), очередь через Redis (HIGH/LOW)
 - **БД**: PostgreSQL 16 (asyncpg + SQLAlchemy 2.0 async)
 - **Кэш/Очередь**: Redis 7
 - **AI**: Anthropic API через `AnthropicPool` (`core/anthropic_client.py`)
-- **Туннель**: Cloudflare Named Tunnel → `bot.fashioncastle.app` (постоянный URL)
+- Два API ключа в пуле с watchdog (автопереключение при 429)
+
+## Стек
+- Python 3.12, PTB 22.x, SQLAlchemy 2.0, asyncpg
+- Vision: claude-sonnet-4-6 (НЕ haiku — плохое качество!)
+- Чат/бриф/текст: claude-haiku-4-5-20251001
+- remove.bg size=small ($0.002/фото)
+- Prompt caching: ephemeral везде
 
 ## Структура проекта
-
 ```
-bot/handlers/       — Telegram handlers (routing only, бизнес-логика в services/)
-bot/middleware/     — auth.py (загрузка user из БД), typing.py (индикатор)
-worker/tasks/       — cron задачи: morning_brief, evening_push, subscription_expiry, ...
-worker/consumer.py  — FastWorker (HIGH) + SlowWorker (LOW)
-db/models/          — SQLAlchemy модели (User, Child, WardrobeItem, BriefLog, ...)
-db/crud/            — CRUD операции
-db/seeds/           — taxonomy_seed, scoring_matrix_seed, dev_seed
-services/           — scoring.py, weather.py, image_processor.py, usage.py, i18n/
-core/               — anthropic_client.py, permissions.py, scheduler.py, queue.py
-billing/            — stripe_provider.py, yukassa_provider.py (stub), paddle_provider.py (stub)
-api/routes/webhooks.py — POST /telegram + POST /stripe
+bot/handlers/
+  wardrobe.py      — Vision, коллаж, owner switching, оценка образа
+  onboarding.py    — ConversationHandler онбординга
+  subscription.py  — /subscribe, /test_subscribe, Stars/Stripe
+  text.py          — Haiku чат стилиста (_get_text_system по сегменту)
+  start.py         — /start handler
+bot/middleware/    — auth.py (загрузка user из БД), typing.py
+worker/tasks/
+  morning_brief.py       — бриф детский + взрослый (no_kids/pregnant)
+  style_config.py        — COLORTYPE_PALETTES, WOW_PHRASES, _needs_tights
+  subscription_expiry.py — уведомления об окончании trial
+  evening_push.py        — вечерний push в 20:00
+worker/consumer.py — FastWorker (HIGH) + SlowWorker (LOW)
+db/models/         — SQLAlchemy модели
+db/crud/           — CRUD операции
+db/seeds/          — taxonomy_seed, scoring_matrix_seed, dev_seed
+services/
+  image_builder.py — коллаж, силуэты детские+взрослые
+  scoring.py, weather.py, image_processor.py, usage.py, i18n/
+permissions.py     — лимиты, планы, trial логика (ЦЕНТРАЛЬНЫЙ ФАЙЛ)
+billing/           — stripe_provider.py, yukassa_provider.py (stub), paddle_provider.py (stub)
 ```
 
 ## Ключевые соглашения
-
 - **DB сессии**: `AsyncWriteSession` для записи, `AsyncReadSession` для чтения
 - **Логирование**: `structlog` (`logger = structlog.get_logger()`)
 - **Конфигурация**: через `config.py` (pydantic `BaseSettings`, case-insensitive)
 - **Строки UI**: `services/i18n/ru.py` через `t("key")`
 - **Redis в боте**: `context.bot_data["redis"]`
 - **Владелец вещей**: `child.id` если `segment=mom_girl/mom_boy`, иначе `user.id`
+- **Активный owner**: `_get_owner(user, context)` → `(owner_id, owner_type)`
 - **Ошибки Sentry**: `sentry_sdk.capture_exception(e)` в обработчиках
 
 ## Модели БД
-
 ```python
 User:
   telegram_id (unique), name, city, timezone
-  plan: "free" | "basic" | "family" | "premium" | "ultra"
+  plan: "free" | "premium" | "ultra" | "admin"
   segment: "mom_girl" | "mom_boy" | "pregnant" | "no_kids"
-  body_type, colortype
+  colortype, body_type
   plan_expires_at        # дата истечения ПЛАТНОЙ подписки
-  trial_started_at, trial_ends_at  # trial (14 дней, начинается с первого фото)
+  trial_started_at, trial_ends_at  # trial (14 дней, с первого фото)
   payment_provider: "stars" | "stripe" | "test"
-  stripe_customer_id, subscription_id
-  daily_requests_used, daily_requests_reset_at
-  onboarding_completed
+  onboarding_completed, onboarding_step
 
 Child: user_id, name, birthdate, gender, colortype, current_size, shoe_size
 
 WardrobeItem:
   owner_id (UUID), owner_type: "user" | "child"
-  category_group (12 групп), category_code, type, color, style, brand
-  season[], occasion[]
-  photo_id, photo_url (пустой — R2 в v1.4), photo_hash (phash)
+  category_group, type, color, season
+  photo_id, photo_url (пустой — R2 в v1.4), photo_hash
   score_item, score_breakdown (JSONB), score_version="v2.0"
-  version (optimistic locking), deleted_at (soft delete)
+  show_in_collage (alpha ratio ≥15%)
 
-ScoringMatrix: name, criteria (JSONB), max_score, version, is_active
+ScoringMatrix: name, criteria (JSONB), max_score, is_active
 BriefLog: user_id, date, outfit_items[], feedback, is_wow
 ```
 
-## Система планов и лимитов (`core/permissions.py`)
+## Система планов и лимитов (`permissions.py`)
 
 ### `get_effective_plan(user) -> str`
-Приоритет: **admin > paid subscription > trial > legacy mapping**
-
+Приоритет: **admin > paid subscription > trial > free**
 ```python
-admin        # telegram_id in ADMIN_TELEGRAM_IDS
+admin         # telegram_id=195169
 premium/ultra # plan_expires_at > now (иначе → "free")
 premium       # trial_ends_at > now (trial активен)
-legacy        # basic/family → "premium" через _PLAN_ALIAS
 ```
 
-### LIMITS (текущие лимиты по плану)
-```python
-free:    photos=3, wardrobe=15, rate=3,  chat=3,  brief=[вт,чт], children=1
-premium: photos=30, wardrobe=500, rate=20, chat=20, brief=ежедн., children=3
-ultra:   photos=100, wardrobe=2000, rate=50, chat=50, brief=ежедн., children=10
+### LIMITS
+```
+free:    photos=3, wardrobe=15, rate=3,  chat=3,  outfit=1,  brief=[вт,чт], children=1
+premium: photos=30, wardrobe=500, rate=20, chat=20, outfit=5,  brief=ежедн., children=3
+ultra:   photos=100, wardrobe=2000, rate=50, chat=50, outfit=10, brief=ежедн., children=10
 admin:   все=9999
 ```
 
-### PRICES (цены Premium)
-```python
-premium_monthly:   usd=9,  stars=700,  label_usd="Месяц — $9"
-premium_quarterly: usd=22, stars=1700, label_usd="3 месяца — $22 (экономия $5)"
-premium_yearly:    usd=72, stars=5500, label_usd="Год — $72 (экономия $36)"
+### PRICES
+```
+premium_monthly:   usd=9,  stars=700
+premium_quarterly: usd=22, stars=1700
+premium_yearly:    usd=72, stars=5500
 ```
 
-### Вспомогательные функции
-- `days_until_expiry(user)` → int | None
-- `get_trial_days_left(user)` → int | None
-- `is_trial_active(user)` → bool
+### Функции
+- `get_effective_plan(user)` → str
+- `get_limit(key, plan)` → int
 - `is_brief_day(plan, timezone)` → bool
 - `is_brief_day_tomorrow(plan, timezone)` → bool
-- `get_limit(key, plan)` → int
+- `get_trial_days_left(user)` → int | None
+- `is_trial_active(user)` → bool
+- `days_until_expiry(user)` → int | None
 
 ## Платёжный флоу
 
 ### Telegram Stars
 ```
-/subscribe
-→ _subscribe_keyboard() (Stars всегда, Stripe если settings.stripe_secret_key)
-→ pay_stars:{plan_key}
-→ handle_pay_stars: edit_message_text с подтверждением
+/subscribe → pay_stars:{plan_key}
+→ handle_pay_stars: подтверждение
 → confirm_stars:{plan_key}
-→ handle_confirm_stars: delete, send_invoice(currency="XTR", provider_token="")
-→ PreCheckoutQuery → handle_pre_checkout (ответить в течение 10 сек!)
-→ SUCCESSFUL_PAYMENT → handle_successful_payment → update_user_plan в БД
+→ send_invoice(currency="XTR", provider_token="")
+→ PreCheckoutQuery → ответить за 10 сек!
+→ SUCCESSFUL_PAYMENT → _activate_premium_after_payment()
 ```
-
-**Payload format**: `"premium:{plan_key}:{telegram_id}"`
-**Test payload**: `"test:{plan_key}:{telegram_id}"` → Premium НЕ активируется
+Payload: `"premium:{plan_key}:{telegram_id}"` (реальный) | `"test:..."` (тест, не активирует)
 
 ### Stripe
 ```
-pay_stripe:{plan_key}
-→ StripeProvider.create_invoice(user_id, plan, period)
-→ Checkout Session URL → reply_text с ссылкой
-→ Stripe webhook → POST /api/v1/webhooks/stripe
+pay_stripe:{plan_key} → create_checkout_session → URL
+→ Stripe webhook POST /api/v1/webhooks/stripe
 → HMAC верификация → checkout.session.completed
-→ _activate_premium_after_payment(telegram_id, plan, period, ...)
+→ _activate_premium_after_payment()
 ```
 
 ### Защиты
-- **Double payment guard**: если `expire_days > 3` → показать статус, не показывать форму
-- **Admin bypass**: admin видит `/test_subscribe` вместо формы оплаты
+- Double payment guard: если `expire_days > 3` → не показывать форму
+- Admin bypass: admin видит `/test_subscribe` вместо формы оплаты
+- Test payload: `test:` → Premium НЕ активируется
 
-## Vision API (добавление вещей в гардероб)
+## Vision API
+- **Модель**: `claude-sonnet-4-6` (НЕ haiku!)
+- **max_tokens**: 4096
+- Фото вертикально — лучше качество
+- Дедупликация: ОТКЛЮЧЕНА
+- Bbox: w>0.8 или h>0.8 → центральный crop
+- Trial активация: атомарно `UPDATE WHERE trial_started_at IS NULL`
+- Prompt caching: `cache_control: {type: "ephemeral"}`
 
-- **Модель**: `claude-sonnet-4-6` (НЕ haiku — плохое качество!)
-- **max_tokens**: 4096 (иначе обрезает JSON на больших ответах)
-- **Ориентация**: вертикальное фото работает лучше
-- **Дедупликация**: ОТКЛЮЧЕНА в v1.1 (`photo_hash` хранится, но не проверяется)
-- **Prompt caching**: system промпт кэшируется через `cache_control: {type: "ephemeral"}`
-- **Trial активация**: при первом фото атомарно `UPDATE WHERE trial_started_at IS NULL`
+## Коллаж (`services/image_builder.py`)
+- `build_collage(outfit_slots)` — реальные вещи + плейсхолдеры
+- Детские силуэты: по возрасту и полу ребёнка
+- Взрослые силуэты: `adult=True` в outfit_slots (грубые, TODO редизайн SVG)
+- show_in_collage=True если alpha ratio ≥15%
 
-## Скоринг
-
-- Матрицы в БД: таблица `scoring_matrices`, загружаются при старте
-- Шкала: каждый критерий 0–2 × вес, нормируется в 10 баллов
-- `score_version = "v2.0"` — текущая версия
-- Возрастные варианты: `0-3`, `3-7`, `7-12`, `12-16`, `16-25`, `25-35`, `35-45`, `45+`
-- Для беременных: `pregnant-1`, `pregnant-2`, `pregnant-3`
+## Бриф (`worker/tasks/morning_brief.py`)
+- Детский (mom_girl/mom_boy): коллаж + Haiku текст стилиста
+- Взрослый (no_kids/pregnant): погода + Haiku совет по цветотипу
+- Free: бриф вт/чт | Premium: каждый день включая выходные
+- Цветотипы: Весна/Лето/Осень/Зима → палитры в `style_config.py`
+- Вечерний push: `evening_push.py` в 20:00 если `is_brief_day_tomorrow`
 
 ## AnthropicPool (`core/anthropic_client.py`)
-
-- Ротация ключей round-robin по `ANTHROPIC_API_KEYS` (через запятую)
+- Ротация ключей round-robin по `ANTHROPIC_API_KEYS`
 - Circuit breaker per key: CLOSED → OPEN → HALF_OPEN
 - RPM лимитер: sliding window в Redis
-- Auto-failover при `RateLimitError` / `APIStatusError`
-- Модели: PRIMARY=claude-haiku-4-5, FALLBACK=claude-sonnet-4-6
-- Логирует: input_tokens, output_tokens, cache_hit_tokens, cache_write_tokens
-
-## Morning Brief (`worker/tasks/morning_brief.py`)
-
-1. Загружает погоду (wttr.in, Redis кэш 1 час)
-2. Выбирает вещи (`_select_outfit`) по сезону/температуре/поводу
-3. Генерирует текст образа через Claude
-4. Строит коллаж (`image_builder.build_collage`)
-5. Отправляет в Telegram в 7:00 по timezone пользователя
-
-Вечернее напоминание (`evening_push.py`) — отправляется если `is_brief_day_tomorrow`.
-
-## Subscription Expiry (`worker/tasks/subscription_expiry.py`)
-
-Ежедневно в 09:00 UTC. Ищет пользователей у которых:
-```sql
-WHERE trial_ends_at BETWEEN yesterday AND now
-  AND plan = 'free'
-  AND onboarding_completed = TRUE
-  AND deleted_at IS NULL
-  AND is_active = TRUE
-```
-
-Тест для конкретного пользователя: `notify_single_user_trial_expiry(telegram_id)`.
+- Логирует: input_tokens, output_tokens, cache_hit_tokens
 
 ## Admin: `/test_subscribe`
-
-Панель тестирования платёжного флоу (только `ADMIN_TELEGRAM_IDS`):
+Только для `ADMIN_TELEGRAM_IDS`. Панель тестирования:
 
 | Кнопка | Действие |
 |--------|----------|
-| 🎁 Trial 14д | Устанавливает trial на 14 дней |
-| 💎 Premium 30д | Активирует premium на 30 дней |
-| 🔄 Сбросить в free | Очищает все планы/trial |
-| 📊 Лимиты | Показывает FREE/PREMIUM/ULTRA сравнение |
-| 🔔 Запустить expiry | Имитирует окончание trial + уведомление |
-| 🌅 Evening push | Тестовый вечерний push |
-| 💳 Stars invoice (тест) | Отправляет invoice с payload `test:` |
-| 🔄 Обновить | Перечитать пользователя из БД |
+| 🎁 Trial 14д | trial на 14 дней |
+| 💎 Premium 30д | premium на 30 дней |
+| 🔄 Сбросить в free | очистить всё |
+| 📊 Лимиты | сравнение FREE/PREMIUM/ULTRA |
+| 🔔 Запустить expiry | тест уведомления об окончании |
+| 🌅 Evening push | тестовый push |
+| 💳 Stars invoice (тест) | invoice с `test:` payload |
+| 🔄 Обновить | перечитать из БД |
 
-Статус-эмодзи: 🔴 free · 🟡 trial-premium · 🟢 paid-premium · 👑 admin
+Статус: 🔴 free · 🟡 trial · 🟢 premium · 👑 admin
 
 ## Деплой
-
 ```bash
-# VPS: 100.97.47.50 (Tailscale), Ubuntu 24.04 ARM64
+# Рестарт только app
+docker restart docker-app-1
 
-# Полный rebuild (после изменений requirements или Dockerfile)
-docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
+# Рестарт только worker
+docker restart docker-worker-1
 
-# Обновить только код (без rebuild образа)
-docker compose -f ~/fashion-bot/docker/docker-compose.yml restart app worker
+# Worker sync (ОБЯЗАТЕЛЬНО для morning_brief, style_config, permissions):
+docker cp docker-app-1:/app/FILE /tmp/F
+docker cp /tmp/F docker-worker-1:/app/FILE
+docker restart docker-worker-1
 
-# Логи
-docker compose -f ~/fashion-bot/docker/docker-compose.yml logs -f app
+# Sync на хост
+docker cp docker-app-1:/app/FILE ~/fashion-bot/FILE
 
 # Миграции
-docker compose exec app alembic upgrade head
+docker exec docker-app-1 alembic upgrade head
+
+# Полный rebuild
+docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
+
+# ВАЖНО: после --build все docker cp теряются!
 ```
 
-**ВАЖНО**: После `docker compose up --build` все изменения через `docker cp` теряются.
-Всегда синхронизируй с хоста: `docker compose cp src/ app:/app/`.
-
-### Cloudflare Tunnel
-
-URL: `bot.fashioncastle.app` (постоянный, не меняется при рестарте).
-
-```yaml
-# ~/.cloudflared/config.yml
-tunnel: fashion-bot
-credentials-file: /etc/cloudflared/{TUNNEL_ID}.json
-ingress:
-  - hostname: bot.fashioncastle.app
-    service: http://app:8000
-  - service: http_status:404
+## Тестирование
+```bash
+docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
+# 60+ тестов: test_smoke.py, test_unit.py, test_integration.py
 ```
-
-Права: `chmod 755 ~/.cloudflared && chmod 644 ~/.cloudflared/*.json ~/.cloudflared/config.yml`
 
 ## Переменные окружения
-
 ```bash
-TELEGRAM_BOT_TOKEN          # токен @fashion_castle_bot
+TELEGRAM_BOT_TOKEN
 TELEGRAM_WEBHOOK_URL        # https://bot.fashioncastle.app
-TELEGRAM_WEBHOOK_SECRET     # HMAC для верификации
-ANTHROPIC_API_KEYS          # key1,key2,... (пул, ротация)
+ANTHROPIC_API_KEYS          # key1,key2 (пул)
 DATABASE_WRITE_URL          # postgresql+asyncpg://...?ssl=disable
-DATABASE_READ_URL           # postgresql+asyncpg://...?ssl=disable
+DATABASE_READ_URL
 REDIS_URL                   # redis://redis:6379/0
-ADMIN_TELEGRAM_IDS          # 195169 (через запятую)
-PAYMENT_PROVIDER            # stars | stripe
+ADMIN_TELEGRAM_IDS          # 195169
 STRIPE_SECRET_KEY           # sk_live_... или sk_test_...
 STRIPE_WEBHOOK_SECRET       # whsec_...
 ENVIRONMENT                 # dev | prod
-SENTRY_DSN                  # опционально
 ```
 
-## Важные ограничения (v1.1)
+## Известные баги / TODO
+- Силуэты (детские+взрослые) нарисованы грубо → редизайн SVG/иконки
+- /profile + /add_child — не реализовано
+- Онбординг: сегменты обидные → переделать UX (в работе)
+- Онбординг: размер обуви принимает только int → нужен float (26.5)
+- Онбординг: лимиты применяются во время онбординга → фикс нужен
+- Онбординг: нет вопроса "а для себя тоже?" после выбора дочки/сына
+- ЮKassa требует ИП/ООО → после открытия в РБ
+- Stripe price_id не заполнены в permissions.PRICES
+- photo_url пустой — фото только в Telegram (R2 в v1.4)
 
-| Ограничение | Workaround | Roadmap |
-|-------------|-----------|---------|
-| `photo_url` пустой — фото только в Telegram | Используем `photo_id` | R2 в v1.4 |
-| Нет возраста взрослых в онбординге | Предполагается 30 лет | v1.2 |
-| Нет выбора триместра | Всегда `pregnant-2` | v1.2 |
-| Дедупликация отключена | — | v1.2 |
-| `test_stylist.py` — flaky | `--ignore` при запуске | — |
-
-## Roadmap
-
-- **v1.1** (текущая) — Vision, Morning Brief, Stars + Stripe, /test_subscribe, named Cloudflare tunnel
-- **v1.2** — редактирование вещей, возраст в онбординге, матрицы скоринга v3
-- **v1.4** — Cloudflare R2 storage, Sentry production, Paddle, referral program
-- **v2.0** — публичный запуск, analytics dashboard, Ultra план
->>>>>>> 1d07f611829c008383f98f24d95e48e64a7b7bd7
+## Роадмап
+- **Срочно**: онбординг UX (сегменты, размер обуви, лимиты, /start admin)
+- **v1.1**: силуэты редизайн SVG, /profile, /add_child, онбординг resumable
+- **v1.2**: шоппинг-лист, growth_alert, capsule_season, wardrobe_analysis
+- **v1.4**: Cloudflare R2, Sentry, Paddle, referral program
+- **v2.0**: публичный запуск, Ultra план, ЮKassa после ИП, семейный аккаунт
