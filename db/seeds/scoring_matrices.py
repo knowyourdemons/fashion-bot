@@ -334,7 +334,7 @@ _MATRICES_V3 = [
 
 
 async def seed_scoring_matrices() -> None:
-    """Деактивирует v2.0, добавляет v3.0 матрицы."""
+    """Обновляет матрицы до v3.0: апдейт существующих по name, вставка новых."""
     async with AsyncReadSession() as session:
         result = await session.execute(
             select(ScoringMatrix).where(ScoringMatrix.version == "v3.0").limit(1)
@@ -342,16 +342,26 @@ async def seed_scoring_matrices() -> None:
         if result.scalar_one_or_none():
             return  # v3.0 уже есть
 
+    inserted = 0
+    updated = 0
     async with AsyncWriteSession() as session:
-        # Деактивировать v2.0
-        await session.execute(
-            update(ScoringMatrix)
-            .where(ScoringMatrix.version == "v2.0")
-            .values(is_active=False)
-        )
-        # Добавить v3.0
         for data in _MATRICES_V3:
-            session.add(ScoringMatrix(**data))
+            existing = await session.execute(
+                select(ScoringMatrix).where(ScoringMatrix.name == data["name"])
+            )
+            m = existing.scalar_one_or_none()
+            if m:
+                # Обновить существующую матрицу
+                m.criteria = data["criteria"]
+                m.max_score = data["max_score"]
+                m.gender = data["gender"]
+                m.version = data["version"]
+                m.is_active = True
+                updated += 1
+            else:
+                # Добавить новую (детские с полом)
+                session.add(ScoringMatrix(**data))
+                inserted += 1
         await session.commit()
 
-    logger.info("scoring_matrices.seeded_v3", count=len(_MATRICES_V3))
+    logger.info("scoring_matrices.seeded_v3", inserted=inserted, updated=updated)
