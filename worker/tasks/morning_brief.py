@@ -498,7 +498,7 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
     from db.crud.wardrobe import get_owner_items
     from db.crud.brief_log import create_log
     from core.queue import RedisQueue, QueuePriority
-    from core.anthropic_client import get_anthropic_pool
+    from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
     from services.image_builder import build_collage
     from worker.tasks.style_config import (
         get_placeholder_label, get_temp_regime, COLORTYPE_PALETTES, _needs_tights,
@@ -551,7 +551,13 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
             f"Рекомендуй {color_hint}. Говори на русском, тон дружелюбный."
         )
 
-    pool = get_anthropic_pool()
+    try:
+        pool = get_anthropic_pool()
+    except RuntimeError:
+        _redis_for_pool = aioredis.from_url(settings.redis_url, decode_responses=False)
+        init_anthropic_pool(_redis_for_pool)
+        pool = get_anthropic_pool()
+
     try:
         advice_resp = await pool.create_message(
             model="claude-haiku-4-5-20251001",
