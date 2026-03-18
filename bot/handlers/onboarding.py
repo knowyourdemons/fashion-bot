@@ -489,21 +489,25 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if segment in ("mom_girl", "mom_boy"):
                 from db.models.child import Child as _Child
                 child_name = context.user_data["child_name"]
+                child_birthdate = context.user_data["child_birthdate"]
+                child_gender = "girl" if segment == "mom_girl" else "boy"
+                child_size = context.user_data.get("child_size")
+                child_shoe = context.user_data.get("child_shoe_size")
                 existing = await session.execute(
                     sa.select(_Child).where(
                         _Child.user_id == user.id,
-                        _Child.name == child_name,
                         _Child.deleted_at.is_(None),
-                    )
+                    ).order_by(_Child.created_at.asc()).limit(1)
                 )
                 existing_child = existing.scalar_one_or_none()
                 if existing_child:
                     await session.execute(
                         sa.update(_Child).where(_Child.id == existing_child.id).values(
-                            birthdate=context.user_data["child_birthdate"],
-                            gender="girl" if segment == "mom_girl" else "boy",
-                            current_size=context.user_data.get("child_size"),
-                            shoe_size=context.user_data.get("child_shoe_size"),
+                            name=child_name,
+                            birthdate=child_birthdate,
+                            gender=child_gender,
+                            current_size=child_size,
+                            shoe_size=child_shoe,
                         )
                     )
                 else:
@@ -511,10 +515,10 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
                         session,
                         user_id=user.id,
                         name=child_name,
-                        birthdate=context.user_data["child_birthdate"],
-                        gender="girl" if segment == "mom_girl" else "boy",
-                        current_size=context.user_data.get("child_size"),
-                        shoe_size=context.user_data.get("child_shoe_size"),
+                        birthdate=child_birthdate,
+                        gender=child_gender,
+                        current_size=child_size,
+                        shoe_size=child_shoe,
                     )
 
             await session.commit()

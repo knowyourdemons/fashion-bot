@@ -781,6 +781,23 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Сначала пройди настройку: /start")
         return
 
+    # Режим оценки образа (из кнопки меню)
+    if context.user_data.get("awaiting_rate_photo"):
+        context.user_data.pop("awaiting_rate_photo")
+        if update.message.photo:
+            file_id = update.message.photo[-1].file_id
+        elif update.message.document:
+            file_id = update.message.document.file_id
+        else:
+            return
+        owner_id, owner_type = await _get_owner(user, context)
+        await update.message.reply_text("⭐ Оцениваю...")
+        asyncio.create_task(
+            _rate_photos([file_id], "single", update.message,
+                         context.bot, owner_id=owner_id, owner_type=owner_type)
+        )
+        return
+
     redis = context.bot_data.get("redis")
 
     # Подсказка про bulk upload — один раз, если гардероб пуст
@@ -947,9 +964,13 @@ async def handle_photo_action(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 # ── handle_rate_mode_text (кнопка Оценить образ из меню) ────────────────
 
-async def handle_rate_mode_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_rate_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+    context.user_data["awaiting_rate_photo"] = True
     await update.message.reply_text(
-        "Отправь фото образа — оценю стиль и дам рекомендации!"
+        "Отправь фото образа — оценю стиль и дам рекомендации! 👗"
     )
 
 
@@ -1223,7 +1244,7 @@ async def handle_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not user:
         return
     page = context.user_data.get("wardrobe_page", 0)
-    await _show_wardrobe_page(update.message, user, page)
+    await _show_wardrobe_page(update.message, user, page, context=context)
     usage = get_usage_str(user)
     if usage:
         await update.message.reply_text(usage)
@@ -1237,13 +1258,18 @@ async def handle_wardrobe_page(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     page = int(query.data.split(":")[2])
     context.user_data["wardrobe_page"] = page
-    await _show_wardrobe_page(query.message, user, page)
+    await _show_wardrobe_page(query.message, user, page, context=context)
 
 
-async def _show_wardrobe_page(message, user, page: int, owner_id=None, owner_type="user") -> None:
+async def _show_wardrobe_page(message, user, page: int, owner_id=None, owner_type=None, context=None) -> None:
     try:
         if owner_id is None:
-            owner_id = user.id
+            if context is not None:
+                owner_id, owner_type = await _get_owner(user, context)
+            else:
+                owner_id, owner_type = user.id, "user"
+        elif owner_type is None:
+            owner_type = "user"
         async with AsyncReadSession() as session:
             items = await get_owner_items(session, owner_id, owner_type)
 

@@ -41,7 +41,7 @@ def create_application() -> Application:
         | filters.Regex("^❓ Помощь$")
     )
     app.add_handler(MessageHandler(filters.Regex("^👗 Гардероб$"), wardrobe.handle_wardrobe_menu))
-    app.add_handler(MessageHandler(filters.Regex("^⭐ Оценить образ$"), wardrobe.handle_rate_mode_text))
+    app.add_handler(MessageHandler(filters.Regex("^⭐ Оценить образ$"), wardrobe.handle_rate_menu))
     app.add_handler(MessageHandler(filters.Regex("^⚙️ Профиль$"), handle_profile))
     app.add_handler(MessageHandler(filters.Regex("^❓ Помощь$"), help.handle_help))
 
