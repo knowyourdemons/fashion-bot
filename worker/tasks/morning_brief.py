@@ -13,7 +13,7 @@ import structlog
 
 from config import settings
 from worker.fast_worker import register
-from worker.tasks.style_config import get_placeholder_label, get_temp_regime
+from worker.tasks.style_config import get_placeholder_label, get_temp_regime, SLOT_EMOJI
 
 logger = structlog.get_logger()
 
@@ -315,7 +315,21 @@ def _select_outfit(
 
 # ── Форматирование блока ребёнка ────────────────────────────────────────────
 
-_MISSING = " (в гардеробе нет — добавь фото 📸)"
+_MISSING = " (в гардеробе нет — добавь фото)"
+
+
+def _format_item(item) -> str:
+    """Форматирует вещь: тип (цвет), без дубля цвета если уже есть в названии."""
+    type_lower = (item.type or "").lower()
+    color_lower = (item.color or "").lower()
+    if not color_lower:
+        return (item.type or "").strip()
+    # Сравниваем по стему (без последних 2 символов), чтобы
+    # "серебристый" находился в "серебристые", "розовый" в "розовые" и т.д.
+    stem = color_lower[:-2] if len(color_lower) > 5 else color_lower
+    if stem in type_lower:
+        return (item.type or "").strip()
+    return f"{(item.type or '').strip()} ({item.color})"
 
 
 def _format_child_block(
@@ -323,7 +337,7 @@ def _format_child_block(
     day_type: str,
     outfit: dict,
     outfit_score,
-    wow_msg: str,
+    is_wow: bool = False,
     temp: float | None = None,
     colortype: str = "default",
     regime: str = "прохладно",
@@ -335,11 +349,9 @@ def _format_child_block(
     if outfit["thermal_top"] or outfit["thermal_bottom"]:
         parts = []
         if outfit["thermal_top"]:
-            t = outfit["thermal_top"]
-            parts.append(f"→ {t.type} ({t.color})")
+            parts.append(f"→ {_format_item(outfit['thermal_top'])}")
         if outfit["thermal_bottom"]:
-            t = outfit["thermal_bottom"]
-            parts.append(f"→ {t.type} ({t.color})")
+            parts.append(f"→ {_format_item(outfit['thermal_bottom'])}")
         lines.append("🧤 Термобельё: " + " ".join(parts))
 
     # Бельё
@@ -347,7 +359,7 @@ def _format_child_block(
     if outfit["underwear_text"]:
         underwear_parts.append(f"→ {outfit['underwear_text']}")
     for item in outfit["underwear_items"]:
-        underwear_parts.append(f"→ {item.type} ({item.color})")
+        underwear_parts.append(f"→ {_format_item(item)}")
     if underwear_parts:
         lines.append("👙 Бельё: " + " ".join(underwear_parts))
 
@@ -355,63 +367,58 @@ def _format_child_block(
     lines.append("👗 Образ:")
     if outfit["one_piece"]:
         i = outfit["one_piece"]
-        lines.append(f"→ 👗 {i.type} ({i.color})")
+        lines.append(f"→ {SLOT_EMOJI['one_piece']} {_format_item(i)}")
     else:
         if outfit["top"]:
-            i = outfit["top"]
-            lines.append(f"→ 👕 {i.type} ({i.color})")
+            lines.append(f"→ {SLOT_EMOJI['top']} {_format_item(outfit['top'])}")
         else:
             lbl = get_placeholder_label("top", colortype, regime)
-            lines.append(f"→ 👕 {lbl or 'любой верх по сезону'}")
+            lines.append(f"→ {SLOT_EMOJI['top']} {lbl or 'верх — любой по сезону'}")
         if outfit["bottom"]:
-            i = outfit["bottom"]
-            lines.append(f"→ 👖 {i.type} ({i.color})")
+            lines.append(f"→ {SLOT_EMOJI['bottom']} {_format_item(outfit['bottom'])}")
         else:
             lbl = get_placeholder_label("bottom", colortype, regime)
-            lines.append(f"→ 👖 {lbl or 'любые штаны/юбка'}")
+            lines.append(f"→ {SLOT_EMOJI['bottom']} {lbl or 'низ — любой по сезону'}")
     if outfit["removable_layer"]:
-        i = outfit["removable_layer"]
-        lines.append(f"→ {i.type} ({i.color}) [снять вечером]")
+        lines.append(f"→ {_format_item(outfit['removable_layer'])} [снять вечером]")
 
     # Ноги
     leg_item = outfit["tights"] or outfit["socks"]
     if leg_item:
-        lines.append(f"🧦 Ноги: → {leg_item.type} ({leg_item.color})")
+        lines.append(f"🧦 Ноги: → {_format_item(leg_item)}")
     elif temp < 10:
         lbl = get_placeholder_label("tights", colortype, regime)
-        lines.append(f"🧦 Ноги: → 🧦 {lbl or 'колготки или тёплые носки'}")
+        lines.append(f"🧦 Ноги: → {lbl or 'колготки или тёплые носки'}")
 
     # Обувь
     if outfit["footwear"]:
-        i = outfit["footwear"]
-        lines.append(f"👟 Обувь: → {i.type} ({i.color})")
+        lines.append(f"{SLOT_EMOJI['footwear']} Обувь: → {_format_item(outfit['footwear'])}")
     else:
         lbl = get_placeholder_label("footwear", colortype, regime)
-        lines.append(f"👟 Обувь: → 👟 {lbl or 'любая закрытая обувь'}")
+        lines.append(f"{SLOT_EMOJI['footwear']} Обувь: → {lbl or 'обувь — любая по сезону'}")
 
     # Верхняя одежда
     if outfit["outerwear"]:
-        i = outfit["outerwear"]
-        lines.append(f"🧥 Верхняя одежда: → {i.type} ({i.color})")
+        lines.append(f"{SLOT_EMOJI['outerwear']} Верхняя одежда: → {_format_item(outfit['outerwear'])}")
     elif temp <= 15:
         lbl = get_placeholder_label("outerwear", colortype, regime)
         if lbl:
-            lines.append(f"🧥 Верхняя одежда: → 🧥 {lbl}")
+            lines.append(f"{SLOT_EMOJI['outerwear']} Верхняя одежда: → {lbl}")
 
     # Аксессуары
     acc_parts = []
     for key in ("hat", "scarf", "gloves"):
         if outfit[key]:
-            i = outfit[key]
-            acc_parts.append(f"→ {i.type} ({i.color})")
+            acc_parts.append(f"→ {_format_item(outfit[key])}")
     if acc_parts:
         lines.append("🎩 Аксессуары: " + " ".join(acc_parts))
 
     lines.append("")
     if outfit_score is not None:
         lines.append(f"⭐ Скор образа: {outfit_score}/10")
-    if wow_msg:
-        lines.append(f"✨ {wow_msg}")
+    if is_wow:
+        from worker.tasks.style_config import get_wow_phrase
+        lines.append(f"✨ {get_wow_phrase()}")
 
     return "\n".join(lines)
 
@@ -520,10 +527,6 @@ async def generate_brief(payload: dict) -> dict:
     temp_e = weather.get("temp_evening")
     precip_e = weather.get("precip_evening", 0)
 
-    from services.scoring import matrix_name_for_owner
-    from db.models.scoring_matrix import ScoringMatrix
-    from sqlalchemy import select as _sel
-
     child_briefs = []
     all_outfit_ids: list[str] = []
     all_outfit_slots: list[dict] = []
@@ -542,7 +545,7 @@ async def generate_brief(payload: dict) -> dict:
             items = await get_owner_items(session, child.id, "child")
 
         if not items:
-            child_briefs.append(f"👧 {child.name}: гардероб пуст. Добавь вещи 📸")
+            child_briefs.append(f"👧 {child.name}: гардероб пуст. Добавь вещи!")
             continue
 
         outfit = _select_outfit(items, season, today, temp_m, temp_e, precip_e or 0)
@@ -563,19 +566,7 @@ async def generate_brief(payload: dict) -> dict:
 
         # WOW детектор
         is_wow_outfit = bool(scored and sum(scored) / len(scored) >= 8.0)
-        wow_msg = ""
         if is_wow_outfit:
-            matrix_name = matrix_name_for_owner(user, child)
-            async with AsyncReadSession() as session:
-                result = await session.execute(
-                    _sel(ScoringMatrix).where(
-                        ScoringMatrix.name == matrix_name,
-                        ScoringMatrix.is_active.is_(True),
-                    )
-                )
-                mx = result.scalar_one_or_none()
-            if mx:
-                wow_msg = mx.criteria.get("_wow_message", "")
             any_wow = True
 
         _temp = temp_m if temp_m is not None else 10.0
@@ -583,39 +574,55 @@ async def generate_brief(payload: dict) -> dict:
         colortype = getattr(child, "colortype", None) or "default"
 
         child_briefs.append(_format_child_block(
-            child.name, day_type, outfit, outfit_score, wow_msg,
+            child.name, day_type, outfit, outfit_score, is_wow=is_wow_outfit,
             temp=_temp, colortype=colortype, regime=regime,
         ))
 
         # Собираем outfit_slots для коллажа с плейсхолдерами
-        for slot_key in _slot_order:
-            item = outfit.get(slot_key)
-
+        # Маппинг ключей outfit → slot name (hat и socks маппятся на стандартные слоты)
+        _outfit_key_to_slot = {
+            "outerwear": "outerwear",
+            "top":       "top",
+            "bottom":    "bottom",
+            "one_piece": "one_piece",
+            "footwear":  "footwear",
+            "hat":       "hat",
+            "tights":    "tights",
+            "socks":     "tights",
+        }
+        seen_slots: set[str] = set()
+        for outfit_key, slot in _outfit_key_to_slot.items():
             # Логические исключения
-            if slot_key in ("top", "bottom") and outfit.get("one_piece"):
+            if outfit_key in ("top", "bottom") and outfit.get("one_piece"):
                 continue
-            if slot_key == "one_piece" and (outfit.get("top") or outfit.get("bottom")):
+            if outfit_key == "one_piece" and (outfit.get("top") or outfit.get("bottom")):
+                continue
+            # Не дублировать слот (socks и tights → один tights)
+            if slot in seen_slots:
                 continue
 
+            item = outfit.get(outfit_key)
             if item and getattr(item, "show_in_collage", True):
+                seen_slots.add(slot)
                 all_outfit_slots.append({
-                    "slot": slot_key,
-                    "label": f"{item.type} {item.color}"[:20],
+                    "slot": slot,
+                    "label": _format_item(item)[:20],
                     "photo_id": item.photo_id,
                     "photo_url": item.photo_url,
                     "has_item": True,
                 })
             else:
-                ph_label = get_placeholder_label(slot_key, colortype, regime)
+                ph_label = get_placeholder_label(slot, colortype, regime)
                 if ph_label is None:
                     continue  # слот не нужен при данной погоде
+                seen_slots.add(slot)
                 if " — " in ph_label:
-                    color_part = ph_label.split(" — ", 1)[1]  # "лавандовую 📸"
+                    color_part = ph_label.split(" — ", 1)[1]
                 else:
-                    color_part = "📸"
-                short_label = _slot_labels.get(slot_key, slot_key)
+                    color_part = "(нет в гардеробе)"
+                short_label = _slot_labels.get(slot, slot)
                 all_outfit_slots.append({
-                    "slot": slot_key,
+                    "slot": slot,
                     "short_label": short_label,
                     "label": color_part,
                     "photo_id": None,
@@ -628,25 +635,15 @@ async def generate_brief(payload: dict) -> dict:
     if temp_m is not None:
         sm = "+" if temp_m >= 0 else ""
         se = "+" if (temp_e or 0) >= 0 else ""
-        weather_line = f"🌡 {user.city}: {sm}{temp_m}°C → вечером {se}{temp_e}°C"
+        weather_line = f"{user.city}: {sm}{temp_m}°C → вечером {se}{temp_e}°C"
+    else:
+        logger.warning("brief.weather.empty", city=user.city)
 
-    # Слить температурный warning в weather_line (избежать дублирования)
-    # outfit["warnings"] содержит "🌡 Утром X°C → вечером Y°C — одень слоями!"
-    # — температура уже есть в weather_line, нужна только подсказка
-    extra_warnings = []
-    for warn in global_warnings:
-        if warn.startswith("🌡"):
-            if weather_line:
-                weather_line += " — одень слоями! 🎽"
-            # иначе просто пропустить — температура уже в weather_line
-        else:
-            extra_warnings.append(warn)
-
-    header = f"🌅 Доброе утро, {user.name}!"
+    header = f"🌅 Доброе утро, {user.name}!\n"
     if weather_line:
-        header += f"\n{weather_line}"
-    for warn in extra_warnings:
-        header += f"\n{warn}"
+        header += f"🌡 {weather_line}\n"
+    for warn in global_warnings:
+        header += f"{warn}\n"
 
     brief_text = (
         header
