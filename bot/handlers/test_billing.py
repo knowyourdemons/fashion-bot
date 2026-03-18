@@ -272,18 +272,16 @@ async def handle_test_subscribe_action(update: Update, context: ContextTypes.DEF
         plan_key = "premium_monthly"
         price = PRICES[plan_key]
 
-        # ФИКС 3: красивое сообщение перед invoice
-        await query.message.reply_text(
-            f"⭐ Тест Stars оплаты\n\n"
-            f"План: {price['label_usd']}\n"
-            f"Стоимость: {price['stars']} Telegram Stars\n\n"
-            f"👇 Нажми кнопку ниже чтобы оплатить:"
+        description = (
+            f"Месяц Premium · {price['stars']} Stars\n"
+            f"После оплаты бриф придёт уже завтра утром ✨"
         )
+        assert len(description) <= 255, f"description too long: {len(description)}"
         await context.bot.send_invoice(
             chat_id=query.message.chat_id,
             title="Касси Premium (тест)",
-            description=price["label_usd"],
-            payload=f"test:premium:{plan_key}:{user.telegram_id}",
+            description=description,
+            payload=f"test:{plan_key}:{user.telegram_id}",
             provider_token="",
             currency="XTR",
             prices=[LabeledPrice("Premium", price["stars"])],

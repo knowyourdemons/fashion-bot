@@ -236,7 +236,19 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
         return
 
     # payload = "premium:premium_monthly:<telegram_id>"
-    parts = payment.invoice_payload.split(":")
+    payload = payment.invoice_payload
+
+    # Тестовый payload — не активировать premium
+    if payload.startswith("test:"):
+        await update.message.reply_text(
+            "✅ Тест Stars оплаты прошёл успешно!\n"
+            "Premium не активирован — это тестовый платёж.\n\n"
+            "В реальном флоу здесь активируется подписка."
+        )
+        return
+
+    # "premium:premium_monthly:<telegram_id>"
+    parts = payload.split(":")
     plan = parts[0] if len(parts) > 0 else "premium"
     plan_key = parts[1] if len(parts) > 1 else "premium_monthly"
     months = _KEY_MONTHS.get(plan_key, 1)
