@@ -383,12 +383,13 @@ class TestTextSystem:
 # ── TestPermissions ────────────────────────────────────────────────────────
 
 class TestPermissions:
-    def _make_user(self, plan, trial_days=None, telegram_id=99999):
+    def _make_user(self, plan, trial_days=None, telegram_id=99999, plan_expires_at=None):
         from unittest.mock import MagicMock
         from datetime import datetime, timezone, timedelta
         u = MagicMock()
         u.plan = plan
         u.telegram_id = telegram_id
+        u.plan_expires_at = plan_expires_at
         if trial_days is not None:
             u.trial_ends_at = datetime.now(timezone.utc) + timedelta(days=trial_days)
             u.trial_started_at = datetime.now(timezone.utc) - timedelta(days=14 - trial_days)
@@ -414,8 +415,27 @@ class TestPermissions:
 
     def test_premium_без_trial(self):
         from core.permissions import get_effective_plan
-        u = self._make_user("premium")
+        from datetime import datetime, timezone, timedelta
+        u = self._make_user("premium", plan_expires_at=datetime.now(timezone.utc) + timedelta(days=30))
         assert get_effective_plan(u) == "premium"
+
+    def test_premium_подписка_истекла_даёт_free(self):
+        from core.permissions import get_effective_plan
+        from datetime import datetime, timezone, timedelta
+        u = self._make_user("premium", plan_expires_at=datetime.now(timezone.utc) - timedelta(days=1))
+        assert get_effective_plan(u) == "free"
+
+    def test_days_until_expiry(self):
+        from core.permissions import days_until_expiry
+        from datetime import datetime, timezone, timedelta
+        u = self._make_user("premium", plan_expires_at=datetime.now(timezone.utc) + timedelta(days=10))
+        d = days_until_expiry(u)
+        assert d is not None and 9 <= d <= 10
+
+    def test_days_until_expiry_нет_подписки(self):
+        from core.permissions import days_until_expiry
+        u = self._make_user("free")
+        assert days_until_expiry(u) is None
 
     def test_admin_по_telegram_id(self):
         from core.permissions import get_effective_plan

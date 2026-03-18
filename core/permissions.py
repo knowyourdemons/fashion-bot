@@ -169,9 +169,27 @@ _PLAN_ALIAS: dict[str, str] = {
 # ── Цены ─────────────────────────────────────────────────────────────────────
 
 PRICES: dict[str, dict[str, Any]] = {
-    "premium_monthly":   {"amount": 9,  "period": "month",  "label": "Месяц — $9"},
-    "premium_quarterly": {"amount": 22, "period": "3month", "label": "3 месяца — $22 (экономия $5)"},
-    "premium_yearly":    {"amount": 72, "period": "year",   "label": "Год — $72 (экономия $36)"},
+    "premium_monthly": {
+        "usd": 9, "stars": 700, "period_months": 1,
+        "label": "Месяц — $9",
+        "label_usd": "Месяц — $9",
+        "label_stars": "Месяц — 700 ⭐",
+        "stripe_price_id": "",  # заполнить из Stripe dashboard
+    },
+    "premium_quarterly": {
+        "usd": 22, "stars": 1700, "period_months": 3,
+        "label": "3 месяца — $22 (экономия $5)",
+        "label_usd": "3 месяца — $22 (экономия $5)",
+        "label_stars": "3 месяца — 1700 ⭐",
+        "stripe_price_id": "",
+    },
+    "premium_yearly": {
+        "usd": 72, "stars": 5500, "period_months": 12,
+        "label": "Год — $72 (экономия $36)",
+        "label_usd": "Год — $72 (экономия $36) ⭐ Лучшая цена",
+        "label_stars": "Год — 5500 ⭐",
+        "stripe_price_id": "",
+    },
 }
 
 # ── Ultra фичи (заглушки) ────────────────────────────────────────────────────
@@ -179,9 +197,10 @@ PRICES: dict[str, dict[str, Any]] = {
 ULTRA_FEATURES = [
     "🛍 Шоппинг-лист с партнёрскими ссылками",
     "💎 Капсульный гардероб на сезон",
-    "📊 Анализ гардероба",
-    "👨‍👩‍👧 Семейный аккаунт",
+    "📊 Глубокий анализ гардероба",
+    "👨‍👩‍👧 Семейный аккаунт (папа тоже видит образы)",
     "🔄 Передача вещей между детьми",
+    "📦 Хранение архива вещей",
 ]
 
 
@@ -189,9 +208,8 @@ ULTRA_FEATURES = [
 
 def get_effective_plan(user) -> str:
     """
-    Возвращает реальный план с учётом trial и admin.
-    Trial даёт premium доступ пока не истёк.
-    Admin определяется по telegram_id из settings.
+    Возвращает реальный план с учётом trial, paid subscription и admin.
+    Приоритет: admin > paid subscription (plan_expires_at) > trial > legacy mapping.
     """
     if not user:
         return "free"
@@ -205,12 +223,22 @@ def get_effective_plan(user) -> str:
         pass
 
     plan = getattr(user, "plan", "free") or "free"
+    now = datetime.now(timezone.utc)
+
+    # Проверить активную платную подписку
+    plan_expires = getattr(user, "plan_expires_at", None)
+    if plan_expires and plan in ("premium", "ultra"):
+        exp = plan_expires
+        if hasattr(exp, "tzinfo") and exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp > now:
+            return plan
+        # Подписка истекла → free
+        return "free"
 
     # Проверить активный trial
     trial_ends = getattr(user, "trial_ends_at", None)
     if trial_ends:
-        now = datetime.now(timezone.utc)
-        # Сделать aware если naive
         if hasattr(trial_ends, "tzinfo") and trial_ends.tzinfo is None:
             trial_ends = trial_ends.replace(tzinfo=timezone.utc)
         if trial_ends > now:
@@ -264,6 +292,18 @@ def get_trial_days_left(user) -> Optional[int]:
     delta = trial_ends - now
     days = delta.days
     return max(0, days)
+
+
+def days_until_expiry(user) -> Optional[int]:
+    """Дней до истечения платной подписки (не trial). None если нет подписки."""
+    plan_expires = getattr(user, "plan_expires_at", None)
+    if not plan_expires:
+        return None
+    now = datetime.now(timezone.utc)
+    if hasattr(plan_expires, "tzinfo") and plan_expires.tzinfo is None:
+        plan_expires = plan_expires.replace(tzinfo=timezone.utc)
+    delta = plan_expires - now
+    return max(0, delta.days)
 
 
 def is_trial_active(user) -> bool:
