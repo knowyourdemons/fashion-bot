@@ -1,38 +1,84 @@
-"""Fixtures: db, user, child, redis."""
-import asyncio
 import pytest
-import pytest_asyncio
-import redis.asyncio as aioredis
+import uuid
+from unittest.mock import AsyncMock, MagicMock
+from datetime import date
 
-from db.base import Base, AsyncWriteSession
-from db.models.user import User
-from db.models.child import Child
 
+# ── Фикстуры пользователя ──────────────────────────────────────────────────
+
+@pytest.fixture
+def fake_user():
+    user = MagicMock()
+    user.id = uuid.UUID("3b4da73e-0772-407c-915e-f6dd1610fcc3")
+    user.telegram_id = 195169
+    user.name = "Stas"
+    user.city = "Vilnius"
+    user.timezone = "Europe/Vilnius"
+    user.plan = "premium"
+    user.segment = "mom_girl"
+    user.colortype = "Лето"
+    user.onboarding_completed = True
+    return user
+
+
+@pytest.fixture
+def fake_child():
+    child = MagicMock()
+    child.id = uuid.UUID("acf0100d-ca11-4fce-815e-c516af11e710")
+    child.name = "Алиса"
+    child.gender = "girl"
+    child.colortype = "Лето"
+    child.birthdate = date(2022, 9, 1)
+    child.current_size = "98"
+    return child
+
+
+@pytest.fixture
+def fake_wardrobe_item():
+    item = MagicMock()
+    item.id = uuid.uuid4()
+    item.owner_id = uuid.UUID("acf0100d-ca11-4fce-815e-c516af11e710")
+    item.owner_type = "child"
+    item.category_group = "top"
+    item.type = "свитшот"
+    item.color = "розовый"
+    item.season = ["spring", "autumn"]
+    item.score_item = 7.5
+    item.show_in_collage = True
+    item.photo_id = "AgACtest123"
+    item.photo_url = "wardrobe/test/item.png"
+    item.last_worn = None
+    item.deleted_at = None
+    return item
+
+
+@pytest.fixture
+def fake_context(fake_user):
+    context = MagicMock()
+    context.user_data = {"db_user": fake_user}
+    context.bot_data = {}
+    context.bot = AsyncMock()
+    return context
+
+
+@pytest.fixture
+def fake_update():
+    update = MagicMock()
+    update.message = MagicMock()
+    update.message.reply_text = AsyncMock()
+    update.message.reply_photo = AsyncMock()
+    update.message.from_user = MagicMock()
+    update.message.from_user.id = 195169
+    return update
+
+
+# ── Session-scoped event loop для integration тестов ──────────────────────
+import asyncio as _asyncio
 
 @pytest.fixture(scope="session")
 def event_loop():
-    loop = asyncio.new_event_loop()
+    """One event loop for all async tests — prevents DB pool loop mismatch."""
+    policy = _asyncio.get_event_loop_policy()
+    loop = policy.new_event_loop()
     yield loop
     loop.close()
-
-
-@pytest_asyncio.fixture
-async def redis_client():
-    client = aioredis.from_url("redis://localhost:6379/1")
-    yield client
-    await client.flushdb()
-    await client.aclose()
-
-
-@pytest_asyncio.fixture
-async def db_session():
-    async with AsyncWriteSession() as session:
-        yield session
-
-
-@pytest_asyncio.fixture
-async def test_user(db_session):
-    from db.crud.users import create
-    user = await create(db_session, telegram_id=999999, name="Test User")
-    await db_session.commit()
-    return user
