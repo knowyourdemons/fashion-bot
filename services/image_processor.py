@@ -33,7 +33,7 @@ def compute_phash(img: Image.Image) -> str:
 def is_duplicate(hash1: str, hash2: str) -> bool:
     h1 = imagehash.hex_to_hash(hash1)
     h2 = imagehash.hex_to_hash(hash2)
-    return (h1 - h2) < PHASH_THRESHOLD
+    return bool((h1 - h2) < PHASH_THRESHOLD)
 
 
 def preprocess(

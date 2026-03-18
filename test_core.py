@@ -32,6 +32,20 @@ def make_jpeg(width: int = 800, height: int = 600, color=(255, 0, 0)) -> bytes:
     return buf.getvalue()
 
 
+def make_striped_jpeg(vertical: bool = True, size: int = 500, stripe: int = 50) -> bytes:
+    """Создаёт JPEG с полосатым узором (вертикальные или горизонтальные полосы).
+    Phash хорошо различает такие изображения в отличие от однотонных."""
+    img = Image.new("RGB", (size, size), (0, 0, 0))
+    pixels = img.load()
+    for y in range(size):
+        for x in range(size):
+            idx = x // stripe if vertical else y // stripe
+            pixels[x, y] = (255, 255, 255) if idx % 2 == 0 else (0, 0, 0)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
+
+
 @dataclass
 class FakeItem:
     """Мок WardrobeItem для тестов _select_outfit."""
@@ -132,8 +146,9 @@ class TestImageProcessor:
 
     def test_different_images_not_duplicate(self):
         """Разные фото не считаются дублями."""
-        jpeg1 = make_jpeg(800, 600, color=(255, 0, 0))
-        jpeg2 = make_jpeg(800, 600, color=(0, 0, 255))
+        # Вертикальные vs горизонтальные полосы — phash хорошо их различает
+        jpeg1 = make_striped_jpeg(vertical=True)
+        jpeg2 = make_striped_jpeg(vertical=False)
         _, hash1 = self.preprocess(jpeg1)
         result, hash2 = self.preprocess(jpeg2, existing_hashes=[hash1])
         assert isinstance(result, bytes)
@@ -156,8 +171,12 @@ class TestImageProcessor:
 
     def test_is_duplicate_different_hash(self):
         """Совершенно разные хеши — не дубль."""
-        img1 = Image.new("RGB", (500, 500), color=(255, 0, 0))
-        img2 = Image.new("RGB", (500, 500), color=(0, 0, 0))
+        # Однотонные изображения имеют почти одинаковый phash (только DC-компонента).
+        # Используем полосатые изображения с разной ориентацией — они дают разные хеши.
+        jpeg1 = make_striped_jpeg(vertical=True)
+        jpeg2 = make_striped_jpeg(vertical=False)
+        img1 = Image.open(io.BytesIO(jpeg1))
+        img2 = Image.open(io.BytesIO(jpeg2))
         h1 = self.compute_phash(img1)
         h2 = self.compute_phash(img2)
         assert self.is_duplicate(h1, h2) is False
