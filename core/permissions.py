@@ -127,6 +127,7 @@ LIMITS: dict[str, dict[str, Any]] = {
         "brief_days":         [1, 3],   # вт=1, чт=3
         "brief_weekends":     False,
         "children_max":       1,
+        "gap_analysis":       False,
     },
     "premium": {
         "photos_per_day":     30,
@@ -137,6 +138,7 @@ LIMITS: dict[str, dict[str, Any]] = {
         "brief_days":         [0, 1, 2, 3, 4, 5, 6],
         "brief_weekends":     True,
         "children_max":       3,
+        "gap_analysis":       True,
     },
     "ultra": {
         "photos_per_day":     100,
@@ -147,6 +149,7 @@ LIMITS: dict[str, dict[str, Any]] = {
         "brief_days":         [0, 1, 2, 3, 4, 5, 6],
         "brief_weekends":     True,
         "children_max":       10,
+        "gap_analysis":       True,
     },
     "admin": {
         "photos_per_day":     9999,
@@ -157,6 +160,7 @@ LIMITS: dict[str, dict[str, Any]] = {
         "brief_days":         [0, 1, 2, 3, 4, 5, 6],
         "brief_weekends":     True,
         "children_max":       99,
+        "gap_analysis":       True,
     },
 }
 
@@ -205,6 +209,11 @@ ULTRA_FEATURES = [
 
 
 # ── Вспомогательные функции ──────────────────────────────────────────────────
+
+def can_gap_analysis(plan: str) -> bool:
+    resolved = _PLAN_ALIAS.get(plan, plan)
+    return bool(LIMITS.get(resolved, LIMITS["free"]).get("gap_analysis", False))
+
 
 def get_effective_plan(user) -> str:
     """

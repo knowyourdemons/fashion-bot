@@ -11,6 +11,7 @@ def create_application() -> Application:
     app = Application.builder().token(settings.telegram_bot_token).build()
 
     from bot.handlers import wardrobe, feedback, billing, help, text, debug, brief
+    from bot.handlers.shopping import handle_shopping
     from bot.handlers.test_billing import (
         handle_test_subscribe, handle_test_subscribe_action,
     )
@@ -35,6 +36,7 @@ def create_application() -> Application:
     app.add_handler(CommandHandler("subscribe", billing.handle_subscribe))
     app.add_handler(CommandHandler("plan", billing.handle_plan))
     app.add_handler(CommandHandler("cancel", billing.handle_cancel))
+    app.add_handler(CommandHandler("shopping", handle_shopping))
 
     # Photo handlers (сжатое фото и документ-изображение оригинального качества)
     app.add_handler(MessageHandler(filters.PHOTO, wardrobe.handle_photo))

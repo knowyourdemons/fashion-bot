@@ -77,10 +77,10 @@ class Scheduler:
             replace_existing=True,
         )
 
-        # gap_analysis — 15-е число 10:00 UTC (Batch API)
+        # gap_analysis — 1-е число 09:00 UTC
         self._scheduler.add_job(
             gap_analysis.run,
-            CronTrigger(day=15, hour=10, minute=0),
+            CronTrigger(day=1, hour=9, minute=0),
             id="gap_analysis",
             replace_existing=True,
         )

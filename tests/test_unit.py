@@ -613,3 +613,141 @@ class TestTrialActivation:
     def test_children_limit_premium(self):
         from core.permissions import get_limit
         assert get_limit("children_max", "premium") == 3
+
+
+# ── TestGapAnalysis ─────────────────────────────────────────────────────────
+
+class TestGapAnalysis:
+    """Тесты gap analysis / шоппинг-листа."""
+
+    def test_gap_free_user_blocked(self):
+        from core.permissions import can_gap_analysis
+        assert can_gap_analysis("free") is False
+
+    def test_gap_premium_allowed(self):
+        from core.permissions import can_gap_analysis
+        assert can_gap_analysis("premium") is True
+
+    def test_gap_ultra_allowed(self):
+        from core.permissions import can_gap_analysis
+        assert can_gap_analysis("ultra") is True
+
+    def test_gap_admin_allowed(self):
+        from core.permissions import can_gap_analysis
+        assert can_gap_analysis("admin") is True
+
+    def test_gap_trial_allowed(self):
+        """Пользователь на trial → effective_plan='premium' → gap доступен."""
+        from core.permissions import can_gap_analysis, get_effective_plan
+        from unittest.mock import MagicMock
+        from datetime import datetime, timezone, timedelta
+        u = MagicMock()
+        u.plan = "free"
+        u.plan_expires_at = None
+        u.trial_ends_at = datetime.now(timezone.utc) + timedelta(days=7)
+        u.trial_started_at = datetime.now(timezone.utc) - timedelta(days=7)
+        u.telegram_id = 99999
+        ep = get_effective_plan(u)
+        assert can_gap_analysis(ep) is True
+
+    @pytest.mark.asyncio
+    async def test_gap_few_items(self):
+        """Меньше 5 вещей → возвращает None без вызова Claude."""
+        from services.gap_analysis import build_shopping_list
+        from unittest.mock import AsyncMock, MagicMock
+
+        user = MagicMock()
+        user.id = "test-id"
+        user.timezone = "Europe/Vilnius"
+        user.colortype = None
+        user.segment = "no_kids"
+
+        redis = AsyncMock()
+        redis.get.return_value = None
+
+        result = await build_shopping_list(user, [1, 2, 3], redis)
+        assert result is None
+        # lock не устанавливался
+        redis.set.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_gap_cache_hit(self):
+        """Если в Redis есть кэш — Claude не вызывается."""
+        from services.gap_analysis import build_shopping_list
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        user = MagicMock()
+        user.id = "test-id"
+        user.timezone = "Europe/Vilnius"
+        user.colortype = None
+        user.segment = "no_kids"
+
+        cached_text = "1. Белая рубашка\n2. Синие джинсы"
+        redis = AsyncMock()
+        # Первый .get — lock key (нет), второй .get — cache key (есть)
+        redis.get.side_effect = [None, cached_text.encode()]
+
+        items = [MagicMock(score_item=5.0) for _ in range(5)]
+
+        with patch("core.anthropic_client.get_anthropic_pool") as mock_pool:
+            result = await build_shopping_list(user, items, redis)
+
+        assert result == cached_text
+        mock_pool.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_gap_lock(self):
+        """Если lock активен — возвращает 'lock'."""
+        from services.gap_analysis import build_shopping_list
+        from unittest.mock import AsyncMock, MagicMock
+
+        user = MagicMock()
+        user.id = "test-id"
+
+        redis = AsyncMock()
+        redis.get.return_value = b"1"  # lock активен
+
+        items = [MagicMock() for _ in range(5)]
+        result = await build_shopping_list(user, items, redis)
+        assert result == "lock"
+
+    @pytest.mark.asyncio
+    async def test_gap_owner_mom_girl(self):
+        """segment='mom_girl' → промпт содержит 'Детский гардероб'."""
+        from services.gap_analysis import build_shopping_list
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        user = MagicMock()
+        user.id = "test-id"
+        user.timezone = "Europe/Vilnius"
+        user.colortype = None
+        user.segment = "mom_girl"
+
+        redis = AsyncMock()
+        redis.get.return_value = None  # нет lock, нет кэша
+
+        items = [
+            MagicMock(
+                category_group="tops", type="футболка",
+                color="белый", season=["summer"], score_item=5.0,
+            )
+            for _ in range(5)
+        ]
+
+        captured: list[dict] = []
+
+        async def mock_create_message(**kwargs):
+            captured.append(kwargs)
+            m = MagicMock()
+            m.content = [MagicMock(text="1. Синяя куртка")]
+            return m
+
+        mock_pool = MagicMock()
+        mock_pool.create_message = mock_create_message
+
+        with patch("core.anthropic_client.get_anthropic_pool", return_value=mock_pool):
+            result = await build_shopping_list(user, items, redis)
+
+        assert captured, "Claude должен был быть вызван"
+        prompt = captured[0]["messages"][0]["content"]
+        assert "Детский" in prompt
