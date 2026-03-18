@@ -47,11 +47,11 @@ def test_import_menu():
 
 def test_import_text():
     from bot.handlers import text
+    from core.permissions import get_limit
     assert hasattr(text, "handle_text")
-    assert hasattr(text, "CHAT_LIMIT_FREE")
-    assert hasattr(text, "CHAT_LIMIT_PREMIUM")
-    assert text.CHAT_LIMIT_FREE == 5
-    assert text.CHAT_LIMIT_PREMIUM == 20
+    # Лимиты чата теперь в core.permissions, не как константы в text.py
+    assert get_limit("chat_per_day", "free") == 3
+    assert get_limit("chat_per_day", "premium") == 20
 
 
 # ── Services ──────────────────────────────────────────────────────────────
@@ -236,24 +236,18 @@ def test_stripe_provider_importable():
 
 def test_yukassa_stub_importable():
     from billing.yukassa_provider import YuKassaProvider
+    import asyncio, pytest
     p = YuKassaProvider()
-    import pytest
     with pytest.raises(NotImplementedError):
-        import asyncio
-        asyncio.get_event_loop().run_until_complete(
-            p.create_invoice("1", "premium", "monthly")
-        )
+        asyncio.run(p.create_invoice("1", "premium", "monthly"))
 
 
 def test_paddle_stub_importable():
     from billing.paddle_provider import PaddleProvider
+    import asyncio, pytest
     p = PaddleProvider()
-    import pytest
     with pytest.raises(NotImplementedError):
-        import asyncio
-        asyncio.get_event_loop().run_until_complete(
-            p.create_invoice("1", "premium", "monthly")
-        )
+        asyncio.run(p.create_invoice("1", "premium", "monthly"))
 
 
 def test_stars_billing_handlers_importable():
@@ -310,9 +304,7 @@ def test_yukassa_not_available_by_default():
     import asyncio, pytest
     p = YuKassaProvider()
     with pytest.raises(NotImplementedError):
-        asyncio.get_event_loop().run_until_complete(
-            p.create_invoice("1", "premium", "monthly")
-        )
+        asyncio.run(p.create_invoice("1", "premium", "monthly"))
 
 
 def test_paddle_not_available_by_default():
@@ -321,9 +313,7 @@ def test_paddle_not_available_by_default():
     import asyncio, pytest
     p = PaddleProvider()
     with pytest.raises(NotImplementedError):
-        asyncio.get_event_loop().run_until_complete(
-            p.create_invoice("1", "premium", "monthly")
-        )
+        asyncio.run(p.create_invoice("1", "premium", "monthly"))
 
 
 def test_trial_activation_in_wardrobe():
