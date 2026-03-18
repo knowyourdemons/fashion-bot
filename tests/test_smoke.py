@@ -343,9 +343,10 @@ def test_limits_in_text_handler():
 
 def test_brief_by_day_gate():
     """generate_brief пропускает дни без брифа."""
-    import inspect
-    from worker.tasks.morning_brief import generate_brief
-    src = inspect.getsource(generate_brief)
+    import os
+    src_path = os.path.join(os.path.dirname(__file__), "..", "worker", "tasks", "morning_brief.py")
+    with open(os.path.abspath(src_path)) as f:
+        src = f.read()
     assert "is_brief_day" in src, "бриф должен проверять день недели"
 
 
