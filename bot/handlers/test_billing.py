@@ -31,23 +31,35 @@ async def _show_test_menu(
     ep = get_effective_plan(user)
     trial_days = get_trial_days_left(user)
     expire_days = days_until_expiry(user)
+    expires = getattr(user, "plan_expires_at", None)
+    provider = getattr(user, "payment_provider", None)
 
-    lines = ["🧪 Test Subscribe Menu\n"]
-    lines.append(f"Plan: <b>{ep}</b>  |  DB plan: {getattr(user, 'plan', '?')}")
-
-    if is_trial_active(user) and trial_days is not None:
-        lines.append(f"Trial: активен · осталось {trial_days} дн.")
-    elif getattr(user, "trial_ends_at", None):
-        lines.append("Trial: истёк")
+    # ФИКС 1: статус с эмодзи
+    if ep == "admin":
+        status_emoji = "👑"
+    elif ep == "premium" and is_trial_active(user):
+        status_emoji = "🟡"  # trial
+    elif ep == "premium":
+        status_emoji = "🟢"  # полноценный premium
     else:
-        lines.append("Trial: нет")
+        status_emoji = "🔴"  # free
+
+    trial_str = (
+        f"активен · {trial_days} дн. осталось" if trial_days
+        else ("истёк" if getattr(user, "trial_ends_at", None) else "нет")
+    )
+
+    lines = [
+        "🧪 Тест подписки\n",
+        f"{status_emoji} effective_plan: <b>{ep}</b>",
+        f"plan в БД: {getattr(user, 'plan', '?')}",
+        f"trial: {trial_str}",
+        f"plan_expires: {str(expires)[:16] if expires else 'нет'}",
+        f"provider: {provider or 'нет'}",
+    ]
 
     if expire_days is not None:
-        lines.append(f"Подписка: до истечения {expire_days} дн.")
-
-    lines.append(f"\nLimits (plan={ep}):")
-    for key in ("photos_per_day", "chat_per_day", "outfit_req_per_day", "wardrobe_size"):
-        lines.append(f"  {key}: {get_limit(key, ep)}")
+        lines.append(f"до истечения: {expire_days} дн.")
 
     if result_msg:
         lines.append(f"\n✅ {result_msg}")
@@ -171,12 +183,35 @@ async def handle_test_subscribe_action(update: Update, context: ContextTypes.DEF
 
     # ── Показать лимиты ────────────────────────────────────────────────────
     elif action == "limits":
-        from core.permissions import get_effective_plan, get_limit, LIMITS
-        ep = get_effective_plan(user)
-        lines = [f"Лимиты для плана <b>{ep}</b>:"]
-        for k, v in LIMITS.get(ep, LIMITS["free"]).items():
-            lines.append(f"  {k}: {v}")
-        await query.message.reply_text("\n".join(lines), parse_mode="HTML")
+        from core.permissions import LIMITS
+
+        # ФИКС 2: сравнение всех планов
+        brief_label = {
+            str([1, 3]): "вт/чт",
+            str([0, 1, 2, 3, 4, 5, 6]): "каждый день",
+        }
+        lines = ["📊 Сравнение лимитов:\n"]
+        for plan_name, emoji in (("free", "🔴"), ("premium", "🟢"), ("ultra", "💎")):
+            lim = LIMITS[plan_name]
+            bd = brief_label.get(str(lim["brief_days"]), str(lim["brief_days"]))
+            lines.append(
+                f"{'—'*18}\n"
+                f"{emoji} <b>{plan_name.upper()}</b>\n"
+                f"  📸 фото/день: {lim['photos_per_day']}\n"
+                f"  👗 гардероб: {lim['wardrobe_size']} вещей\n"
+                f"  ⭐ оценки/день: {lim['rate_per_day']}\n"
+                f"  💬 чат/день: {lim['chat_per_day']}\n"
+                f"  🌤 образ дня: {lim['outfit_req_per_day']}\n"
+                f"  📅 бриф: {bd}\n"
+                f"  👧 детей: {lim['children_max']}"
+            )
+        await query.message.reply_text(
+            "\n".join(lines),
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("◀️ Назад", callback_data="ts:refresh"),
+            ]]),
+        )
         return
 
     # ── Запустить expiry уведомление (только для текущего пользователя) ────
@@ -233,12 +268,22 @@ async def handle_test_subscribe_action(update: Update, context: ContextTypes.DEF
     elif action == "stars_test":
         from telegram import LabeledPrice
         from core.permissions import PRICES
-        price = PRICES["premium_monthly"]
+
+        plan_key = "premium_monthly"
+        price = PRICES[plan_key]
+
+        # ФИКС 3: красивое сообщение перед invoice
+        await query.message.reply_text(
+            f"⭐ Тест Stars оплаты\n\n"
+            f"План: {price['label_usd']}\n"
+            f"Стоимость: {price['stars']} Telegram Stars\n\n"
+            f"👇 Нажми кнопку ниже чтобы оплатить:"
+        )
         await context.bot.send_invoice(
             chat_id=query.message.chat_id,
             title="Касси Premium (тест)",
             description=price["label_usd"],
-            payload=f"premium:premium_monthly:{user.telegram_id}",
+            payload=f"test:premium:{plan_key}:{user.telegram_id}",
             provider_token="",
             currency="XTR",
             prices=[LabeledPrice("Premium", price["stars"])],
