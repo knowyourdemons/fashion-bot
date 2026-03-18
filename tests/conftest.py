@@ -16,16 +16,23 @@ _mock_if_missing(
     "structlog",
     "redis", "redis.asyncio",
     "sentry_sdk", "sentry_sdk.integrations", "sentry_sdk.integrations.fastapi",
-    "pydantic_settings",
     "worker.fast_worker",
 )
-# httpx: import real package if available; mock only if truly missing.
-# Mocking httpx as MagicMock causes metaclass conflicts in starlette.testclient.
-if "httpx" not in sys.modules:
-    try:
-        import httpx as _httpx_real  # noqa: F401
-    except ImportError:
-        sys.modules["httpx"] = MagicMock()
+
+# Packages that cause issues when mocked but ARE installed in Docker:
+# httpx      → metaclass conflict in starlette.testclient
+# pydantic_settings → config.Settings(BaseSettings) inherits MagicMock, breaking DB URL
+# Try real imports first; only mock if the package is truly absent.
+def _try_real_import(*names: str) -> None:
+    for name in names:
+        if name not in sys.modules:
+            try:
+                import importlib
+                importlib.import_module(name)
+            except ImportError:
+                sys.modules[name] = MagicMock()
+
+_try_real_import("httpx", "pydantic_settings")
 
 # pytz нужно мокировать отдельно: telegram.constants импортирует UTC из pytz,
 # и если UTC будет MagicMock — datetime.datetime(tzinfo=UTC) упадёт с TypeError.
