@@ -78,7 +78,11 @@ async def handle_subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     effective_plan = get_effective_plan(user)
 
     if effective_plan == "admin":
-        await update.message.reply_text("👑 Admin план!")
+        await update.message.reply_text(
+            "👑 Admin план\n\n"
+            "Для тестирования платёжного флоу используй:\n"
+            "/test_subscribe"
+        )
         return
 
     # Защита от двойной оплаты

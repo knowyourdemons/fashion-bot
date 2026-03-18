@@ -37,9 +37,9 @@ async def run() -> None:
                 f"Касси скучает по тебе! 🌸\n\n"
                 f"14 дней пролетели незаметно...\n"
                 f"Выбери план чтобы продолжить:\n\n"
-                f"📅 {PRICES['premium_monthly']['label']}\n"
-                f"📅 {PRICES['premium_quarterly']['label']}\n"
-                f"📅 {PRICES['premium_yearly']['label']}\n"
+                f"📅 {PRICES['premium_monthly']['label_usd']}\n"
+                f"📅 {PRICES['premium_quarterly']['label_usd']}\n"
+                f"📅 {PRICES['premium_yearly']['label_usd']}\n"
             )
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("✨ Выбрать план", callback_data="show_upgrade")],
@@ -57,3 +57,25 @@ async def run() -> None:
                 user_id=str(user.id), error=str(e))
 
     logger.info("subscription_expiry.run", notified=count)
+
+
+async def notify_single_user_trial_expiry(telegram_id: int) -> None:
+    """Отправить уведомление об окончании trial одному пользователю (для теста)."""
+    from config import settings
+    from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton
+    from core.permissions import PRICES
+
+    bot = Bot(token=settings.telegram_bot_token)
+    text = (
+        f"Касси скучает по тебе! 🌸\n\n"
+        f"14 дней пролетели незаметно...\n"
+        f"Выбери план чтобы продолжить:\n\n"
+        f"📅 {PRICES['premium_monthly']['label_usd']}\n"
+        f"📅 {PRICES['premium_quarterly']['label_usd']}\n"
+        f"📅 {PRICES['premium_yearly']['label_usd']}\n"
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✨ Выбрать план", callback_data="show_upgrade")],
+        [InlineKeyboardButton("Остаться на Free", callback_data="stay_free")],
+    ])
+    await bot.send_message(chat_id=telegram_id, text=text, reply_markup=keyboard)

@@ -11,6 +11,9 @@ def create_application() -> Application:
     app = Application.builder().token(settings.telegram_bot_token).build()
 
     from bot.handlers import wardrobe, feedback, billing, help, text, debug, brief
+    from bot.handlers.test_billing import (
+        handle_test_subscribe, handle_test_subscribe_action,
+    )
     from bot.handlers.onboarding import build_conversation_handler
     from bot.handlers.menu import get_main_menu
     from bot.handlers.profile import handle_profile
@@ -26,6 +29,7 @@ def create_application() -> Application:
 
     # Command handlers
     app.add_handler(CommandHandler("debug_reset", debug.handle_debug_reset))
+    app.add_handler(CommandHandler("test_subscribe", handle_test_subscribe))
     app.add_handler(CommandHandler("help", help.handle_help))
     app.add_handler(CommandHandler("wardrobe", wardrobe.handle_list))
     app.add_handler(CommandHandler("subscribe", billing.handle_subscribe))
@@ -46,6 +50,9 @@ def create_application() -> Application:
         MessageHandler(filters.TEXT & filters.Regex("^❓ Помощь$"), help.handle_help),
         group=1,
     )
+
+    # Test billing callbacks (ts:*)
+    app.add_handler(CallbackQueryHandler(handle_test_subscribe_action, pattern="^ts:"))
 
     # Callback queries (кнопки)
     app.add_handler(CallbackQueryHandler(brief.handle_brief_feedback, pattern="^brief_feedback:"))
