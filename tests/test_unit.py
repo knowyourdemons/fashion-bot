@@ -438,9 +438,12 @@ class TestPermissions:
         assert days_until_expiry(u) is None
 
     def test_admin_по_telegram_id(self):
+        from unittest.mock import patch
         from core.permissions import get_effective_plan
         u = self._make_user("free", telegram_id=195169)
-        assert get_effective_plan(u) == "admin"
+        with patch("core.permissions.settings") as mock_settings:
+            mock_settings.admin_ids_list = [195169]
+            assert get_effective_plan(u) == "admin"
 
     def test_лимиты_free(self):
         from core.permissions import get_limit

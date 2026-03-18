@@ -16,11 +16,19 @@ _mock_if_missing(
     "structlog",
     "httpx",
     "redis", "redis.asyncio",
-    "pytz",
     "sentry_sdk", "sentry_sdk.integrations", "sentry_sdk.integrations.fastapi",
     "pydantic_settings",
     "worker.fast_worker",
 )
+
+# pytz нужно мокировать отдельно: telegram.constants импортирует UTC из pytz,
+# и если UTC будет MagicMock — datetime.datetime(tzinfo=UTC) упадёт с TypeError.
+if "pytz" not in sys.modules:
+    import datetime as _dt
+    _pytz_mock = MagicMock()
+    _pytz_mock.UTC = _dt.timezone.utc  # реальный UTC, не MagicMock
+    _pytz_mock.timezone = lambda tz: _dt.timezone.utc  # fallback для pytz.timezone("Europe/...")
+    sys.modules["pytz"] = _pytz_mock
 
 # config.settings должен быть реальным объектом, не MagicMock,
 # чтобы не сломать тесты permissions (которые его импортируют напрямую).
