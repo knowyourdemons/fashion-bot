@@ -66,6 +66,22 @@ def test_import_image_builder():
     assert isinstance(THUMB_SIZE, int)
 
 
+def test_adult_silhouette_exists():
+    from services.image_builder import _draw_adult_silhouette
+    assert callable(_draw_adult_silhouette)
+
+
+def test_make_placeholder_adult():
+    from services.image_builder import _make_placeholder, THUMB_SIZE
+    ph = _make_placeholder("top", "верх", adult=True)
+    assert ph.size == (THUMB_SIZE, THUMB_SIZE)
+    # Взрослый силуэт не должен быть пустым
+    pixels = list(ph.getdata())
+    bg = (240, 238, 240)
+    non_bg = [p for p in pixels if tuple(p[:3]) != bg]
+    assert len(non_bg) > 100, f"Взрослый силуэт 'top' почти пустой ({len(non_bg)} пикс)"
+
+
 def test_import_image_processor():
     from services.image_processor import preprocess, remove_background, compute_phash
     assert callable(preprocess)

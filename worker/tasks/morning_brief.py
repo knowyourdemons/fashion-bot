@@ -479,6 +479,198 @@ async def schedule_all() -> None:
     logger.info("morning_brief.schedule_all", count=count, hour=datetime.utcnow().hour)
 
 
+# ── Взрослый бриф ──────────────────────────────────────────────────────────
+
+_REGIME_OUTER_ADVICE = {
+    "сильный_мороз": "тёплое пальто или пуховик",
+    "мороз":         "тёплая куртка или пальто",
+    "холодно":       "куртка или тренч",
+    "прохладно":     "лёгкая куртка или кардиган",
+    "тепло":         "лёгкий жакет или без верхней одежды",
+    "жара":          "лёгкий образ без верхней одежды",
+}
+
+
+async def _generate_adult_brief(user, payload: dict) -> dict:
+    """Бриф для взрослых: погода + совет стилиста через Haiku + коллаж."""
+    import redis.asyncio as aioredis
+    from db.base import AsyncWriteSession, AsyncReadSession
+    from db.crud.wardrobe import get_owner_items
+    from db.crud.brief_log import create_log
+    from core.queue import RedisQueue, QueuePriority
+    from core.anthropic_client import get_anthropic_pool
+    from services.image_builder import build_collage
+    from worker.tasks.style_config import (
+        get_placeholder_label, get_temp_regime, COLORTYPE_PALETTES, _needs_tights,
+    )
+
+    # Погода
+    coords = await _geocode_city(user.city or "")
+    weather = {}
+    if coords:
+        weather = await _get_weather(coords[0], coords[1], user.timezone or "Europe/Vilnius")
+
+    today = date.today()
+    temp_m = weather.get("temp_morning") or 10.0
+    temp_e = weather.get("temp_evening") or temp_m
+    sm = "+" if temp_m >= 0 else ""
+    se = "+" if temp_e >= 0 else ""
+    weather_line = f"🌡 {user.city}: {sm}{temp_m:.0f}°C → вечером {se}{temp_e:.0f}°C" if user.city else ""
+
+    regime = _get_temp_regime(temp_m)
+    colortype = getattr(user, "colortype", None) or "default"
+
+    # Гардероб пользователя
+    async with AsyncReadSession() as session:
+        items = await get_owner_items(session, user.id, "user")
+
+    # Совет стилиста через Haiku
+    outer_advice = _REGIME_OUTER_ADVICE.get(regime, "куртка")
+
+    if items:
+        wardrobe_context = ", ".join(
+            f"{i.type} {i.color}" for i in
+            sorted(items, key=lambda x: float(x.score_item or 0), reverse=True)[:10]
+        )
+        prompt = (
+            f"Погода: {sm}{temp_m:.0f}°C, {regime}. "
+            f"Цветотип: {colortype}. "
+            f"Гардероб: {wardrobe_context}. "
+            f"Дай короткий (2-3 предложения) совет по образу на день "
+            f"используя вещи из гардероба. Говори на русском, тон дружелюбный."
+        )
+    else:
+        palette = COLORTYPE_PALETTES.get(colortype, COLORTYPE_PALETTES.get("default", {}))
+        top_colors = palette.get("top", ["нейтральный"])
+        outer_colors = palette.get("outerwear", ["нейтральный"])
+        color_hint = f"{top_colors[0]} верх и {outer_colors[0]} {outer_advice}"
+        prompt = (
+            f"Погода: {sm}{temp_m:.0f}°C, {regime}. "
+            f"Цветотип: {colortype}. "
+            f"Дай короткий (2-3 предложения) совет по образу на день. "
+            f"Рекомендуй {color_hint}. Говори на русском, тон дружелюбный."
+        )
+
+    pool = get_anthropic_pool()
+    try:
+        advice_resp = await pool.create_message(
+            model="claude-haiku-4-5-20251001",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=256,
+        )
+        stylist_advice = advice_resp.content[0].text.strip()
+    except Exception as e:
+        logger.warning("brief.adult.haiku_failed", error=str(e))
+        stylist_advice = f"Сегодня {sm}{temp_m:.0f}°C — выбери {outer_advice} ✨"
+
+    # Приветствие
+    _hour = datetime.now().hour
+    if _hour < 12:
+        greeting = "Доброе утро"
+    elif _hour < 18:
+        greeting = "Добрый день"
+    else:
+        greeting = "Добрый вечер"
+
+    brief_text = f"🌅 {greeting}, {user.name}!\n"
+    if weather_line:
+        brief_text += f"{weather_line}\n\n"
+    brief_text += f"👗 Совет дня:\n{stylist_advice}"
+    if not items:
+        brief_text += "\n\n📸 Добавь вещи в гардероб — буду подбирать образы каждое утро!"
+
+    # Коллаж из вещей пользователя
+    outfit_slots: list[dict] = []
+    if items:
+        season = _SEASONS[today.month]
+        slot_order = ["outerwear", "top", "bottom", "one_piece", "footwear", "accessory"]
+        seen_cg: set = set()
+        outfit: dict = {}
+        for item in sorted(items, key=lambda x: float(x.score_item or 0), reverse=True):
+            cg = item.category_group
+            if cg not in seen_cg and cg in slot_order:
+                outfit[cg] = item
+                seen_cg.add(cg)
+
+        for slot in slot_order:
+            if slot == "outerwear" and temp_m >= 20:
+                continue
+            if slot in ("top", "bottom") and outfit.get("one_piece"):
+                continue
+            if slot == "one_piece" and (outfit.get("top") or outfit.get("bottom")):
+                continue
+
+            item = outfit.get(slot)
+            if item and getattr(item, "show_in_collage", True):
+                outfit_slots.append({
+                    "slot": slot,
+                    "label": f"{item.type} {item.color}"[:20],
+                    "photo_id": item.photo_id,
+                    "photo_url": item.photo_url,
+                    "has_item": True,
+                    "adult": True,
+                })
+            else:
+                ph_label = get_placeholder_label(slot, colortype, regime)
+                if ph_label is None:
+                    continue
+                color_part = ph_label.split(" — ", 1)[1] if " — " in ph_label else "(нет в гардеробе)"
+                outfit_slots.append({
+                    "slot": slot,
+                    "short_label": slot,
+                    "label": color_part,
+                    "photo_id": None,
+                    "photo_url": None,
+                    "has_item": False,
+                    "adult": True,
+                })
+
+    collage_bytes_val = None
+    if outfit_slots:
+        try:
+            collage_bytes_val = await build_collage(outfit_slots=outfit_slots)
+        except Exception as e:
+            logger.warning("brief.adult.collage_failed", error=str(e))
+
+    # Сохранить BriefLog
+    async with AsyncWriteSession() as session:
+        log = await create_log(
+            session,
+            user_id=user.id,
+            date=today,
+            weather_summary=weather_line,
+            outfit_description=brief_text,
+            outfit_items=[],
+            is_wow=False,
+        )
+        await session.commit()
+        brief_id = str(log.id)
+
+    # Push send task
+    redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    try:
+        queue = RedisQueue(redis_client)
+        await queue.push(
+            "send_morning_brief",
+            {
+                "telegram_id": user.telegram_id,
+                "text": brief_text,
+                "brief_id": brief_id,
+                "is_adult": True,
+                "collage_bytes_b64": (
+                    __import__("base64").b64encode(collage_bytes_val).decode()
+                    if collage_bytes_val else None
+                ),
+            },
+            priority=QueuePriority.HIGH,
+        )
+    finally:
+        await redis_client.aclose()
+
+    logger.info("morning_brief.adult_generated", user_id=str(user.id), brief_id=brief_id)
+    return {"brief_id": brief_id}
+
+
 # ── Worker tasks ───────────────────────────────────────────────────────────
 
 @register("generate_brief")
@@ -508,10 +700,10 @@ async def generate_brief(payload: dict) -> dict:
         logger.warning("brief.generate.user_not_found", user_id=str(user_id))
         return {}
 
-    # TODO: бриф для взрослых (no_kids/pregnant)
-    if user.segment not in ("mom_girl", "mom_boy"):
-        logger.info("brief.generate.skipped_adult", user_id=str(user_id))
-        return {}
+    is_adult_brief = user.segment not in ("mom_girl", "mom_boy")
+
+    if is_adult_brief:
+        return await _generate_adult_brief(user, payload)
 
     children = [c for c in (user.children or []) if c.deleted_at is None]
     if not children:
@@ -741,9 +933,12 @@ async def generate_brief(payload: dict) -> dict:
 @register("send_morning_brief")
 async def send_morning_brief(payload: dict) -> dict:
     """Отправляет Morning Brief через Telegram Bot API (httpx)."""
+    import base64 as _b64
+
     telegram_id = payload["telegram_id"]
     text = payload["text"]
     brief_id = payload["brief_id"]
+    is_adult = payload.get("is_adult", False)
 
     reply_markup = {
         "inline_keyboard": [[
@@ -754,33 +949,42 @@ async def send_morning_brief(payload: dict) -> dict:
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            # Пробуем собрать коллаж
-            collage_photo_ids = payload.get("collage_photo_ids", [])
-            collage_labels = payload.get("collage_labels", [])
-            collage_photo_urls = payload.get("collage_photo_urls")
             collage_bytes = None
 
-            outfit_slots = payload.get("outfit_slots")
-            if outfit_slots:
-                try:
-                    from services.image_builder import build_collage
-                    collage_bytes = await build_collage(outfit_slots=outfit_slots)
-                except Exception as e:
-                    logger.warning("morning_brief.collage_failed", error=str(e))
-            elif collage_photo_ids:
-                try:
-                    from services.image_builder import build_collage
-                    collage_bytes = await build_collage(
-                        photo_ids=collage_photo_ids,
-                        labels=collage_labels,
-                        photo_urls=collage_photo_urls,
-                    )
-                except Exception as e:
-                    logger.warning("morning_brief.collage_failed", error=str(e))
+            if is_adult:
+                # Взрослый бриф: коллаж уже собран и закодирован в base64
+                collage_b64 = payload.get("collage_bytes_b64")
+                if collage_b64:
+                    try:
+                        collage_bytes = _b64.b64decode(collage_b64)
+                    except Exception as e:
+                        logger.warning("morning_brief.adult.decode_failed", error=str(e))
+            else:
+                # Детский бриф: собираем коллаж из outfit_slots или photo_ids
+                collage_photo_ids = payload.get("collage_photo_ids", [])
+                collage_labels = payload.get("collage_labels", [])
+                collage_photo_urls = payload.get("collage_photo_urls")
+
+                outfit_slots = payload.get("outfit_slots")
+                if outfit_slots:
+                    try:
+                        from services.image_builder import build_collage
+                        collage_bytes = await build_collage(outfit_slots=outfit_slots)
+                    except Exception as e:
+                        logger.warning("morning_brief.collage_failed", error=str(e))
+                elif collage_photo_ids:
+                    try:
+                        from services.image_builder import build_collage
+                        collage_bytes = await build_collage(
+                            photo_ids=collage_photo_ids,
+                            labels=collage_labels,
+                            photo_urls=collage_photo_urls,
+                        )
+                    except Exception as e:
+                        logger.warning("morning_brief.collage_failed", error=str(e))
 
             if collage_bytes:
                 # Отправляем фото с caption и кнопками
-                import base64 as _b64
                 resp = await client.post(
                     f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendPhoto",
                     data={

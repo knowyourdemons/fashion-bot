@@ -232,6 +232,67 @@ def _draw_silhouette(draw: ImageDraw.ImageDraw, slot: str,
         draw.rounded_rectangle([pad, pad, size - pad, size - pad], radius=20, fill=color)
 
 
+def _draw_adult_silhouette(draw: ImageDraw.ImageDraw, slot: str,
+                           size: int = 300, color: tuple = SILHOUETTE_CLR) -> None:
+    """Рисует взрослый силуэт одежды на size×size холсте (вытянутые пропорции)."""
+    cx = size // 2
+
+    if slot == "outerwear":
+        # Длинное пальто/тренч
+        draw.rounded_rectangle([cx-60, 60, cx+60, 240], radius=15, fill=color)
+        draw.rounded_rectangle([cx-95, 65, cx-55, 170], radius=10, fill=color)
+        draw.rounded_rectangle([cx+55, 65, cx+95, 170], radius=10, fill=color)
+        draw.polygon([
+            (cx-20, 60), (cx+20, 60), (cx+10, 95), (cx-10, 95)
+        ], fill=(230, 225, 232))
+
+    elif slot == "top":
+        # Женская блузка/свитер
+        draw.rounded_rectangle([cx-50, 80, cx+50, 210], radius=12, fill=color)
+        draw.rounded_rectangle([cx-85, 80, cx-45, 185], radius=8, fill=color)
+        draw.rounded_rectangle([cx+45, 80, cx+85, 185], radius=8, fill=color)
+        draw.polygon([(cx-20, 78), (cx+20, 78), (cx, 110)], fill=(240, 238, 240))
+
+    elif slot == "bottom":
+        # Женские брюки
+        draw.rounded_rectangle([cx-50, 70, cx+50, 100], radius=8, fill=color)
+        draw.rounded_rectangle([cx-48, 95, cx-5, 240], radius=10, fill=color)
+        draw.rounded_rectangle([cx+5, 95, cx+48, 240], radius=10, fill=color)
+
+    elif slot == "one_piece":
+        # Платье
+        draw.rounded_rectangle([cx-48, 60, cx+48, 145], radius=10, fill=color)
+        draw.polygon([
+            (cx-48, 140), (cx+48, 140), (cx+80, 250), (cx-80, 250)
+        ], fill=color)
+        draw.rectangle([cx-30, 55, cx-15, 70], fill=color)
+        draw.rectangle([cx+15, 55, cx+30, 70], fill=color)
+
+    elif slot == "footwear":
+        # Женская обувь (туфли)
+        draw.ellipse([cx-60, 200, cx+60, 230], fill=color)
+        draw.rounded_rectangle([cx-55, 155, cx+45, 210], radius=18, fill=color)
+        draw.rounded_rectangle([cx+25, 205, cx+45, 240], radius=5, fill=color)
+        draw.ellipse([cx+20, 175, cx+65, 215], fill=color)
+
+    elif slot in ("accessory", "hat"):
+        # Женская шляпа
+        draw.ellipse([cx-70, 165, cx+70, 195], fill=color)
+        draw.rounded_rectangle([cx-45, 100, cx+45, 175], radius=12, fill=color)
+
+    elif slot in ("tights", "base_layer"):
+        # Колготки
+        draw.polygon([(cx-35, 60), (cx+35, 60), (cx+30, 110), (cx-30, 110)], fill=color)
+        draw.rounded_rectangle([cx-33, 105, cx-3, 245], radius=8, fill=color)
+        draw.rounded_rectangle([cx+3, 105, cx+33, 245], radius=8, fill=color)
+        draw.ellipse([cx-37, 235, cx+1, 255], fill=color)
+        draw.ellipse([cx+1, 235, cx+37, 255], fill=color)
+
+    else:
+        pad = size // 6
+        draw.rounded_rectangle([pad, pad, size - pad, size - pad], radius=20, fill=color)
+
+
 _SLOT_LABELS_RU = {
     "outerwear": "добавь куртку",
     "top":       "добавь верх",
@@ -245,11 +306,15 @@ _SLOT_LABELS_RU = {
 }
 
 
-def _make_placeholder(slot: str, label: str, size: int = THUMB_SIZE) -> Image.Image:
-    """Ячейка-плейсхолдер: детский силуэт на сером фоне."""
+def _make_placeholder(slot: str, label: str, size: int = THUMB_SIZE,
+                      adult: bool = False) -> Image.Image:
+    """Ячейка-плейсхолдер: силуэт на сером фоне (adult=True → взрослые пропорции)."""
     img = Image.new("RGBA", (size, size), PLACEHOLDER_BG + (255,))
     draw = ImageDraw.Draw(img)
-    _draw_silhouette(draw, slot, size)
+    if adult:
+        _draw_adult_silhouette(draw, slot, size)
+    else:
+        _draw_silhouette(draw, slot, size)
 
     try:
         font = ImageFont.truetype(
@@ -344,6 +409,7 @@ async def build_collage(
                 slot_key = slot_data.get("slot", "top")
                 lbl = slot_data.get("label") or ""
 
+                is_adult = slot_data.get("adult", False)
                 if slot_data.get("has_item"):
                     photo_bytes = await _download_photo(
                         client,
@@ -359,11 +425,11 @@ async def build_collage(
                         except Exception as e:
                             logger.warning("image_builder.decode_failed", error=str(e))
                     # Не удалось скачать → плейсхолдер
-                    ph = _make_placeholder(slot_key, lbl)
+                    ph = _make_placeholder(slot_key, lbl, adult=is_adult)
                     thumbs.append(ph)
                     final_labels.append(lbl)
                 else:
-                    ph = _make_placeholder(slot_key, lbl)
+                    ph = _make_placeholder(slot_key, lbl, adult=is_adult)
                     thumbs.append(ph)
                     final_labels.append(lbl)
     else:
