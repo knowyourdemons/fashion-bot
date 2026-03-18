@@ -9,6 +9,8 @@ def create_application() -> Application:
 
     from bot.handlers import wardrobe, feedback, billing, help, text, debug, brief
     from bot.handlers.onboarding import build_conversation_handler
+    from bot.handlers.menu import get_main_menu
+    from bot.handlers.profile import handle_profile
     from bot.middleware.auth import AuthMiddleware
     from bot.middleware.typing import TypingMiddleware
 
@@ -31,6 +33,18 @@ def create_application() -> Application:
     app.add_handler(MessageHandler(filters.PHOTO, wardrobe.handle_photo))
     app.add_handler(MessageHandler(filters.Document.IMAGE, wardrobe.handle_photo))
 
+    # Кнопки главного меню (group=0, до text стилиста)
+    _menu_filter = (
+        filters.Regex("^👗 Гардероб$")
+        | filters.Regex("^⭐ Оценить образ$")
+        | filters.Regex("^⚙️ Профиль$")
+        | filters.Regex("^❓ Помощь$")
+    )
+    app.add_handler(MessageHandler(filters.Regex("^👗 Гардероб$"), wardrobe.handle_wardrobe_menu))
+    app.add_handler(MessageHandler(filters.Regex("^⭐ Оценить образ$"), wardrobe.handle_rate_mode_text))
+    app.add_handler(MessageHandler(filters.Regex("^⚙️ Профиль$"), handle_profile))
+    app.add_handler(MessageHandler(filters.Regex("^❓ Помощь$"), help.handle_help))
+
     # Callback queries (кнопки)
     app.add_handler(CallbackQueryHandler(brief.handle_brief_feedback, pattern="^brief_feedback:"))
     app.add_handler(CallbackQueryHandler(feedback.handle_feedback, pattern="^feedback:"))
@@ -38,8 +52,10 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(wardrobe.handle_wardrobe_page, pattern="^wardrobe:page:"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_photo_action, pattern="^photo_action:"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_rate_mode, pattern="^rate_mode:"))
+    app.add_handler(CallbackQueryHandler(wardrobe.handle_set_owner, pattern="^set_owner:"))
 
-    # Текстовые сообщения → стилист
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text.handle_text))
+    # Текстовые сообщения → стилист (исключаем кнопки меню)
+    _menu_texts = filters.Regex("^(👗 Гардероб|⭐ Оценить образ|⚙️ Профиль|❓ Помощь)$")
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~_menu_texts, text.handle_text))
 
     return app

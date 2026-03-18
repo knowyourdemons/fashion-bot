@@ -63,6 +63,7 @@ class User(Base):
     # Onboarding
     onboarding_step: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    colortype: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
 
     # Soft delete
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

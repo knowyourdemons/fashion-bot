@@ -432,22 +432,29 @@ async def _upload_crop(
 # ── Определить владельца вещи (пользователь или ребёнок) ───────────────────
 
 async def _get_owner(user, context) -> tuple:
-    cache_key = f"owner:{user.id}"
-    cached = context.bot_data.get(cache_key)
-    if cached:
-        return cached
+    """Получить текущего владельца гардероба. Приоритет: Redis owner_mode → segment."""
+    redis = context.bot_data.get("redis")
+    if redis:
+        try:
+            mode = await redis.get(f"owner_mode:{user.id}")
+            if mode:
+                mode = mode if isinstance(mode, str) else mode.decode()
+                if mode == "user":
+                    return (user.id, "user")
+                elif mode.startswith("child:"):
+                    import uuid as _uuid
+                    child_id = _uuid.UUID(mode[6:])
+                    return (child_id, "child")
+        except Exception:
+            pass
 
     async with AsyncReadSession() as session:
         from db.crud.children import get_children
         children = await get_children(session, user.id)
 
     if user.segment in ("mom_girl", "mom_boy") and children:
-        owner = (children[0].id, "child")
-    else:
-        owner = (user.id, "user")
-
-    context.bot_data[cache_key] = owner
-    return owner
+        return (children[0].id, "child")
+    return (user.id, "user")
 
 
 # ── Загрузить матрицу скоринга для владельца ───────────────────────────────
@@ -937,6 +944,15 @@ async def handle_photo_action(update: Update, context: ContextTypes.DEFAULT_TYPE
             asyncio.create_task(_rate_photos(file_ids, "single", query.message, context.bot, owner_id=owner_id, owner_type=owner_type))
 
 
+
+# ── handle_rate_mode_text (кнопка Оценить образ из меню) ────────────────
+
+async def handle_rate_mode_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "Отправь фото образа — оценю стиль и дам рекомендации!"
+    )
+
+
 # ── Callback: режим оценки ───────────────────────────────────────────────────
 
 async def handle_rate_mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1109,6 +1125,97 @@ async def _process_media_group(
     )
 
 
+
+# ── handle_wardrobe_menu (кнопка Гардероб в меню) ───────────────────────────
+
+async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показать гардероб с кнопкой переключения владельца."""
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    async with AsyncReadSession() as session:
+        from db.crud.children import get_children
+        children = await get_children(session, user.id)
+
+    owner_id, owner_type = await _get_owner(user, context)
+
+    if owner_type == "user":
+        owner_name = user.name
+    else:
+        child = next((c for c in children if c.id == owner_id), None)
+        owner_name = child.name if child else "Ребёнок"
+
+    buttons = []
+    if children:
+        if owner_type == "user":
+            for child in children:
+                buttons.append([InlineKeyboardButton(
+                    f"Переключить на {child.name}",
+                    callback_data=f"set_owner:child:{child.id}"
+                )])
+        else:
+            buttons.append([InlineKeyboardButton(
+                "👤 Мои вещи",
+                callback_data="set_owner:user"
+            )])
+            for child in (c for c in children if c.id != owner_id):
+                buttons.append([InlineKeyboardButton(
+                    f"Переключить на {child.name}",
+                    callback_data=f"set_owner:child:{child.id}"
+                )])
+
+    header_msg = f"👗 Гардероб: *{owner_name}*"
+    markup = InlineKeyboardMarkup(buttons) if buttons else None
+    await update.message.reply_text(header_msg, parse_mode="Markdown", reply_markup=markup)
+
+    await _show_wardrobe_page(update.message, user, 0, owner_id=owner_id, owner_type=owner_type)
+
+    usage = get_usage_str(user)
+    if usage:
+        await update.message.reply_text(usage)
+
+
+async def handle_set_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: переключить владельца гардероба."""
+    query = update.callback_query
+    await query.answer()
+
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    redis = context.bot_data.get("redis")
+    parts = query.data.split(":", 2)  # set_owner:user OR set_owner:child:{uuid}
+    new_mode = parts[1]
+
+    if new_mode == "user":
+        owner_id, owner_type = user.id, "user"
+        owner_name = user.name
+        redis_val = "user"
+    else:
+        import uuid as _uuid
+        child_id = _uuid.UUID(parts[2])
+        owner_id, owner_type = child_id, "child"
+        redis_val = f"child:{child_id}"
+        async with AsyncReadSession() as session:
+            from db.crud.children import get_children
+            children = await get_children(session, user.id)
+        child = next((c for c in children if c.id == child_id), None)
+        owner_name = child.name if child else "Ребёнок"
+
+    if redis:
+        try:
+            await redis.set(f"owner_mode:{user.id}", redis_val, ex=86400 * 30)
+        except Exception as e:
+            logger.error("set_owner.redis_failed", error=str(e))
+
+    await query.message.reply_text(
+        f"✅ Гардероб переключён на *{owner_name}*", parse_mode="Markdown"
+    )
+    await _show_wardrobe_page(query.message, user, 0, owner_id=owner_id, owner_type=owner_type)
+
+
 # ── handle_list ─────────────────────────────────────────────────────────────
 
 async def handle_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1133,10 +1240,12 @@ async def handle_wardrobe_page(update: Update, context: ContextTypes.DEFAULT_TYP
     await _show_wardrobe_page(query.message, user, page)
 
 
-async def _show_wardrobe_page(message, user, page: int) -> None:
+async def _show_wardrobe_page(message, user, page: int, owner_id=None, owner_type="user") -> None:
     try:
+        if owner_id is None:
+            owner_id = user.id
         async with AsyncReadSession() as session:
-            items = await get_owner_items(session, user.id, "user")
+            items = await get_owner_items(session, owner_id, owner_type)
 
         if not items:
             await message.reply_text(t("wardrobe.empty"))
