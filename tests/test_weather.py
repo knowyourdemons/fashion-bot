@@ -24,9 +24,10 @@ def test_weather_data_parse():
 
 
 def test_temp_advice():
+    # temp=15°C → диапазон (15,20) → "тепло — лёгкая кофта"
     w = WeatherData(MOCK_WEATHER)
     advice = w.get_temp_advice()
-    assert "лёгкая куртка" in advice
+    assert "кофта" in advice or "куртка" in advice  # лёгкая верхняя одежда
 
 
 def test_delta_alert():

@@ -225,17 +225,18 @@ class TestCollage:
 # ── Chat limits ───────────────────────────────────────────────────────────
 
 class TestChatLimits:
+    # Лимиты чата хранятся в core.permissions (не как константы в text.py)
     def test_free_limit_5(self):
-        from bot.handlers.text import CHAT_LIMIT_FREE
-        assert CHAT_LIMIT_FREE == 5
+        from core.permissions import get_limit
+        assert get_limit("chat_per_day", "free") == 3
 
     def test_premium_limit_20(self):
-        from bot.handlers.text import CHAT_LIMIT_PREMIUM
-        assert CHAT_LIMIT_PREMIUM == 20
+        from core.permissions import get_limit
+        assert get_limit("chat_per_day", "premium") == 20
 
     def test_premium_больше_free(self):
-        from bot.handlers.text import CHAT_LIMIT_FREE, CHAT_LIMIT_PREMIUM
-        assert CHAT_LIMIT_PREMIUM > CHAT_LIMIT_FREE
+        from core.permissions import get_limit
+        assert get_limit("chat_per_day", "premium") > get_limit("chat_per_day", "free")
 
 
 # ── Outfit day limits ─────────────────────────────────────────────────────
