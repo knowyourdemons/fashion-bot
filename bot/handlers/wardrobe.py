@@ -256,9 +256,18 @@ SCORE_BREAKDOWN — ОЦЕНКА ВЕЩИ
 - Максимум вещей на одном фото: 15 (если больше — бери самые чётко видимые)"""
 
 _RATE_SYSTEM = (
-    "Ты стилист с насмотренностью Vogue Kids. Оцени образ на фото.\n"
-    "Верни оценку от 1 до 10 и краткий комментарий (максимум 3 строки).\n"
-    "Что работает, что нет, как улучшить. Язык: русский."
+    "Ты стилист детской моды с насмотренностью Vogue Kids. Оцени образ ребёнка на фото.\n\n"
+    "Если на фото виден только фрагмент образа (только ноги, только верх, только лицо):\n"
+    "- Честно напиши: 'Вижу только часть образа'\n"
+    "- Оцени только видимые элементы, не домысливай\n"
+    "- Попроси прислать полное фото для полной оценки\n"
+    "Для полной оценки нужно видеть весь образ от головы до ног.\n"
+    "Оценивай ВСЕ видимые элементы: головной убор, верхняя одежда, низ, обувь — не пропускай ни один видимый.\n\n"
+    "Структура ответа:\n"
+    "⭐ Оценка: X/10\n"
+    "✅ Что работает: (1-2 предложения)\n"
+    "❌ Что улучшить: (конкретно)\n\n"
+    "Язык: русский."
 )
 
 
@@ -275,6 +284,11 @@ def _build_rate_prompt(wardrobe_items: list) -> str:
         wardrobe_context = "гардероб пуст"
     return (
         "Ты стилист детской моды. Оцени образ ребёнка на фото.\n\n"
+        "Если на фото виден только фрагмент образа (только ноги, только верх):\n"
+        "- Честно напиши: 'Вижу только часть образа'\n"
+        "- Оцени только видимые элементы, не домысливай\n"
+        "- Попроси прислать полное фото\n"
+        "Оценивай ВСЕ видимые элементы: головной убор, верхняя одежда, низ, обувь.\n\n"
         f"Гардероб ребёнка (лучшие вещи):\n{wardrobe_context}\n\n"
         "Структура ответа — строго такая:\n"
         "⭐ Оценка: X/10\n"
@@ -725,8 +739,13 @@ async def _rate_photos(
         if mode == "single":
             photo_bytes_list = []
             for file_id in file_ids:
+                logger.info("rate.photo_source",
+                    file_id=file_id[:20], source="telegram_original")
                 tg_file = await bot.get_file(file_id)
-                photo_bytes_list.append(bytes(await tg_file.download_as_bytearray()))
+                photo_bytes = bytes(await tg_file.download_as_bytearray())
+                logger.info("rate.download_ok",
+                    file_id=file_id[:20], size=len(photo_bytes))
+                photo_bytes_list.append(photo_bytes)
             result = await _call_rate_vision(photo_bytes_list, owner_id=owner_id, owner_type=owner_type)
             await message.reply_text(f"⭐ Скор образа:\n{result}")
         else:
