@@ -176,31 +176,40 @@ BBOX — ПЛОТНОЕ ОБРАМЛЕНИЕ ВЕЩИ
 ════════════════════════════════════════════
 
 bbox = нормализованные координаты 0.0–1.0 (x, y — верхний левый угол; w, h — ширина, высота).
-Bbox ПЛОТНО обрамляет конкретную вещь, НЕ захватывает соседние.
+Bbox ПЛОТНО обрамляет ТОЛЬКО эту конкретную вещь.
 
-Размер bbox по типу вещи (СТРОГО соблюдай):
-- носки, трусики, повязка на голову → w ≤ 0.20, h ≤ 0.20
-- шапка, варежки, перчатки, шарф → w ≤ 0.25, h ≤ 0.25
-- футболка, лонгслив, свитер, кофта, штаны, шорты, юбка → 0.20 ≤ w,h ≤ 0.55
-- куртка, пальто, пуховик, платье, комбинезон → 0.30 ≤ w,h ≤ 0.75
-- обувь (кроссовки, ботинки, сандалии) → 0.15 ≤ w,h ≤ 0.40
+РАЗМЕР bbox по типу вещи — СТРОГО соблюдать верхние пределы:
+- носки, трусики, шапка, повязка на голову → w ≤ 0.15, h ≤ 0.15
+- варежки, перчатки, шарф → w ≤ 0.20, h ≤ 0.20
+- футболка, лонгслив, свитер, кофта, свитшот → w 0.20–0.45, h 0.20–0.45
+- штаны, шорты, юбка, леггинсы → w 0.20–0.40, h 0.30–0.60
+- куртка, пальто, пуховик, комбинезон, платье → w 0.30–0.60, h 0.40–0.70
+- обувь (кроссовки, ботинки, сандалии) → w 0.15–0.30, h 0.10–0.25
 
-Правила:
-- 5 вещей на фото → 5 отдельных bbox, каждый tight вокруг своей вещи
-- bbox НЕ пересекается с другими bbox
-- НЕ давай w > 0.8 или h > 0.8 если не одна вещь крупным планом
-- Одна вещь на весь кадр (крупный план) → bbox 0.80–0.98
+ПРАВИЛА — нарушение недопустимо:
+1. bbox обрамляет ТОЛЬКО одну вещь — НЕ захватывать соседние
+2. Если вещь лежит рядом с другой — bbox заканчивается ТАМ ГДЕ НАЧИНАЕТСЯ соседняя
+3. НЕ давай w > 0.70 или h > 0.70 если на фото больше одной вещи
+4. Одна вещь крупным планом на весь кадр → bbox 0.80–0.98
+
+ЦВЕТ — определять ТОЛЬКО по пикселям внутри bbox:
+- Если рядом лежит розовая вещь и она попала в bbox свитшота → это НЕ цвет свитшота
+- Смотреть на основную вещь, игнорировать то что за границей bbox
+- Сомневаешься в цвете → называй по доминирующему пятну внутри bbox
 
 Примеры (КОПИРУЙ этот стиль):
-  Носки в правом нижнем углу → {"x":0.65,"y":0.72,"w":0.18,"h":0.16}
-  Трусики в центре → {"x":0.38,"y":0.40,"w":0.22,"h":0.18}
-  Кофта в центре кадра → {"x":0.18,"y":0.12,"w":0.50,"h":0.55}
-  Штаны слева → {"x":0.05,"y":0.20,"w":0.42,"h":0.58}
+  Носки в правом нижнем углу → {"x":0.65,"y":0.72,"w":0.13,"h":0.12}
+  Трусики в центре → {"x":0.40,"y":0.42,"w":0.14,"h":0.13}
+  Кофта в центре кадра → {"x":0.18,"y":0.12,"w":0.44,"h":0.43}
+  Штаны слева → {"x":0.05,"y":0.20,"w":0.38,"h":0.55}
   Куртка во весь кадр → {"x":0.03,"y":0.02,"w":0.93,"h":0.95}
-  3 вещи рядом (носки+кофта+штаны) →
-    носки: {"x":0.70,"y":0.75,"w":0.15,"h":0.14}
-    кофта: {"x":0.15,"y":0.10,"w":0.45,"h":0.50}
-    штаны: {"x":0.45,"y":0.10,"w":0.40,"h":0.55}
+  Свитшот серый слева + леггинсы розовые справа:
+    свитшот: {"x":0.02,"y":0.10,"w":0.42,"h":0.43}
+    леггинсы: {"x":0.52,"y":0.10,"w":0.38,"h":0.58}
+  3 вещи рядом (носки+кофта+штаны):
+    носки:  {"x":0.70,"y":0.75,"w":0.13,"h":0.12}
+    кофта:  {"x":0.15,"y":0.10,"w":0.43,"h":0.44}
+    штаны:  {"x":0.45,"y":0.10,"w":0.38,"h":0.55}
 
 ════════════════════════════════════════════
 SCORE_BREAKDOWN — ОЦЕНКА ВЕЩИ
@@ -281,6 +290,44 @@ def _dedup_key(data: dict) -> tuple:
 def _item_label(data: dict) -> str:
     """Короткое название вещи для сообщений."""
     return f"{data.get('color', '')} {data.get('type', 'вещь')}".strip()
+
+
+def _fix_bbox(data: dict) -> dict:
+    """Центрирует и ужимает bbox если он слишком велик для данного типа вещи."""
+    bbox = data.get("bbox")
+    if not bbox:
+        return data
+    bw = float(bbox.get("w", 0.5))
+    bh = float(bbox.get("h", 0.5))
+    item_type = (data.get("type") or "").lower()
+    cg = data.get("category_group", "top")
+
+    if cg in ("base_layer", "underwear") or any(
+        w in item_type for w in ["носки", "трусик", "шапка", "повязка"]
+    ):
+        max_dim = 0.25
+    elif cg in ("outerwear", "one_piece"):
+        max_dim = 0.75
+    else:
+        max_dim = 0.55
+
+    if bw > max_dim or bh > max_dim:
+        logger.warning(
+            "wardrobe.bbox.oversized",
+            item_type=item_type, cg=cg,
+            w=bw, h=bh, max_dim=max_dim,
+            action="crop_tightened",
+        )
+        cx = float(bbox.get("x", 0.1)) + bw / 2
+        cy = float(bbox.get("y", 0.1)) + bh / 2
+        new_dim = max_dim * 0.8
+        data["bbox"] = {
+            "x": max(0.0, min(1.0 - new_dim, cx - new_dim / 2)),
+            "y": max(0.0, min(1.0 - new_dim, cy - new_dim / 2)),
+            "w": new_dim,
+            "h": new_dim,
+        }
+    return data
 
 
 def _default_score() -> tuple[dict, float]:
@@ -618,17 +665,8 @@ async def _analyze_and_save(
             logger.info("wardrobe.dedup.skipped", type=data.get("type"), color=data.get("color"))
             continue
 
+        _fix_bbox(data)
         bbox = data.get("bbox")
-        if bbox:
-            bw = float(bbox.get("w", 1.0))
-            bh = float(bbox.get("h", 1.0))
-            if bw > 0.8 or bh > 0.8:
-                logger.warning(
-                    "wardrobe.bbox.too_large",
-                    type=data.get("type"), w=bw, h=bh,
-                )
-                bbox = {"x": 0.1, "y": 0.1, "w": 0.8, "h": 0.8}
-                data["bbox"] = bbox
 
         photo_url, good_crop = await _upload_crop(photo_bytes, bbox, owner_id=owner_id)
         await _save_one(owner_id, owner_type, photo_id, data, matrix,
@@ -983,17 +1021,8 @@ async def _process_media_group(
                     continue
 
                 logger.info("wardrobe.save_start", index=i, item_type=data.get("type"))
+                _fix_bbox(data)
                 bbox = data.get("bbox")
-                if bbox:
-                    bw = float(bbox.get("w", 1.0))
-                    bh = float(bbox.get("h", 1.0))
-                    if bw > 0.8 or bh > 0.8:
-                        logger.warning(
-                            "wardrobe.bbox.too_large",
-                            index=i, type=data.get("type"), w=bw, h=bh,
-                        )
-                        bbox = {"x": 0.1, "y": 0.1, "w": 0.8, "h": 0.8}
-                        data["bbox"] = bbox
                 photo_url, good_crop = await _upload_crop(photo_bytes, bbox, owner_id=owner_id)
                 await _save_one(owner_id, owner_type, file_id, data, matrix,
                                 photo_url=photo_url, show_in_collage=good_crop)

@@ -361,11 +361,11 @@ async def build_collage(
                     # Не удалось скачать → плейсхолдер
                     ph = _make_placeholder(slot_key, lbl)
                     thumbs.append(ph)
-                    final_labels.append(f"добавь {lbl}")
+                    final_labels.append(lbl)
                 else:
                     ph = _make_placeholder(slot_key, lbl)
                     thumbs.append(ph)
-                    final_labels.append(f"добавь {lbl}")
+                    final_labels.append(lbl)
     else:
         # ── Старый режим: photo_ids ────────────────────────────────────────
         if not photo_ids:
