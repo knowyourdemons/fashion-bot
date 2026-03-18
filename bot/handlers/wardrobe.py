@@ -50,12 +50,6 @@ _CATEGORY_LABELS = {
     "underwear": "Нижнее бельё",
 }
 
-_PLAN_LIMITS = {
-    "free":    settings.daily_limits_free,
-    "basic":   settings.daily_limits_basic,
-    "family":  settings.daily_limits_family,
-    "premium": -1,
-}
 
 PAGE_SIZE = 20
 OUTFIT_DAY_LIMIT_FREE = 2
@@ -464,10 +458,44 @@ def _check_crop_quality(png_bytes: bytes, min_ratio: float = 0.15) -> bool:
         return True  # fallback — не блокировать сохранение
 
 
+async def _maybe_trigger_first_brief(user, owner_id, owner_type, message, context, redis) -> None:
+    """Триггер первого брифа ровно на 5-й вещи. Работает для ВСЕХ планов.
+    message — объект с методом reply_text (update.message или message напрямую)."""
+    if redis is None:
+        return
+    lock_key = f"lock:first_brief:{user.id}"
+    acquired = await redis.set(lock_key, "1", ex=86400, nx=True)
+    if not acquired:
+        return  # уже триггерили сегодня (или ранее)
+    try:
+        from db.base import AsyncReadSession
+        from db.crud.wardrobe import get_owner_items_count
+        async with AsyncReadSession() as session:
+            wardrobe_count = await get_owner_items_count(session, owner_id, owner_type)
+        if wardrobe_count < 5:
+            # Ещё не дотянули до 5 — вернём lock
+            await redis.delete(lock_key)
+            return
+        from core.queue import RedisQueue, QueuePriority
+        queue = RedisQueue(redis)
+        await queue.push(
+            "generate_brief",
+            {"user_id": str(user.id)},
+            priority=QueuePriority.HIGH,
+        )
+        await message.reply_text(
+            "✨ Отлично! Собираю первый образ — пришлю через несколько секунд..."
+        )
+        logger.info("wardrobe.first_brief_triggered", user_id=str(user.id), count=wardrobe_count)
+    except Exception as e:
+        logger.warning("wardrobe.first_brief_trigger_failed", error=str(e))
+
+
 async def _upload_crop(
     photo_bytes: bytes,
     bbox: dict | None,
     owner_id: uuid.UUID | None = None,
+    redis=None,
 ) -> tuple[str | None, bool]:
     """Кропит по bbox → удаляет фон → загружает PNG в R2.
     Возвращает (CDN URL или None, good_crop: bool)."""
@@ -476,7 +504,7 @@ async def _upload_crop(
     try:
         crop_bytes = _crop_bbox(photo_bytes, bbox)
         from services.image_processor import remove_background
-        png_bytes = await remove_background(crop_bytes)
+        png_bytes = await remove_background(crop_bytes, redis=redis)
         # Проверяем качество кропа (доля непрозрачных пикселей)
         good_crop = _check_crop_quality(png_bytes)
         if not good_crop:
@@ -737,6 +765,7 @@ async def _analyze_and_save(
     owner_type: str,
     bot,
     matrix=None,
+    redis=None,
 ) -> list[dict]:
     """Скачать фото → Claude Vision → crop по bbox → R2 → сохранить WardrobeItem."""
     tg_file = await bot.get_file(photo_id)
@@ -776,7 +805,7 @@ async def _analyze_and_save(
             data["category_group"] = "base_layer"
             data["type"] = "носки"
 
-        photo_url, good_crop = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id)
+        photo_url, good_crop = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id, redis=redis)
         await _save_one(owner_id, owner_type, photo_id, data, matrix,
                         photo_url=photo_url, show_in_collage=good_crop)
         existing_set.add(key)
@@ -937,11 +966,19 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             keyboard = InlineKeyboardMarkup([[
                 InlineKeyboardButton("✨ Расширить гардероб →", callback_data="show_upgrade")
             ]])
-            await update.message.reply_text(
-                f"👗 В гардеробе {len(_existing_items)}/{_wardrobe_limit} вещей.\n"
-                f"Достигнут лимит для вашего плана.",
-                reply_markup=keyboard,
-            )
+            if _effective_plan == "free":
+                msg = t(
+                    "wardrobe.full.free",
+                    used=str(len(_existing_items)),
+                    max=str(_wardrobe_limit),
+                )
+            else:
+                msg = t(
+                    "wardrobe.full",
+                    used=str(len(_existing_items)),
+                    max=str(_wardrobe_limit),
+                )
+            await update.message.reply_text(msg, reply_markup=keyboard)
             return
 
     # ── Trial активация при первом фото ──────────────────────────────────────
@@ -961,6 +998,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             user.trial_started_at = _now
             user.trial_ends_at = _now + _td(days=14)
             logger.info("trial.activated", user_id=str(user.id))
+            await update.message.reply_text(t("trial.activated"))
 
     # Подсказка про bulk upload — один раз, если гардероб пуст
     if redis:
@@ -980,8 +1018,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not redis:
         # Redis недоступен — немедленное добавление в гардероб
         owner_id, owner_type = await _get_owner(user, context)
-        limit = _PLAN_LIMITS.get(user.plan, settings.daily_limits_free)
-        if limit != -1 and user.daily_requests_used >= limit:
+        effective_plan = get_effective_plan(user)
+        limit = get_limit("photos_per_day", effective_plan)
+        if limit != 9999 and user.daily_requests_used >= limit:
             await update.message.reply_text(get_limit_exceeded_msg(user))
             return
         await _handle_single_photo(update, context, user, owner_id, owner_type)
@@ -1026,7 +1065,7 @@ async def _handle_single_photo(
 
         redis = context.bot_data.get("redis")
         matrix = await _get_scoring_matrix(redis, user, owner_id, owner_type)
-        added = await _analyze_and_save(photo_id, owner_id, owner_type, context.bot, matrix)
+        added = await _analyze_and_save(photo_id, owner_id, owner_type, context.bot, matrix, redis=redis)
 
         new_count = user.daily_requests_used + 1
         async with AsyncWriteSession() as session:
@@ -1048,6 +1087,10 @@ async def _handle_single_photo(
             lines.append("🤔 На фото не найдено одежды")
 
         await update.message.reply_text("\n".join(lines))
+
+        # ── Триггер первого брифа на 5-й вещи (для ВСЕХ юзеров) ────────────
+        if added and user.onboarding_completed:
+            await _maybe_trigger_first_brief(user, owner_id, owner_type, update.message, context, redis)
 
         usage = get_usage_str(user)
         if usage:
@@ -1095,8 +1138,9 @@ async def handle_photo_action(update: Update, context: ContextTypes.DEFAULT_TYPE
     file_ids = json.loads(raw if isinstance(raw, str) else raw.decode())
 
     if action == "add":
-        limit = _PLAN_LIMITS.get(user.plan, settings.daily_limits_free)
-        if limit != -1 and user.daily_requests_used >= limit:
+        effective_plan = get_effective_plan(user)
+        limit = get_limit("photos_per_day", effective_plan)
+        if limit != 9999 and user.daily_requests_used >= limit:
             await query.edit_message_text(get_limit_exceeded_msg(user))
             return
         await query.edit_message_text("📥 Добавляю в гардероб...")
@@ -1200,8 +1244,9 @@ async def _process_media_group(
     owner_id, owner_type = await _get_owner(user, context)
 
     # Проверка лимита
-    limit = _PLAN_LIMITS.get(user.plan, settings.daily_limits_free)
-    if limit != -1:
+    effective_plan = get_effective_plan(user)
+    limit = get_limit("photos_per_day", effective_plan)
+    if limit != 9999:
         remaining = limit - user.daily_requests_used
         if remaining <= 0:
             await message.reply_text(get_limit_exceeded_msg(user))
@@ -1223,7 +1268,8 @@ async def _process_media_group(
     progress_text = f"🔍 Анализирую фото 1 из {total}..."
     progress_msg = await message.reply_text(progress_text)
 
-    matrix = await _get_scoring_matrix(context.bot_data.get("redis") if context else None, user, owner_id, owner_type)
+    _redis = context.bot_data.get("redis") if context else None
+    matrix = await _get_scoring_matrix(_redis, user, owner_id, owner_type)
 
     photo_lines: list[str] = []
     total_added = 0
@@ -1272,7 +1318,7 @@ async def _process_media_group(
                         reason="small_bbox_accessory")
                     data["category_group"] = "base_layer"
                     data["type"] = "носки"
-                photo_url, good_crop = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id)
+                photo_url, good_crop = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id, redis=_redis)
                 await _save_one(owner_id, owner_type, file_id, data, matrix,
                                 photo_url=photo_url, show_in_collage=good_crop)
                 existing_set.add(key)
@@ -1319,6 +1365,10 @@ async def _process_media_group(
         f"✅ Добавила {total_added} вещей из {total} фото:\n\n{summary}"
     )
 
+    # ── Триггер первого брифа на 5-й вещи (для ВСЕХ юзеров) ────────────
+    if total_added > 0 and user.onboarding_completed:
+        _redis2 = context.bot_data.get("redis") if context else None
+        await _maybe_trigger_first_brief(user, owner_id, owner_type, message, context, _redis2)
 
 
 # ── handle_wardrobe_menu (кнопка Гардероб в меню) ───────────────────────────

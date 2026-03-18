@@ -42,8 +42,10 @@ async def handle_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         seg_label = _SEGMENT_LABELS.get(user.segment, user.segment)
         lines.append(f"👨‍👩‍👧 Сегмент: {seg_label}")
 
-    plan_label = {"free": "Бесплатный", "basic": "Базовый", "family": "Семейный", "premium": "Премиум"}.get(
-        user.plan, user.plan
+    from core.permissions import get_effective_plan
+    _effective_plan = get_effective_plan(user)
+    plan_label = {"free": "Бесплатный", "premium": "Премиум", "admin": "Admin", "ultra": "Ultra"}.get(
+        _effective_plan, _effective_plan
     )
     lines.append(f"💳 Тариф: {plan_label}")
 

@@ -29,7 +29,7 @@ async def main() -> None:
     fast_worker = FastWorker(queue, redis_client)
     slow_worker = SlowWorker(queue, redis_client)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda s=sig: _handle_signal(s))
 

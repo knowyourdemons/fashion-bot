@@ -8,23 +8,27 @@ STRINGS: dict[str, str] = {
     "error.not_found": "Не найдено.",
 
     # Онбординг
-<<<<<<< HEAD
-    "onboarding.start": "Для кого будем подбирать образы? 👗\n\nВыбери один вариант — потом можно изменить",
+    "onboarding.start": (
+        "Привет! Я Касси 👗\n\n"
+        "Помогу собрать стильный гардероб для всей семьи.\n"
+        "Давай начнём — это займёт минуту!\n\n"
+        "Для кого подбираем образы?"
+    ),
     "onboarding.segment.mom_girl": "👧 Для дочки",
-    "onboarding.segment.mom_boy": "👦 Для сына",
+    "onboarding.segment.mom_boy":  "👦 Для сына",
     "onboarding.segment.pregnant": "🤰 Жду малыша",
-    "onboarding.segment.no_kids": "👩 Для себя",
-=======
-    "onboarding.start": "Привет! Я Касси 👗\n\nПомогу собрать стильный гардероб для всей семьи.\nДавай начнём — это займёт минуту!\n\nС чего начнём?",
-    "onboarding.segment.mom_girl": "Мама девочки",
-    "onboarding.segment.mom_boy": "Мама мальчика",
-    "onboarding.segment.pregnant": "Беременная",
-    "onboarding.segment.no_kids": "Без детей",
->>>>>>> 1d07f611829c008383f98f24d95e48e64a7b7bd7
+    "onboarding.segment.no_kids":  "👩 Для себя",
     "onboarding.child_name": "Как зовут дочку?",
     "onboarding.child_birthdate": "Дата рождения? (дд.мм.гггг)",
-    "onboarding.child_size": "Размер одежды ребёнка? 👗\n\nВведи размер (например: 86, 92, 104, 116)\nИли возраст (1–12), если не знаешь размер",
-    "onboarding.child_shoe_size": "Размер обуви ребёнка? 👟\n\nВведи число (например: 26 или 26.5)",
+    "onboarding.child_size": (
+        "Размер одежды ребёнка? 👗\n\n"
+        "Введи размер (например: 86, 92, 104, 116)\n"
+        "Или возраст (1–12), если не знаешь размер"
+    ),
+    "onboarding.child_shoe_size": (
+        "Размер обуви ребёнка? 👟\n\n"
+        "Введи число (например: 26 или 26.5)"
+    ),
     "onboarding.city": "Ваш город?",
     "onboarding.trimester": "Какой триместр?",
     "onboarding.body_type": "Тип фигуры? (можно пропустить)",
@@ -37,6 +41,11 @@ STRINGS: dict[str, str] = {
     "wardrobe.add.duplicate": "Такая вещь уже есть в гардеробе!",
     "wardrobe.add.success": "Добавила в гардероб ✅",
     "wardrobe.full": "Гардероб заполнен ({used}/{max} вещей).",
+    "wardrobe.full.free": (
+        "👗 Гардероб заполнен — {used}/{max} вещей.\n\n"
+        "✨ Premium открывает до 500 вещей + безлимит фото в день.\n"
+        "👉 /subscribe — 14 дней бесплатно"
+    ),
     "wardrobe.empty": "Гардероб пуст. Пришли фото вещи для начала.",
     "wardrobe.list.header": "Твой гардероб ({count} вещей):",
 
@@ -46,21 +55,36 @@ STRINGS: dict[str, str] = {
     "brief.outfit": "Предлагаю образ:",
     "brief.wow": "✨ Такой образ обычно предлагают стилисты за $200+",
     "brief.feedback": "Как тебе образ?",
-    "brief.no_brief_free": "Morning Brief доступен с плана Basic ($5/мес).",
+    "brief.no_brief_free": "Morning Brief доступен на Premium. 👉 /subscribe — 14 дней бесплатно",
 
     # Feedback
     "feedback.thanks_up": "Отлично! Рада, что понравилось 👍",
     "feedback.thanks_down": "Понятно, учту на следующий раз 👎",
 
     # Billing
-    "billing.subscribe": "Выбери план:",
-    "billing.basic": "Basic — $5/мес или $48/год",
-    "billing.family": "Family — $12/мес или $115/год",
-    "billing.premium": "Premium — $19/мес или $182/год",
+    "billing.subscribe": "Выбери период подписки:",
+    "billing.premium_monthly":   "💎 Premium — $9/мес (700 ⭐)",
+    "billing.premium_quarterly": "💎 Premium — $22/квартал (1700 ⭐)",
+    "billing.premium_yearly":    "💎 Premium — $72/год (5500 ⭐) 🏆",
     "billing.success": "Подписка оформлена! Спасибо ✨",
     "billing.cancelled": "Подписка отменена.",
     "billing.expiry.3days": "Подписка истекает через 3 дня. Продлить?",
     "billing.expiry.today": "Подписка истекает сегодня. Продлить?",
+
+    # Trial
+    "trial.activated": (
+        "🎁 14 дней Premium — бесплатно!\n\n"
+        "Все функции уже доступны:\n"
+        "📅 Morning Brief каждый день\n"
+        "📸 30 фото в гардероб\n"
+        "💬 20 вопросов стилисту\n\n"
+        "Наслаждайся! 🌟"
+    ),
+    "trial.expired": (
+        "🎁 Пробный период завершён.\n\n"
+        "Чтобы продолжить без ограничений — выбери план:\n"
+        "👉 /subscribe"
+    ),
 
     # Напоминания
     "reminder.3days": "Привет! Не забывай про Morning Brief 👗",
@@ -82,11 +106,11 @@ STRINGS: dict[str, str] = {
 
     # Помощь
     "help.text": (
-        "Я AI-стилист. Вот что я умею:\n\n"
+        "Я Касси — твой AI-стилист. Вот что умею:\n\n"
         "📸 Пришли фото → добавлю в гардероб\n"
         "🌅 Morning Brief — образ на день по погоде\n"
         "👗 /wardrobe — список вещей\n"
-        "💳 /subscribe — планы и оплата\n"
+        "💳 /subscribe — Premium (14 дней бесплатно)\n"
         "❓ /help — эта справка"
     ),
 }

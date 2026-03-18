@@ -14,10 +14,7 @@ from core.anthropic_client import init_anthropic_pool
 from core.queue import RedisQueue
 from core.scheduler import Scheduler
 
-logger = structlog.get_logger()
-
 # Настройка structlog
-import structlog
 structlog.configure(
     processors=[
         structlog.stdlib.add_log_level,
@@ -29,6 +26,8 @@ structlog.configure(
     context_class=dict,
     logger_factory=structlog.PrintLoggerFactory(),
 )
+
+logger = structlog.get_logger()
 
 # FastAPI приложение
 app: FastAPI = create_app()

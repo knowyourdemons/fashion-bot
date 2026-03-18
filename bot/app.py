@@ -30,6 +30,8 @@ def create_application() -> Application:
 
     # Command handlers
     app.add_handler(CommandHandler("debug_reset", debug.handle_debug_reset))
+    app.add_handler(CommandHandler("debug_free", debug.handle_debug_free))
+    app.add_handler(CommandHandler("debug_brief", debug.handle_debug_brief))
     app.add_handler(CommandHandler("test_subscribe", handle_test_subscribe))
     app.add_handler(CommandHandler("help", help.handle_help))
     app.add_handler(CommandHandler("wardrobe", wardrobe.handle_list))

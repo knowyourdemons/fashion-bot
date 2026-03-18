@@ -1,26 +1,22 @@
 """Утилиты для отображения лимитов пользователю."""
-
-_LIMITS = {"free": 3, "basic": 50, "family": 100, "premium": -1}
+from core.permissions import get_effective_plan, get_limit
 
 
 def get_usage_str(user) -> str | None:
-    """Строка счётчика для показа пользователю. None для premium."""
-    limit = _LIMITS.get(user.plan, 3)
-    if limit == -1:
+    """Строка счётчика для показа пользователю. None для premium/admin (не нужен счётчик)."""
+    effective_plan = get_effective_plan(user)
+    if effective_plan != "free":
         return None
+    limit = get_limit("photos_per_day", effective_plan)
     return f"📸 Фото сегодня: {user.daily_requests_used}/{limit}"
 
 
 def get_limit_exceeded_msg(user) -> str:
     """Сообщение при исчерпании лимита."""
-    limit = _LIMITS.get(user.plan, 3)
-    upsell = {
-        "free": "Хочешь больше? /subscribe — от $5/мес",
-        "basic": "Перейди на Family для 100 фото: /subscribe",
-        "family": "Перейди на Premium для безлимита: /subscribe",
-    }
+    effective_plan = get_effective_plan(user)
+    limit = get_limit("photos_per_day", effective_plan)
     return (
         f"📸 Дневной лимит исчерпан ({limit}/{limit} фото)\n\n"
-        f"Обновится завтра утром 🌅\n"
-        f"{upsell.get(user.plan, '')}"
+        f"Обновится завтра 🌅\n"
+        f"Безлимит фото — на Premium: /subscribe"
     )

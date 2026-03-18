@@ -38,17 +38,15 @@ class Scheduler:
         await self._redis.delete(key)
 
     def _setup_jobs(self) -> None:
-        from worker.tasks import morning_brief, growth_alert, declutter
-        from worker.tasks import gap_analysis, capsule_season, birthday_alert
+        from worker.tasks import morning_brief, gap_analysis
         from worker.tasks import subscription_expiry, reminders, analytics_report
         from worker.tasks import evening_push
-        from worker.tasks import unknown_items_report, taxonomy_review
         from worker.tasks import daily_reset, cleanup_r2
 
-        # daily_reset — каждый день в полночь UTC
+        # daily_reset — каждый час, фильтрует юзеров у кого сейчас 00:xx по local timezone
         self._scheduler.add_job(
             daily_reset.reset_daily_limits,
-            CronTrigger(hour=0, minute=0),
+            CronTrigger(hour="*", minute=0),
             id="daily_reset",
             replace_existing=True,
         )
@@ -61,43 +59,11 @@ class Scheduler:
             replace_existing=True,
         )
 
-        # growth_alert — вс 11:00 UTC
-        self._scheduler.add_job(
-            growth_alert.run,
-            CronTrigger(day_of_week="sun", hour=11, minute=0),
-            id="growth_alert",
-            replace_existing=True,
-        )
-
-        # declutter — 1-е число 10:00 UTC (Batch API)
-        self._scheduler.add_job(
-            declutter.run,
-            CronTrigger(day=1, hour=10, minute=0),
-            id="declutter",
-            replace_existing=True,
-        )
-
         # gap_analysis — 1-е число 09:00 UTC
         self._scheduler.add_job(
             gap_analysis.run,
             CronTrigger(day=1, hour=9, minute=0),
             id="gap_analysis",
-            replace_existing=True,
-        )
-
-        # capsule_season — 1 мар/июн/сен/дек
-        self._scheduler.add_job(
-            capsule_season.run,
-            CronTrigger(month="3,6,9,12", day=1, hour=10, minute=0),
-            id="capsule_season",
-            replace_existing=True,
-        )
-
-        # birthday_alert — ежедневно 08:00 UTC
-        self._scheduler.add_job(
-            birthday_alert.run,
-            CronTrigger(hour=8, minute=0),
-            id="birthday_alert",
             replace_existing=True,
         )
 
@@ -130,22 +96,6 @@ class Scheduler:
             analytics_report.run,
             CronTrigger(hour=8, minute=0),
             id="analytics_report",
-            replace_existing=True,
-        )
-
-        # unknown_items_report — 1-е число 09:00 UTC
-        self._scheduler.add_job(
-            unknown_items_report.run,
-            CronTrigger(day=1, hour=9, minute=0),
-            id="unknown_items_report",
-            replace_existing=True,
-        )
-
-        # taxonomy_review — 1 мар/июн/сен/дек 09:00
-        self._scheduler.add_job(
-            taxonomy_review.run,
-            CronTrigger(month="3,6,9,12", day=1, hour=9, minute=0),
-            id="taxonomy_review",
             replace_existing=True,
         )
 

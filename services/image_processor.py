@@ -89,10 +89,11 @@ def to_base64(image_bytes: bytes) -> str:
     return base64.standard_b64encode(image_bytes).decode()
 
 
-async def remove_background(image_bytes: bytes) -> bytes:
+async def remove_background(image_bytes: bytes, redis=None) -> bytes:
     """
     Удаляет фон через remove.bg API. Возвращает PNG bytes с прозрачностью.
-    При ошибке или незаданном ключе — возвращает оригинал.
+    При ошибке или незаданном ключе — возвращает оригинал (fallback).
+    redis — опциональный Redis клиент для мониторинга кредитов.
     """
     import httpx
     import structlog
@@ -112,7 +113,17 @@ async def remove_background(image_bytes: bytes) -> bytes:
                 files={"image_file": ("image.jpg", image_bytes, "image/jpeg")},
             )
             r.raise_for_status()
-            return r.content
+        if redis is not None:
+            try:
+                await redis.incr("removebg:credits:used")
+            except Exception:
+                pass
+        return r.content
     except Exception as e:
         log.warning("remove_background.failed", error=str(e))
+        if redis is not None:
+            try:
+                await redis.incr("removebg:credits:failed")
+            except Exception:
+                pass
         return image_bytes

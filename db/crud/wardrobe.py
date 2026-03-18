@@ -2,7 +2,7 @@
 import uuid
 from typing import Optional
 
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.wardrobe import WardrobeItem
@@ -88,6 +88,22 @@ async def update_wear_count(
         .where(WardrobeItem.id.in_(item_ids), WardrobeItem.deleted_at.is_(None))
         .values(wear_count=WardrobeItem.wear_count + 1, last_worn=date.today())
     )
+
+
+async def get_owner_items_count(
+    session: AsyncSession,
+    owner_id: uuid.UUID,
+    owner_type: str,
+) -> int:
+    """Быстрый COUNT вещей владельца без загрузки объектов."""
+    result = await session.execute(
+        select(func.count()).where(
+            WardrobeItem.owner_id == owner_id,
+            WardrobeItem.owner_type == owner_type,
+            WardrobeItem.deleted_at.is_(None),
+        )
+    )
+    return result.scalar() or 0
 
 
 async def soft_delete(session: AsyncSession, item_id: uuid.UUID) -> None:

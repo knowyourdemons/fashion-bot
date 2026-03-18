@@ -1,132 +1,27 @@
 """
 Планы, лимиты и конверсионные триггеры.
+Источник правды: CLAUDE.md → "Система планов и лимитов".
 """
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Any, Optional
 
-from exceptions import PermissionDeniedError, WardrobeFullError
 
-# ── Старые PLANS (обратная совместимость) ────────────────────────────────────
-
-PLANS: dict[str, dict[str, Any]] = {
-    "free": {
-        "daily_requests": 3,
-        "max_wardrobe_items": 20,
-        "max_children": 0,
-        "morning_brief": False,
-        "gap_analysis": False,
-        "wow_builder": False,
-    },
-    "basic": {
-        "daily_requests": 50,
-        "max_wardrobe_items": 50,
-        "max_children": 1,
-        "morning_brief": True,
-        "gap_analysis": False,
-        "wow_builder": False,
-    },
-    "family": {
-        "daily_requests": 100,
-        "max_wardrobe_items": 200,
-        "max_children": 2,
-        "morning_brief": True,
-        "gap_analysis": True,
-        "wow_builder": False,
-    },
-    "premium": {
-        "daily_requests": -1,
-        "max_wardrobe_items": -1,
-        "max_children": -1,
-        "morning_brief": True,
-        "gap_analysis": True,
-        "wow_builder": True,
-    },
-}
-
-PLAN_ORDER = ["free", "basic", "family", "premium"]
-
-UPGRADE_TRIGGERS: dict[str, str] = {
-    "items_limit_90pct": (
-        "У тебя {used}/{max} вещей. Перейди на {next_plan} и добавь ещё"
-    ),
-    "brief_blocked": (
-        "Сегодня {weather}. Хочешь образ для {child_name}? Morning Brief в Basic $5"
-    ),
-    "daily_limit": (
-        "Использовано {used}/{max} запросов. Basic $5 — 50 запросов в день"
-    ),
-}
-
-
-def get_plan_limits(plan: str) -> dict[str, Any]:
-    return PLANS.get(plan, PLANS["free"])
-
-
-def get_next_plan(plan: str) -> str | None:
-    idx = PLAN_ORDER.index(plan) if plan in PLAN_ORDER else 0
-    if idx < len(PLAN_ORDER) - 1:
-        return PLAN_ORDER[idx + 1]
-    return None
-
-
-def check_feature(plan: str, feature: str) -> None:
-    """Raises PermissionDeniedError если фича недоступна на плане."""
-    limits = get_plan_limits(plan)
-    if not limits.get(feature, False):
-        next_plan = get_next_plan(plan)
-        msg = f"Функция '{feature}' недоступна на плане {plan}."
-        if next_plan:
-            msg += f" Перейди на {next_plan}."
-        raise PermissionDeniedError(msg)
-
-
-def check_wardrobe_limit(plan: str, current_count: int) -> None:
-    """Raises WardrobeFullError если гардероб заполнен."""
-    limit = get_plan_limits(plan)["max_wardrobe_items"]
-    if limit == -1:
-        return
-    if current_count >= limit:
-        next_plan = get_next_plan(plan)
-        msg = f"Гардероб заполнен: {current_count}/{limit} вещей."
-        if next_plan:
-            msg += f" Перейди на {next_plan} для расширения."
-        raise WardrobeFullError(msg)
-
-
-def check_children_limit(plan: str, current_count: int) -> None:
-    """Raises PermissionDeniedError если достигнут лимит детей."""
-    limit = get_plan_limits(plan)["max_children"]
-    if limit == -1:
-        return
-    if current_count >= limit:
-        next_plan = get_next_plan(plan)
-        msg = f"Достигнут лимит детей: {current_count}/{limit}."
-        if next_plan:
-            msg += f" Перейди на {next_plan}."
-        raise PermissionDeniedError(msg)
-
-
-def get_daily_limit(plan: str) -> int:
-    return int(get_plan_limits(plan)["daily_requests"])
-
-
-def upgrade_trigger(trigger: str, **kwargs: Any) -> str:
-    template = UPGRADE_TRIGGERS.get(trigger, "")
-    return template.format(**kwargs)
-
-
-# ── Новые лимиты по фичам ────────────────────────────────────────────────────
+# ── Лимиты по планам ─────────────────────────────────────────────────────────
 
 LIMITS: dict[str, dict[str, Any]] = {
     "free": {
         "photos_per_day":     3,
-        "wardrobe_size":      15,
+        "wardrobe_size":      30,
         "rate_per_day":       3,
         "chat_per_day":       3,
         "outfit_req_per_day": 1,
-        "brief_days":         [1, 3],   # вт=1, чт=3
+        "brief_days":         [1, 3],   # вт=1, чт=3 (weekday, 0=пн)
         "brief_weekends":     False,
         "children_max":       1,
+        "reroll":             0,
+        "evening_brief":      False,
+        "weather_alert":      False,
+        "calendar":           False,
         "gap_analysis":       False,
     },
     "premium": {
@@ -138,8 +33,13 @@ LIMITS: dict[str, dict[str, Any]] = {
         "brief_days":         [0, 1, 2, 3, 4, 5, 6],
         "brief_weekends":     True,
         "children_max":       3,
+        "reroll":             3,
+        "evening_brief":      True,
+        "weather_alert":      True,
+        "calendar":           True,
         "gap_analysis":       True,
     },
+    # ultra — отложен до v2.0, но plan="ultra" в БД должен работать без краша
     "ultra": {
         "photos_per_day":     100,
         "wardrobe_size":      2000,
@@ -149,6 +49,10 @@ LIMITS: dict[str, dict[str, Any]] = {
         "brief_days":         [0, 1, 2, 3, 4, 5, 6],
         "brief_weekends":     True,
         "children_max":       10,
+        "reroll":             10,
+        "evening_brief":      True,
+        "weather_alert":      True,
+        "calendar":           True,
         "gap_analysis":       True,
     },
     "admin": {
@@ -160,35 +64,39 @@ LIMITS: dict[str, dict[str, Any]] = {
         "brief_days":         [0, 1, 2, 3, 4, 5, 6],
         "brief_weekends":     True,
         "children_max":       99,
+        "reroll":             9999,
+        "evening_brief":      True,
+        "weather_alert":      True,
+        "calendar":           True,
         "gap_analysis":       True,
     },
 }
 
-# Маппинг старых планов → новые для LIMITS
+# Маппинг legacy планов из БД → новые (для плавного перехода)
 _PLAN_ALIAS: dict[str, str] = {
     "basic":  "premium",
     "family": "premium",
 }
 
-# ── Цены ─────────────────────────────────────────────────────────────────────
+# ── Цены (usd в центах для Stripe!) ──────────────────────────────────────────
 
 PRICES: dict[str, dict[str, Any]] = {
     "premium_monthly": {
-        "usd": 9, "stars": 700, "period_months": 1,
+        "usd": 900, "stars": 700, "period_months": 1,
         "label": "Месяц — $9",
         "label_usd": "Месяц — $9",
         "label_stars": "Месяц — 700 ⭐",
         "stripe_price_id": "",  # заполнить из Stripe dashboard
     },
     "premium_quarterly": {
-        "usd": 22, "stars": 1700, "period_months": 3,
+        "usd": 2200, "stars": 1700, "period_months": 3,
         "label": "3 месяца — $22 (экономия $5)",
         "label_usd": "3 месяца — $22 (экономия $5)",
         "label_stars": "3 месяца — 1700 ⭐",
         "stripe_price_id": "",
     },
     "premium_yearly": {
-        "usd": 72, "stars": 5500, "period_months": 12,
+        "usd": 7200, "stars": 5500, "period_months": 12,
         "label": "Год — $72 (экономия $36)",
         "label_usd": "Год — $72 (экономия $36) ⭐ Лучшая цена",
         "label_stars": "Год — 5500 ⭐",
@@ -196,7 +104,7 @@ PRICES: dict[str, dict[str, Any]] = {
     },
 }
 
-# ── Ultra фичи (заглушки) ────────────────────────────────────────────────────
+# ── Ultra фичи (заглушки для promote) ────────────────────────────────────────
 
 ULTRA_FEATURES = [
     "🛍 Шоппинг-лист с партнёрскими ссылками",
@@ -208,22 +116,17 @@ ULTRA_FEATURES = [
 ]
 
 
-# ── Вспомогательные функции ──────────────────────────────────────────────────
-
-def can_gap_analysis(plan: str) -> bool:
-    resolved = _PLAN_ALIAS.get(plan, plan)
-    return bool(LIMITS.get(resolved, LIMITS["free"]).get("gap_analysis", False))
-
+# ── Основные функции ──────────────────────────────────────────────────────────
 
 def get_effective_plan(user) -> str:
     """
     Возвращает реальный план с учётом trial, paid subscription и admin.
-    Приоритет: admin > paid subscription (plan_expires_at) > trial > legacy mapping.
+    Приоритет: admin > paid (plan_expires_at > now) > trial (trial_ends_at > now) > free.
     """
     if not user:
         return "free"
 
-    # Проверить admin через telegram_id
+    # Admin через telegram_id
     try:
         from config import settings
         if int(getattr(user, "telegram_id", -1)) in settings.admin_ids_list:
@@ -232,20 +135,21 @@ def get_effective_plan(user) -> str:
         pass
 
     plan = getattr(user, "plan", "free") or "free"
+    # Алиасы legacy планов (basic/family → premium) для самого плана в БД
+    effective_stored = _PLAN_ALIAS.get(plan, plan)
     now = datetime.now(timezone.utc)
 
-    # Проверить активную платную подписку
+    # Активная платная подписка
     plan_expires = getattr(user, "plan_expires_at", None)
-    if plan_expires and plan in ("premium", "ultra"):
+    if plan_expires and effective_stored in ("premium", "ultra"):
         exp = plan_expires
         if hasattr(exp, "tzinfo") and exp.tzinfo is None:
             exp = exp.replace(tzinfo=timezone.utc)
         if exp > now:
-            return plan
-        # Подписка истекла → free
+            return effective_stored
         return "free"
 
-    # Проверить активный trial
+    # Активный trial
     trial_ends = getattr(user, "trial_ends_at", None)
     if trial_ends:
         if hasattr(trial_ends, "tzinfo") and trial_ends.tzinfo is None:
@@ -253,12 +157,14 @@ def get_effective_plan(user) -> str:
         if trial_ends > now:
             return "premium"
 
-    # Маппинг legacy планов
-    return _PLAN_ALIAS.get(plan, plan)
+    # Платный план без действующей подписки и без trial → деградация до free
+    if effective_stored in ("premium", "ultra"):
+        return "free"
+    return "free"
 
 
 def get_limit(key: str, plan: str) -> int:
-    """Получить числовой лимит для плана."""
+    """Получить числовой лимит для плана. Неизвестный план → free лимиты."""
     resolved = _PLAN_ALIAS.get(plan, plan)
     plan_limits = LIMITS.get(resolved, LIMITS["free"])
     return int(plan_limits.get(key, 0))
@@ -291,33 +197,32 @@ def is_brief_day_tomorrow(plan: str, user_timezone: str) -> bool:
 
 
 def get_trial_days_left(user) -> Optional[int]:
-    """Сколько дней осталось в trial. None если нет trial."""
+    """Сколько дней осталось в trial. None если trial нет или истёк."""
     trial_ends = getattr(user, "trial_ends_at", None)
     if not trial_ends:
         return None
     now = datetime.now(timezone.utc)
     if hasattr(trial_ends, "tzinfo") and trial_ends.tzinfo is None:
         trial_ends = trial_ends.replace(tzinfo=timezone.utc)
-    delta = trial_ends - now
-    days = delta.days
-    return max(0, days)
+    if trial_ends <= now:
+        return None
+    return max(0, (trial_ends - now).days)
+
+
+def is_trial_active(user) -> bool:
+    days = get_trial_days_left(user)
+    return days is not None and days > 0
 
 
 def days_until_expiry(user) -> Optional[int]:
-    """Дней до истечения платной подписки (не trial). None если нет подписки."""
+    """Дней до конца платной подписки (не trial). None если нет подписки."""
     plan_expires = getattr(user, "plan_expires_at", None)
     if not plan_expires:
         return None
     now = datetime.now(timezone.utc)
     if hasattr(plan_expires, "tzinfo") and plan_expires.tzinfo is None:
         plan_expires = plan_expires.replace(tzinfo=timezone.utc)
-    delta = plan_expires - now
-    return max(0, delta.days)
-
-
-def is_trial_active(user) -> bool:
-    days = get_trial_days_left(user)
-    return days is not None and days > 0
+    return max(0, (plan_expires - now).days)
 
 
 def is_trial_just_ended(user) -> bool:
@@ -331,3 +236,8 @@ def is_trial_just_ended(user) -> bool:
         trial_ends = trial_ends.replace(tzinfo=timezone.utc)
     delta = now - trial_ends
     return 0 <= delta.total_seconds() <= 86400
+
+
+def can_gap_analysis(plan: str) -> bool:
+    resolved = _PLAN_ALIAS.get(plan, plan)
+    return bool(LIMITS.get(resolved, LIMITS["free"]).get("gap_analysis", False))

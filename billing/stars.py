@@ -7,15 +7,14 @@ from typing import Any
 import structlog
 
 from billing.base import PaymentProvider
-from config import settings
 
 logger = structlog.get_logger()
 
-# Курс: 1 XTR = $0.013 (приблизительно)
-PLAN_PRICES_STARS: dict[str, dict[str, int]] = {
-    "basic": {"monthly": 385, "annual": 3692},    # ~$5 / ~$48
-    "family": {"monthly": 923, "annual": 8846},   # ~$12 / ~$115
-    "premium": {"monthly": 1462, "annual": 14000}, # ~$19 / ~$182
+# plan_key → кол-во Stars
+PLAN_PRICES_STARS: dict[str, int] = {
+    "premium_monthly":   700,
+    "premium_quarterly": 1700,
+    "premium_yearly":    5500,
 }
 
 
@@ -23,31 +22,32 @@ class StarsProvider(PaymentProvider):
     async def create_invoice(
         self,
         user_id: str,
-        plan: str,
-        period: str,
+        plan_key: str,
+        **kwargs: Any,
     ) -> dict[str, Any]:
-        prices = PLAN_PRICES_STARS.get(plan, {})
-        amount = prices.get(period, 0)
+        from core.permissions import PRICES
+        amount = PLAN_PRICES_STARS.get(plan_key)
         if not amount:
-            raise ValueError(f"Неизвестный план/период: {plan}/{period}")
+            raise ValueError(f"Неизвестный plan_key: {plan_key}")
 
-        period_label = "месяц" if period == "monthly" else "год"
+        price = PRICES.get(plan_key, {})
+        label = price.get("label", plan_key)
+
         return {
             "type": "stars_invoice",
-            "title": f"Fashion Bot {plan.capitalize()} — {period_label}",
-            "description": f"Подписка на {period_label}",
-            "payload": f"sub:{plan}:{period}:{user_id}",
+            "title": "Касси Premium",
+            "description": label,
+            "payload": f"premium:{plan_key}:{user_id}",
             "currency": "XTR",
-            "prices": [{"label": f"Подписка {plan}", "amount": amount}],
-            "provider_token": settings.telegram_payment_token,
+            "prices": [{"label": "Premium", "amount": amount}],
+            "provider_token": "",  # пустой для Stars
         }
 
     async def verify_payment(self, payload: dict[str, Any]) -> bool:
-        # Telegram сам верифицирует Stars — проверяем только payload формат
+        # Telegram сам верифицирует Stars — проверяем только наличие события
         return "successful_payment" in payload
 
     async def cancel_subscription(self, subscription_id: str) -> bool:
-        # Stars не поддерживают отмену через API
         logger.info("stars.cancel_subscription", subscription_id=subscription_id)
         return True
 

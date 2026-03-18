@@ -59,3 +59,64 @@ async def handle_debug_reset(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     logger.info("debug.reset", user_id=str(user.id))
     await update.message.reply_text("✅ Сброшено. План → premium. Лимиты обнулены. /start")
+
+
+async def handle_debug_free(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Сбросить юзера в free для тестирования free-flow. Только для admin."""
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    if user.telegram_id not in settings.admin_ids_list:
+        await update.message.reply_text("⛔ Нет доступа.")
+        return
+
+    async with AsyncWriteSession() as session:
+        await session.execute(
+            sa.update(User)
+            .where(User.id == user.id)
+            .values(
+                plan="free",
+                plan_expires_at=None,
+                trial_ends_at=None,
+                trial_started_at=None,
+                daily_requests_used=0,
+            )
+        )
+        await session.commit()
+
+    user.plan = "free"
+    user.daily_requests_used = 0
+
+    logger.info("debug.free", user_id=str(user.id))
+    await update.message.reply_text("✅ План → free. Подписки и trial сброшены.")
+
+
+async def handle_debug_brief(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Триггер Morning Brief по запросу. Только для admin."""
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    if user.telegram_id not in settings.admin_ids_list:
+        await update.message.reply_text("⛔ Нет доступа.")
+        return
+
+    redis = context.bot_data.get("redis")
+    if not redis:
+        await update.message.reply_text("❌ Redis недоступен.")
+        return
+
+    try:
+        from core.queue import RedisQueue, QueuePriority
+        queue = RedisQueue(redis)
+        await queue.push(
+            "generate_brief",
+            {"user_id": str(user.id)},
+            priority=QueuePriority.HIGH,
+        )
+        logger.info("debug.brief_triggered", user_id=str(user.id))
+        await update.message.reply_text("🌅 Бриф в очереди — придёт через несколько секунд.")
+    except Exception as e:
+        logger.error("debug.brief_failed", error=str(e))
+        await update.message.reply_text(f"❌ Ошибка: {e}")

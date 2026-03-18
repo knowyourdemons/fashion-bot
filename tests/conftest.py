@@ -1,7 +1,37 @@
+import sys
+import types
 import pytest
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 from datetime import date
+
+# ── Заглушки для отсутствующих зависимостей (локальный запуск без Docker) ───
+# Подключаем до любых импортов проекта — если модуль уже есть, не трогаем.
+def _mock_if_missing(*names: str) -> None:
+    for name in names:
+        if name not in sys.modules:
+            sys.modules[name] = MagicMock()
+
+_mock_if_missing(
+    "structlog",
+    "httpx",
+    "redis", "redis.asyncio",
+    "pytz",
+    "sentry_sdk", "sentry_sdk.integrations", "sentry_sdk.integrations.fastapi",
+    "pydantic_settings",
+    "worker.fast_worker",
+)
+
+# config.settings должен быть реальным объектом, не MagicMock,
+# чтобы не сломать тесты permissions (которые его импортируют напрямую).
+if "config" not in sys.modules:
+    _cfg = types.ModuleType("config")
+    _settings = MagicMock()
+    _settings.environment = "dev"
+    _settings.admin_telegram_ids = ""
+    _settings.admin_ids_list = []
+    _cfg.settings = _settings
+    sys.modules["config"] = _cfg
 
 
 # ── Фикстуры пользователя ──────────────────────────────────────────────────

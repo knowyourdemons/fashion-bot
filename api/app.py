@@ -24,7 +24,15 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(RequestIdMiddleware)
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    # В продакшене разрешаем только внутренние/webhook источники.
+    # Telegram и Stripe используют server-side запросы — CORS им не нужен.
+    cors_origins = ["*"] if settings.environment == "dev" else []
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_methods=["POST", "GET"],
+        allow_headers=["Content-Type", "X-Request-ID"],
+    )
 
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(wardrobe.router, prefix="/api/v1/wardrobe", tags=["wardrobe"])

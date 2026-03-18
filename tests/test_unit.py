@@ -445,7 +445,7 @@ class TestPermissions:
     def test_лимиты_free(self):
         from core.permissions import get_limit
         assert get_limit("photos_per_day", "free") == 3
-        assert get_limit("wardrobe_size", "free") == 15
+        assert get_limit("wardrobe_size", "free") == 30
         assert get_limit("chat_per_day", "free") == 3
 
     def test_лимиты_premium_больше_free(self):

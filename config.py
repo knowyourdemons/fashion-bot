@@ -40,10 +40,6 @@ class Settings(BaseSettings):
     environment: Literal["dev", "prod"] = "dev"
     sentry_dsn: str = ""
     admin_telegram_ids: str = ""
-    free_trial_days: int = 7
-    daily_limits_free: int = 3
-    daily_limits_basic: int = 50
-    daily_limits_family: int = 100
 
     @property
     def admin_ids_list(self) -> list[int]:
@@ -57,13 +53,6 @@ class Settings(BaseSettings):
     cloudflare_r2_cdn_url: str = ""
     removebg_api_key: str = ""
 
-    # Pricing
-    basic_monthly_price: int = 5
-    basic_annual_price: int = 48
-    family_monthly_price: int = 12
-    family_annual_price: int = 115
-    premium_monthly_price: int = 19
-    premium_annual_price: int = 182
 
 
 settings = Settings()  # type: ignore[call-arg]

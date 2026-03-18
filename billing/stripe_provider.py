@@ -1,7 +1,9 @@
 """
 Stripe payment provider.
-Поддерживает recurring подписки.
+Поддерживает разовые платежи и подписки.
 """
+import hmac
+import hashlib
 from typing import Any
 
 import httpx
@@ -12,10 +14,18 @@ from config import settings
 
 logger = structlog.get_logger()
 
-PLAN_PRICES_USD: dict[str, dict[str, int]] = {
-    "basic": {"monthly": 500, "annual": 4800},      # в центах
-    "family": {"monthly": 1200, "annual": 11500},
-    "premium": {"monthly": 1900, "annual": 18200},
+# period key → (Stripe interval, interval_count)
+_PERIOD_TO_INTERVAL = {
+    "monthly":   ("month", 1),
+    "quarterly": ("month", 3),
+    "yearly":    ("year",  1),
+}
+
+# plan_key → period (для handle_pay_stripe который передаёт plan_key напрямую)
+_PLAN_KEY_TO_PERIOD = {
+    "premium_monthly":   "monthly",
+    "premium_quarterly": "quarterly",
+    "premium_yearly":    "yearly",
 }
 
 STRIPE_API = "https://api.stripe.com/v1"
@@ -32,12 +42,25 @@ class StripeProvider(PaymentProvider):
         plan: str,
         period: str,
     ) -> dict[str, Any]:
-        prices = PLAN_PRICES_USD.get(plan, {})
-        amount = prices.get(period, 0)
-        if not amount:
+        from core.permissions import PRICES
+
+        # period может быть "monthly"/"quarterly"/"yearly" ИЛИ plan_key ("premium_monthly")
+        if period in _PLAN_KEY_TO_PERIOD:
+            period = _PLAN_KEY_TO_PERIOD[period]
+
+        plan_key = f"{plan}_{period}" if not period.startswith(plan) else period
+        # Нормализация: "premium_monthly" → ищем в PRICES
+        if plan_key not in PRICES:
+            plan_key = f"premium_{period}"
+
+        price = PRICES.get(plan_key)
+        if not price:
             raise ValueError(f"Неизвестный план/период: {plan}/{period}")
 
-        interval = "month" if period == "monthly" else "year"
+        amount_cents = price["usd"]  # уже в центах
+        label = price.get("label_usd", price.get("label", "Premium"))
+
+        interval, interval_count = _PERIOD_TO_INTERVAL.get(period, ("month", 1))
 
         async with httpx.AsyncClient() as client:
             resp = await client.post(
@@ -45,15 +68,15 @@ class StripeProvider(PaymentProvider):
                 auth=(self._secret, ""),
                 data={
                     "mode": "subscription",
-                    "success_url": "https://fashionbot.app/success",
-                    "cancel_url": "https://fashionbot.app/cancel",
+                    "success_url": "https://fashioncastle.app/success",
+                    "cancel_url": "https://fashioncastle.app/cancel",
                     "metadata[user_id]": user_id,
-                    "metadata[plan]": plan,
-                    "metadata[period]": period,
+                    "metadata[plan_key]": plan_key,
                     "line_items[0][price_data][currency]": "usd",
-                    "line_items[0][price_data][product_data][name]": f"Fashion Bot {plan}",
-                    "line_items[0][price_data][unit_amount]": str(amount),
+                    "line_items[0][price_data][product_data][name]": f"Касси Premium — {label}",
+                    "line_items[0][price_data][unit_amount]": str(amount_cents),
                     "line_items[0][price_data][recurring][interval]": interval,
+                    "line_items[0][price_data][recurring][interval_count]": str(interval_count),
                     "line_items[0][quantity]": "1",
                 },
             )
@@ -63,15 +86,17 @@ class StripeProvider(PaymentProvider):
         return {"type": "stripe_checkout", "url": session["url"], "session_id": session["id"]}
 
     async def verify_payment(self, payload: dict[str, Any]) -> bool:
-        import hmac, hashlib
         sig_header = payload.get("stripe_signature", "")
-        body = payload.get("body", "")
+        body = payload.get("body", b"")
+        if isinstance(body, str):
+            body = body.encode()
         try:
-            parts = {p.split("=")[0]: p.split("=")[1] for p in sig_header.split(",")}
-            ts = parts["t"]
+            parts = {p.split("=", 1)[0]: p.split("=", 1)[1] for p in sig_header.split(",") if "=" in p}
+            ts = parts.get("t", "")
+            signed_payload = f"{ts}.".encode() + body
             expected = hmac.new(
                 self._webhook_secret.encode(),
-                f"{ts}.{body}".encode(),
+                signed_payload,
                 hashlib.sha256,
             ).hexdigest()
             return hmac.compare_digest(expected, parts.get("v1", ""))

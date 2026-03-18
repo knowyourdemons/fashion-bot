@@ -113,6 +113,12 @@ async def stripe_webhook(request: Request) -> dict:
 
 @router.post("/telegram")
 async def telegram_webhook(request: Request) -> dict:
+    # Проверяем секретный токен если задан
+    if settings.telegram_webhook_secret:
+        token = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+        if not hmac.compare_digest(token, settings.telegram_webhook_secret):
+            raise HTTPException(status_code=403, detail="Invalid secret token")
+
     tg_app = request.app.state.tg_app
     data = await request.json()
     update = Update.de_json(data, tg_app.bot)

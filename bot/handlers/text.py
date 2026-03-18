@@ -3,19 +3,17 @@ import time
 import sentry_sdk
 import structlog
 import sqlalchemy as sa
-from telegram import Update
+from datetime import date
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
-from config import settings
 from core.anthropic_client import get_anthropic_pool
 from db.base import AsyncWriteSession
 from db.models.user import User
 from exceptions import FashionBotError, RateLimitError
-from datetime import date
 from services.i18n.ru import t
 from bot.handlers.menu import get_main_menu
-from services.usage import get_limit_exceeded_msg
-from core.permissions import get_effective_plan, get_limit
+from core.permissions import get_effective_plan, get_limit, is_trial_just_ended
 
 logger = structlog.get_logger()
 
@@ -61,59 +59,40 @@ def _get_text_system(user) -> str:
         f"- Тон: как подруга, не официально"
     )
 
-_PLAN_LIMITS: dict[str, int] = {
-    "free":    settings.daily_limits_free,
-    "basic":   settings.daily_limits_basic,
-    "family":  settings.daily_limits_family,
-    "premium": -1,  # unlimited
-}
-
-CHAT_LIMIT_FREE = 5
-CHAT_LIMIT_PREMIUM = 20
-
-
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = context.user_data.get("db_user")
     if not user:
         return
 
-<<<<<<< HEAD
-    # Проверка дневного лимита (не применяется во время онбординга)
-    if getattr(user, "onboarding_completed", True):
-        limit = _PLAN_LIMITS.get(user.plan, settings.daily_limits_free)
-        if limit != -1 and user.daily_requests_used >= limit:
-            await update.message.reply_text(get_limit_exceeded_msg(user))
-            return
-=======
-    # Лимит свободного чата (отдельный от лимита фото)
+    # Во время онбординга лимиты не применяются
+    if not getattr(user, "onboarding_completed", True):
+        return
+
+    # Лимит чата через Redis (отдельный от лимита фото)
     redis = context.bot_data.get("redis")
-    _ep_text = get_effective_plan(user)
-    chat_limit = get_limit("chat_per_day", _ep_text)
+    effective_plan = get_effective_plan(user)
+    chat_limit = get_limit("chat_per_day", effective_plan)
     today = date.today().isoformat()
     chat_key = f"chat_limit:{user.id}:{today}"
     chat_count = 0
     if redis:
         val = await redis.get(chat_key)
         chat_count = int(val) if val else 0
-    if chat_count >= chat_limit and _ep_text != "admin":
-        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+
+    if chat_count >= chat_limit and effective_plan != "admin":
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton("✨ Получить безлимит →", callback_data="show_upgrade")
         ]])
-        await update.message.reply_text(
-            f"✋ Лимит вопросов на сегодня ({chat_limit}/день).\n"
-            "Лимит восстановится завтра!",
-            reply_markup=keyboard,
-        )
+        if is_trial_just_ended(user):
+            msg = t("trial.expired")
+        else:
+            msg = (
+                f"✋ Лимит вопросов на сегодня ({chat_limit}/день).\n"
+                "Лимит восстановится завтра!"
+            )
+        await update.message.reply_text(msg, reply_markup=keyboard)
         return
-
-    # Проверка дневного лимита (фото/запросы)
-    limit = _PLAN_LIMITS.get(user.plan, settings.daily_limits_free)
-    if limit != -1 and user.daily_requests_used >= limit:
-        await update.message.reply_text(get_limit_exceeded_msg(user))
-        return
->>>>>>> 1d07f611829c008383f98f24d95e48e64a7b7bd7
 
     try:
         start = time.monotonic()
@@ -131,8 +110,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         # Суффикс — только когда мало осталось
         remaining = chat_limit - (chat_count + 1)
         if remaining == 0:
-            suffix = f"\n\n⚠️ Это последний вопрос на сегодня."
-        elif remaining <= 5:
+            suffix = "\n\n⚠️ Это последний вопрос на сегодня."
+        elif remaining <= 2:
             suffix = f"\n\n💬 Осталось вопросов сегодня: {remaining}/{chat_limit}"
         else:
             suffix = ""
@@ -144,7 +123,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await redis.incr(chat_key)
             await redis.expire(chat_key, 86400)
 
-        # Инкремент счётчика
+        # Инкремент общего счётчика
         new_count = user.daily_requests_used + 1
         async with AsyncWriteSession() as session:
             await session.execute(
