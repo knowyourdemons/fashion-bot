@@ -57,6 +57,9 @@ _PLAN_LIMITS = {
 }
 
 PAGE_SIZE = 20
+OUTFIT_DAY_LIMIT_FREE = 2
+OUTFIT_DAY_LIMIT_PREMIUM = 5
+
 
 _VISION_SYSTEM = """Ты определяешь детскую одежду на фото и добавляешь её в гардероб.
 Фото может быть горизонтальным или вертикальным — определяй вещи независимо от ориентации.
@@ -1206,9 +1209,23 @@ async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYP
                     callback_data=f"set_owner:child:{child.id}"
                 )])
 
-    header_msg = f"👗 Гардероб: *{owner_name}*"
-    markup = InlineKeyboardMarkup(buttons) if buttons else None
-    await update.message.reply_text(header_msg, parse_mode="Markdown", reply_markup=markup)
+    # Добавить кнопку "Образ дня" ко всем остальным кнопкам
+    action_buttons = [InlineKeyboardButton("🌤 Образ дня", callback_data="outfit_request")]
+    if buttons:
+        # switch-buttons уже есть — добавим образ дня первой строкой
+        markup = InlineKeyboardMarkup([action_buttons] + buttons)
+    else:
+        markup = InlineKeyboardMarkup([action_buttons])
+
+    async with AsyncReadSession() as session:
+        all_items = await get_owner_items(session, owner_id, owner_type)
+    item_count = len(all_items)
+
+    await update.message.reply_text(
+        f"👗 Гардероб: *{owner_name}* · {item_count} вещей",
+        parse_mode="Markdown",
+        reply_markup=markup,
+    )
 
     await _show_wardrobe_page(update.message, user, 0, owner_id=owner_id, owner_type=owner_type)
 
@@ -1255,6 +1272,170 @@ async def handle_set_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         f"✅ Гардероб переключён на *{owner_name}*", parse_mode="Markdown"
     )
     await _show_wardrobe_page(query.message, user, 0, owner_id=owner_id, owner_type=owner_type)
+
+
+
+# ── handle_outfit_request (кнопка Образ дня из Гардероба) ───────────────────
+
+async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    redis = context.bot_data.get("redis")
+    from datetime import date as _date, datetime as _datetime
+    import random as _random
+
+    today = _date.today().isoformat()
+    limit_key = f"outfit_req:{user.id}:{today}"
+    plan = (user.plan or "free")
+    day_limit = OUTFIT_DAY_LIMIT_PREMIUM if plan == "premium" else OUTFIT_DAY_LIMIT_FREE
+
+    count = 0
+    if redis:
+        val = await redis.get(limit_key)
+        count = int(val) if val else 0
+
+    if count >= day_limit:
+        await query.message.reply_text(
+            f"✋ На сегодня лимит образов ({day_limit}/день).\n"
+            "Следующий образ — завтра утром в 07:00 🌅",
+            reply_markup=get_main_menu(),
+        )
+        return
+
+    await query.message.reply_text("🌤 Собираю образ...")
+
+    try:
+        from services.weather import WeatherService
+        from worker.tasks.morning_brief import _select_outfit, _get_temp_regime, _SEASONS
+        from worker.tasks.style_config import get_placeholder_label
+        from services.image_builder import build_collage
+
+        # Найти детей
+        async with AsyncReadSession() as session:
+            from db.crud.children import get_children as _get_children
+            children = await _get_children(session, user.id)
+
+        if not children:
+            await query.message.reply_text(
+                "Добавь ребёнка в профиле чтобы получать образы 👧",
+                reply_markup=get_main_menu(),
+            )
+            return
+
+        child = children[0]
+
+        # Погода
+        temp_m, temp_e = 10.0, 10.0
+        if user.city and redis:
+            try:
+                svc = WeatherService(redis)
+                wd = await svc.get(user.city)
+                temp_m = float(wd.temp_c)
+                temp_e = float(wd.evening_temp)
+            except Exception as we:
+                logger.warning("outfit_request.weather_failed", error=str(we))
+
+        # Вещи ребёнка
+        async with AsyncReadSession() as session:
+            items = await get_owner_items(session, child.id, "child")
+
+        if not items:
+            await query.message.reply_text(
+                "Гардероб пуст — добавь вещи через фото 📸",
+                reply_markup=get_main_menu(),
+            )
+            return
+
+        # Рандомизировать seed чтобы образ менялся
+        seed = int(_datetime.now().timestamp()) // 1800 + count
+        _random.seed(seed)
+        items_shuffled = list(items)
+        _random.shuffle(items_shuffled)
+
+        today_date = _date.today()
+        season = _SEASONS[today_date.month]
+        outfit = _select_outfit(items_shuffled, season, today_date, temp_m, temp_e)
+
+        colortype = getattr(child, "colortype", None) or "default"
+        regime = _get_temp_regime(temp_m)
+
+        _outfit_key_to_slot = {
+            "outerwear": "outerwear", "top": "top", "bottom": "bottom",
+            "one_piece": "one_piece", "footwear": "footwear",
+            "hat": "hat", "tights": "tights", "socks": "tights",
+        }
+        _short_labels = {
+            "outerwear": "куртку", "top": "верх", "bottom": "низ",
+            "one_piece": "платье", "footwear": "обувь",
+            "hat": "шапку", "tights": "колготки",
+        }
+        seen_slots: set = set()
+        all_slots = []
+        for outfit_key, slot in _outfit_key_to_slot.items():
+            if outfit_key in ("top", "bottom") and outfit.get("one_piece"):
+                continue
+            if outfit_key == "one_piece" and (outfit.get("top") or outfit.get("bottom")):
+                continue
+            if slot in seen_slots:
+                continue
+            item = outfit.get(outfit_key)
+            if item and getattr(item, "show_in_collage", True):
+                seen_slots.add(slot)
+                all_slots.append({
+                    "slot": slot,
+                    "label": f"{item.type} {item.color}"[:20],
+                    "photo_id": item.photo_id,
+                    "photo_url": item.photo_url,
+                    "has_item": True,
+                })
+            else:
+                ph_label = get_placeholder_label(slot, colortype, regime)
+                if ph_label is None:
+                    continue
+                seen_slots.add(slot)
+                color_part = ph_label.split(" — ", 1)[1] if " — " in ph_label else "(нет в гардеробе)"
+                all_slots.append({
+                    "slot": slot,
+                    "short_label": _short_labels.get(slot, slot),
+                    "label": color_part,
+                    "photo_id": None,
+                    "photo_url": None,
+                    "has_item": False,
+                })
+
+        sm = "+" if temp_m >= 0 else ""
+        temp_text = f"{sm}{temp_m:.0f}°C"
+        caption = f"🌤 Образ для {child.name} · {temp_text}"
+        outfit_warnings = outfit.get("warnings") or []
+        if outfit_warnings:
+            caption += "\n" + "\n".join(outfit_warnings)
+
+        collage_bytes = await build_collage(outfit_slots=all_slots)
+
+        if redis:
+            await redis.incr(limit_key)
+            await redis.expire(limit_key, 86400)
+
+        if collage_bytes:
+            await query.message.reply_photo(
+                photo=collage_bytes, caption=caption, reply_markup=get_main_menu()
+            )
+        else:
+            await query.message.reply_text(caption, reply_markup=get_main_menu())
+
+    except Exception as e:
+        logger.error("outfit_request.failed", error=str(e))
+        import sentry_sdk as _sentry
+        _sentry.capture_exception(e)
+        await query.message.reply_text(
+            "Не удалось собрать образ. Попробуй позже.",
+            reply_markup=get_main_menu(),
+        )
 
 
 # ── handle_list ─────────────────────────────────────────────────────────────

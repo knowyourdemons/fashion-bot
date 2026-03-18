@@ -8,7 +8,7 @@ STRINGS: dict[str, str] = {
     "error.not_found": "Не найдено.",
 
     # Онбординг
-    "onboarding.start": "Привет! Я твой AI-стилист 👗\nС чего начнём?",
+    "onboarding.start": "Привет! Я Касси 👗\n\nПомогу собрать стильный гардероб для всей семьи.\nДавай начнём — это займёт минуту!\n\nС чего начнём?",
     "onboarding.segment.mom_girl": "Мама девочки",
     "onboarding.segment.mom_boy": "Мама мальчика",
     "onboarding.segment.pregnant": "Беременная",
