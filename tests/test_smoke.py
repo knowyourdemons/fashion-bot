@@ -258,22 +258,23 @@ def test_paddle_stub_importable():
 
 def test_stars_billing_handlers_importable():
     from bot.handlers.billing import (
-        handle_pay_stars, handle_pay_stripe,
+        handle_pay_stars, handle_pay_stripe, handle_confirm_stars,
         handle_successful_payment, handle_pre_checkout,
-        _stars_keyboard,
+        _subscribe_keyboard,
     )
     assert callable(handle_pay_stars)
     assert callable(handle_pay_stripe)
+    assert callable(handle_confirm_stars)
     assert callable(handle_successful_payment)
     assert callable(handle_pre_checkout)
-    kb = _stars_keyboard()
+    kb = _subscribe_keyboard()
     assert len(kb.inline_keyboard) >= 3  # минимум 3 ряда Stars
 
 
 def test_stars_keyboard_amounts():
-    from bot.handlers.billing import _stars_keyboard
+    from bot.handlers.billing import _subscribe_keyboard
     from core.permissions import PRICES
-    kb = _stars_keyboard()
+    kb = _subscribe_keyboard()
     labels = [btn.text for row in kb.inline_keyboard for btn in row]
     assert any("700" in l for l in labels), "monthly 700 stars должен быть"
     assert any("5500" in l for l in labels), "yearly 5500 stars должен быть"

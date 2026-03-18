@@ -7,43 +7,58 @@ import structlog
 
 logger = structlog.get_logger()
 
-# Period → months
-_PERIOD_MONTHS = {"monthly": 1, "quarterly": 3, "yearly": 12}
+# price_key → period months
+_KEY_MONTHS = {
+    "premium_monthly": 1,
+    "premium_quarterly": 3,
+    "premium_yearly": 12,
+}
+_KEY_LABEL = {
+    "premium_monthly": "1 месяц",
+    "premium_quarterly": "3 месяца",
+    "premium_yearly": "1 год",
+}
 
 
-def _stars_keyboard() -> InlineKeyboardMarkup:
+def _subscribe_keyboard() -> InlineKeyboardMarkup:
     from core.permissions import PRICES
     from config import settings
 
-    rows = [
+    rows = []
+
+    # Stars секция — всегда
+    rows += [
         [InlineKeyboardButton(
             f"⭐ {PRICES['premium_monthly']['label_stars']}",
-            callback_data="pay_stars:monthly",
+            callback_data="pay_stars:premium_monthly",
         )],
         [InlineKeyboardButton(
             f"⭐ {PRICES['premium_quarterly']['label_stars']}",
-            callback_data="pay_stars:quarterly",
+            callback_data="pay_stars:premium_quarterly",
         )],
         [InlineKeyboardButton(
-            f"⭐ {PRICES['premium_yearly']['label_stars']} — Лучшая цена",
-            callback_data="pay_stars:yearly",
+            f"⭐ {PRICES['premium_yearly']['label_stars']} 🏆",
+            callback_data="pay_stars:premium_yearly",
         )],
     ]
-    if settings.stripe_secret_key:
+
+    # Stripe — только если настроен
+    if getattr(settings, "stripe_secret_key", ""):
         rows += [
             [InlineKeyboardButton(
                 f"💳 {PRICES['premium_monthly']['label_usd']}",
-                callback_data="pay_stripe:monthly",
+                callback_data="pay_stripe:premium_monthly",
             )],
             [InlineKeyboardButton(
                 f"💳 {PRICES['premium_quarterly']['label_usd']}",
-                callback_data="pay_stripe:quarterly",
+                callback_data="pay_stripe:premium_quarterly",
             )],
             [InlineKeyboardButton(
-                f"💳 {PRICES['premium_yearly']['label_usd']} — Лучшая цена",
-                callback_data="pay_stripe:yearly",
+                f"💳 {PRICES['premium_yearly']['label_usd']} 🏆",
+                callback_data="pay_stripe:premium_yearly",
             )],
         ]
+
     rows.append([InlineKeyboardButton("🔒 Ultra — скоро!", callback_data="show_ultra")])
     return InlineKeyboardMarkup(rows)
 
@@ -63,29 +78,32 @@ async def handle_subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     effective_plan = get_effective_plan(user)
 
     if effective_plan == "admin":
-        await update.message.reply_text("👑 У тебя admin план!")
+        await update.message.reply_text("👑 Admin план!")
         return
 
-    if effective_plan in ("premium", "ultra") and getattr(user, "plan", "free") in ("premium", "ultra"):
-        d = days_until_expiry(user)
-        days_text = f"\nДо следующего списания: {d} дн." if d is not None else ""
+    # Защита от двойной оплаты
+    expire_days = days_until_expiry(user)
+    if effective_plan in ("premium", "ultra") and expire_days is not None and expire_days > 3:
+        plan_label = "Premium" if effective_plan == "premium" else "Ultra"
         await update.message.reply_text(
-            f"✅ У тебя {'Premium' if effective_plan == 'premium' else 'Ultra'} план!"
-            f"{days_text}\nВсе функции доступны 🎉"
+            f"✅ У тебя уже активен {plan_label}!\n"
+            f"Действует ещё {expire_days} дн.\n\n"
+            f"Продлить заранее можно за 3 дня до истечения."
         )
         return
 
+    # Статус trial
     trial_days = get_trial_days_left(user)
     if is_trial_active(user) and trial_days:
-        trial_text = (
-            f"🎁 У тебя активный trial!\n"
-            f"Осталось дней: {trial_days}\n\n"
+        status = (
+            f"🎁 Trial активен · осталось {trial_days} дн.\n"
+            f"Подпишись сейчас — продолжишь без перерыва!\n\n"
         )
     else:
-        trial_text = ""
+        status = ""
 
     text = (
-        f"{trial_text}"
+        f"{status}"
         f"✨ Касси Premium\n\n"
         f"📅 Бриф каждый день (включая выходные)\n"
         f"👗 Образ дня без ограничений\n"
@@ -93,39 +111,70 @@ async def handle_subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         f"⭐ 20 оценок образа в день\n"
         f"💬 20 вопросов стилисту в день\n"
         f"👧 До 3 детей\n\n"
-        f"Выбери способ оплаты:"
+        f"Выбери план:"
     )
-    await update.message.reply_text(text, reply_markup=_stars_keyboard())
+    await update.message.reply_text(text, reply_markup=_subscribe_keyboard())
 
 
 async def handle_pay_stars(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Отправляет Telegram Stars invoice."""
+    """Показывает подтверждение перед отправкой Stars invoice."""
     query = update.callback_query
     await query.answer()
 
-    period = query.data.split(":")[1]  # monthly | quarterly | yearly
-    months = _PERIOD_MONTHS.get(period, 1)
+    plan_key = query.data.split(":")[1]  # premium_monthly | premium_quarterly | premium_yearly
 
     from core.permissions import PRICES
-    price_key = f"premium_{period}"
-    stars_amount = PRICES[price_key]["stars"]
-    period_label = {
-        "monthly": "1 месяц",
-        "quarterly": "3 месяца",
-        "yearly": "1 год",
-    }.get(period, period)
+    price = PRICES.get(plan_key)
+    if not price:
+        await query.answer("Неизвестный план", show_alert=True)
+        return
 
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton(
+            f"✅ Оплатить {price['stars']} ⭐",
+            callback_data=f"confirm_stars:{plan_key}",
+        ),
+        InlineKeyboardButton(
+            "◀️ Назад",
+            callback_data="show_upgrade",
+        ),
+    ]])
+    await query.edit_message_text(
+        f"⭐ {price['label_usd']}\n\n"
+        f"Стоимость: {price['stars']} Telegram Stars\n\n"
+        f"После оплаты Premium активируется мгновенно!",
+        reply_markup=keyboard,
+    )
+
+
+async def handle_confirm_stars(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Отправляет Stars invoice после подтверждения."""
+    query = update.callback_query
+    await query.answer()
+
+    plan_key = query.data.split(":")[1]
     user = context.user_data.get("db_user")
-    user_id = str(user.id) if user else "unknown"
+
+    from core.permissions import PRICES
+    price = PRICES.get(plan_key)
+    if not price:
+        return
+
+    try:
+        await query.message.delete()
+    except Exception:
+        pass
+
+    telegram_id = getattr(user, "telegram_id", "unknown") if user else "unknown"
 
     await context.bot.send_invoice(
         chat_id=query.message.chat_id,
         title="Касси Premium",
-        description=f"Подписка на {period_label}",
-        payload=f"premium:{period}:{user_id}",
-        currency="XTR",
-        prices=[LabeledPrice(f"Premium {period_label}", stars_amount)],
+        description=price["label_usd"],
+        payload=f"premium:{plan_key}:{telegram_id}",
         provider_token="",  # пустой для Stars
+        currency="XTR",
+        prices=[LabeledPrice("Premium", price["stars"])],
     )
 
 
@@ -134,16 +183,24 @@ async def handle_pay_stripe(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     query = update.callback_query
     await query.answer()
 
-    period = query.data.split(":")[1]  # monthly | quarterly | yearly
+    plan_key = query.data.split(":")[1]  # premium_monthly | premium_quarterly | premium_yearly
     user = context.user_data.get("db_user")
     if not user:
         await query.message.reply_text("Сначала войди через /start")
         return
 
     from config import settings
-    if not settings.stripe_secret_key:
+    if not getattr(settings, "stripe_secret_key", ""):
         await query.message.reply_text("Оплата картой временно недоступна.")
         return
+
+    # Маппинг ключей в period для StripeProvider
+    period_map = {
+        "premium_monthly": "monthly",
+        "premium_quarterly": "quarterly",
+        "premium_yearly": "yearly",
+    }
+    period = period_map.get(plan_key, "monthly")
 
     from billing.stripe_provider import StripeProvider
     provider = StripeProvider()
@@ -174,11 +231,12 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
     if not payment:
         return
 
-    payload = payment.invoice_payload  # "premium:monthly:<user_id>"
-    parts = payload.split(":")
+    # payload = "premium:premium_monthly:<telegram_id>"
+    parts = payment.invoice_payload.split(":")
     plan = parts[0] if len(parts) > 0 else "premium"
-    period = parts[1] if len(parts) > 1 else "monthly"
-    months = _PERIOD_MONTHS.get(period, 1)
+    plan_key = parts[1] if len(parts) > 1 else "premium_monthly"
+    months = _KEY_MONTHS.get(plan_key, 1)
+    period_label = _KEY_LABEL.get(plan_key, "1 месяц")
 
     user = context.user_data.get("db_user")
     if not user:
@@ -197,16 +255,14 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
             user_id=user.id,
             plan=plan,
             plan_expires_at=expires_at,
-            subscription_id=None,  # Stars не даёт subscription_id
+            subscription_id=None,
             payment_provider="stars",
         )
 
-    # Обновить кэш
     user.plan = plan
     user.plan_expires_at = expires_at
     context.user_data["db_user"] = user
 
-    period_label = {"monthly": "месяц", "quarterly": "3 месяца", "yearly": "год"}.get(period, period)
     await update.message.reply_text(
         f"✅ Premium активирован на {period_label}!\n"
         f"Все функции доступны. Добро пожаловать! 🎉"
@@ -215,13 +271,13 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
         "stars.payment_activated",
         user_id=str(user.id),
         plan=plan,
-        period=period,
+        plan_key=plan_key,
         expires_at=expires_at.isoformat(),
     )
 
 
 async def handle_pre_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Отвечает на PreCheckoutQuery — обязателен для Stars."""
+    """Отвечает на PreCheckoutQuery — обязателен для Stars (в течение 10 сек)."""
     await update.pre_checkout_query.answer(ok=True)
 
 
@@ -238,20 +294,6 @@ async def handle_plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 async def handle_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(t("billing.cancelled"))
-
-
-async def handle_plan_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Legacy handler для plan: callback_data."""
-    query = update.callback_query
-    await query.answer()
-    try:
-        parts = query.data.split(":")
-        plan = parts[1] if len(parts) > 1 else "premium"
-        period = parts[2] if len(parts) > 2 else "monthly"
-        await query.message.reply_text(f"Оформляю {plan}/{period}...")
-    except Exception as e:
-        await query.message.reply_text(t("error.generic"))
-        sentry_sdk.capture_exception(e)
 
 
 async def handle_stay_free(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
