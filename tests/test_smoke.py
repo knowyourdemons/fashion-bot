@@ -292,3 +292,92 @@ def test_app_has_precheckout_handler():
     app = create_application()
     handler_types = [type(h) for h in app.handlers.get(0, [])]
     assert PreCheckoutQueryHandler in handler_types, "PreCheckoutQueryHandler must be registered"
+
+
+def test_billing_providers_available():
+    """Все billing провайдеры импортируются."""
+    from billing.stripe_provider import StripeProvider
+    from billing.yukassa_provider import YuKassaProvider
+    from billing.paddle_provider import PaddleProvider
+    assert callable(getattr(StripeProvider, "create_invoice", None))
+    assert callable(getattr(YuKassaProvider, "create_invoice", None))
+    assert callable(getattr(PaddleProvider, "create_invoice", None))
+
+
+def test_yukassa_not_available_by_default():
+    """ЮKassa заглушка — NotImplementedError при вызове."""
+    from billing.yukassa_provider import YuKassaProvider
+    import asyncio, pytest
+    p = YuKassaProvider()
+    with pytest.raises(NotImplementedError):
+        asyncio.get_event_loop().run_until_complete(
+            p.create_invoice("1", "premium", "monthly")
+        )
+
+
+def test_paddle_not_available_by_default():
+    """Paddle заглушка — NotImplementedError при вызове."""
+    from billing.paddle_provider import PaddleProvider
+    import asyncio, pytest
+    p = PaddleProvider()
+    with pytest.raises(NotImplementedError):
+        asyncio.get_event_loop().run_until_complete(
+            p.create_invoice("1", "premium", "monthly")
+        )
+
+
+def test_trial_activation_in_wardrobe():
+    """handle_photo содержит логику активации trial."""
+    import inspect
+    from bot.handlers.wardrobe import handle_photo
+    src = inspect.getsource(handle_photo)
+    assert "trial_started_at" in src, "trial активация должна быть в handle_photo"
+    assert "trial_ends_at" in src
+
+
+def test_limits_in_wardrobe():
+    """handle_photo проверяет лимиты фото."""
+    import inspect
+    from bot.handlers.wardrobe import handle_photo
+    src = inspect.getsource(handle_photo)
+    assert "photos_per_day" in src
+
+
+def test_limits_in_text_handler():
+    """handle_text проверяет лимит чатов."""
+    import inspect
+    from bot.handlers.text import handle_text
+    src = inspect.getsource(handle_text)
+    assert "chat_per_day" in src
+
+
+def test_brief_by_day_gate():
+    """generate_brief пропускает дни без брифа."""
+    import inspect
+    from worker.tasks.morning_brief import generate_brief
+    src = inspect.getsource(generate_brief)
+    assert "is_brief_day" in src, "бриф должен проверять день недели"
+
+
+def test_subscription_expiry_checks_trial():
+    """subscription_expiry проверяет trial_ends_at."""
+    import inspect
+    from worker.tasks.subscription_expiry import run
+    src = inspect.getsource(run)
+    assert "trial_ends_at" in src
+
+
+def test_evening_push_checks_brief_day_tomorrow():
+    """evening_push проверяет is_brief_day_tomorrow."""
+    import inspect
+    from worker.tasks.evening_push import run
+    src = inspect.getsource(run)
+    assert "is_brief_day_tomorrow" in src or "brief_day" in src.lower()
+
+
+def test_scheduler_has_evening_push():
+    """Планировщик регистрирует evening_push job."""
+    import inspect
+    from core.scheduler import Scheduler
+    src = inspect.getsource(Scheduler._setup_jobs)
+    assert "evening_push" in src

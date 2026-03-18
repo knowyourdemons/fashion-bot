@@ -482,3 +482,134 @@ class TestPermissions:
         u = self._make_user("free", trial_days=7)
         days = get_trial_days_left(u)
         assert days is not None and 6 <= days <= 7
+
+
+# ── TestStarsPayment ───────────────────────────────────────────────────────
+
+class TestStarsPayment:
+    """Тесты Stars invoice и активации premium."""
+
+    def test_stars_invoice_payload_format(self):
+        """payload должен содержать telegram_id для идентификации пользователя."""
+        # Формат: "premium:{plan_key}:{telegram_id}"
+        payload = "premium:premium_monthly:195169"
+        parts = payload.split(":")
+        assert parts[0] == "premium"
+        assert parts[1] in ("premium_monthly", "premium_quarterly", "premium_yearly")
+        assert parts[2].isdigit()
+
+    def test_prices_stars_amounts(self):
+        from core.permissions import PRICES
+        assert PRICES["premium_monthly"]["stars"] == 700
+        assert PRICES["premium_quarterly"]["stars"] == 1700
+        assert PRICES["premium_yearly"]["stars"] == 5500
+
+    def test_prices_period_months(self):
+        from core.permissions import PRICES
+        assert PRICES["premium_monthly"]["period_months"] == 1
+        assert PRICES["premium_quarterly"]["period_months"] == 3
+        assert PRICES["premium_yearly"]["period_months"] == 12
+
+    def test_prices_have_dual_labels(self):
+        from core.permissions import PRICES
+        for key in ("premium_monthly", "premium_quarterly", "premium_yearly"):
+            assert "label_usd" in PRICES[key], f"{key} missing label_usd"
+            assert "label_stars" in PRICES[key], f"{key} missing label_stars"
+            assert "stars" in PRICES[key], f"{key} missing stars"
+            assert "usd" in PRICES[key], f"{key} missing usd"
+
+    def test_key_months_mapping(self):
+        from bot.handlers.billing import _KEY_MONTHS
+        assert _KEY_MONTHS["premium_monthly"] == 1
+        assert _KEY_MONTHS["premium_quarterly"] == 3
+        assert _KEY_MONTHS["premium_yearly"] == 12
+
+    def test_subscribe_keyboard_no_stripe_when_no_key(self):
+        """При пустом stripe_secret_key кнопки Stripe не показываются."""
+        from bot.handlers.billing import _subscribe_keyboard
+        from unittest.mock import patch
+        with patch("bot.handlers.billing.ContextTypes", create=True):
+            with patch("config.settings") as mock_settings:
+                mock_settings.stripe_secret_key = ""
+                kb = _subscribe_keyboard()
+        callbacks = [btn.callback_data
+                     for row in kb.inline_keyboard for btn in row]
+        assert not any("pay_stripe" in c for c in callbacks), \
+            "Stripe кнопки не должны быть при пустом ключе"
+        assert any("pay_stars" in c for c in callbacks), \
+            "Stars кнопки должны быть всегда"
+
+    def test_subscribe_keyboard_has_ultra_button(self):
+        from bot.handlers.billing import _subscribe_keyboard
+        kb = _subscribe_keyboard()
+        callbacks = [btn.callback_data
+                     for row in kb.inline_keyboard for btn in row]
+        assert "show_ultra" in callbacks
+
+    def test_double_payment_protection_days_check(self):
+        """Если expire_days > 3 — подписка считается активной."""
+        from datetime import datetime, timezone, timedelta
+        from core.permissions import days_until_expiry
+        from unittest.mock import MagicMock
+        u = MagicMock()
+        u.plan_expires_at = datetime.now(timezone.utc) + timedelta(days=10)
+        d = days_until_expiry(u)
+        assert d is not None and d > 3, "10 дней до истечения → защита должна работать"
+
+
+# ── TestTrialActivation ────────────────────────────────────────────────────
+
+class TestTrialActivation:
+    """Тесты trial активации и ограничений."""
+
+    def test_trial_даёт_premium_лимиты(self):
+        """Во время trial пользователь получает premium лимиты."""
+        from core.permissions import get_limit
+        assert get_limit("photos_per_day", "premium") == 30
+        assert get_limit("chat_per_day", "premium") == 20
+        assert get_limit("outfit_req_per_day", "premium") == 5
+
+    def test_free_лимиты_ниже_premium(self):
+        from core.permissions import get_limit
+        for key in ("photos_per_day", "chat_per_day", "rate_per_day", "outfit_req_per_day"):
+            assert get_limit(key, "free") < get_limit(key, "premium"), \
+                f"free {key} должен быть < premium"
+
+    def test_admin_макс_лимиты(self):
+        from core.permissions import get_limit
+        for key in ("photos_per_day", "chat_per_day", "wardrobe_size"):
+            assert get_limit(key, "admin") == 9999
+
+    def test_brief_days_free_только_вт_чт(self):
+        from core.permissions import LIMITS
+        free_days = set(LIMITS["free"]["brief_days"])
+        assert free_days == {1, 3}, f"Free brief_days должны быть вт/чт, получили {free_days}"
+
+    def test_brief_days_premium_каждый_день(self):
+        from core.permissions import LIMITS
+        premium_days = LIMITS["premium"]["brief_days"]
+        assert len(premium_days) == 7, "Premium бриф каждый день"
+
+    def test_is_trial_active_с_активным_trial(self):
+        from core.permissions import is_trial_active
+        from datetime import datetime, timezone, timedelta
+        from unittest.mock import MagicMock
+        u = MagicMock()
+        u.trial_ends_at = datetime.now(timezone.utc) + timedelta(days=3)
+        assert is_trial_active(u) is True
+
+    def test_is_trial_active_с_истёкшим_trial(self):
+        from core.permissions import is_trial_active
+        from datetime import datetime, timezone, timedelta
+        from unittest.mock import MagicMock
+        u = MagicMock()
+        u.trial_ends_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        assert is_trial_active(u) is False
+
+    def test_children_limit_free(self):
+        from core.permissions import get_limit
+        assert get_limit("children_max", "free") == 1
+
+    def test_children_limit_premium(self):
+        from core.permissions import get_limit
+        assert get_limit("children_max", "premium") == 3
