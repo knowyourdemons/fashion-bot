@@ -15,6 +15,7 @@ from datetime import date
 from services.i18n.ru import t
 from bot.handlers.menu import get_main_menu
 from services.usage import get_limit_exceeded_msg
+from core.permissions import get_effective_plan, get_limit
 
 logger = structlog.get_logger()
 
@@ -79,19 +80,23 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     # Лимит свободного чата (отдельный от лимита фото)
     redis = context.bot_data.get("redis")
-    plan = (user.plan or "free")
-    chat_limit = CHAT_LIMIT_PREMIUM if plan == "premium" else CHAT_LIMIT_FREE
+    _ep_text = get_effective_plan(user)
+    chat_limit = get_limit("chat_per_day", _ep_text)
     today = date.today().isoformat()
     chat_key = f"chat_limit:{user.id}:{today}"
     chat_count = 0
     if redis:
         val = await redis.get(chat_key)
         chat_count = int(val) if val else 0
-    if chat_count >= chat_limit:
+    if chat_count >= chat_limit and _ep_text != "admin":
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✨ Получить безлимит →", callback_data="show_upgrade")
+        ]])
         await update.message.reply_text(
-            f"✋ Лимит вопросов на сегодня ({chat_limit}/день).\n\n"
-            + ("Обнови план для большего количества вопросов 💎" if plan != "premium" else "Лимит восстановится завтра утром 🌅"),
-            reply_markup=get_main_menu(),
+            f"✋ Лимит вопросов на сегодня ({chat_limit}/день).\n"
+            "Лимит восстановится завтра!",
+            reply_markup=keyboard,
         )
         return
 

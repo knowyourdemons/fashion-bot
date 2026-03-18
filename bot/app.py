@@ -48,6 +48,8 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(brief.handle_brief_feedback, pattern="^brief_feedback:"))
     app.add_handler(CallbackQueryHandler(feedback.handle_feedback, pattern="^feedback:"))
     app.add_handler(CallbackQueryHandler(billing.handle_plan_callback, pattern="^plan:"))
+    app.add_handler(CallbackQueryHandler(billing.handle_plan_callback, pattern="^subscribe:"))
+    app.add_handler(CallbackQueryHandler(billing.handle_stay_free, pattern="^stay_free$"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_wardrobe_page, pattern="^wardrobe:page:"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_photo_action, pattern="^photo_action:"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_rate_mode, pattern="^rate_mode:"))
@@ -55,6 +57,9 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(wardrobe.handle_outfit_request, pattern="^outfit_request$"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_list_callback, pattern="^show_wardrobe_list$"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_add_items_hint, pattern="^add_items_hint$"))
+    app.add_handler(CallbackQueryHandler(wardrobe.handle_show_upgrade, pattern="^show_upgrade$"))
+    app.add_handler(CallbackQueryHandler(wardrobe.handle_show_ultra, pattern="^show_ultra$"))
+    app.add_handler(CallbackQueryHandler(wardrobe.handle_notify_ultra, pattern="^notify_ultra$"))
 
     # Текстовые сообщения → стилист — group=2 (после меню-хендлеров)
     _menu_texts = filters.Regex("^(👗 Гардероб|⭐ Оценить образ|⚙️ Профиль|❓ Помощь)$")

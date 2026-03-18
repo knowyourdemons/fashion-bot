@@ -378,3 +378,87 @@ class TestTextSystem:
         system = _get_text_system(user)
         assert isinstance(system, str)
         assert len(system) > 100
+
+
+# ── TestPermissions ────────────────────────────────────────────────────────
+
+class TestPermissions:
+    def _make_user(self, plan, trial_days=None, telegram_id=99999):
+        from unittest.mock import MagicMock
+        from datetime import datetime, timezone, timedelta
+        u = MagicMock()
+        u.plan = plan
+        u.telegram_id = telegram_id
+        if trial_days is not None:
+            u.trial_ends_at = datetime.now(timezone.utc) + timedelta(days=trial_days)
+            u.trial_started_at = datetime.now(timezone.utc) - timedelta(days=14 - trial_days)
+        else:
+            u.trial_ends_at = None
+            u.trial_started_at = None
+        return u
+
+    def test_trial_активен_даёт_premium(self):
+        from core.permissions import get_effective_plan
+        u = self._make_user("free", trial_days=5)
+        assert get_effective_plan(u) == "premium"
+
+    def test_trial_истёк_даёт_free(self):
+        from core.permissions import get_effective_plan
+        from datetime import datetime, timezone, timedelta
+        from unittest.mock import MagicMock
+        u = MagicMock()
+        u.plan = "free"
+        u.telegram_id = 99999
+        u.trial_ends_at = datetime.now(timezone.utc) - timedelta(days=1)
+        assert get_effective_plan(u) == "free"
+
+    def test_premium_без_trial(self):
+        from core.permissions import get_effective_plan
+        u = self._make_user("premium")
+        assert get_effective_plan(u) == "premium"
+
+    def test_admin_по_telegram_id(self):
+        from core.permissions import get_effective_plan
+        u = self._make_user("free", telegram_id=195169)
+        assert get_effective_plan(u) == "admin"
+
+    def test_лимиты_free(self):
+        from core.permissions import get_limit
+        assert get_limit("photos_per_day", "free") == 3
+        assert get_limit("wardrobe_size", "free") == 15
+        assert get_limit("chat_per_day", "free") == 3
+
+    def test_лимиты_premium_больше_free(self):
+        from core.permissions import get_limit
+        assert get_limit("photos_per_day", "premium") > get_limit("photos_per_day", "free")
+
+    def test_admin_без_лимитов(self):
+        from core.permissions import get_limit
+        assert get_limit("photos_per_day", "admin") == 9999
+
+    def test_brief_day_premium_всегда(self):
+        from core.permissions import is_brief_day
+        assert is_brief_day("premium", "Europe/Vilnius") is True
+
+    def test_brief_day_free_вт_чт(self):
+        from core.permissions import LIMITS
+        assert 1 in LIMITS["free"]["brief_days"]   # вт
+        assert 3 in LIMITS["free"]["brief_days"]   # чт
+        assert 0 not in LIMITS["free"]["brief_days"]  # пн — нет
+        assert 4 not in LIMITS["free"]["brief_days"]  # пт — нет
+
+    def test_brief_day_tomorrow_возвращает_bool(self):
+        from core.permissions import is_brief_day_tomorrow
+        result = is_brief_day_tomorrow("premium", "Europe/Vilnius")
+        assert isinstance(result, bool)
+
+    def test_trial_days_left_нет_trial(self):
+        from core.permissions import get_trial_days_left
+        u = self._make_user("free")
+        assert get_trial_days_left(u) is None
+
+    def test_trial_days_left_активный(self):
+        from core.permissions import get_trial_days_left
+        u = self._make_user("free", trial_days=7)
+        days = get_trial_days_left(u)
+        assert days is not None and 6 <= days <= 7

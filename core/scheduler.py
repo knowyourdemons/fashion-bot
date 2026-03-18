@@ -41,6 +41,7 @@ class Scheduler:
         from worker.tasks import morning_brief, growth_alert, declutter
         from worker.tasks import gap_analysis, capsule_season, birthday_alert
         from worker.tasks import subscription_expiry, reminders, analytics_report
+        from worker.tasks import evening_push
         from worker.tasks import unknown_items_report, taxonomy_review
         from worker.tasks import daily_reset, cleanup_r2
 
@@ -105,6 +106,14 @@ class Scheduler:
             subscription_expiry.run,
             CronTrigger(hour=9, minute=0),
             id="subscription_expiry",
+            replace_existing=True,
+        )
+
+        # evening_push — ежедневно 20:00 UTC
+        self._scheduler.add_job(
+            evening_push.run,
+            CronTrigger(hour=20, minute=0),
+            id="evening_push",
             replace_existing=True,
         )
 

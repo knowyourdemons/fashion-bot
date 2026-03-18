@@ -186,3 +186,44 @@ def test_import_app():
     """Критичный тест — app.py должен импортироваться без ошибок."""
     from bot.app import create_application
     assert callable(create_application)
+
+
+def test_permissions_importable():
+    from core.permissions import (
+        get_effective_plan, get_limit,
+        is_brief_day, is_brief_day_tomorrow,
+        get_trial_days_left, is_trial_active,
+        LIMITS, PRICES, ULTRA_FEATURES,
+    )
+    assert isinstance(LIMITS, dict)
+    assert isinstance(PRICES, dict)
+    assert len(ULTRA_FEATURES) >= 3
+    assert "free" in LIMITS
+    assert "premium" in LIMITS
+
+
+def test_subscribe_handler_importable():
+    from bot.handlers.billing import handle_subscribe, handle_stay_free
+    assert callable(handle_subscribe)
+    assert callable(handle_stay_free)
+
+
+def test_upgrade_handlers_importable():
+    from bot.handlers.wardrobe import (
+        handle_show_upgrade, handle_show_ultra, handle_notify_ultra,
+    )
+    assert callable(handle_show_upgrade)
+    assert callable(handle_show_ultra)
+    assert callable(handle_notify_ultra)
+
+
+def test_evening_push_importable():
+    from worker.tasks.evening_push import run
+    assert callable(run)
+
+
+def test_subscription_expiry_updated():
+    from worker.tasks.subscription_expiry import run
+    import inspect
+    src = inspect.getsource(run)
+    assert "trial_ends_at" in src, "subscription_expiry должен проверять trial_ends_at"

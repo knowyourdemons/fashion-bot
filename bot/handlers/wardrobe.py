@@ -25,6 +25,7 @@ from services.i18n.ru import t
 from bot.handlers.menu import get_main_menu
 from services.scoring import ScoringService, matrix_name_for_owner, calc_item_score
 from services.usage import get_limit_exceeded_msg, get_usage_str
+from core.permissions import get_effective_plan, get_limit
 
 logger = structlog.get_logger()
 
@@ -868,16 +869,20 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         from datetime import date as _date_rate
         today = _date_rate.today().isoformat()
         rate_key = f"rate_limit:{user.id}:{today}"
-        plan = getattr(user, "plan", "free") or "free"
-        rate_limit = RATE_LIMIT_PREMIUM if plan == "premium" else RATE_LIMIT_FREE
+        effective_plan = get_effective_plan(user)
+        rate_limit = get_limit("rate_per_day", effective_plan)
         rate_count = 0
         if redis:
             val = await redis.get(rate_key)
             rate_count = int(val) if val else 0
         if rate_count >= rate_limit:
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("✨ Получить безлимит →", callback_data="show_upgrade")
+            ]])
             await update.message.reply_text(
-                f"✋ Лимит оценок на сегодня ({rate_limit}/день).",
-                reply_markup=get_main_menu(),
+                f"✋ Лимит оценок на сегодня ({rate_limit}/день).\n"
+                f"Завтра снова доступно!",
+                reply_markup=keyboard,
             )
             return
 
@@ -900,6 +905,62 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     redis = context.bot_data.get("redis")
+
+    # ── Лимиты: фото в день и размер гардероба ───────────────────────────────
+    _effective_plan = get_effective_plan(user)
+    if _effective_plan != "admin":
+        from datetime import date as _date_ph
+        _today_ph = _date_ph.today().isoformat()
+        _photo_key = f"photos_day:{user.id}:{_today_ph}"
+        _photo_count = 0
+        if redis:
+            _val = await redis.get(_photo_key)
+            _photo_count = int(_val) if _val else 0
+        _photo_limit = get_limit("photos_per_day", _effective_plan)
+        if _photo_count >= _photo_limit:
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("✨ Получить безлимит →", callback_data="show_upgrade")
+            ]])
+            await update.message.reply_text(
+                f"📸 Добавлено {_photo_count}/{_photo_limit} фото сегодня.\n"
+                f"Лимит восстановится завтра!",
+                reply_markup=keyboard,
+            )
+            return
+
+        # Проверить лимит размера гардероба
+        _owner_id_check, _owner_type_check = await _get_owner(user, context)
+        async with AsyncReadSession() as _session_check:
+            _existing_items = await get_owner_items(_session_check, _owner_id_check, _owner_type_check)
+        _wardrobe_limit = get_limit("wardrobe_size", _effective_plan)
+        if len(_existing_items) >= _wardrobe_limit:
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("✨ Расширить гардероб →", callback_data="show_upgrade")
+            ]])
+            await update.message.reply_text(
+                f"👗 В гардеробе {len(_existing_items)}/{_wardrobe_limit} вещей.\n"
+                f"Достигнут лимит для вашего плана.",
+                reply_markup=keyboard,
+            )
+            return
+
+    # ── Trial активация при первом фото ──────────────────────────────────────
+    if not getattr(user, "trial_started_at", None):
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+        from sqlalchemy import update as _sa_update
+        _now = _dt.now(_tz.utc)
+        async with AsyncWriteSession() as _ts:
+            _res = await _ts.execute(
+                _sa_update(User)
+                .where(User.id == user.id)
+                .where(User.trial_started_at.is_(None))
+                .values(trial_started_at=_now, trial_ends_at=_now + _td(days=14))
+            )
+            await _ts.commit()
+        if _res.rowcount > 0:
+            user.trial_started_at = _now
+            user.trial_ends_at = _now + _td(days=14)
+            logger.info("trial.activated", user_id=str(user.id))
 
     # Подсказка про bulk upload — один раз, если гардероб пуст
     if redis:
@@ -1441,19 +1502,22 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
 
     today = _date.today().isoformat()
     limit_key = f"outfit_req:{user.id}:{today}"
-    plan = (user.plan or "free")
-    day_limit = OUTFIT_DAY_LIMIT_PREMIUM if plan == "premium" else OUTFIT_DAY_LIMIT_FREE
+    _ep_outfit = get_effective_plan(user)
+    day_limit = get_limit("outfit_req_per_day", _ep_outfit)
 
     count = 0
     if redis:
         val = await redis.get(limit_key)
         count = int(val) if val else 0
 
-    if count >= day_limit:
+    if count >= day_limit and _ep_outfit != "admin":
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✨ Получить безлимит →", callback_data="show_upgrade")
+        ]])
         await query.message.reply_text(
             f"✋ На сегодня лимит образов ({day_limit}/день).\n"
             "Следующий образ — завтра утром в 07:00 🌅",
-            reply_markup=get_main_menu(),
+            reply_markup=keyboard,
         )
         return
 
@@ -1688,3 +1752,63 @@ async def _show_wardrobe_page(message, user, page: int, owner_id=None, owner_typ
         await message.reply_text(t("error.generic"))
         logger.error("wardrobe.list.error", error=str(e), user_id=str(user.id))
         sentry_sdk.capture_exception(e)
+
+
+# ── Upgrade flow ─────────────────────────────────────────────────────────────
+
+async def handle_show_upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показать экран выбора плана."""
+    query = update.callback_query
+    await query.answer()
+    from core.permissions import PRICES, ULTRA_FEATURES
+
+    text = (
+        "✨ Касси Premium\n\n"
+        "📅 Бриф каждый день\n"
+        "👗 Образ дня без ограничений\n"
+        "📸 30 фото в день\n"
+        "⭐ 20 оценок образа\n"
+        "💬 20 вопросов стилисту\n"
+        "👧 До 3 детей\n\n"
+        "Выбери план:\n"
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(
+            f"📅 {PRICES['premium_monthly']['label']}",
+            callback_data="subscribe:monthly",
+        )],
+        [InlineKeyboardButton(
+            f"📅 {PRICES['premium_quarterly']['label']}",
+            callback_data="subscribe:quarterly",
+        )],
+        [InlineKeyboardButton(
+            f"📅 {PRICES['premium_yearly']['label']} ⭐",
+            callback_data="subscribe:yearly",
+        )],
+        [InlineKeyboardButton("🔒 Ultra — скоро!", callback_data="show_ultra")],
+    ])
+    await query.message.reply_text(text, reply_markup=keyboard)
+
+
+async def handle_show_ultra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показать информацию об Ultra плане."""
+    query = update.callback_query
+    await query.answer()
+    from core.permissions import ULTRA_FEATURES
+
+    text = "💎 Касси Ultra — скоро!\n\nВ разработке:\n"
+    for f in ULTRA_FEATURES:
+        text += f"  {f}\n"
+    text += "\nОставь контакт и мы уведомим о запуске!"
+
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔔 Уведомить меня", callback_data="notify_ultra")
+    ]])
+    await query.message.reply_text(text, reply_markup=keyboard)
+
+
+async def handle_notify_ultra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Заглушка: пользователь хочет узнать про Ultra."""
+    query = update.callback_query
+    await query.answer("Отлично! Уведомим тебя первой 🎉")
+    # TODO: сохранить в БД список желающих Ultra

@@ -700,6 +700,14 @@ async def generate_brief(payload: dict) -> dict:
         logger.warning("brief.generate.user_not_found", user_id=str(user_id))
         return {}
 
+    # Проверить должен ли прийти бриф сегодня
+    from core.permissions import get_effective_plan, is_brief_day as _is_brief_day
+    _effective_plan = get_effective_plan(user)
+    if not _is_brief_day(_effective_plan, user.timezone or "Europe/Vilnius"):
+        logger.info("brief.skipped_not_brief_day",
+            user_id=str(user_id), plan=_effective_plan)
+        return {}
+
     is_adult_brief = user.segment not in ("mom_girl", "mom_boy")
 
     if is_adult_brief:
