@@ -392,42 +392,44 @@ def test_format_basic():
     """Имя, day_type, тип и цвет вещи в выводе."""
     outfit = _empty_outfit()
     outfit["top"] = FakeItem(type="футболка", color="белый")
-    text = _format_child_block("Алиса", "садик", outfit, 7.5)
+    text = _format_child_block("Алиса", "садик", outfit)
     assert "Алиса" in text
     assert "садик" in text
     assert "футболка" in text
     assert "белый" in text
 
 
-def test_format_with_score():
-    """Скор отображается как 'X.X/10'."""
+def test_format_no_score_ever():
+    """Числовой скор никогда не показывается юзеру."""
     outfit = _empty_outfit()
     outfit["top"] = FakeItem(type="кофта", color="синий")
-    text = _format_child_block("Алиса", "садик", outfit, 8.5)
-    assert "8.5/10" in text
-
-
-def test_format_no_score_when_none():
-    """При score=None строки со скором нет."""
-    outfit = _empty_outfit()
-    outfit["top"] = FakeItem(type="кофта", color="синий")
-    text = _format_child_block("Алиса", "садик", outfit, None)
+    text = _format_child_block("Алиса", "садик", outfit)
     assert "/10" not in text
+    assert "8.5" not in text
 
 
-def test_format_with_wow():
-    """is_wow=True → эмодзи ✨ в выводе."""
+def test_format_with_comment():
+    """outfit_comment отображается в блоке."""
     outfit = _empty_outfit()
     outfit["top"] = FakeItem(type="кофта", color="синий")
-    text = _format_child_block("Алиса", "садик", outfit, 9.0, is_wow=True)
-    assert "✨" in text
+    text = _format_child_block("Алиса", "садик", outfit, outfit_comment="Отличный образ!")
+    assert "Отличный образ!" in text
+    assert "💬" in text
+
+
+def test_format_no_comment_when_none():
+    """Без комментария — блок 💬 отсутствует."""
+    outfit = _empty_outfit()
+    outfit["top"] = FakeItem(type="кофта", color="синий")
+    text = _format_child_block("Алиса", "садик", outfit, outfit_comment=None)
+    assert "💬" not in text
 
 
 def test_format_thermals():
     """Термобельё отображается с заголовком 'Термобельё'."""
     outfit = _empty_outfit()
     outfit["thermal_top"] = FakeItem(category_group="underwear", type="термолонгслив", color="серый")
-    text = _format_child_block("Алиса", "прогулка", outfit, None)
+    text = _format_child_block("Алиса", "прогулка", outfit)
     assert "Термобельё" in text
     assert "термолонгслив" in text
 
@@ -436,7 +438,7 @@ def test_format_outerwear():
     """Верхняя одежда отображается с заголовком."""
     outfit = _empty_outfit()
     outfit["outerwear"] = FakeItem(category_group="outerwear", type="куртка", color="красный")
-    text = _format_child_block("Алиса", "садик", outfit, None)
+    text = _format_child_block("Алиса", "садик", outfit)
     assert "Верхняя одежда" in text
     assert "куртка" in text
 
@@ -446,7 +448,7 @@ def test_format_accessories():
     outfit = _empty_outfit()
     outfit["hat"] = FakeItem(category_group="accessory", type="шапка", color="синий")
     outfit["scarf"] = FakeItem(category_group="accessory", type="шарф", color="серый")
-    text = _format_child_block("Алиса", "прогулка", outfit, None)
+    text = _format_child_block("Алиса", "прогулка", outfit)
     assert "Аксессуары" in text
     assert "шапка" in text
     assert "шарф" in text
@@ -457,7 +459,7 @@ def test_format_removable_layer():
     outfit = _empty_outfit()
     outfit["top"] = FakeItem(type="футболка", color="белый")
     outfit["removable_layer"] = FakeItem(type="худи", color="серый")
-    text = _format_child_block("Алиса", "садик", outfit, None)
+    text = _format_child_block("Алиса", "садик", outfit)
     assert "снять вечером" in text
     assert "худи" in text
 
@@ -466,7 +468,7 @@ def test_format_underwear_text_fallback():
     """Если нет underwear_items → underwear_text показывается."""
     outfit = _empty_outfit()
     outfit["underwear_text"] = "трусики"
-    text = _format_child_block("Алиса", "садик", outfit, None)
+    text = _format_child_block("Алиса", "садик", outfit)
     assert "трусики" in text
 
 

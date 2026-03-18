@@ -377,7 +377,7 @@ async def generate_brief(payload: dict) -> dict:
 
         all_outfit_ids.extend(str(i.id) for i in outfit["all_items"])
         scored = [float(i.score_item) for i in outfit["all_items"] if i.score_item]
-        outfit_score = round(sum(scored) / len(scored), 1) if scored else None
+        internal_score = round(sum(scored) / len(scored), 1) if scored else 0.0
 
         # WOW детектор
         is_wow_outfit = bool(scored and sum(scored) / len(scored) >= 8.0)
@@ -388,8 +388,54 @@ async def generate_brief(payload: dict) -> dict:
         regime = get_temp_regime(_temp)
         colortype = getattr(child, "colortype", None) or "default"
 
+        # Получить матрицу для тона и wow-сообщений
+        from services.scoring import matrix_name_for_owner
+        from db.base import AsyncReadSession as _ARS
+        from db.models.scoring_matrix import ScoringMatrix as _SM
+        from sqlalchemy import select as _select
+        _matrix_name = matrix_name_for_owner(user, child)
+        _matrix = None
+        try:
+            async with _ARS() as _sess:
+                _res = await _sess.execute(
+                    _select(_SM).where(_SM.name == _matrix_name, _SM.is_active.is_(True))
+                )
+                _matrix = _res.scalar_one_or_none()
+        except Exception:
+            pass
+
+        _tone = (_matrix.criteria.get("_tone") or "") if _matrix else ""
+        _wow_msgs = (_matrix.criteria.get("_wow_messages") or []) if _matrix else []
+
+        # Сгенерировать текстовый комментарий через Haiku
+        from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
+        import redis.asyncio as _aioredis
+        try:
+            _pool = get_anthropic_pool()
+        except RuntimeError:
+            _r = _aioredis.from_url(settings.redis_url, decode_responses=False)
+            init_anthropic_pool(_r)
+            _pool = get_anthropic_pool()
+
+        from services.scoring_comment import generate_outfit_comment
+        child_age = (date.today() - child.birthdate).days // 365
+        weather_str = f"{temp_m:.0f}°C" if temp_m is not None else ""
+        outfit_comment = await generate_outfit_comment(
+            pool=_pool,
+            outfit_items=[f"{i.type} {i.color}" for i in outfit["all_items"]],
+            weather=weather_str,
+            context=day_type,
+            score=internal_score,
+            is_wow=is_wow_outfit,
+            child_name=child.name,
+            gender=getattr(child, "gender", None),
+            age=child_age,
+            tone=_tone,
+            wow_messages=_wow_msgs,
+        )
+
         child_briefs.append(_format_child_block(
-            child.name, day_type, outfit, outfit_score, is_wow=is_wow_outfit,
+            child.name, day_type, outfit, outfit_comment,
             temp=_temp, colortype=colortype, regime=regime,
         ))
 

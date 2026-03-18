@@ -47,6 +47,7 @@ class FakeItem:
 @dataclass
 class FakeChild:
     birthdate: date
+    gender: str = "girl"
 
 
 @dataclass
@@ -226,19 +227,19 @@ class TestScoring:
 
     def test_matrix_name_child_age_0(self):
         child = FakeChild(birthdate=date.today() - timedelta(days=365))
-        assert self.matrix_name_for_owner(FakeUser(), child) == "0-3"
+        assert self.matrix_name_for_owner(FakeUser(), child) == "0-3-girl"
 
     def test_matrix_name_child_age_3(self):
         child = FakeChild(birthdate=date.today() - timedelta(days=365 * 3 + 1))
-        assert self.matrix_name_for_owner(FakeUser(), child) == "3-7"
+        assert self.matrix_name_for_owner(FakeUser(), child) == "3-7-girl"
 
     def test_matrix_name_child_age_7(self):
         child = FakeChild(birthdate=date.today() - timedelta(days=365 * 7 + 1))
-        assert self.matrix_name_for_owner(FakeUser(), child) == "7-12"
+        assert self.matrix_name_for_owner(FakeUser(), child) == "7-12-girl"
 
     def test_matrix_name_child_age_12(self):
         child = FakeChild(birthdate=date.today() - timedelta(days=365 * 12 + 1))
-        assert self.matrix_name_for_owner(FakeUser(), child) == "12-16"
+        assert self.matrix_name_for_owner(FakeUser(), child) == "12-16-girl"
 
     def test_matrix_name_pregnant(self):
         user = FakeUser(segment="pregnant", trimester=2)

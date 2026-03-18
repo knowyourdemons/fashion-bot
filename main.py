@@ -38,6 +38,19 @@ async def startup() -> None:
     from db.seeds.scoring_matrices import seed_scoring_matrices
     await seed_scoring_matrices()
 
+    # Миграция: добавить столбец role в wardrobe_items если не существует
+    try:
+        from sqlalchemy import text as _text
+        from db.base import AsyncWriteSession as _AWS
+        async with _AWS() as _sess:
+            await _sess.execute(_text(
+                "ALTER TABLE wardrobe_items ADD COLUMN IF NOT EXISTS role VARCHAR(16)"
+            ))
+            await _sess.commit()
+    except Exception as _e:
+        import structlog as _sl
+        _sl.get_logger().warning("startup.migration.role_column_failed", error=str(_e))
+
     from db.seeds.translate_items import run_if_needed as translate_items
     await translate_items()
 

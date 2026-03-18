@@ -23,7 +23,7 @@ def test_placeholder_outerwear():
         "hat": None, "scarf": None, "gloves": None,
         "warnings": [], "all_items": [],
     }
-    result = _format_child_block("Алиса", "садик", outfit, 7.5, temp=3.0)
+    result = _format_child_block("Алиса", "садик", outfit, temp=3.0)
     assert "(нет в гардеробе)" in result, f"FAIL: нет placeholder\n{result}"
     assert "куртк" in result or "ветровк" in result or "пуховик" in result, \
         f"FAIL: нет упоминания куртки\n{result}"
@@ -42,7 +42,7 @@ def test_no_placeholder_when_warm():
         "hat": None, "scarf": None, "gloves": None,
         "warnings": [], "all_items": [],
     }
-    result = _format_child_block("Алиса", "садик", outfit, 6.5, temp=20.0)
+    result = _format_child_block("Алиса", "садик", outfit, temp=20.0)
     assert "куртк" not in result, \
         f"FAIL: при +20°C не должно быть куртки\n{result}"
     print("PASS: нет placeholder для outerwear при +20°C")
@@ -62,7 +62,7 @@ def test_placeholder_footwear():
         "hat": None, "scarf": None, "gloves": None,
         "warnings": [], "all_items": [],
     }
-    result = _format_child_block("Алиса", "садик", outfit, 7.0, temp=8.0)
+    result = _format_child_block("Алиса", "садик", outfit, temp=8.0)
     assert "обувь" in result.lower(), \
         f"FAIL: нет placeholder для обуви\n{result}"
     assert "(нет в гардеробе)" in result, f"FAIL: нет '(нет в гардеробе)'\n{result}"

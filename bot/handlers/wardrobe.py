@@ -710,10 +710,13 @@ async def _save_one(
     if matrix and raw_breakdown:
         score_breakdown = raw_breakdown
         score_item = calc_item_score(raw_breakdown, matrix)
-        score_version = "v2.0"
+        score_version = "v3.0"
     else:
         score_breakdown, score_item = _default_score()
         score_version = "v1.0"
+
+    from services.scoring import classify_role as _classify_role
+    item_role = _classify_role(data.get("type") or "", data.get("color") or "")
 
     try:
         async with AsyncWriteSession() as session:
@@ -738,6 +741,7 @@ async def _save_one(
                 quantity=1,
                 show_in_collage=show_in_collage,
                 is_base_layer=(category_group == "base_layer"),
+                role=item_role,
                 score_item=score_item,
                 score_breakdown=score_breakdown,
                 score_version=score_version,
@@ -1087,6 +1091,68 @@ async def _handle_single_photo(
             lines.append("🤔 На фото не найдено одежды")
 
         await update.message.reply_text("\n".join(lines))
+
+        # Комментарий стилиста для первой добавленной вещи
+        if added:
+            try:
+                from datetime import date
+                from services.scoring_comment import generate_item_comment
+                from services.scoring import classify_role
+                first = added[0]
+                _item_type = first.get("type") or "вещь"
+                _item_color = first.get("color") or ""
+                _role = classify_role(_item_type, _item_color)
+                _pool = get_anthropic_pool()
+                # Тон из матрицы
+                _tone = ""
+                if matrix and hasattr(matrix, "criteria"):
+                    _tone = matrix.criteria.get("_tone") or ""
+                # Информация о ребёнке/пользователе
+                _child_name = _child_gender = _child_age = None
+                if owner_type == "child":
+                    try:
+                        from db.crud.children import get_children
+                        async with AsyncReadSession() as _cs:
+                            _children = await get_children(_cs, user.id)
+                        _ch = next((c for c in _children if c.id == owner_id), None)
+                        if _ch:
+                            _child_name = _ch.name
+                            _child_gender = getattr(_ch, "gender", None)
+                            _child_age = (date.today() - _ch.birthdate).days // 365 if _ch.birthdate else None
+                    except Exception:
+                        pass
+                _colortype = getattr(user, "colortype", None)
+                _comment = await generate_item_comment(
+                    pool=_pool,
+                    item_type=_item_type,
+                    item_color=_item_color,
+                    score=0.0,
+                    role=_role,
+                    colortype=_colortype,
+                    colortype_match=True,
+                    wardrobe_summary="",
+                    gender=_child_gender,
+                    age=_child_age,
+                    child_name=_child_name,
+                    tone=_tone,
+                )
+                await update.message.reply_text(f"💬 {_comment}")
+            except Exception as _e:
+                logger.warning("wardrobe.item_comment_failed", error=str(_e))
+
+        # ── Balance insight при milestone (каждые 10 вещей) ────────────────
+        if added:
+            try:
+                from services.scoring import get_wardrobe_balance_insight
+                async with AsyncReadSession() as _bi_sess:
+                    _all_items = await get_owner_items(_bi_sess, owner_id, owner_type)
+                _count = len(_all_items)
+                if _count > 0 and _count % 10 == 0:
+                    _insight = get_wardrobe_balance_insight(_all_items)
+                    if _insight:
+                        await update.message.reply_text(_insight)
+            except Exception as _e:
+                logger.warning("wardrobe.balance_insight_failed", error=str(_e))
 
         # ── Триггер первого брифа на 5-й вещи (для ВСЕХ юзеров) ────────────
         if added and user.onboarding_completed:

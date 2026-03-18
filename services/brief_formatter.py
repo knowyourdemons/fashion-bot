@@ -24,8 +24,7 @@ def _format_child_block(
     child_name: str,
     day_type: str,
     outfit: dict,
-    outfit_score,
-    is_wow: bool = False,
+    outfit_comment: str | None = None,
     temp: float | None = None,
     colortype: str = "default",
     regime: str = "прохладно",
@@ -102,10 +101,7 @@ def _format_child_block(
         lines.append("🎩 Аксессуары: " + " ".join(acc_parts))
 
     lines.append("")
-    if outfit_score is not None:
-        lines.append(f"⭐ Скор образа: {outfit_score}/10")
-    if is_wow:
-        from worker.tasks.style_config import get_wow_phrase
-        lines.append(f"✨ {get_wow_phrase()}")
+    if outfit_comment:
+        lines.append(f"💬 {outfit_comment}")
 
     return "\n".join(lines)

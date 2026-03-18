@@ -69,6 +69,9 @@ class WardrobeItem(Base):
     wear_count: Mapped[int] = mapped_column(Integer, default=0)
     last_worn: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
+    # Роль вещи в гардеробе
+    role: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+
     # Скоринг
     score_item: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
     score_breakdown: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)

@@ -22,13 +22,14 @@ def matrix_name_for_owner(user, child=None) -> str:
     """Возвращает имя матрицы по сегменту/возрасту."""
     if child:
         age = (date.today() - child.birthdate).days // 365
+        gender = getattr(child, "gender", "girl") or "girl"
         if age < 3:
-            return "0-3"
+            return f"0-3-{gender}"
         if age < 7:
-            return "3-7"
+            return f"3-7-{gender}"
         if age < 12:
-            return "7-12"
-        return "12-16"
+            return f"7-12-{gender}"
+        return f"12-16-{gender}"
 
     if getattr(user, "segment", None) == "pregnant":
         trimester = getattr(user, "trimester", 1) or 1
@@ -57,6 +58,39 @@ def calc_item_score(breakdown: dict, matrix: ScoringMatrix) -> float:
         clamped = max(0, min(int(value), 2))
         total += clamped * weight_info["weight"]
     return round((total / matrix.max_score) * 10, 2)
+
+def classify_role(item_type: str, item_color: str) -> str:
+    """Определяет роль вещи в гардеробе: base / accent / statement."""
+    neutral_colors = {"белый", "чёрный", "серый", "бежевый", "navy", "тёмно-синий", "коричневый"}
+    basic_types = {"футболка", "джинсы", "брюки", "юбка-карандаш", "рубашка", "водолазка", "лонгслив"}
+    statement_types = {"вечернее платье", "кожаная куртка", "пальто", "шуба"}
+
+    color_lower = (item_color or "").lower()
+    type_lower = (item_type or "").lower()
+
+    if any(st in type_lower for st in statement_types):
+        return "statement"
+    if any(bt in type_lower for bt in basic_types) and any(nc in color_lower for nc in neutral_colors):
+        return "base"
+    return "accent"
+
+
+def get_wardrobe_balance_insight(items: list) -> str | None:
+    """Генерирует инсайт о балансе гардероба (только при ≥10 вещах с ролью)."""
+    from collections import Counter
+    roles = Counter(getattr(i, "role", None) for i in items if getattr(i, "role", None))
+    base = roles.get("base", 0)
+    accent = roles.get("accent", 0)
+    statement = roles.get("statement", 0)
+    total = base + accent + statement
+    if total < 10:
+        return None
+    if base < total * 0.3:
+        return "💡 В гардеробе мало базовых вещей — добавь нейтральный топ или брюки, и акценты заиграют!"
+    if accent > total * 0.5:
+        return "💡 Много ярких вещей — классно! Но пара нейтральных базовых вещей сделает гардероб ещё гибче"
+    return None
+
 
 # Скоринг образа (взрослые)
 OUTFIT_SCORE_WEIGHTS_ADULT = {
