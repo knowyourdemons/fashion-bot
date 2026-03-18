@@ -1209,29 +1209,25 @@ async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYP
                     callback_data=f"set_owner:child:{child.id}"
                 )])
 
-    # Добавить кнопку "Образ дня" ко всем остальным кнопкам
-    action_buttons = [InlineKeyboardButton("🌤 Образ дня", callback_data="outfit_request")]
-    if buttons:
-        # switch-buttons уже есть — добавим образ дня первой строкой
-        markup = InlineKeyboardMarkup([action_buttons] + buttons)
-    else:
-        markup = InlineKeyboardMarkup([action_buttons])
-
+    # Считаем вещи и средний скор для заголовка
     async with AsyncReadSession() as session:
         all_items = await get_owner_items(session, owner_id, owner_type)
     item_count = len(all_items)
+    scored = [float(i.score_item) for i in all_items if i.score_item]
+    avg_score_str = f" · ⭐ {round(sum(scored)/len(scored), 1)}" if scored else ""
+
+    # Кнопки: образ дня + список; switch-кнопки ниже
+    top_row = [
+        InlineKeyboardButton("🌤 Образ дня", callback_data="outfit_request"),
+        InlineKeyboardButton("📋 Посмотреть вещи", callback_data="show_wardrobe_list"),
+    ]
+    markup = InlineKeyboardMarkup([top_row] + buttons)
 
     await update.message.reply_text(
-        f"👗 Гардероб: *{owner_name}* · {item_count} вещей",
+        f"👗 Гардероб: *{owner_name}* · {item_count} вещей{avg_score_str}",
         parse_mode="Markdown",
         reply_markup=markup,
     )
-
-    await _show_wardrobe_page(update.message, user, 0, owner_id=owner_id, owner_type=owner_type)
-
-    usage = get_usage_str(user)
-    if usage:
-        await update.message.reply_text(usage)
 
 
 async def handle_set_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1351,9 +1347,9 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
             )
             return
 
-        # Рандомизировать seed чтобы образ менялся
-        seed = int(_datetime.now().timestamp()) // 1800 + count
-        _random.seed(seed)
+        # Полностью случайный seed при каждом запросе
+        import uuid as _uuid
+        _random.seed(str(_uuid.uuid4()))
         items_shuffled = list(items)
         _random.shuffle(items_shuffled)
 
@@ -1410,7 +1406,20 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
 
         sm = "+" if temp_m >= 0 else ""
         temp_text = f"{sm}{temp_m:.0f}°C"
-        caption = f"🌤 Образ для {child.name} · {temp_text}"
+
+        # Посчитать скор образа
+        outfit_score_str = ""
+        try:
+            all_items_in_outfit = [v for v in outfit.values()
+                                   if v and hasattr(v, "score_item") and v.score_item]
+            if all_items_in_outfit:
+                scores = [float(i.score_item) for i in all_items_in_outfit]
+                avg = sum(scores) / len(scores)
+                outfit_score_str = f"\n⭐ Скор: {avg:.1f}/10"
+        except Exception:
+            pass
+
+        caption = f"🌤 Образ для {child.name} · {temp_text}{outfit_score_str}"
         outfit_warnings = outfit.get("warnings") or []
         if outfit_warnings:
             caption += "\n" + "\n".join(outfit_warnings)
@@ -1449,6 +1458,17 @@ async def handle_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     usage = get_usage_str(user)
     if usage:
         await update.message.reply_text(usage)
+
+
+async def handle_list_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback кнопка 📋 Посмотреть вещи из меню гардероба."""
+    query = update.callback_query
+    await query.answer()
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+    context.user_data["wardrobe_page"] = 0
+    await _show_wardrobe_page(query.message, user, 0, context=context)
 
 
 async def handle_wardrobe_page(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

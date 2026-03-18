@@ -222,9 +222,32 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         return ConversationHandler.END
 
     if user.onboarding_completed:
+        from datetime import datetime as _dt
+        _hour = _dt.now().hour
+        if _hour < 12:
+            greeting = "Доброе утро"
+        elif _hour < 18:
+            greeting = "Добрый день"
+        else:
+            greeting = "Добрый вечер"
+        async with AsyncReadSession() as _session:
+            from db.crud.children import get_children as _gc
+            _children = await _gc(_session, user.id)
+        _child_name = _children[0].name if _children else None
+        if _child_name:
+            _welcome = (
+                f"{greeting}, {user.name}! 👋\n"
+                f"Рада видеть тебя и {_child_name} ✨\n"
+                f"Чем могу помочь сегодня?"
+            )
+        else:
+            _welcome = (
+                f"{greeting}, {user.name}! 👋\n"
+                f"Рада видеть тебя снова ✨\n"
+                f"Чем могу помочь сегодня?"
+            )
         await update.effective_message.reply_text(
-            f"Привет, {user.name}! 👋",
-            reply_markup=get_main_menu(),
+            _welcome, reply_markup=get_main_menu()
         )
         return ConversationHandler.END
 
