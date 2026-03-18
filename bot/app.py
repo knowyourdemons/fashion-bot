@@ -33,17 +33,16 @@ def create_application() -> Application:
     app.add_handler(MessageHandler(filters.PHOTO, wardrobe.handle_photo))
     app.add_handler(MessageHandler(filters.Document.IMAGE, wardrobe.handle_photo))
 
-    # Кнопки главного меню (group=0, до text стилиста)
-    _menu_filter = (
-        filters.Regex("^👗 Гардероб$")
-        | filters.Regex("^⭐ Оценить образ$")
-        | filters.Regex("^⚙️ Профиль$")
-        | filters.Regex("^❓ Помощь$")
-    )
+    # Кнопки главного меню group=0 (Гардероб, Оценить образ, Профиль)
     app.add_handler(MessageHandler(filters.Regex("^👗 Гардероб$"), wardrobe.handle_wardrobe_menu))
     app.add_handler(MessageHandler(filters.Regex("^⭐ Оценить образ$"), wardrobe.handle_rate_menu))
     app.add_handler(MessageHandler(filters.Regex("^⚙️ Профиль$"), handle_profile))
-    app.add_handler(MessageHandler(filters.Regex("^❓ Помощь$"), help.handle_help))
+
+    # ❓ Помощь — group=1 (явный приоритет перед text стилистом)
+    app.add_handler(
+        MessageHandler(filters.TEXT & filters.Regex("^❓ Помощь$"), help.handle_help),
+        group=1,
+    )
 
     # Callback queries (кнопки)
     app.add_handler(CallbackQueryHandler(brief.handle_brief_feedback, pattern="^brief_feedback:"))
@@ -54,8 +53,11 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(wardrobe.handle_rate_mode, pattern="^rate_mode:"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_set_owner, pattern="^set_owner:"))
 
-    # Текстовые сообщения → стилист (исключаем кнопки меню)
+    # Текстовые сообщения → стилист — group=2 (после меню-хендлеров)
     _menu_texts = filters.Regex("^(👗 Гардероб|⭐ Оценить образ|⚙️ Профиль|❓ Помощь)$")
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~_menu_texts, text.handle_text))
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND & ~_menu_texts, text.handle_text),
+        group=2,
+    )
 
     return app

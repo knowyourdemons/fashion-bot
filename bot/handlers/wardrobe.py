@@ -22,6 +22,7 @@ from db.crud.wardrobe import create, get_owner_items
 from db.models.user import User
 from exceptions import FashionBotError, RateLimitError
 from services.i18n.ru import t
+from bot.handlers.menu import get_main_menu
 from services.scoring import ScoringService, matrix_name_for_owner, calc_item_score
 from services.usage import get_limit_exceeded_msg, get_usage_str
 
@@ -747,15 +748,15 @@ async def _rate_photos(
                     file_id=file_id[:20], size=len(photo_bytes))
                 photo_bytes_list.append(photo_bytes)
             result = await _call_rate_vision(photo_bytes_list, owner_id=owner_id, owner_type=owner_type)
-            await message.reply_text(f"⭐ Скор образа:\n{result}")
+            await message.reply_text(f"⭐ Скор образа:\n{result}", reply_markup=get_main_menu())
         else:
             for i, file_id in enumerate(file_ids, 1):
                 tg_file = await bot.get_file(file_id)
                 photo_bytes = bytes(await tg_file.download_as_bytearray())
                 result = await _call_rate_vision([photo_bytes], owner_id=owner_id, owner_type=owner_type)
-                await message.reply_text(f"📷 Фото {i}:\n{result}")
+                await message.reply_text(f"📷 Фото {i}:\n{result}", reply_markup=get_main_menu())
     except Exception as e:
-        await message.reply_text("Не удалось оценить образ. Попробуй ещё раз.")
+        await message.reply_text("Не удалось оценить образ. Попробуй ещё раз.", reply_markup=get_main_menu())
         logger.error("rate_photos.error", error=str(e))
         sentry_sdk.capture_exception(e)
 
