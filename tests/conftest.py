@@ -26,8 +26,10 @@ _mock_if_missing(
 if "pytz" not in sys.modules:
     import datetime as _dt
     _pytz_mock = MagicMock()
-    _pytz_mock.UTC = _dt.timezone.utc  # реальный UTC, не MagicMock
-    _pytz_mock.timezone = lambda tz: _dt.timezone.utc  # fallback для pytz.timezone("Europe/...")
+    # telegram._utils.datetime использует pytz.utc (lowercase) и pytz.UTC (uppercase)
+    _pytz_mock.utc = _dt.timezone.utc
+    _pytz_mock.UTC = _dt.timezone.utc
+    _pytz_mock.timezone = lambda tz: _dt.timezone.utc
     sys.modules["pytz"] = _pytz_mock
 
 # config.settings должен быть реальным объектом, не MagicMock,
