@@ -18,11 +18,47 @@ from services.usage import get_limit_exceeded_msg
 
 logger = structlog.get_logger()
 
-STYLIST_SYSTEM_PROMPT = """Ты Касси — стилист по детской одежде и семейному стилю.
-Отвечаешь кратко — максимум 5 строк. Язык: русский. Используй эмодзи умеренно.
-Ты НЕ универсальный ассистент — если вопрос не про одежду, стиль или гардероб,
-вежливо отвечай: "Я стилист, могу помочь только с вопросами про одежду и стиль 👗"
-"""
+HAIKU_MODEL = "claude-haiku-4-5-20251001"
+
+
+def _get_text_system(user) -> str:
+    segment = getattr(user, "segment", "no_kids") or "no_kids"
+    colortype = getattr(user, "colortype", None)
+    colortype_text = f"Цветотип пользователя: {colortype}." if colortype else ""
+
+    if segment in ("mom_girl", "mom_boy"):
+        gender = "девочки" if segment == "mom_girl" else "мальчика"
+        context_line = (
+            f"Пользователь — мама {gender}. "
+            f"Отвечай про детскую и женскую моду. "
+            f"{colortype_text}"
+        )
+    elif segment == "pregnant":
+        context_line = (
+            f"Пользователь беременна. "
+            f"Отвечай про моду для беременных и будущих мам. "
+            f"{colortype_text}"
+        )
+    else:  # no_kids
+        context_line = (
+            f"Пользователь без детей. "
+            f"Отвечай ТОЛЬКО про взрослую моду и стиль. "
+            f"НЕ упоминай детей, семью с детьми, детскую одежду. "
+            f"{colortype_text}"
+        )
+
+    return (
+        f"Ты Касси — дружелюбный персональный стилист. "
+        f"{context_line}\n\n"
+        f"Правила:\n"
+        f"- Отвечай коротко (до 5 строк)\n"
+        f"- Только про одежду и стиль\n"
+        f"- Если вопрос не про одежду — вежливо скажи: "
+        f"\"Я стилист, могу помочь только с вопросами про одежду и стиль 👗\"\n"
+        f"- Используй эмодзи умеренно\n"
+        f"- Говори на русском\n"
+        f"- Тон: как подруга, не официально"
+    )
 
 _PLAN_LIMITS: dict[str, int] = {
     "free":    settings.daily_limits_free,
@@ -68,15 +104,26 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     try:
         start = time.monotonic()
         pool = get_anthropic_pool()
+        system = _get_text_system(user)
         response = await pool.create_message(
-            system=STYLIST_SYSTEM_PROMPT,
+            model=HAIKU_MODEL,
+            system=system,
             messages=[{"role": "user", "content": update.message.text}],
             max_tokens=512,
         )
         reply = response.content[0].text if response.content else t("error.generic")
         duration_ms = int((time.monotonic() - start) * 1000)
 
-        await update.message.reply_text(reply, reply_markup=get_main_menu())
+        # Суффикс — только когда мало осталось
+        remaining = chat_limit - (chat_count + 1)
+        if remaining == 0:
+            suffix = f"\n\n⚠️ Это последний вопрос на сегодня."
+        elif remaining <= 5:
+            suffix = f"\n\n💬 Осталось вопросов сегодня: {remaining}/{chat_limit}"
+        else:
+            suffix = ""
+
+        await update.message.reply_text(f"{reply}{suffix}", reply_markup=get_main_menu())
 
         # Инкремент лимита чата
         if redis:

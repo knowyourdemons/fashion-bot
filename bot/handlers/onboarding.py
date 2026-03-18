@@ -230,9 +230,12 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             greeting = "Добрый день"
         else:
             greeting = "Добрый вечер"
-        async with AsyncReadSession() as _session:
-            _children = await get_children(_session, user.id)
-        _child_name = _children[0].name if _children else None
+        _segment = getattr(user, "segment", "no_kids") or "no_kids"
+        _child_name = None
+        if _segment in ("mom_girl", "mom_boy"):
+            async with AsyncReadSession() as _session:
+                _children = await get_children(_session, user.id)
+            _child_name = _children[0].name if _children else None
         if _child_name:
             _welcome = (
                 f"{greeting}, {user.name}! 👋\n"

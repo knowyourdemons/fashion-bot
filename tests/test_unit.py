@@ -338,3 +338,43 @@ class TestSwitchOwner:
         count = 5
         action = "добавить" if count == 0 else "посмотреть"
         assert action == "посмотреть"
+
+
+# ── TestTextSystem ─────────────────────────────────────────────────────────
+
+class TestTextSystem:
+    def _make_user(self, segment, colortype=None):
+        from unittest.mock import MagicMock
+        user = MagicMock()
+        user.segment = segment
+        user.colortype = colortype
+        return user
+
+    def test_no_kids_не_упоминает_детей(self):
+        from bot.handlers.text import _get_text_system
+        user = self._make_user("no_kids")
+        system = _get_text_system(user)
+        assert "НЕ упоминай детей" in system, \
+            "Для no_kids промпт должен запрещать упоминание детей"
+        assert "взрослую" in system.lower(), \
+            "Для no_kids должно быть про взрослую моду"
+
+    def test_mom_girl_упоминает_девочку(self):
+        from bot.handlers.text import _get_text_system
+        user = self._make_user("mom_girl")
+        system = _get_text_system(user)
+        assert "девочк" in system.lower(), \
+            "Для mom_girl должно быть про девочку"
+
+    def test_colortype_в_промпте(self):
+        from bot.handlers.text import _get_text_system
+        user = self._make_user("no_kids", colortype="Лето")
+        system = _get_text_system(user)
+        assert "Лето" in system, "Цветотип должен быть в промпте"
+
+    def test_no_colortype_без_ошибки(self):
+        from bot.handlers.text import _get_text_system
+        user = self._make_user("no_kids", colortype=None)
+        system = _get_text_system(user)
+        assert isinstance(system, str)
+        assert len(system) > 100

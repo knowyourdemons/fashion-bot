@@ -109,6 +109,11 @@ def test_import_style_config():
     assert callable(_needs_tights)
 
 
+def test_get_text_system_importable():
+    from bot.handlers.text import _get_text_system
+    assert callable(_get_text_system)
+
+
 def test_handle_switch_owner_exists():
     from bot.handlers.wardrobe import handle_switch_owner, handle_add_items_hint
     assert callable(handle_switch_owner)
