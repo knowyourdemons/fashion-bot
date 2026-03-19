@@ -748,11 +748,14 @@ _PASTEL_MAP = {
 }
 
 
+_PASTEL_SORTED = sorted(_PASTEL_MAP.items(), key=lambda x: len(x[0]), reverse=True)
+
+
 def _pastel_bg(color_name: str) -> str:
     if not color_name:
         return "#F5F3F0"
     c = color_name.lower()
-    for key, val in _PASTEL_MAP.items():
+    for key, val in _PASTEL_SORTED:
         if key in c:
             return val
     return "#F5F3F0"
@@ -1000,7 +1003,63 @@ async def build_collage_satori(
         },
     }
 
-    # Footer
+    # Footer with palette circles
+    # Collect unique colors from slots that have items
+    _COLOR_HEX = {
+        "белый": "#F0F0F0", "чёрный": "#333333", "серый": "#999999",
+        "розовый": "#F4A0B0", "красный": "#D94040", "бордовый": "#8B2252",
+        "оранжевый": "#F0A030", "жёлтый": "#F0D030", "бежевый": "#E8D0B0",
+        "зелёный": "#60B060", "голубой": "#70B0D8", "синий": "#4060C0",
+        "фиолетовый": "#9060C0", "коричневый": "#8B6040", "лавандовый": "#B090D0",
+        "пыльно-розовый": "#D0A0A8", "серо-зелёный": "#80A888",
+    }
+    palette_colors: list[str] = []
+    seen_colors: set[str] = set()
+    for s in slots:
+        c = (s.get("item_color") or "").lower()
+        if c and c not in seen_colors:
+            seen_colors.add(c)
+            hex_c = "#C0B8C8"  # default muted
+            for key, val in _COLOR_HEX.items():
+                if key in c:
+                    hex_c = val
+                    break
+            palette_colors.append(hex_c)
+
+    circle_els = [
+        {
+            "type": "div",
+            "props": {
+                "style": {
+                    "display": "flex",
+                    "width": 18,
+                    "height": 18,
+                    "borderRadius": "50%",
+                    "backgroundColor": hx,
+                    "border": "2px solid #E8E0F0",
+                },
+            },
+        }
+        for hx in palette_colors[:6]
+    ]
+
+    footer_children: list = []
+    if circle_els:
+        footer_children.append({
+            "type": "div",
+            "props": {
+                "style": {"display": "flex", "gap": 6, "marginRight": 12},
+                "children": circle_els,
+            },
+        })
+    footer_children.append({
+        "type": "div",
+        "props": {
+            "style": {"display": "flex", "fontSize": 14, "color": "#AAA0B9"},
+            "children": footer_text,
+        },
+    })
+
     footer_el = {
         "type": "div",
         "props": {
@@ -1011,10 +1070,8 @@ async def build_collage_satori(
                 "width": "100%",
                 "padding": "12px 0",
                 "fontFamily": "DejaVu",
-                "fontSize": 14,
-                "color": "#AAA0B9",
             },
-            "children": footer_text,
+            "children": footer_children,
         },
     }
 

@@ -178,7 +178,7 @@ docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
 ## Тестирование
 ```bash
 docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
-# 548 тестов (март 2026)
+# 570 тестов (март 2026)
 ```
 
 ## Известные баги / TODO (v1.0)
@@ -241,10 +241,11 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - Satori primary (~0.1 сек), PIL fallback при ошибке
 - Satori сервер: `renderer/server.mjs`, шрифт DejaVu, constraints: display:'flex' обязателен
 
-### Тесты: 425 → 548 (+123)
+### Тесты: 425 → 570 (+145)
 - `test_infra.py` (12) — Redis singleton, health check, ONNX safety, DB indexes
 - `test_phase2.py` (17) — queue ack/recovery, backoff, task tracking, pagination, atomic pool
 - `test_phase3.py` (22) — Lua rate limiter, cascade, concurrency, correlation ID, pool tuning
+- `test_satori.py` (22) — pastel colors, auto-trim, card structure, zones, palette, fallback, integration
 
 ## Роадмап
 
