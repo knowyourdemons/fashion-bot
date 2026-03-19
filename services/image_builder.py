@@ -9,6 +9,7 @@ from typing import Optional
 import httpx
 import structlog
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from pilmoji import Pilmoji
 
 from config import settings
 
@@ -60,10 +61,17 @@ _SLOT_EMOJI = {
 
 
 def format_collage_label(slot: str, item_type: str) -> str:
-    """Короткая подпись с эмодзи: '👚 Свитшот'."""
-    emoji = _SLOT_EMOJI.get(slot, "👕")
+    """Короткая подпись БЕЗ эмодзи (PIL не рендерит unicode emoji): 'Свитшот'."""
     short = (item_type or "").split()[0].capitalize()[:14]
-    return f"{emoji} {short}"
+    return short or _SLOT_NAMES_SHORT.get(slot, "Вещь")
+
+
+_SLOT_NAMES_SHORT = {
+    "outerwear": "Куртка", "top": "Верх", "bottom": "Низ",
+    "removable_layer": "Кардиган", "one_piece": "Платье",
+    "footwear": "Обувь", "hat": "Шапка", "scarf": "Шарф",
+    "gloves": "Перчатки", "tights": "Колготки", "socks": "Носки",
+}
 
 
 # ── Кэш теней ────────────────────────────────────────────────────────────────
@@ -346,15 +354,15 @@ def _draw_adult_silhouette(draw: ImageDraw.ImageDraw, slot: str,
 
 
 _SLOT_LABELS_RU: dict = {
-    "outerwear": "добавь куртку 📸",
-    "top":       "добавь верх 📸",
-    "bottom":    "добавь низ 📸",
-    "one_piece": {"girl": "добавь платье 📸", "boy": "добавь комбинезон 📸", "adult": "добавь платье 📸"},
-    "footwear":  "добавь обувь 📸",
-    "accessory": "добавь шапку 📸",
-    "hat":       "добавь шапку 📸",
-    "tights":    "добавь колготки 📸",
-    "base_layer":"добавь колготки 📸",
+    "outerwear": "добавь куртку",
+    "top":       "добавь верх",
+    "bottom":    "добавь низ",
+    "one_piece": {"girl": "добавь платье", "boy": "добавь комбинезон", "adult": "добавь платье"},
+    "footwear":  "добавь обувь",
+    "accessory": "добавь шапку",
+    "hat":       "добавь шапку",
+    "tights":    "добавь колготки",
+    "base_layer":"добавь колготки",
 }
 
 
@@ -446,7 +454,6 @@ def _build_grid(images: list, labels: list, theme: str = "girl",
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", hfont_size)
         except Exception:
             hfont = ImageFont.load_default()
-        hd = ImageDraw.Draw(canvas)
         try:
             bbox = hfont.getbbox(header_text)
             tw = bbox[2] - bbox[0]
@@ -456,7 +463,11 @@ def _build_grid(images: list, labels: list, theme: str = "girl",
             th = hfont_size
         tx = max(4, (canvas_w - tw) // 2)
         ty = max(2, (header_px - th) // 2)
-        hd.text((tx, ty), header_text, fill=LABEL_TEXT + (255,), font=hfont)
+        # Pilmoji рендерит unicode emoji (☀️🌧❄️🥶) которые DejaVuSans не умеет
+        canvas_rgb = canvas.convert("RGB")
+        with Pilmoji(canvas_rgb) as pmj:
+            pmj.text((tx, ty), header_text, fill=LABEL_TEXT, font=hfont)
+        canvas = canvas_rgb.convert("RGBA")
 
     # Карточки (сдвинуты вниз на header_px)
     for idx, (img, label) in enumerate(zip(images, labels)):
@@ -526,8 +537,8 @@ async def build_collage(
                     item_type = slot_data.get("item_type") or raw_lbl
                     display_lbl = format_collage_label(slot_key, item_type)
                 else:
-                    # Для плейсхолдера — только эмодзи слота (текст внутри карточки через _SLOT_LABELS_RU)
-                    display_lbl = _SLOT_EMOJI.get(slot_key, "👕")
+                    # Для плейсхолдера — короткое название слота (PIL не рендерит emoji)
+                    display_lbl = _SLOT_NAMES_SHORT.get(slot_key, "Вещь")
 
                 if slot_data.get("has_item"):
                     photo_bytes = await _download_photo(

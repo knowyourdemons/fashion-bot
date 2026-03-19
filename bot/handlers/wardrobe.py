@@ -1553,8 +1553,6 @@ async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE
     async with AsyncReadSession() as session:
         items = await get_owner_items(session, new_owner_id, new_owner_type)
     count = len(items)
-    scored = [float(i.score_item) for i in items if i.score_item]
-    avg_str = f" · ⭐ {round(sum(scored)/len(scored), 1)}" if scored else ""
 
     # Заголовок
     if count == 0:
@@ -1564,7 +1562,7 @@ async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"Пришли фото чтобы добавить вещи 📸"
         )
     else:
-        header = f"✅ Переключено\n{owner_label} · {count} вещей{avg_str}"
+        header = f"✅ Переключено\n{owner_label} · {count} вещей"
 
     # Кнопка переключения на другого owner
     if new_owner_type == "child":
