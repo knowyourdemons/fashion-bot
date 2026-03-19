@@ -178,7 +178,7 @@ docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
 ## Тестирование
 ```bash
 docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
-# 580 тестов (март 2026)
+# 585 тестов (март 2026)
 ```
 
 ## Известные баги / TODO (v1.0)
@@ -243,25 +243,36 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - Каждый стиль: ~0.08-0.23 сек, auto-trim, pastel bg, silhouette placeholder
 - PIL fallback если Satori недоступен
 
-### Тесты: 425 → 580 (+155)
+### Roadmap фичи (v1.0 + v1.1)
+- **Текст брифа**: уже компактный (5-7 строк), fix температуры round() (убрал `.0`)
+- **Меню**: уже в целевой структуре (Что надеть full-width, Спросить Касси, Гардероб, Профиль, Помощь)
+- **Контекстный чат**: wardrobe summary уже в system prompt Haiku (get_wardrobe_summary_cached)
+- **Вечерний образ 20:00**: schedule_evening уже работает (cron :30, premium users)
+- **Trial degradation дни 12-14**: get_effective_limits() подключён к handlers
+  - День 12: reroll = 0 (brief.py)
+  - День 13: evening_brief = False (schedule_evening)
+  - День 14: chat = 1, outfit = 1 (text.py, help.py)
+
+### Тесты: 425 → 585 (+160)
 - `test_infra.py` (12) — Redis singleton, health check, ONNX safety, DB indexes
 - `test_phase2.py` (17) — queue ack/recovery, backoff, task tracking, pagination, atomic pool
 - `test_phase3.py` (22) — Lua rate limiter, cascade, concurrency, correlation ID, pool tuning
 - `test_satori.py` (32) — 6 styles, round-robin, palette, zones, auto-trim, fallback, integration
+- `test_trial_wiring.py` (5) — trial degradation wired into brief, text, help, evening schedule
 
 ## Роадмап
 
 ### v1.0 remaining (до запуска жене)
 - Онбординг UX (Касси, fuzzy дата, "Для обоих", прогресс-бар)
-- Меню: "Что надеть" full-width + "Спросить Касси" + handlers
-- Текст брифа 15→5 строк
+- ~~Меню: "Что надеть" full-width + "Спросить Касси"~~ — ГОТОВО
+- ~~Текст брифа 15→5 строк~~ — ГОТОВО (уже компактный + round temp fix)
 - Visual polish: центрирование, иконки, контекст
 
 ### v1.1 (апрель)
-- Контекстный чат (wardrobe summary в system prompt)
+- ~~Контекстный чат (wardrobe summary в system prompt)~~ — ГОТОВО
 - Re-roll "переодень" (кнопка + exclude + Redis counter)
-- Вечерний образ 20:00 (scheduler по timezone)
-- Trial отключение дни 12-14
+- ~~Вечерний образ 20:00 (scheduler по timezone)~~ — ГОТОВО
+- ~~Trial отключение дни 12-14~~ — ГОТОВО (get_effective_limits в handlers)
 - /profile + /add_child
 - Оценка образа по фото (вещь vs outfit detection)
 - Gap analysis + growth alert WHO

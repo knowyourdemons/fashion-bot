@@ -2,13 +2,14 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from bot.handlers.menu import get_main_menu
-from core.permissions import get_effective_plan, get_limit
+from core.permissions import get_effective_plan, get_limit, get_effective_limits
 
 
 async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = context.user_data.get("db_user")
     plan = get_effective_plan(user) if user else "free"
-    chat_limit = get_limit("chat_per_day", plan)
+    _eff = get_effective_limits(user) if user else {}
+    chat_limit = _eff.get("chat_per_day", get_limit("chat_per_day", plan))
 
     text = (
         "Привет! Я Касси — твой личный стилист 👗\n\n"

@@ -60,9 +60,10 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     redis = context.bot_data.get("redis")
 
-    from core.permissions import get_effective_plan, get_limit
+    from core.permissions import get_effective_plan, get_limit, get_effective_limits
     plan = get_effective_plan(user)
-    reroll_limit = get_limit("reroll", plan)
+    effective = get_effective_limits(user)
+    reroll_limit = effective.get("reroll", get_limit("reroll", plan))
 
     if reroll_limit == 0:
         await query.answer(

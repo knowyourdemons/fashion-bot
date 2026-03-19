@@ -237,7 +237,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     # Лимит чата через Redis (отдельный от лимита фото)
     redis = context.bot_data.get("redis")
     effective_plan = get_effective_plan(user)
-    chat_limit = get_limit("chat_per_day", effective_plan)
+    from core.permissions import get_effective_limits
+    _eff_limits = get_effective_limits(user)
+    chat_limit = _eff_limits.get("chat_per_day", get_limit("chat_per_day", effective_plan))
     today = date.today().isoformat()
     chat_key = f"chat_limit:{user.id}:{today}"
     chat_count = 0

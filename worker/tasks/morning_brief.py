@@ -521,7 +521,7 @@ async def generate_brief(payload: dict) -> dict:
     if temp_m is not None:
         sm = "+" if temp_m >= 0 else ""
         se = "+" if (temp_e or 0) >= 0 else ""
-        weather_line = f"{user.city}: {sm}{temp_m}°C → вечером {se}{temp_e}°C"
+        weather_line = f"{user.city}: {sm}{round(temp_m)}°C → вечером {se}{round(temp_e)}°C"
     else:
         logger.warning("brief.weather.empty", city=user.city)
 
@@ -554,7 +554,7 @@ async def generate_brief(payload: dict) -> dict:
             _trial_notice = "\n\n⏰ Это последний день Premium!"
 
     brief_text = (
-        header
+        header.rstrip()
         + "\n\n"
         + "\n\n".join(child_briefs)
         + "\n\nКак тебе образ?"
@@ -792,6 +792,10 @@ async def schedule_evening() -> None:
                     continue
                 effective_plan = get_effective_plan(user)
                 if not is_brief_day_tomorrow(effective_plan, user.timezone or "Europe/Vilnius"):
+                    continue
+                # Trial degradation: skip evening brief in last day
+                from core.permissions import get_effective_limits as _gel
+                if not _gel(user).get("evening_brief", True):
                     continue
                 lock_key = f"lock:evening_brief:{user.id}:{tomorrow_str}"
                 acquired = await redis_client.set(lock_key, 1, ex=86400, nx=True)
