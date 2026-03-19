@@ -1764,7 +1764,8 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
             outfit, child=child, temp=temp_m, colortype=colortype_for_outfit, regime=regime
         )
 
-        _collage_params = get_collage_params(child=child, user=user, temp=temp_m)
+        _day_type = ("садик" if today_date.weekday() < 5 else "прогулка") if child else ""
+        _collage_params = get_collage_params(child=child, user=user, temp=temp_m, day_type=_day_type)
         sm = "+" if temp_m >= 0 else ""
         temp_text = f"{sm}{temp_m:.0f}°C"
 

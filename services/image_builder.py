@@ -420,8 +420,8 @@ def _make_placeholder(slot: str, label: str, card_w: int = THUMB_SIZE,
     icon = _load_silhouette(slot, gender, adult)
     label_zone = 40   # резервируем снизу под подпись
     if icon:
-        max_icon_w = int(card_w * 0.70)
-        max_icon_h = int((card_h - label_zone) * 0.78)
+        max_icon_w = int(card_w * 0.75)
+        max_icon_h = int((card_h - label_zone) * 0.75)
         icon = _fit_item(icon, max_icon_w, max_icon_h)
         ix = (card_w - icon.width) // 2
         iy = (card_h - label_zone - icon.height) // 2
