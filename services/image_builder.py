@@ -420,8 +420,8 @@ def _make_placeholder(slot: str, label: str, card_w: int = THUMB_SIZE,
     icon = _load_silhouette(slot, gender, adult)
     label_zone = 40   # резервируем снизу под подпись
     if icon:
-        max_icon_w = int(card_w * 0.75)
-        max_icon_h = int((card_h - label_zone) * 0.75)
+        max_icon_w = int(card_w * 0.95)
+        max_icon_h = int((card_h - label_zone) * 0.95)
         icon = _fit_item(icon, max_icon_w, max_icon_h)
         ix = (card_w - icon.width) // 2
         iy = (card_h - label_zone - icon.height) // 2
@@ -558,9 +558,11 @@ def _build_layered_layout(
     for slot_data in zone1:
         if slot_data.get("has_item"):
             card_w = CANVAS_W - LAYOUT_PAD * 2
+            card_x = LAYOUT_PAD
         else:
             card_w = (CANVAS_W - LAYOUT_PAD * 2 - LAYOUT_GAP) // 2
-        _draw_slot_card(canvas, slot_data, LAYOUT_PAD, y_cur, card_w, ZONE1_CARD_H, ZONE1_LABEL_SIZE)
+            card_x = (CANVAS_W - card_w) // 2  # центр
+        _draw_slot_card(canvas, slot_data, card_x, y_cur, card_w, ZONE1_CARD_H, ZONE1_LABEL_SIZE)
         y_cur += ZONE1_CARD_H + LAYOUT_GAP
 
     # ── Зона 2: top + bottom / one_piece ─────────────────────────────────────

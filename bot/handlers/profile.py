@@ -16,10 +16,10 @@ _COLORTYPE_LABELS = {
 }
 
 _SEGMENT_LABELS = {
-    "mom_girl": "Мама девочки",
-    "mom_boy": "Мама мальчика",
-    "pregnant": "Беременная",
-    "no_kids": "Без детей",
+    "mom_girl": "👧 дочка",
+    "mom_boy": "👦 сын",
+    "pregnant": "🤰 беременность",
+    "no_kids": "👩 для себя",
 }
 
 
@@ -40,7 +40,7 @@ async def handle_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if user.segment:
         seg_label = _SEGMENT_LABELS.get(user.segment, user.segment)
-        lines.append(f"👨‍👩‍👧 Сегмент: {seg_label}")
+        lines.append(f"👗 Подбираю для: {seg_label}")
 
     from core.permissions import get_effective_plan
     _effective_plan = get_effective_plan(user)
@@ -57,7 +57,12 @@ async def handle_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             lines.append(f"\n👶 Дети:")
             for child in children:
                 gender_icon = "👧" if child.gender == "girl" else "👦"
-                size_info = f", размер {child.current_size}" if child.current_size else ""
+                parts = []
+                if child.current_size:
+                    parts.append(f"одежда {child.current_size}")
+                if getattr(child, "shoe_size", None):
+                    parts.append(f"обувь {child.shoe_size}")
+                size_info = f" · {" · ".join(parts)}" if parts else ""
                 lines.append(f"  {gender_icon} {child.name}{size_info}")
     except Exception as e:
         logger.error("profile.children.error", error=str(e))
