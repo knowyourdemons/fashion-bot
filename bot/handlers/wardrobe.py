@@ -3,6 +3,7 @@ import asyncio
 import base64
 import io
 import json
+import random
 import time
 import uuid
 from difflib import SequenceMatcher
@@ -28,6 +29,47 @@ from services.usage import get_limit_exceeded_msg, get_usage_str
 from core.permissions import get_effective_plan, get_limit
 
 logger = structlog.get_logger()
+
+
+def _warm_outfit_comment(score: float, child_name: str = None,
+                         temp: float = None, has_outerwear: bool = True) -> str:
+    """Тёплый развёрнутый комментарий Касси к образу."""
+    if child_name and child_name.endswith("а"):
+        name_dat = child_name[:-1] + "е"  # Алиса → Алисе
+    elif child_name:
+        name_dat = child_name
+    else:
+        name_dat = "тебе"
+
+    if score >= 8.5:
+        options = [
+            f"Отличный образ для {name_dat}! Тепло, стильно и всё сочетается ✨",
+            f"Прекрасный выбор! {child_name or 'Ты'} будет выглядеть замечательно",
+            f"Образ на все сто! Цвета отлично играют вместе",
+        ]
+    elif score >= 7.0:
+        options = [
+            f"Хороший образ для {name_dat} — и тепло, и красиво!",
+            f"Достойный выбор на сегодня. Всё по погоде!",
+            f"Симпатичный образ! Добавь яркий аксессуар — будет ещё лучше",
+        ]
+    elif score >= 5.0:
+        options = [
+            f"Удобный образ на каждый день",
+            f"Практичный выбор! Добавь пару вещей в гардероб — комбинаций станет больше",
+        ]
+    else:
+        options = [
+            f"Собрала из того что есть. Добавь ещё вещей — образы станут интереснее!",
+        ]
+
+    comment = random.choice(options)
+
+    if temp is not None and temp <= 5 and not has_outerwear:
+        comment += "\n⚠️ Холодно — добавь тёплую куртку в гардероб!"
+
+    return comment
+
 
 _VALID_CATEGORY_GROUPS = {
     "outerwear", "top", "bottom", "one_piece", "footwear",
@@ -1648,7 +1690,7 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
 
     try:
         from services.weather import WeatherService
-        from services.outfit_builder import select_outfit, get_temp_regime, SEASONS, build_outfit_slots, get_collage_params, outfit_score_to_text
+        from services.outfit_builder import select_outfit, get_temp_regime, SEASONS, build_outfit_slots, get_collage_params
         from services.image_builder import build_collage
 
         # Найти детей
@@ -1719,20 +1761,21 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
         temp_text = f"{sm}{temp_m:.0f}°C"
 
         owner_label = child.name if child else (user.name or "")
-        caption = f"🌤 {owner_label} · {temp_text}"
 
-        # Комментарий-совет Касси по скору образа
+        # Тёплый комментарий Касси
         scored = [float(i.score_item) for i in outfit.get("all_items", []) if i.score_item]
+        has_ow = any(s["slot"] == "outerwear" and s.get("has_item") for s in all_slots)
         if scored:
             avg = sum(scored) / len(scored)
-            caption += f"\n\n{outfit_score_to_text(avg)}"
+            comment = _warm_outfit_comment(avg, child.name if child else None, temp_m, has_ow)
+        else:
+            comment = _warm_outfit_comment(6.0, child.name if child else None, temp_m, has_ow)
+
+        caption = f"✨ {comment}"
 
         outfit_warnings = outfit.get("warnings") or []
         if outfit_warnings:
-            caption += "\n" + "\n".join(outfit_warnings)
-        if temp_m is not None and temp_m <= 0 and "outerwear" not in [
-                s["slot"] for s in all_slots if s.get("has_item")]:
-            caption += "\n⚠️ В гардеробе нет тёплой верхней одежды!"
+            caption += "\n\n" + "\n".join(outfit_warnings)
 
         collage_bytes = await build_collage(
             outfit_slots=all_slots,

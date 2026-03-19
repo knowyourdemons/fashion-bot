@@ -42,9 +42,12 @@ FOOTER_H      = 35
 CANVAS_W      = 800     # фиксированная ширина
 LAYOUT_PAD    = 32      # >= SHADOW_BLUR*3 = 27
 LAYOUT_GAP    = 16
-ZONE1_CARD_H  = 320     # outerwear
-ZONE2_CARD_H  = 280     # top / bottom / one_piece
-ZONE3_CARD_H  = 220     # обувь / аксессуары
+ZONE1_CARD_H  = 420     # outerwear — КРУПНО (главный элемент)
+ZONE2_CARD_H  = 280     # top / bottom / one_piece — стандарт
+ZONE3_CARD_H  = 170     # обувь / аксессуары — МЕЛКО
+ZONE1_LABEL_SIZE = 28   # шрифт подписи зоны 1
+ZONE2_LABEL_SIZE = 24   # шрифт подписи зоны 2
+ZONE3_LABEL_SIZE = 20   # шрифт подписи зоны 3
 
 # ── Цвета ────────────────────────────────────────────────────────────────────
 BG_COLOR        = (250, 246, 255)
@@ -55,7 +58,7 @@ LABEL_TEXT      = (139, 123, 139)
 LABEL_DIVIDER   = (230, 222, 240)
 PLACEHOLDER_BG  = (240, 238, 240)
 SILHOUETTE_CLR  = (200, 192, 204)
-FOOTER_TEXT_CLR = (175, 165, 190)
+FOOTER_TEXT_CLR = (170, 160, 185)
 
 # ── Темы ─────────────────────────────────────────────────────────────────────
 _THEMES = {
@@ -242,7 +245,7 @@ def _draw_card(canvas: Image.Image, img: Image.Image,
     label_area = Image.new("RGBA", (card_w, LABEL_H), LABEL_BG + (255,))
     ld = ImageDraw.Draw(label_area)
     ld.line([(0, 0), (card_w, 0)], fill=LABEL_DIVIDER + (255,), width=1)
-    text = label[:24] + "…" if len(label) > 24 else label
+    text = label[:28] + "…" if len(label) > 28 else label
     try:
         bbox = font.getbbox(text)
         tw = bbox[2] - bbox[0]
@@ -445,11 +448,17 @@ def _make_placeholder(slot: str, label: str, card_w: int = THUMB_SIZE,
 
 def _draw_slot_card(canvas: Image.Image, slot_data: dict,
                     x: int, y: int, card_w: int, card_h: int,
-                    font: ImageFont.FreeTypeFont) -> None:
+                    font_size: int = ZONE2_LABEL_SIZE) -> None:
     """Рисует карточку слота на canvas: фото или PNG-плейсхолдер."""
     slot_key = slot_data.get("slot", "top")
     is_adult  = slot_data.get("adult", False)
     gender    = slot_data.get("gender", "girl")
+
+    try:
+        font = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+    except Exception:
+        font = ImageFont.load_default()
 
     _draw_shadow(canvas, x, y, card_w, card_h)
 
@@ -506,11 +515,11 @@ def _build_layered_layout(
 
     # Шрифты
     try:
-        font    = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
-        hfont   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 26)
-        ffont   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
+        _dejavu = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        hfont   = ImageFont.truetype(_dejavu, 26)
+        ffont   = ImageFont.truetype(_dejavu, 26)
     except Exception:
-        font = hfont = ffont = ImageFont.load_default()
+        hfont = ffont = ImageFont.load_default()
 
     y_cur = LAYOUT_PAD
 
@@ -533,7 +542,7 @@ def _build_layered_layout(
             card_w = CANVAS_W - LAYOUT_PAD * 2
         else:
             card_w = (CANVAS_W - LAYOUT_PAD * 2 - LAYOUT_GAP) // 2
-        _draw_slot_card(canvas, slot_data, LAYOUT_PAD, y_cur, card_w, ZONE1_CARD_H, font)
+        _draw_slot_card(canvas, slot_data, LAYOUT_PAD, y_cur, card_w, ZONE1_CARD_H, ZONE1_LABEL_SIZE)
         y_cur += ZONE1_CARD_H + LAYOUT_GAP
 
     # ── Зона 2: top + bottom / one_piece ─────────────────────────────────────
@@ -544,29 +553,47 @@ def _build_layered_layout(
     if zone2:
         if one_piece_slots:
             card_w = CANVAS_W - LAYOUT_PAD * 2
-            _draw_slot_card(canvas, one_piece_slots[0], LAYOUT_PAD, y_cur, card_w, zone2_card_h, font)
+            _draw_slot_card(canvas, one_piece_slots[0], LAYOUT_PAD, y_cur, card_w, zone2_card_h, ZONE2_LABEL_SIZE)
         else:
             card_w = (CANVAS_W - LAYOUT_PAD * 2 - LAYOUT_GAP) // 2
             if top_slots:
-                _draw_slot_card(canvas, top_slots[0], LAYOUT_PAD, y_cur, card_w, zone2_card_h, font)
+                _draw_slot_card(canvas, top_slots[0], LAYOUT_PAD, y_cur, card_w, zone2_card_h, ZONE2_LABEL_SIZE)
             if bot_slots:
                 _draw_slot_card(canvas, bot_slots[0],
                                 LAYOUT_PAD + card_w + LAYOUT_GAP, y_cur,
-                                card_w, zone2_card_h, font)
+                                card_w, zone2_card_h, ZONE2_LABEL_SIZE)
         y_cur += zone2_card_h + LAYOUT_GAP
 
-    # ── Зона 3: обувь + аксессуары ───────────────────────────────────────────
-    card_w3 = (CANVAS_W - LAYOUT_PAD * 2 - LAYOUT_GAP) // 2
+    # ── Зона 3: обувь + аксессуары (адаптивный layout) ───────────────────────
     zone3_shown = zone3[:4]
-    for i, slot_data in enumerate(zone3_shown):
-        col = i % 2
-        row = i // 2
-        x = LAYOUT_PAD + col * (card_w3 + LAYOUT_GAP)
-        yy = y_cur + row * (ZONE3_CARD_H + LAYOUT_GAP)
-        _draw_slot_card(canvas, slot_data, x, yy, card_w3, ZONE3_CARD_H, font)
-    if zone3_shown:
-        rows3 = math.ceil(len(zone3_shown) / 2)
-        y_cur += rows3 * (ZONE3_CARD_H + LAYOUT_GAP)
+    card_w3 = (CANVAS_W - LAYOUT_PAD * 2 - LAYOUT_GAP) // 2
+
+    if len(zone3_shown) == 1:
+        # 1 элемент — по центру, полуширина
+        x_c = (CANVAS_W - card_w3) // 2
+        _draw_slot_card(canvas, zone3_shown[0], x_c, y_cur, card_w3, ZONE3_CARD_H, ZONE3_LABEL_SIZE)
+        y_cur += ZONE3_CARD_H + LAYOUT_GAP
+    elif len(zone3_shown) == 2:
+        # 2 элемента — стандартный 2-col
+        for i, sd in enumerate(zone3_shown):
+            x = LAYOUT_PAD + i * (card_w3 + LAYOUT_GAP)
+            _draw_slot_card(canvas, sd, x, y_cur, card_w3, ZONE3_CARD_H, ZONE3_LABEL_SIZE)
+        y_cur += ZONE3_CARD_H + LAYOUT_GAP
+    elif len(zone3_shown) >= 3:
+        # 3+ элементов: первый ряд 2 шт, второй ряд: 1 по центру или 2
+        for i in range(2):
+            x = LAYOUT_PAD + i * (card_w3 + LAYOUT_GAP)
+            _draw_slot_card(canvas, zone3_shown[i], x, y_cur, card_w3, ZONE3_CARD_H, ZONE3_LABEL_SIZE)
+        y_cur += ZONE3_CARD_H + LAYOUT_GAP
+        remaining = zone3_shown[2:]
+        if len(remaining) == 1:
+            x_c = (CANVAS_W - card_w3) // 2
+            _draw_slot_card(canvas, remaining[0], x_c, y_cur, card_w3, ZONE3_CARD_H, ZONE3_LABEL_SIZE)
+        else:
+            for i, sd in enumerate(remaining):
+                x = LAYOUT_PAD + i * (card_w3 + LAYOUT_GAP)
+                _draw_slot_card(canvas, sd, x, y_cur, card_w3, ZONE3_CARD_H, ZONE3_LABEL_SIZE)
+        y_cur += ZONE3_CARD_H + LAYOUT_GAP
 
     # ── Footer ────────────────────────────────────────────────────────────────
     if footer_text:
@@ -575,7 +602,7 @@ def _build_layered_layout(
             bbox = ffont.getbbox(footer_text)
             tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         except Exception:
-            tw, th = len(footer_text) * 9, 18
+            tw, th = len(footer_text) * 10, 22
         tx = max(LAYOUT_PAD, (CANVAS_W - tw) // 2)
         ty = y_cur + max(2, (FOOTER_H - th) // 2)
         fd.text((tx, ty), footer_text, fill=FOOTER_TEXT_CLR + (255,), font=ffont)
