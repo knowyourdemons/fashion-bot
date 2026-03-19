@@ -78,10 +78,145 @@ PAGE_SIZE = 20
 OUTFIT_DAY_LIMIT_FREE = 2
 OUTFIT_DAY_LIMIT_PREMIUM = 5
 
+
+# ── Owner helpers ──────────────────────────────────────────────────────────
+
+async def _get_owner(user, context) -> tuple:
+    """Получить текущего владельца гардероба. Приоритет: Redis owner_mode → segment."""
+    redis = context.bot_data.get("redis")
+    if redis:
+        try:
+            mode = await redis.get(f"owner_mode:{user.id}")
+            if mode:
+                mode = mode if isinstance(mode, str) else mode.decode()
+                if mode == "user":
+                    return (user.id, "user")
+                elif mode.startswith("child:"):
+                    import uuid as _uuid
+                    child_id = _uuid.UUID(mode[6:])
+                    return (child_id, "child")
+        except Exception:
+            pass
+
+    async with AsyncReadSession() as session:
+        from db.crud.children import get_children
+        children = await get_children(session, user.id)
+
+    if user.segment in ("mom_girl", "mom_boy") and children:
+        return (children[0].id, "child")
+    return (user.id, "user")
+
+
+async def _get_scoring_matrix(redis, user, owner_id: uuid.UUID, owner_type: str):
+    """Возвращает ScoringMatrix для owner или None если Redis недоступен."""
+    if not redis:
+        return None
+    try:
+        child = None
+        if owner_type == "child":
+            from db.models.child import Child
+            from sqlalchemy import select as _sel
+            async with AsyncReadSession() as session:
+                result = await session.execute(_sel(Child).where(Child.id == owner_id))
+                child = result.scalar_one_or_none()
+        name = matrix_name_for_owner(user, child)
+        async with AsyncReadSession() as session:
+            svc = ScoringService(session, redis)
+            return await svc.get_matrix(name)
+    except Exception as e:
+        logger.warning("scoring_matrix.load_failed", error=str(e))
+        return None
+
+
+async def _load_existing_set(owner_id: uuid.UUID, owner_type: str = "user") -> set:
+    async with AsyncReadSession() as session:
+        items = await get_owner_items(session, owner_id, owner_type)
+    return {
+        (
+            (i.type or "").lower().strip(),
+            (i.color or "").lower().strip(),
+            i.category_group or "top",
+        )
+        for i in items
+    }
+
+
+# ── Brief trigger ──────────────────────────────────────────────────────────
+
+async def _maybe_trigger_first_brief(user, owner_id, owner_type, message, context, redis) -> None:
+    """Триггер первого брифа ровно на 5-й вещи. Работает для ВСЕХ планов."""
+    if redis is None:
+        return
+    lock_key = f"lock:first_brief:{user.id}"
+    acquired = await redis.set(lock_key, "1", ex=86400, nx=True)
+    if not acquired:
+        return
+    try:
+        from db.crud.wardrobe import get_owner_items_count
+        async with AsyncReadSession() as session:
+            wardrobe_count = await get_owner_items_count(session, owner_id, owner_type)
+        if wardrobe_count < 5:
+            await redis.delete(lock_key)
+            remaining = 5 - wardrobe_count
+            if remaining == 1:
+                suffix = "вещь"
+            elif remaining < 5:
+                suffix = "вещи"
+            else:
+                suffix = "вещей"
+            await message.reply_text(f"📸 Ещё {remaining} {suffix} — и я соберу первый образ!")
+            return
+        from core.queue import RedisQueue, QueuePriority
+        queue = RedisQueue(redis)
+        await queue.push(
+            "generate_brief",
+            {"user_id": str(user.id)},
+            priority=QueuePriority.HIGH,
+        )
+        await message.reply_text(
+            "✨ У тебя уже 5 вещей! Собираю первый образ — подожди пару секунд..."
+        )
+        logger.info("wardrobe.first_brief_triggered", user_id=str(user.id), count=wardrobe_count)
+    except Exception as e:
+        logger.warning("wardrobe.first_brief_trigger_failed", error=str(e))
+
+
+async def _upload_crop(
+    photo_bytes: bytes,
+    bbox: dict | None,
+    owner_id: uuid.UUID | None = None,
+    redis=None,
+) -> tuple[str | None, bool]:
+    """Кропит по bbox → удаляет фон → загружает PNG в R2."""
+    if not bbox:
+        return None, True
+    try:
+        crop_bytes = _crop_bbox(photo_bytes, bbox)
+        from services.image_processor import remove_background
+        png_bytes = await remove_background(crop_bytes, redis=redis)
+        good_crop = _check_crop_quality(png_bytes)
+        if not good_crop:
+            logger.warning("wardrobe.crop.low_quality", action="show_in_collage=False")
+        is_png = png_bytes[:4] == b'\x89PNG'
+        ext = "png" if is_png else "jpg"
+        content_type = "image/png" if is_png else "image/jpeg"
+        from services.storage.r2_storage import get_r2_storage
+        r2 = get_r2_storage()
+        filename = f"{uuid.uuid4()}.{ext}"
+        key = await r2.upload_photo(
+            png_bytes, filename,
+            owner_id=str(owner_id) if owner_id else "",
+            content_type=content_type,
+        )
+        url = r2.get_public_url(key) if settings.cloudflare_r2_cdn_url else key
+        return url, good_crop
+    except Exception as e:
+        logger.warning("wardrobe.crop_upload_failed", error=str(e))
+        return None, True
+
+
 RATE_LIMIT_FREE = 5
 RATE_LIMIT_PREMIUM = 20
-
-
 
 
 async def _save_one(

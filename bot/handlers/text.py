@@ -65,8 +65,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not user:
         return
 
-    # Во время онбординга лимиты не применяются
+    # Во время онбординга и сразу после его завершения — пропускаем
     if not getattr(user, "onboarding_completed", True):
+        return
+    if context.user_data.pop("onboarding_just_completed", False):
         return
 
     # ── Режим редактирования профиля (edit_city) ──────────────────────────

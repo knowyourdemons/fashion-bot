@@ -772,6 +772,8 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user.city = city
         user.timezone = timezone
         user.colortype = colortype
+        # Флаг для text handler: не вызывать Касси для этого же сообщения
+        context.user_data["onboarding_just_completed"] = True
 
         child_name = context.user_data.get("child_name")
         if segment in ("mom_girl", "mom_boy") and child_name:
