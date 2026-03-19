@@ -78,15 +78,15 @@ assets/
 - Иконки и фоны в git assets/ (не R2) — мгновенный доступ, нет HTTP
 
 ## Коллаж (`services/image_builder.py`)
-- 3-зонный layout: outerwear 420px → top+bottom 280px → обувь+акс 170px
-- `_build_layered_layout()` — новый, `_build_grid()` — старый (backward compat)
-- PNG-иконки из assets/silhouettes/ вместо PIL-рисования
-- Фоны из assets/backgrounds/ по полу (girl/boy/adult/winter)
-- Подписи: "Тип цвет" без эмодзи, max 28 символов, умная обрезка
-- Плейсхолдеры: PNG-иконка + тип вещи по temp ("Куртка"/"Ветровка")
-- Header: "Чт, 19 мар · +6°C · Алиса, садик" (без эмодзи)
-- Footer: "Касси — твой личный стилист"
-- Комментарий стиль: "Симпатичный образ, Алиса! Комфортно весь день. Совет: добавь куртку"
+- **Primary: Satori renderer** (http://172.18.0.1:3100) — magazine layout, ~0.1 сек
+- **Fallback: PIL** — 3-зонный layout (если Satori недоступен)
+- Satori: тёмный header "LOOK OF THE DAY", пастельные карточки по цвету вещи, палитра footer
+- `build_collage_satori()` → POST JSON → PNG; `_build_layered_layout()` → PIL fallback
+- `_build_grid()` — старый grid (backward compat для photo_ids)
+- PNG-иконки из assets/silhouettes/ (23 шт) для placeholder
+- auto-trim: обрезка прозрачных краёв фото (5% padding)
+- Подписи: "Тип цвет" без эмодзи, max 28 символов
+- Satori constraints: display:'flex' обязателен, нет CSS grid/position:absolute/emoji
 
 ## Меню (целевая структура)
 ```
@@ -231,6 +231,15 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
   - Drain in-flight задач при shutdown (30 сек)
 - **Correlation ID**: ContextVar + structlog.contextvars, все логи включают request_id
 - **Pool tuning**: pool_pre_ping=True, pool_recycle=600 (detect stale connections)
+
+### Satori Collage Renderer
+- `build_collage_satori()` — magazine-style layout через Satori HTTP (http://172.18.0.1:3100)
+- Тёмный header "LOOK OF THE DAY" + child name + дата + температура
+- Карточки с пастельным фоном по цвету вещи (`_pastel_bg()`)
+- auto-trim фото (`_auto_trim()`), PNG-иконки placeholder
+- 3 зоны: hero outerwear → top+bottom (50/50) → footwear+accessories
+- Satori primary (~0.1 сек), PIL fallback при ошибке
+- Satori сервер: `renderer/server.mjs`, шрифт DejaVu, constraints: display:'flex' обязателен
 
 ### Тесты: 425 → 548 (+123)
 - `test_infra.py` (12) — Redis singleton, health check, ONNX safety, DB indexes

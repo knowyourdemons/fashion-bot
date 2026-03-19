@@ -732,6 +732,342 @@ def _build_grid(images: list, labels: list, theme: str = "girl",
     return final
 
 
+# ── Satori renderer ──────────────────────────────────────────────────────────
+
+SATORI_URL = "http://172.18.0.1:3100/render"
+SATORI_TIMEOUT = 15
+SATORI_W = 800
+
+_PASTEL_MAP = {
+    "белый": "#F8F8F6", "чёрный": "#EAEAEA", "серый": "#F0F0EE",
+    "розовый": "#FFF0F2", "красный": "#FFF0EE", "бордовый": "#F5EAEE",
+    "оранжевый": "#FFF5EA", "жёлтый": "#FFFDE8", "бежевый": "#FFF8F0",
+    "зелёный": "#EEFAEE", "голубой": "#EEF5FA", "синий": "#EEF0FA",
+    "фиолетовый": "#F3EAFA", "коричневый": "#F5F0EA", "лавандовый": "#F0EAFA",
+    "пыльно-розовый": "#F8F0F2", "серо-зелёный": "#EEF3EE",
+}
+
+
+def _pastel_bg(color_name: str) -> str:
+    if not color_name:
+        return "#F5F3F0"
+    c = color_name.lower()
+    for key, val in _PASTEL_MAP.items():
+        if key in c:
+            return val
+    return "#F5F3F0"
+
+
+def _auto_trim(img_bytes: bytes) -> bytes:
+    """Crop transparent edges of RGBA image, keep 5% padding."""
+    try:
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGBA")
+        alpha = img.split()[3]
+        bbox = alpha.getbbox()
+        if not bbox:
+            return img_bytes
+        w, h = img.size
+        pad_x = int((bbox[2] - bbox[0]) * 0.05)
+        pad_y = int((bbox[3] - bbox[1]) * 0.05)
+        bbox = (
+            max(0, bbox[0] - pad_x), max(0, bbox[1] - pad_y),
+            min(w, bbox[2] + pad_x), min(h, bbox[3] + pad_y),
+        )
+        img = img.crop(bbox)
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        return buf.getvalue()
+    except Exception:
+        return img_bytes
+
+
+def _img_to_data_uri(img_bytes: bytes) -> str:
+    import base64
+    b64 = base64.b64encode(img_bytes).decode()
+    return f"data:image/png;base64,{b64}"
+
+
+def _load_silhouette_bytes(slot: str, gender: str = "girl", adult: bool = False) -> Optional[bytes]:
+    candidates = []
+    if adult:
+        candidates.append(f"{slot}_adult.png")
+    candidates.append(f"{slot}_{gender}.png")
+    candidates.append(f"{slot}.png")
+    for name in candidates:
+        path = os.path.join(_SILHOUETTES_DIR, name)
+        if os.path.exists(path):
+            try:
+                with open(path, "rb") as f:
+                    return f.read()
+            except Exception:
+                pass
+    return None
+
+
+def _satori_card(slot_data: dict, card_w: str, card_h: str) -> dict:
+    """Build a single Satori card element for a slot."""
+    slot_key = slot_data.get("slot", "top")
+    item_color = slot_data.get("item_color", "")
+    bg = _pastel_bg(item_color)
+
+    # Image element
+    img_el = None
+    if slot_data.get("has_item") and slot_data.get("_photo_bytes"):
+        photo_bytes = _auto_trim(slot_data["_photo_bytes"])
+        img_el = {
+            "type": "img",
+            "props": {
+                "src": _img_to_data_uri(photo_bytes),
+                "width": "80%",
+                "height": "75%",
+                "style": {"objectFit": "contain"},
+            },
+        }
+    else:
+        gender = slot_data.get("gender", "girl")
+        adult = slot_data.get("adult", False)
+        sil_bytes = _load_silhouette_bytes(slot_key, gender, adult)
+        if sil_bytes:
+            img_el = {
+                "type": "img",
+                "props": {
+                    "src": _img_to_data_uri(sil_bytes),
+                    "width": "70%",
+                    "height": "65%",
+                    "style": {"objectFit": "contain", "opacity": "0.5"},
+                },
+            }
+
+    # Label
+    if slot_data.get("has_item"):
+        label = format_collage_label(
+            slot_key, slot_data.get("item_type", ""), item_color
+        )
+    else:
+        label = slot_data.get("label") or _get_placeholder_label(
+            slot_key, slot_data.get("gender", "girl")
+        )
+
+    label_el = {
+        "type": "div",
+        "props": {
+            "style": {
+                "display": "flex",
+                "fontFamily": "DejaVu",
+                "fontSize": 15,
+                "color": "#8B7B8B",
+                "marginTop": 4,
+            },
+            "children": label,
+        },
+    }
+
+    children = []
+    if img_el:
+        children.append(img_el)
+    children.append(label_el)
+
+    return {
+        "type": "div",
+        "props": {
+            "style": {
+                "display": "flex",
+                "flexDirection": "column",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "width": card_w,
+                "height": card_h,
+                "backgroundColor": bg,
+                "borderRadius": 16,
+                "overflow": "hidden",
+            },
+            "children": children,
+        },
+    }
+
+
+def _satori_row(cards: list, gap: int = 12) -> dict:
+    """Wrap cards in a flex row."""
+    return {
+        "type": "div",
+        "props": {
+            "style": {
+                "display": "flex",
+                "flexDirection": "row",
+                "gap": gap,
+                "width": "100%",
+            },
+            "children": cards,
+        },
+    }
+
+
+async def _render_satori(element: dict, width: int, height: int) -> Optional[bytes]:
+    """POST to Satori server, return PNG bytes or None."""
+    payload = {"width": width, "height": height, "element": element}
+    try:
+        async with httpx.AsyncClient(timeout=SATORI_TIMEOUT) as client:
+            r = await client.post(SATORI_URL, json=payload)
+            r.raise_for_status()
+            if r.content[:4] == b"\x89PNG":
+                return r.content
+            logger.warning("satori.not_png", content_type=r.headers.get("content-type"))
+            return None
+    except Exception as e:
+        logger.warning("satori.render_failed", error=str(e))
+        return None
+
+
+async def build_collage_satori(
+    slots: list,
+    header_text: str = "",
+    footer_text: str = "Касси -- твой личный стилист",
+) -> Optional[bytes]:
+    """Render collage via Satori. Returns PNG bytes or None on error."""
+    import time as _time
+    t0 = _time.monotonic()
+
+    # Split into zones
+    zone1 = [s for s in slots if s.get("slot") == "outerwear"]
+    zone2 = [s for s in slots if s.get("slot") in ("top", "removable_layer", "bottom", "one_piece")]
+    zone3 = [s for s in slots if s.get("slot") in ("footwear", "hat", "scarf", "gloves", "tights", "socks")]
+
+    body_rows: list = []
+    pad = 24
+
+    # Zone 1: hero outerwear
+    if zone1:
+        card = _satori_card(zone1[0], "100%", "340px")
+        body_rows.append(card)
+
+    # Zone 2: top + bottom or one_piece
+    one_piece = [s for s in zone2 if s.get("slot") == "one_piece"]
+    tops = [s for s in zone2 if s.get("slot") in ("top", "removable_layer")]
+    bots = [s for s in zone2 if s.get("slot") == "bottom"]
+
+    if one_piece:
+        body_rows.append(_satori_card(one_piece[0], "100%", "260px"))
+    elif tops or bots:
+        row_cards = []
+        if tops:
+            row_cards.append(_satori_card(tops[0], "50%", "260px"))
+        if bots:
+            row_cards.append(_satori_card(bots[0], "50%", "260px"))
+        if row_cards:
+            body_rows.append(_satori_row(row_cards))
+
+    # Zone 3: footwear + accessories
+    z3_shown = zone3[:4]
+    if z3_shown:
+        pct = f"{100 // len(z3_shown)}%" if len(z3_shown) <= 3 else "25%"
+        row_cards = [_satori_card(s, pct, "160px") for s in z3_shown]
+        body_rows.append(_satori_row(row_cards))
+
+    if not body_rows:
+        return None
+
+    # Header
+    header_el = {
+        "type": "div",
+        "props": {
+            "style": {
+                "display": "flex",
+                "flexDirection": "column",
+                "justifyContent": "center",
+                "width": "100%",
+                "padding": f"{pad}px {pad}px 16px {pad}px",
+                "backgroundColor": "#1a1a2e",
+                "color": "#ffffff",
+                "fontFamily": "DejaVu",
+                "borderRadius": "0 0 0 0",
+            },
+            "children": [
+                {
+                    "type": "div",
+                    "props": {
+                        "style": {"display": "flex", "fontSize": 13, "color": "#9090B0", "letterSpacing": 3},
+                        "children": "LOOK OF THE DAY",
+                    },
+                },
+                {
+                    "type": "div",
+                    "props": {
+                        "style": {"display": "flex", "fontSize": 22, "marginTop": 4, "fontWeight": "bold"},
+                        "children": header_text or "Образ дня",
+                    },
+                },
+            ],
+        },
+    }
+
+    # Footer
+    footer_el = {
+        "type": "div",
+        "props": {
+            "style": {
+                "display": "flex",
+                "justifyContent": "center",
+                "alignItems": "center",
+                "width": "100%",
+                "padding": "12px 0",
+                "fontFamily": "DejaVu",
+                "fontSize": 14,
+                "color": "#AAA0B9",
+            },
+            "children": footer_text,
+        },
+    }
+
+    # Body wrapper
+    body_el = {
+        "type": "div",
+        "props": {
+            "style": {
+                "display": "flex",
+                "flexDirection": "column",
+                "gap": 12,
+                "padding": f"16px {pad}px",
+                "width": "100%",
+            },
+            "children": body_rows,
+        },
+    }
+
+    # Root
+    # Calculate height: header ~80, body dynamic, footer ~44
+    n_rows = len(body_rows)
+    est_h = 80 + n_rows * 280 + 44 + pad * 2
+    # More precise: zone1=340+16, zone2=260+16, zone3=160+16
+    precise_h = 80 + 44 + 32  # header + footer + padding
+    if zone1:
+        precise_h += 340 + 12
+    if one_piece or tops or bots:
+        precise_h += 260 + 12
+    if z3_shown:
+        precise_h += 160 + 12
+    height = max(precise_h, 400)
+
+    root = {
+        "type": "div",
+        "props": {
+            "style": {
+                "display": "flex",
+                "flexDirection": "column",
+                "width": "100%",
+                "height": "100%",
+                "backgroundColor": "#FAF6FF",
+            },
+            "children": [header_el, body_el, footer_el],
+        },
+    }
+
+    result = await _render_satori(root, SATORI_W, height)
+    dt = _time.monotonic() - t0
+    if result:
+        logger.info("satori.collage_ok", size=len(result), time_ms=int(dt * 1000))
+    return result
+
+
 # ── Public API ───────────────────────────────────────────────────────────────
 
 async def build_collage(
@@ -762,12 +1098,21 @@ async def build_collage(
                         if photo_bytes:
                             try:
                                 slot_data["_thumb"] = _make_thumb(photo_bytes)
+                                slot_data["_photo_bytes"] = photo_bytes
                             except Exception as e:
                                 logger.warning("image_builder.decode_failed", error=str(e))
                                 slot_data["has_item"] = False
                         else:
                             slot_data["has_item"] = False
 
+            # Try Satori first, fallback to PIL
+            satori_result = await build_collage_satori(
+                outfit_slots, header_text, footer_text,
+            )
+            if satori_result:
+                return satori_result
+
+            logger.info("image_builder.satori_fallback_to_pil")
             result = _build_layered_layout(outfit_slots, theme, header_text, footer_text)
             buf = io.BytesIO()
             result.save(buf, format="JPEG", quality=88, optimize=True)
