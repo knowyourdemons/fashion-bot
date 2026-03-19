@@ -3,6 +3,7 @@
 
 Используется и morning_brief.py и wardrobe.py — единая точка правды.
 """
+import random
 from datetime import date
 
 from services.outfit_selector import _select_outfit, _get_temp_regime
@@ -299,6 +300,57 @@ async def get_wardrobe_summary(owner_id, owner_type: str, session) -> str:
         lines.append(line)
 
     return "\n".join(lines)
+
+
+_MISSING_SLOT_NAMES = {
+    "outerwear": "тёплую куртку", "footwear": "обувь",
+    "hat": "шапку", "scarf": "шарф", "gloves": "перчатки",
+    "top": "верх", "bottom": "низ",
+}
+
+
+def warm_outfit_comment(
+    score: float,
+    child_name: str = None,
+    temp: float = None,
+    has_outerwear: bool = True,
+    missing_slots: list = None,
+) -> str:
+    """Тёплый развёрнутый комментарий Касси к образу с советом."""
+    name = child_name or "ты"
+
+    if score >= 8.5:
+        options = [
+            f"Отличный образ, {name}! Тепло, стильно и всё сочетается ✨",
+            f"Собрала классный образ для {name}! Будет выглядеть замечательно",
+            f"Образ на все сто, {name}! Цвета отлично играют вместе",
+        ]
+    elif score >= 7.0:
+        options = [
+            f"Хороший образ, {name} — и тепло, и красиво! Добавь яркий аксессуар — будет ещё лучше",
+            f"Отличный образ для {name}! Всё по погоде. Попробуй добавить шарф для настроения",
+            f"Симпатичный образ, {name}! Комфортно весь день",
+        ]
+    elif score >= 5.0:
+        options = [
+            f"Удобный образ, {name}! Добавь пару ярких вещей — комбинаций станет больше",
+            f"Удобный образ для {name}! Загрузи ещё вещей — смогу собирать интереснее",
+        ]
+    else:
+        options = [
+            f"Собрала из того что есть, {name}. Добавь ещё вещей — образы станут разнообразнее!",
+        ]
+
+    comment = random.choice(options)
+
+    if missing_slots:
+        missing_text = [_MISSING_SLOT_NAMES[s] for s in missing_slots[:2] if s in _MISSING_SLOT_NAMES]
+        if missing_text:
+            comment += f"\nСовет: добавь {' и '.join(missing_text)} в гардероб!"
+    elif temp is not None and temp <= 5 and not has_outerwear:
+        comment += "\n⚠️ Холодно — добавь тёплую куртку в гардероб!"
+
+    return comment
 
 
 async def get_wardrobe_summary_cached(owner_id, owner_type: str, redis, session) -> str:
