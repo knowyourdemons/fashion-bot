@@ -43,6 +43,26 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     async def health() -> dict:
-        return {"status": "ok"}
+        checks: dict = {"status": "ok"}
+        try:
+            from core.redis import get_redis
+            redis = get_redis()
+            await redis.ping()
+            checks["redis"] = "ok"
+        except Exception as e:
+            checks["redis"] = str(e)
+            checks["status"] = "degraded"
+        try:
+            from sqlalchemy import text
+            from db.base import AsyncReadSession
+            async with AsyncReadSession() as session:
+                await session.execute(text("SELECT 1"))
+            checks["db"] = "ok"
+        except Exception as e:
+            checks["db"] = str(e)
+            checks["status"] = "degraded"
+        status_code = 200 if checks["status"] == "ok" else 503
+        from fastapi.responses import JSONResponse
+        return JSONResponse(content=checks, status_code=status_code)
 
     return app

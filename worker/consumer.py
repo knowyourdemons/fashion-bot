@@ -5,11 +5,10 @@ Redis queue consumer — точка входа воркера.
 import asyncio
 import signal
 import structlog
-import redis.asyncio as aioredis
 
-from config import settings
-from core.queue import RedisQueue, QueuePriority
+from core.queue import RedisQueue
 from core.anthropic_client import init_anthropic_pool
+from core.redis import init_redis, close_redis
 from worker.fast_worker import FastWorker
 from worker.slow_worker import SlowWorker
 
@@ -24,7 +23,7 @@ def _handle_signal(sig: signal.Signals) -> None:
 
 
 async def main() -> None:
-    redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    redis_client = await init_redis()
     queue = RedisQueue(redis_client)
 
     init_anthropic_pool(redis_client)
@@ -44,7 +43,7 @@ async def main() -> None:
             slow_worker.run(_shutdown),
         )
     finally:
-        await redis_client.aclose()
+        await close_redis()
         logger.info("worker.stopped")
 
 

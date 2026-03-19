@@ -4,7 +4,6 @@ Fashion Bot — точка входа.
 """
 import asyncio
 import structlog
-import redis.asyncio as aioredis
 from fastapi import FastAPI
 
 from config import settings
@@ -12,6 +11,7 @@ from api.app import create_app
 from bot.app import create_application
 from core.anthropic_client import init_anthropic_pool
 from core.queue import RedisQueue
+from core.redis import init_redis, close_redis, get_redis
 from core.scheduler import Scheduler
 
 # Настройка structlog
@@ -54,7 +54,7 @@ async def startup() -> None:
     from db.seeds.translate_items import run_if_needed as translate_items
     await translate_items()
 
-    redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    redis_client = await init_redis()
 
     # Инициализируем пул Anthropic
     init_anthropic_pool(redis_client)
@@ -86,6 +86,5 @@ async def shutdown() -> None:
         app.state.scheduler.stop()
     if hasattr(app.state, "tg_app"):
         await app.state.tg_app.shutdown()
-    if hasattr(app.state, "redis"):
-        await app.state.redis.aclose()
+    await close_redis()
     logger.info("app.stopped")

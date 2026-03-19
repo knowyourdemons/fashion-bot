@@ -1522,14 +1522,9 @@ async def handle_gap_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     from services.gap_analysis import build_shopping_list, _get_current_season
     from services.i18n.ru import t
-    import redis.asyncio as aioredis
-    from config import settings as _settings
+    from core.redis import get_redis
 
-    redis_client = aioredis.from_url(_settings.redis_url, decode_responses=False)
-    try:
-        result = await build_shopping_list(user, items, redis_client)
-    finally:
-        await redis_client.aclose()
+    result = await build_shopping_list(user, items, get_redis())
 
     if result is None:
         await query.message.reply_text(

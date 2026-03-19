@@ -45,7 +45,7 @@ async def check_engagement(payload: dict) -> dict:
     import uuid as _uuid
     from sqlalchemy import select, func
     from sqlalchemy.orm import selectinload
-    import redis.asyncio as aioredis
+    from core.redis import get_redis
     from db.base import AsyncReadSession
     from db.models.user import User
     from db.models.brief_log import BriefLog
@@ -103,7 +103,7 @@ async def check_engagement(payload: dict) -> dict:
             from db.crud.brief_log import count_liked_briefs as _clb
             liked_count = await _clb(session, user.id)
 
-    redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    redis_client = get_redis()
     try:
         engagement_key = f"engagement:{user.id}:{date.today().isoformat()}"
         if await redis_client.exists(engagement_key):
@@ -146,7 +146,7 @@ async def check_engagement(payload: dict) -> dict:
         logger.info("engagement.sent", user_id=str(user.id), trial_day=trial_day)
     except Exception as e:
         logger.warning("engagement.failed", user_id=str(user.id), error=str(e))
-    finally:
-        await redis_client.aclose()
+    except Exception as e:
+        logger.warning("engagement.send_failed", user_id=str(user.id), error=str(e))
 
     return {}

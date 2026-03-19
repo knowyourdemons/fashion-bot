@@ -34,13 +34,13 @@ logger = structlog.get_logger()
 
 async def schedule_all() -> None:
     """Каждый час отбирает юзеров у кого сейчас 07:00 → пушит generate_brief."""
-    import redis.asyncio as aioredis
     from sqlalchemy import select
     from db.base import AsyncReadSession
     from db.models.user import User
     from core.queue import RedisQueue, QueuePriority
+    from core.redis import get_redis
 
-    redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    redis_client = get_redis()
     queue = RedisQueue(redis_client)
     count = 0
     teaser_count = 0
@@ -155,7 +155,7 @@ async def schedule_all() -> None:
         except Exception as e:
             logger.warning("engagement.schedule.error", error=str(e))
     finally:
-        await redis_client.aclose()
+        pass  # singleton — не закрываем
 
     logger.info("morning_brief.schedule_all", count=count, teaser_count=teaser_count, hour=datetime.utcnow().hour)
 
@@ -174,7 +174,7 @@ _REGIME_OUTER_ADVICE = {
 
 async def _generate_adult_brief(user, payload: dict) -> dict:
     """Бриф для взрослых: погода + совет стилиста через Haiku + коллаж."""
-    import redis.asyncio as aioredis
+    from core.redis import get_redis
     from db.base import AsyncWriteSession, AsyncReadSession
     from db.crud.wardrobe import get_owner_items
     from db.crud.brief_log import create_log
@@ -237,7 +237,7 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
     try:
         pool = get_anthropic_pool()
     except RuntimeError:
-        _redis_for_pool = aioredis.from_url(settings.redis_url, decode_responses=False)
+        _redis_for_pool = get_redis()
         init_anthropic_pool(_redis_for_pool)
         pool = get_anthropic_pool()
 
@@ -312,7 +312,7 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
         brief_id = str(log.id)
 
     # Push send task
-    redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    redis_client = get_redis()
     try:
         queue = RedisQueue(redis_client)
         await queue.push(
@@ -330,7 +330,7 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
             priority=QueuePriority.HIGH,
         )
     finally:
-        await redis_client.aclose()
+        pass  # singleton — не закрываем
 
     logger.info("morning_brief.adult_generated", user_id=str(user.id), brief_id=brief_id)
     return {"brief_id": brief_id}
@@ -344,7 +344,7 @@ async def generate_brief(payload: dict) -> dict:
     import uuid as _uuid
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
-    import redis.asyncio as aioredis
+    from core.redis import get_redis
     from db.base import AsyncWriteSession, AsyncReadSession
     from db.models.user import User
     from db.crud.wardrobe import get_owner_items
@@ -457,11 +457,11 @@ async def generate_brief(payload: dict) -> dict:
 
         # Сгенерировать текстовый комментарий через Haiku
         from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
-        import redis.asyncio as _aioredis
+        from core.redis import get_redis as _get_redis
         try:
             _pool = get_anthropic_pool()
         except RuntimeError:
-            _r = _aioredis.from_url(settings.redis_url, decode_responses=False)
+            _r = _get_redis()
             init_anthropic_pool(_r)
             _pool = get_anthropic_pool()
 
@@ -590,7 +590,7 @@ async def generate_brief(payload: dict) -> dict:
         collage_photo_urls = []
 
     # Push send task
-    redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    redis_client = get_redis()
     try:
         queue = RedisQueue(redis_client)
         await queue.push(
@@ -609,7 +609,7 @@ async def generate_brief(payload: dict) -> dict:
             priority=QueuePriority.HIGH,
         )
     finally:
-        await redis_client.aclose()
+        pass  # singleton — не закрываем
 
     logger.info(
         "morning_brief.generated",
@@ -743,7 +743,7 @@ _EVENING_MONTH_NAMES = {
 
 async def schedule_evening() -> None:
     """Каждый час отбирает premium-юзеров у кого сейчас 20:xx → пушит generate_evening_brief."""
-    import redis.asyncio as aioredis
+    from core.redis import get_redis
     from datetime import timedelta
     from sqlalchemy import select, or_
     from datetime import timezone as _tz
@@ -752,7 +752,7 @@ async def schedule_evening() -> None:
     from core.queue import RedisQueue, QueuePriority
     from core.permissions import get_effective_plan, is_brief_day_tomorrow
 
-    redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    redis_client = get_redis()
     queue = RedisQueue(redis_client)
     count = 0
 
@@ -794,7 +794,7 @@ async def schedule_evening() -> None:
             except Exception as e:
                 logger.warning("evening_brief.schedule.user_error", user_id=str(user.id), error=str(e))
     finally:
-        await redis_client.aclose()
+        pass  # singleton — не закрываем
 
     logger.info("evening_brief.schedule_all", count=count, hour=datetime.utcnow().hour)
 
@@ -806,7 +806,7 @@ async def generate_evening_brief(payload: dict) -> dict:
     from datetime import timedelta
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
-    import redis.asyncio as aioredis
+    from core.redis import get_redis
     from db.base import AsyncWriteSession, AsyncReadSession
     from db.models.user import User
     from db.crud.wardrobe import get_owner_items
@@ -836,10 +836,8 @@ async def generate_evening_brief(payload: dict) -> dict:
 
     if user.city:
         try:
-            redis_tmp = aioredis.from_url(settings.redis_url, decode_responses=False)
-            svc = WeatherService(redis_tmp)
+            svc = WeatherService(get_redis())
             w = await svc.get_forecast_day(user.city, day=1)
-            await redis_tmp.aclose()
             temp_m = w["temp_morning"]
             temp_e = w["temp_evening"]
             precip_e = w.get("precip_evening", 0.0)
@@ -891,7 +889,7 @@ async def generate_evening_brief(payload: dict) -> dict:
         try:
             pool = get_anthropic_pool()
         except RuntimeError:
-            _r = aioredis.from_url(settings.redis_url, decode_responses=False)
+            _r = get_redis()
             init_anthropic_pool(_r)
             pool = get_anthropic_pool()
 
@@ -950,7 +948,7 @@ async def generate_evening_brief(payload: dict) -> dict:
             await session.commit()
             brief_id = str(log.id)
 
-        redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+        redis_client = get_redis()
         try:
             queue = RedisQueue(redis_client)
             await queue.push(
@@ -968,7 +966,7 @@ async def generate_evening_brief(payload: dict) -> dict:
                 priority=QueuePriority.LOW,
             )
         finally:
-            await redis_client.aclose()
+            pass  # singleton — не закрываем
 
         logger.info("evening_brief.adult_generated", user_id=str(user_id), brief_id=brief_id)
         return {"brief_id": brief_id}
@@ -1052,7 +1050,7 @@ async def generate_evening_brief(payload: dict) -> dict:
         await session.commit()
         brief_id = str(log.id)
 
-    redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    redis_client = get_redis()
     try:
         queue = RedisQueue(redis_client)
         await queue.push(
@@ -1071,7 +1069,7 @@ async def generate_evening_brief(payload: dict) -> dict:
             priority=QueuePriority.LOW,
         )
     finally:
-        await redis_client.aclose()
+        pass  # singleton — не закрываем
 
     logger.info(
         "evening_brief.child_generated",
@@ -1090,7 +1088,7 @@ async def send_teaser(payload: dict) -> dict:
     from sqlalchemy.orm import selectinload as _sl
     from db.base import AsyncReadSession
     from db.models.user import User
-    import redis.asyncio as aioredis
+    from core.redis import get_redis
 
     user_id = _uuid.UUID(payload["user_id"])
 
@@ -1106,7 +1104,7 @@ async def send_teaser(payload: dict) -> dict:
         return {}
 
     # Не спамить: Redis lock
-    redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    redis_client = get_redis()
     try:
         teaser_key = f"teaser_sent:{user.id}:{date.today().isoformat()}"
         sent = await redis_client.exists(teaser_key)
@@ -1165,6 +1163,6 @@ async def send_teaser(payload: dict) -> dict:
     except Exception as e:
         logger.warning("teaser.failed", user_id=str(user.id), error=str(e))
     finally:
-        await redis_client.aclose()
+        pass  # singleton — не закрываем
 
     return {}

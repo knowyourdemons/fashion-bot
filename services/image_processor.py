@@ -7,6 +7,7 @@
 5. Удаление фона (local ONNX silueta → remove.bg API fallback)
 """
 import io
+import threading
 from typing import Optional
 
 import imagehash
@@ -19,17 +20,20 @@ from exceptions import DuplicateItemError, ImageTooLargeError
 # ── Singleton ONNX session for background removal ──────────────────
 _SILUETA_PATH = "/root/.u2net/silueta.onnx"
 _ort_session: Optional[ort.InferenceSession] = None
+_ort_lock = threading.Lock()
 
 
 def _get_ort_session() -> ort.InferenceSession:
     global _ort_session
     if _ort_session is None:
-        opts = ort.SessionOptions()
-        opts.intra_op_num_threads = 1
-        opts.inter_op_num_threads = 1
-        _ort_session = ort.InferenceSession(
-            _SILUETA_PATH, opts, providers=["CPUExecutionProvider"]
-        )
+        with _ort_lock:
+            if _ort_session is None:  # double-check after acquiring lock
+                opts = ort.SessionOptions()
+                opts.intra_op_num_threads = 1
+                opts.inter_op_num_threads = 1
+                _ort_session = ort.InferenceSession(
+                    _SILUETA_PATH, opts, providers=["CPUExecutionProvider"]
+                )
     return _ort_session
 
 

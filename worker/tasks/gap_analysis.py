@@ -18,11 +18,11 @@ async def run() -> None:
     from services.gap_analysis import build_shopping_list, _get_current_season
     from services.i18n.ru import t
     from telegram import Bot
-    import redis.asyncio as aioredis
+    from core.redis import get_redis
     from sqlalchemy import select
 
     bot = Bot(token=settings.telegram_bot_token)
-    redis_client = aioredis.from_url(settings.redis_url)
+    redis_client = get_redis()
 
     now = datetime.now(timezone.utc)
 
