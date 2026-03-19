@@ -13,7 +13,8 @@ import structlog
 
 from config import settings
 from worker.fast_worker import register
-from worker.tasks.style_config import get_placeholder_label, get_temp_regime, SLOT_EMOJI, _needs_tights
+from worker.tasks.style_config import get_temp_regime
+from services.outfit_builder import build_outfit_slots, get_collage_params
 
 # ── Реэкспорт из сервисных модулей (backward compat для тестов) ────────────
 from services.brief_weather import _SEASONS, _geocode_city, _get_weather
@@ -21,28 +22,6 @@ from services.outfit_selector import _get_temp_regime, _select_outfit
 from services.brief_formatter import _format_item, _format_child_block
 
 logger = structlog.get_logger()
-
-# ── Заголовок коллажа ─────────────────────────────────────────────────────────
-_DAY_NAMES = {0: "Пн", 1: "Вт", 2: "Ср", 3: "Чт", 4: "Пт", 5: "Сб", 6: "Вс"}
-_MONTH_NAMES = {1: "янв", 2: "фев", 3: "мар", 4: "апр", 5: "мая",
-                6: "июн", 7: "июл", 8: "авг", 9: "сен", 10: "окт", 11: "ноя", 12: "дек"}
-
-
-def _weather_emoji(temp, precip: float = 0) -> str:
-    if precip and precip > 50:
-        return "🌧"
-    if temp is None:
-        return "🌤"
-    if temp > 25:
-        return "☀️"
-    if temp > 15:
-        return "🌤"
-    if temp > 5:
-        return "🌥"
-    if temp > 0:
-        return "❄️"
-    return "🥶"
-
 
 # ── [Функции перенесены в services/] ────────────────────────────────────────
 # _SEASONS, _geocode_city, _get_weather  → services/brief_weather.py
@@ -213,8 +192,7 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
     # Коллаж из вещей пользователя
     outfit_slots: list[dict] = []
     if items:
-        season = _SEASONS[today.month]
-        slot_order = ["outerwear", "top", "bottom", "one_piece", "footwear", "accessory"]
+        slot_order = ["outerwear", "top", "bottom", "one_piece", "footwear"]
         seen_cg: set = set()
         outfit: dict = {}
         for item in sorted(items, key=lambda x: float(x.score_item or 0), reverse=True):
@@ -222,51 +200,19 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
             if cg not in seen_cg and cg in slot_order:
                 outfit[cg] = item
                 seen_cg.add(cg)
-
-        for slot in slot_order:
-            if slot == "outerwear" and temp_m >= 20:
-                continue
-            if slot in ("top", "bottom") and outfit.get("one_piece"):
-                continue
-            if slot == "one_piece" and (outfit.get("top") or outfit.get("bottom")):
-                continue
-
-            item = outfit.get(slot)
-            if item and getattr(item, "show_in_collage", True):
-                outfit_slots.append({
-                    "slot": slot,
-                    "item_type": item.type,
-                    "label": f"{item.type} {item.color}"[:20],
-                    "photo_id": item.photo_id,
-                    "photo_url": item.photo_url,
-                    "has_item": True,
-                    "adult": True,
-                })
-            else:
-                ph_label = get_placeholder_label(slot, colortype, regime)
-                if ph_label is None:
-                    continue
-                outfit_slots.append({
-                    "slot": slot,
-                    "photo_id": None,
-                    "photo_url": None,
-                    "has_item": False,
-                    "adult": True,
-                })
+        outfit_slots = build_outfit_slots(outfit, child=None, temp=temp_m)
 
     # Заголовок коллажа для взрослых
     precip_e_adult = weather.get("precip_evening", 0)
-    _emoji = _weather_emoji(temp_m, precip_e_adult or 0)
-    _sign = "+" if (temp_m or 0) >= 0 else ""
-    _day_ctx = "выходной" if today.weekday() >= 5 else "будний день"
-    collage_header = f"{_emoji} {_DAY_NAMES[today.weekday()]}, {today.day} {_MONTH_NAMES[today.month]} · {_sign}{temp_m:.0f}°C · {_day_ctx}"
+    _collage_params = get_collage_params(user=user, temp=temp_m, precip=precip_e_adult or 0)
+    collage_header = _collage_params["header_text"]
 
     collage_bytes_val = None
     if outfit_slots:
         try:
             collage_bytes_val = await build_collage(
                 outfit_slots=outfit_slots,
-                theme="adult",
+                theme=_collage_params["theme"],
                 header_text=collage_header,
             )
         except Exception as e:
@@ -378,13 +324,6 @@ async def generate_brief(payload: dict) -> dict:
     any_wow = False
     global_warnings: list[str] = []
 
-    _slot_order = ["outerwear", "top", "bottom", "one_piece", "footwear", "hat", "tights"]
-    _slot_labels = {
-        "outerwear": "куртку", "top": "верх", "bottom": "низ",
-        "one_piece": "платье", "footwear": "обувь",
-        "hat": "шапку", "tights": "колготки",
-    }
-
     for child in children:
         async with AsyncReadSession() as session:
             items = await get_owner_items(session, child.id, "child")
@@ -469,76 +408,15 @@ async def generate_brief(payload: dict) -> dict:
             temp=_temp, colortype=colortype, regime=regime,
         ))
 
-        # Собираем outfit_slots для коллажа с плейсхолдерами
-        _outfit_key_to_slot = {
-            "outerwear": "outerwear",
-            "top":       "top",
-            "bottom":    "bottom",
-            "one_piece": "one_piece",
-            "footwear":  "footwear",
-            "hat":       "hat",
-            "tights":    "tights",
-            "socks":     "tights",
-        }
-        tights_needed = _needs_tights(outfit, _temp)
-        seen_slots: set[str] = set()
-        for outfit_key, slot in _outfit_key_to_slot.items():
-            if outfit_key in ("top", "bottom") and outfit.get("one_piece"):
-                continue
-            if outfit_key == "one_piece" and (outfit.get("top") or outfit.get("bottom")):
-                continue
-            if slot in seen_slots:
-                continue
-            if slot == "tights" and not tights_needed:
-                continue
-
-            _child_gender = getattr(child, "gender", "girl") or "girl"
-            item = outfit.get(outfit_key)
-            if item and getattr(item, "show_in_collage", True):
-                seen_slots.add(slot)
-                all_outfit_slots.append({
-                    "slot": slot,
-                    "item_type": item.type,
-                    "label": _format_item(item)[:20],
-                    "photo_id": item.photo_id,
-                    "photo_url": item.photo_url,
-                    "has_item": True,
-                    "gender": _child_gender,
-                })
-            else:
-                ph_label = get_placeholder_label(slot, colortype, regime)
-                if ph_label is None:
-                    continue
-                seen_slots.add(slot)
-                all_outfit_slots.append({
-                    "slot": slot,
-                    "photo_id": None,
-                    "photo_url": None,
-                    "has_item": False,
-                    "gender": _child_gender,
-                })
-
-        # Всегда показывать обувь (ребёнок не ходит босиком)
-        if "footwear" not in seen_slots:
-            all_outfit_slots.append({
-                "slot": "footwear", "photo_id": None, "photo_url": None,
-                "has_item": False, "gender": _child_gender,
-            })
-            seen_slots.add("footwear")
-
-        # При холоде (≤10°C) всегда показывать куртку
-        if _temp is not None and _temp <= 10 and "outerwear" not in seen_slots:
-            all_outfit_slots.insert(0, {
-                "slot": "outerwear", "photo_id": None, "photo_url": None,
-                "has_item": False, "gender": _child_gender,
-            })
-            seen_slots.add("outerwear")
+        # Собираем outfit_slots для коллажа
+        child_slots = build_outfit_slots(outfit, child=child, temp=_temp)
+        all_outfit_slots.extend(child_slots)
 
         # Критическое предупреждение при морозе без тёплой одежды
         if _temp is not None and _temp <= 0:
             has_warm = any(
                 s["slot"] == "outerwear" and s.get("has_item")
-                for s in all_outfit_slots
+                for s in child_slots
             )
             if not has_warm:
                 global_warnings.append(
@@ -556,17 +434,11 @@ async def generate_brief(payload: dict) -> dict:
 
     # Заголовок коллажа — берём из первого ребёнка
     _first_child = children[0] if children else None
-    _emoji_h = _weather_emoji(temp_m, precip_e or 0)
-    _sign_h = "+" if (temp_m or 0) >= 0 else ""
-    if _first_child:
-        collage_header = (
-            f"{_emoji_h} {_DAY_NAMES[today.weekday()]}, {today.day} {_MONTH_NAMES[today.month]}"
-            f" · {_sign_h}{temp_m:.0f}°C · {_first_child.name}, {day_type}"
-        )
-        collage_theme = "boy" if getattr(_first_child, "gender", "girl") == "boy" else "girl"
-    else:
-        collage_header = ""
-        collage_theme = "girl"
+    _collage_params = get_collage_params(
+        child=_first_child, temp=temp_m, precip=precip_e or 0, day_type=day_type
+    )
+    collage_header = _collage_params["header_text"]
+    collage_theme = _collage_params["theme"]
 
     header = f"🌅 Доброе утро, {user.name}!\n"
     if weather_line:

@@ -848,7 +848,7 @@ async def _rate_photos(
                     file_id=file_id[:20], size=len(photo_bytes))
                 photo_bytes_list.append(photo_bytes)
             result = await _call_rate_vision(photo_bytes_list, owner_id=owner_id, owner_type=owner_type)
-            await message.reply_text(f"⭐ Скор образа:\n{result}", reply_markup=get_main_menu())
+            await message.reply_text(result, reply_markup=get_main_menu())
         else:
             for i, file_id in enumerate(file_ids, 1):
                 tg_file = await bot.get_file(file_id)
@@ -1486,8 +1486,6 @@ async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     async with AsyncReadSession() as session:
         all_items = await get_owner_items(session, owner_id, owner_type)
     item_count = len(all_items)
-    scored = [float(i.score_item) for i in all_items if i.score_item]
-    avg_score_str = f" · ⭐ {round(sum(scored)/len(scored), 1)}" if scored else ""
 
     # Кнопки: образ дня + список; switch-кнопки ниже
     top_row = [
@@ -1497,7 +1495,7 @@ async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     markup = InlineKeyboardMarkup([top_row] + buttons)
 
     await update.message.reply_text(
-        f"👗 Гардероб: *{owner_name}* · {item_count} вещей{avg_score_str}",
+        f"👗 Гардероб: *{owner_name}* · {item_count} вещей",
         parse_mode="Markdown",
         reply_markup=markup,
     )
@@ -1652,8 +1650,7 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
 
     try:
         from services.weather import WeatherService
-        from worker.tasks.morning_brief import _select_outfit, _get_temp_regime, _SEASONS
-        from worker.tasks.style_config import get_placeholder_label, _needs_tights
+        from services.outfit_builder import select_outfit, get_temp_regime, SEASONS, build_outfit_slots, get_collage_params
         from services.image_builder import build_collage
 
         # Найти детей
@@ -1702,76 +1699,12 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
         _random.shuffle(items_shuffled)
 
         today_date = _date.today()
-        season = _SEASONS[today_date.month]
-        outfit = _select_outfit(items_shuffled, season, today_date, temp_m, temp_e)
+        season = SEASONS[today_date.month]
+        outfit = select_outfit(items_shuffled, season, today_date, temp_m, temp_e)
 
-        colortype = getattr(child, "colortype", None) or "default"
-        regime = _get_temp_regime(temp_m)
+        all_slots = build_outfit_slots(outfit, child=child, temp=temp_m)
 
-        _outfit_key_to_slot = {
-            "outerwear": "outerwear", "top": "top", "bottom": "bottom",
-            "one_piece": "one_piece", "footwear": "footwear",
-            "hat": "hat", "tights": "tights", "socks": "tights",
-        }
-        _short_labels = {
-            "outerwear": "куртку", "top": "верх", "bottom": "низ",
-            "one_piece": "платье", "footwear": "обувь",
-            "hat": "шапку", "tights": "колготки",
-        }
-        tights_needed = _needs_tights(outfit, temp_m)
-        seen_slots: set = set()
-        all_slots = []
-        _child_gender = getattr(child, "gender", "girl") or "girl"
-        for outfit_key, slot in _outfit_key_to_slot.items():
-            if outfit_key in ("top", "bottom") and outfit.get("one_piece"):
-                continue
-            if outfit_key == "one_piece" and (outfit.get("top") or outfit.get("bottom")):
-                continue
-            if slot in seen_slots:
-                continue
-            if slot == "tights" and not tights_needed:
-                continue
-            item = outfit.get(outfit_key)
-            if item and getattr(item, "show_in_collage", True):
-                seen_slots.add(slot)
-                all_slots.append({
-                    "slot": slot,
-                    "item_type": item.type,
-                    "label": f"{item.type} {item.color}"[:20],
-                    "photo_id": item.photo_id,
-                    "photo_url": item.photo_url,
-                    "has_item": True,
-                    "gender": _child_gender,
-                })
-            else:
-                ph_label = get_placeholder_label(slot, colortype, regime)
-                if ph_label is None:
-                    continue
-                seen_slots.add(slot)
-                all_slots.append({
-                    "slot": slot,
-                    "photo_id": None,
-                    "photo_url": None,
-                    "has_item": False,
-                    "gender": _child_gender,
-                })
-
-        # Всегда показывать обувь (ребёнок не ходит босиком)
-        if "footwear" not in seen_slots:
-            all_slots.append({
-                "slot": "footwear", "photo_id": None, "photo_url": None,
-                "has_item": False, "gender": _child_gender,
-            })
-            seen_slots.add("footwear")
-
-        # При холоде всегда показывать куртку
-        if temp_m is not None and temp_m <= 10 and "outerwear" not in seen_slots:
-            all_slots.insert(0, {
-                "slot": "outerwear", "photo_id": None, "photo_url": None,
-                "has_item": False, "gender": _child_gender,
-            })
-            seen_slots.add("outerwear")
-
+        _collage_params = get_collage_params(child=child, temp=temp_m)
         sm = "+" if temp_m >= 0 else ""
         temp_text = f"{sm}{temp_m:.0f}°C"
 
@@ -1783,7 +1716,11 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
                 s["slot"] for s in all_slots if s.get("has_item")]:
             caption += "\n⚠️ В гардеробе нет тёплой верхней одежды!"
 
-        collage_bytes = await build_collage(outfit_slots=all_slots)
+        collage_bytes = await build_collage(
+            outfit_slots=all_slots,
+            theme=_collage_params["theme"],
+            header_text=_collage_params["header_text"],
+        )
 
         if redis:
             await redis.incr(limit_key)
@@ -1858,15 +1795,13 @@ async def _show_wardrobe_page(message, user, page: int, owner_id=None, owner_typ
             return
 
         total = len(items)
-        scored = [float(i.score_item) for i in items if i.score_item]
-        avg_score = round(sum(scored) / len(scored), 1) if scored else 0
 
         paged = items[page * PAGE_SIZE: (page + 1) * PAGE_SIZE]
         paged_groups: dict[str, list] = {}
         for item in paged:
             paged_groups.setdefault(item.category_group, []).append(item)
 
-        lines = [f"👗 Гардероб ({total} вещей) · ⭐ средний скор: {avg_score}\n"]
+        lines = [f"👗 Гардероб ({total} вещей)\n"]
         for group, group_items in paged_groups.items():
             label = _CATEGORY_LABELS.get(group, group)
             names = ", ".join(f"{i.color} {i.type}" for i in group_items[:5])
