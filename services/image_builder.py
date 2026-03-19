@@ -109,8 +109,10 @@ def _get_placeholder_label(slot: str, gender: str = "girl") -> str:
 
 def format_collage_label(slot: str, item_type: str, item_color: str = "") -> str:
     """Подпись карточки: 'Свитшот розовый' (без эмодзи, PIL не рендерит unicode emoji)."""
-    short_type = (item_type or "").split()[0].capitalize()
-    short_color = (item_color or "").split()[0].lower()[:8]
+    parts_t = (item_type or "").split()
+    parts_c = (item_color or "").split()
+    short_type = parts_t[0].capitalize() if parts_t else ""
+    short_color = parts_c[0].lower()[:8] if parts_c else ""
     label = f"{short_type} {short_color}".strip()
     return label[:20] if label else _SLOT_NAMES_SHORT.get(slot, "Вещь")
 
