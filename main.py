@@ -17,6 +17,7 @@ from core.scheduler import Scheduler
 # Настройка structlog
 structlog.configure(
     processors=[
+        structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.dev.ConsoleRenderer() if settings.environment == "dev"

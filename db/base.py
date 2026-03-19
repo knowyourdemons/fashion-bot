@@ -24,6 +24,8 @@ def _get_write_maker() -> async_sessionmaker:
             settings.database_write_url,
             pool_size=settings.database_pool_size,
             max_overflow=settings.database_max_overflow,
+            pool_pre_ping=True,       # detect stale connections
+            pool_recycle=600,          # recycle connections every 10 min
             echo=settings.environment == "dev",
         )
         _write_maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -37,6 +39,8 @@ def _get_read_maker() -> async_sessionmaker:
             settings.database_read_url,
             pool_size=settings.database_pool_size,
             max_overflow=settings.database_max_overflow,
+            pool_pre_ping=True,
+            pool_recycle=600,
             echo=False,
         )
         _read_maker = async_sessionmaker(engine, expire_on_commit=False)

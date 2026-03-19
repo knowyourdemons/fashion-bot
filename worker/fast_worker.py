@@ -30,17 +30,20 @@ class FastWorker:
     QUEUES = [QueuePriority.HIGH]
     MAX_RETRIES = 3
     HEARTBEAT_TTL = 120
+    MAX_CONCURRENT = 4  # max parallel tasks
 
     def __init__(self, queue: RedisQueue, redis_client: aioredis.Redis) -> None:
         self._queue = queue
         self._redis = redis_client
         self._worker_id = "fast_worker"
+        self._sem = asyncio.Semaphore(self.MAX_CONCURRENT)
+        self._tasks: set[asyncio.Task] = set()
 
         # Ленивый импорт обработчиков
         from worker.tasks import morning_brief, wardrobe_analysis  # noqa: F401
 
     async def run(self, shutdown: asyncio.Event) -> None:
-        logger.info("fast_worker.started")
+        logger.info("fast_worker.started", max_concurrent=self.MAX_CONCURRENT)
 
         # Recover orphaned messages from previous crash
         recovered = await self._queue.recover_processing()
@@ -49,13 +52,30 @@ class FastWorker:
 
         while not shutdown.is_set():
             try:
+                await self._sem.acquire()
                 msg = await self._queue.pop(self.QUEUES, timeout=5)
                 if msg:
-                    await self._process(msg)
+                    task = asyncio.create_task(self._process_and_release(msg))
+                    self._tasks.add(task)
+                    task.add_done_callback(self._tasks.discard)
+                else:
+                    self._sem.release()
                 await self._heartbeat()
             except Exception as e:
+                self._sem.release()
                 logger.error("fast_worker.loop_error", error=str(e))
+
+        # Drain in-flight tasks on shutdown
+        if self._tasks:
+            logger.info("fast_worker.draining", count=len(self._tasks))
+            await asyncio.wait(self._tasks, timeout=30)
         logger.info("fast_worker.stopped")
+
+    async def _process_and_release(self, msg: TaskMessage) -> None:
+        try:
+            await self._process(msg)
+        finally:
+            self._sem.release()
 
     async def _process(self, msg: TaskMessage) -> None:
         handler = TASK_HANDLERS.get(msg.task_type)
