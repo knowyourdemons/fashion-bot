@@ -1721,6 +1721,7 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
         tights_needed = _needs_tights(outfit, temp_m)
         seen_slots: set = set()
         all_slots = []
+        _child_gender = getattr(child, "gender", "girl") or "girl"
         for outfit_key, slot in _outfit_key_to_slot.items():
             if outfit_key in ("top", "bottom") and outfit.get("one_piece"):
                 continue
@@ -1735,45 +1736,52 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
                 seen_slots.add(slot)
                 all_slots.append({
                     "slot": slot,
+                    "item_type": item.type,
                     "label": f"{item.type} {item.color}"[:20],
                     "photo_id": item.photo_id,
                     "photo_url": item.photo_url,
                     "has_item": True,
+                    "gender": _child_gender,
                 })
             else:
                 ph_label = get_placeholder_label(slot, colortype, regime)
                 if ph_label is None:
                     continue
                 seen_slots.add(slot)
-                color_part = ph_label.split(" — ", 1)[1] if " — " in ph_label else "(нет в гардеробе)"
                 all_slots.append({
                     "slot": slot,
-                    "short_label": _short_labels.get(slot, slot),
-                    "label": color_part,
                     "photo_id": None,
                     "photo_url": None,
                     "has_item": False,
+                    "gender": _child_gender,
                 })
+
+        # Всегда показывать обувь (ребёнок не ходит босиком)
+        if "footwear" not in seen_slots:
+            all_slots.append({
+                "slot": "footwear", "photo_id": None, "photo_url": None,
+                "has_item": False, "gender": _child_gender,
+            })
+            seen_slots.add("footwear")
+
+        # При холоде всегда показывать куртку
+        if temp_m is not None and temp_m <= 10 and "outerwear" not in seen_slots:
+            all_slots.insert(0, {
+                "slot": "outerwear", "photo_id": None, "photo_url": None,
+                "has_item": False, "gender": _child_gender,
+            })
+            seen_slots.add("outerwear")
 
         sm = "+" if temp_m >= 0 else ""
         temp_text = f"{sm}{temp_m:.0f}°C"
 
-        # Посчитать скор образа
-        outfit_score_str = ""
-        try:
-            all_items_in_outfit = [v for v in outfit.values()
-                                   if v and hasattr(v, "score_item") and v.score_item]
-            if all_items_in_outfit:
-                scores = [float(i.score_item) for i in all_items_in_outfit]
-                avg = sum(scores) / len(scores)
-                outfit_score_str = f"\n⭐ Скор: {avg:.1f}/10"
-        except Exception:
-            pass
-
-        caption = f"🌤 Образ для {child.name} · {temp_text}{outfit_score_str}"
+        caption = f"🌤 {child.name} · {temp_text}"
         outfit_warnings = outfit.get("warnings") or []
         if outfit_warnings:
             caption += "\n" + "\n".join(outfit_warnings)
+        if temp_m is not None and temp_m <= 0 and "outerwear" not in [
+                s["slot"] for s in all_slots if s.get("has_item")]:
+            caption += "\n⚠️ В гардеробе нет тёплой верхней одежды!"
 
         collage_bytes = await build_collage(outfit_slots=all_slots)
 

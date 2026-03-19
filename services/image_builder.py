@@ -521,12 +521,13 @@ async def build_collage(
                 raw_lbl = slot_data.get("label") or ""
                 is_adult = slot_data.get("adult", False)
                 gender = slot_data.get("gender", "girl")
-                # Короткая подпись с эмодзи для вещей
+                # Короткая подпись с эмодзи
                 if slot_data.get("has_item"):
                     item_type = slot_data.get("item_type") or raw_lbl
                     display_lbl = format_collage_label(slot_key, item_type)
                 else:
-                    display_lbl = raw_lbl
+                    # Для плейсхолдера — только эмодзи слота (текст внутри карточки через _SLOT_LABELS_RU)
+                    display_lbl = _SLOT_EMOJI.get(slot_key, "👕")
 
                 if slot_data.get("has_item"):
                     photo_bytes = await _download_photo(

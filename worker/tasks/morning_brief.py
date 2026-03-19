@@ -235,6 +235,7 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
             if item and getattr(item, "show_in_collage", True):
                 outfit_slots.append({
                     "slot": slot,
+                    "item_type": item.type,
                     "label": f"{item.type} {item.color}"[:20],
                     "photo_id": item.photo_id,
                     "photo_url": item.photo_url,
@@ -245,11 +246,8 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
                 ph_label = get_placeholder_label(slot, colortype, regime)
                 if ph_label is None:
                     continue
-                color_part = ph_label.split(" — ", 1)[1] if " — " in ph_label else "(нет в гардеробе)"
                 outfit_slots.append({
                     "slot": slot,
-                    "short_label": slot,
-                    "label": color_part,
                     "photo_id": None,
                     "photo_url": None,
                     "has_item": False,
@@ -512,17 +510,40 @@ async def generate_brief(payload: dict) -> dict:
                 if ph_label is None:
                     continue
                 seen_slots.add(slot)
-                color_part = ph_label.split(" — ", 1)[1] if " — " in ph_label else "(нет в гардеробе)"
-                short_label = _slot_labels.get(slot, slot)
                 all_outfit_slots.append({
                     "slot": slot,
-                    "short_label": short_label,
-                    "label": color_part,
                     "photo_id": None,
                     "photo_url": None,
                     "has_item": False,
                     "gender": _child_gender,
                 })
+
+        # Всегда показывать обувь (ребёнок не ходит босиком)
+        if "footwear" not in seen_slots:
+            all_outfit_slots.append({
+                "slot": "footwear", "photo_id": None, "photo_url": None,
+                "has_item": False, "gender": _child_gender,
+            })
+            seen_slots.add("footwear")
+
+        # При холоде (≤10°C) всегда показывать куртку
+        if _temp is not None and _temp <= 10 and "outerwear" not in seen_slots:
+            all_outfit_slots.insert(0, {
+                "slot": "outerwear", "photo_id": None, "photo_url": None,
+                "has_item": False, "gender": _child_gender,
+            })
+            seen_slots.add("outerwear")
+
+        # Критическое предупреждение при морозе без тёплой одежды
+        if _temp is not None and _temp <= 0:
+            has_warm = any(
+                s["slot"] == "outerwear" and s.get("has_item")
+                for s in all_outfit_slots
+            )
+            if not has_warm:
+                global_warnings.append(
+                    f"⚠️ На улице {_temp:.0f}°C — в гардеробе нет тёплой верхней одежды!"
+                )
 
     # ── Заголовок с погодой ──────────────────────────────────────────────
     weather_line = ""
