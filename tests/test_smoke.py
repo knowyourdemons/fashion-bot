@@ -26,6 +26,36 @@ def test_import_wardrobe():
     assert hasattr(wardrobe, "_fix_bbox")
 
 
+def test_wardrobe_private_helpers_exist():
+    """Регрессия: эти функции были случайно удалены при рефакторинге (2026-03-19).
+    Импортируем явно — NameError сломает тест сразу."""
+    from bot.handlers.wardrobe import (
+        _get_owner,
+        _get_scoring_matrix,
+        _load_existing_set,
+        _maybe_trigger_first_brief,
+        _upload_crop,
+        _save_one,
+        _analyze_and_save,
+        _rate_photos,
+        _send_action_buttons,
+        _collect_and_ask,
+        _handle_single_photo,
+        _process_media_group,
+        _generate_outfit_for_user,
+        _show_wardrobe_page,
+    )
+    # Проверяем что это coroutine-функции (не None, не строки)
+    import asyncio
+    for fn in [
+        _get_owner, _get_scoring_matrix, _load_existing_set,
+        _maybe_trigger_first_brief, _upload_crop, _save_one,
+        _analyze_and_save, _rate_photos, _handle_single_photo,
+        _generate_outfit_for_user, _show_wardrobe_page,
+    ]:
+        assert asyncio.iscoroutinefunction(fn), f"{fn.__name__} должна быть async"
+
+
 def test_import_help():
     from bot.handlers import help
     assert hasattr(help, "handle_help")
