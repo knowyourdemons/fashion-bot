@@ -251,6 +251,14 @@ def _draw_card(canvas: Image.Image, img: Image.Image,
         tw = bbox[2] - bbox[0]
     except Exception:
         tw = len(text) * 8
+    # Fit text within card width by trimming characters if too wide
+    max_tw = card_w - 8
+    while tw > max_tw and len(text) > 3:
+        text = text[:-2].rstrip() + "."
+        try:
+            tw = font.getbbox(text)[2] - font.getbbox(text)[0]
+        except Exception:
+            tw = len(text) * 8
     tx = max(4, (card_w - tw) // 2)
     ld.text((tx, 9), text, fill=LABEL_TEXT + (255,), font=font)
     card.paste(label_area, (0, img_area_h))
@@ -404,15 +412,16 @@ def _draw_adult_silhouette(draw: ImageDraw.ImageDraw, slot: str,
 
 def _make_placeholder(slot: str, label: str, card_w: int = THUMB_SIZE,
                       card_h: int = THUMB_SIZE,
-                      adult: bool = False, gender: str = "girl") -> Image.Image:
+                      adult: bool = False, gender: str = "girl",
+                      font_size: int = None) -> Image.Image:
     """Плейсхолдер: PNG-иконка на сером фоне с подписью (без 'добавь')."""
     img = Image.new("RGBA", (card_w, card_h), PLACEHOLDER_BG + (255,))
 
     icon = _load_silhouette(slot, gender, adult)
-    label_zone = 36   # резервируем снизу под подпись
+    label_zone = 40   # резервируем снизу под подпись
     if icon:
-        max_icon_w = int(card_w * 0.58)
-        max_icon_h = int((card_h - label_zone) * 0.72)
+        max_icon_w = int(card_w * 0.70)
+        max_icon_h = int((card_h - label_zone) * 0.78)
         icon = _fit_item(icon, max_icon_w, max_icon_h)
         ix = (card_w - icon.width) // 2
         iy = (card_h - label_zone - icon.height) // 2
@@ -426,8 +435,9 @@ def _make_placeholder(slot: str, label: str, card_w: int = THUMB_SIZE,
             _draw_silhouette(draw, slot, sil_size, gender=gender)
 
     if label:
+        # font_size от зоны (passed in), fallback пропорционально карточке, минимум 20px
+        font_sz = font_size if font_size is not None else max(20, int(card_h * 0.09))
         try:
-            font_sz = max(12, int(card_h * 0.055))
             font = ImageFont.truetype(
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_sz)
         except Exception:
@@ -438,8 +448,16 @@ def _make_placeholder(slot: str, label: str, card_w: int = THUMB_SIZE,
             tw = bbox[2] - bbox[0]
         except Exception:
             tw = len(label) * 8
+        # Fit text within card width
+        max_tw = card_w - 8
+        while tw > max_tw and len(label) > 3:
+            label = label[:-2].rstrip() + "."
+            try:
+                tw = font.getbbox(label)[2] - font.getbbox(label)[0]
+            except Exception:
+                tw = len(label) * 8
         tx = max(4, (card_w - tw) // 2)
-        draw.text((tx, card_h - label_zone + 8), label, fill=(155, 143, 160), font=font)
+        draw.text((tx, card_h - label_zone + 10), label, fill=(155, 143, 160), font=font)
 
     return img
 
@@ -471,7 +489,7 @@ def _draw_slot_card(canvas: Image.Image, slot_data: dict,
         # Уважаем temp-based label из outfit_builder; fallback — иконочное название
         ph_label = slot_data.get("label") or _get_placeholder_label(slot_key, gender)
         ph = _make_placeholder(slot_key, ph_label, card_w, card_h,
-                               adult=is_adult, gender=gender)
+                               adult=is_adult, gender=gender, font_size=font_size)
         mask = _rounded_mask(card_w, card_h, RADIUS)
         ph.putalpha(mask)
         canvas.alpha_composite(ph, (x, y))
@@ -721,7 +739,7 @@ async def build_collage(
     photo_urls: Optional[list] = None,
     theme: str = "girl",
     header_text: str = "",
-    footer_text: str = "Касси · fashioncastle.app",
+    footer_text: str = "Касси -- твой личный стилист",
 ) -> Optional[bytes]:
     """
     Собирает коллаж.

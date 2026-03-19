@@ -31,11 +31,18 @@ from core.permissions import get_effective_plan, get_limit
 logger = structlog.get_logger()
 
 
+_MISSING_SLOT_NAMES = {
+    "outerwear": "тёплую куртку", "footwear": "обувь",
+    "hat": "шапку", "scarf": "шарф", "gloves": "перчатки",
+    "top": "верх", "bottom": "низ",
+}
+
+
 def _warm_outfit_comment(score: float, child_name: str = None,
-                         temp: float = None, has_outerwear: bool = True) -> str:
-    """Тёплый развёрнутый комментарий Касси к образу."""
+                         temp: float = None, has_outerwear: bool = True,
+                         missing_slots: list = None) -> str:
+    """Тёплый развёрнутый комментарий Касси к образу с советом."""
     name = child_name or "ты"
-    name_cap = child_name or "Ты"
 
     if score >= 8.5:
         options = [
@@ -45,23 +52,28 @@ def _warm_outfit_comment(score: float, child_name: str = None,
         ]
     elif score >= 7.0:
         options = [
-            f"Хороший образ, {name} — и тепло, и красиво!",
-            f"Достойный выбор, {name}! Всё по погоде",
-            f"Симпатичный образ, {name}! Добавь яркий аксессуар — будет ещё лучше",
+            f"Хороший образ, {name} — и тепло, и красиво! Добавь яркий аксессуар — будет ещё лучше",
+            f"Достойный выбор, {name}! Всё по погоде. Попробуй добавить шарф для настроения",
+            f"Симпатичный образ, {name}! Комфортно весь день",
         ]
     elif score >= 5.0:
         options = [
-            f"Удобный образ на каждый день, {name}",
-            f"Практичный выбор, {name}! Добавь пару вещей — комбинаций станет больше",
+            f"Удобный образ, {name}! Добавь пару ярких вещей — комбинаций станет больше",
+            f"Практичный выбор, {name}! Загрузи ещё вещей — смогу собирать интереснее",
         ]
     else:
         options = [
-            f"Собрала из того что есть, {name}. Добавь ещё вещей — образы станут интереснее!",
+            f"Собрала из того что есть, {name}. Добавь ещё вещей — образы станут разнообразнее!",
         ]
 
     comment = random.choice(options)
 
-    if temp is not None and temp <= 5 and not has_outerwear:
+    # Совет по недостающим вещам
+    if missing_slots:
+        missing_text = [_MISSING_SLOT_NAMES[s] for s in missing_slots[:2] if s in _MISSING_SLOT_NAMES]
+        if missing_text:
+            comment += f"\nСовет: добавь {' и '.join(missing_text)} в гардероб!"
+    elif temp is not None and temp <= 5 and not has_outerwear:
         comment += "\n⚠️ Холодно — добавь тёплую куртку в гардероб!"
 
     return comment
@@ -1761,11 +1773,13 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
         # Тёплый комментарий Касси
         scored = [float(i.score_item) for i in outfit.get("all_items", []) if i.score_item]
         has_ow = any(s["slot"] == "outerwear" and s.get("has_item") for s in all_slots)
+        missing = [s["slot"] for s in all_slots if not s.get("has_item")]
+        child_name_str = child.name if child else None
         if scored:
             avg = sum(scored) / len(scored)
-            comment = _warm_outfit_comment(avg, child.name if child else None, temp_m, has_ow)
+            comment = _warm_outfit_comment(avg, child_name_str, temp_m, has_ow, missing)
         else:
-            comment = _warm_outfit_comment(6.0, child.name if child else None, temp_m, has_ow)
+            comment = _warm_outfit_comment(6.0, child_name_str, temp_m, has_ow, missing)
 
         caption = f"✨ {comment}"
 
