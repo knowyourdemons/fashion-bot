@@ -43,7 +43,10 @@ async def handle_brief_feedback(update: Update, context: ContextTypes.DEFAULT_TY
         if vote == "up":
             await query.message.reply_text("👍 Отлично! Записала что надели.")
         else:
-            await query.message.reply_text("👎 Что надели? Пришли фото 📸")
+            await query.message.reply_text(
+                "Понятно! Что не подошло? Напиши — помогу подобрать лучше 👗\n"
+                "Или нажми «Что надеть» — предложу новый вариант!"
+            )
 
         logger.info(
             "brief.feedback",

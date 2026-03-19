@@ -1,9 +1,6 @@
 """
 Форматирование текста Morning Brief для Telegram.
 """
-from worker.tasks.style_config import get_placeholder_label, SLOT_EMOJI
-
-_MISSING = " (в гардеробе нет — добавь фото)"
 
 
 def _format_item(item) -> str:
@@ -29,79 +26,42 @@ def _format_child_block(
     colortype: str = "default",
     regime: str = "прохладно",
 ) -> str:
-    temp = temp if temp is not None else outfit.get("temp", 15.0)
+    """Короткий блок: только невидимые вещи + комментарий стилиста.
+
+    Видимые вещи (top, bottom, outerwear, footwear, hat, scarf, gloves)
+    уже отображены на коллаже — не дублируем в тексте.
+    """
     lines = [f"👧 {child_name} ({day_type}):"]
 
+    # Невидимые вещи — одной строкой
+    under_parts = []
+
     # Термобельё
-    if outfit["thermal_top"] or outfit["thermal_bottom"]:
-        parts = []
-        if outfit["thermal_top"]:
-            parts.append(f"→ {_format_item(outfit['thermal_top'])}")
-        if outfit["thermal_bottom"]:
-            parts.append(f"→ {_format_item(outfit['thermal_bottom'])}")
-        lines.append("🧤 Термобельё: " + " ".join(parts))
+    if outfit.get("thermal_top"):
+        under_parts.append("термобельё верх")
+    if outfit.get("thermal_bottom"):
+        under_parts.append("термобельё низ")
 
     # Бельё
-    underwear_parts = []
-    if outfit["underwear_text"]:
-        underwear_parts.append(f"→ {outfit['underwear_text']}")
-    for item in outfit["underwear_items"]:
-        underwear_parts.append(f"→ {_format_item(item)}")
-    if underwear_parts:
-        lines.append("👙 Бельё: " + " ".join(underwear_parts))
+    if outfit.get("underwear_text"):
+        under_parts.append(outfit["underwear_text"])
+    for item in outfit.get("underwear_items", []):
+        name = (item.type or "").split()[0].lower()
+        if name:
+            under_parts.append(name)
 
-    # Образ
-    lines.append("👗 Образ:")
-    if outfit["one_piece"]:
-        i = outfit["one_piece"]
-        lines.append(f"→ {SLOT_EMOJI['one_piece']} {_format_item(i)}")
-    else:
-        if outfit["top"]:
-            lines.append(f"→ {SLOT_EMOJI['top']} {_format_item(outfit['top'])}")
-        else:
-            lbl = get_placeholder_label("top", colortype, regime)
-            lines.append(f"→ {SLOT_EMOJI['top']} {lbl or 'верх — любой по сезону'}")
-        if outfit["bottom"]:
-            lines.append(f"→ {SLOT_EMOJI['bottom']} {_format_item(outfit['bottom'])}")
-        else:
-            lbl = get_placeholder_label("bottom", colortype, regime)
-            lines.append(f"→ {SLOT_EMOJI['bottom']} {lbl or 'низ — любой по сезону'}")
-    if outfit["removable_layer"]:
-        lines.append(f"→ {_format_item(outfit['removable_layer'])} [снять вечером]")
+    # Носки / колготки
+    leg = outfit.get("tights") or outfit.get("socks")
+    if leg:
+        name = (leg.type or "").split()[0].lower()
+        if name:
+            under_parts.append(name)
 
-    # Ноги
-    leg_item = outfit["tights"] or outfit["socks"]
-    if leg_item:
-        lines.append(f"🧦 Ноги: → {_format_item(leg_item)}")
-    elif temp < 10:
-        lbl = get_placeholder_label("tights", colortype, regime)
-        lines.append(f"🧦 Ноги: → {lbl or 'колготки или тёплые носки'}")
+    if under_parts:
+        lines.append(f"🩲 Под одежду: {', '.join(under_parts)}")
 
-    # Обувь
-    if outfit["footwear"]:
-        lines.append(f"{SLOT_EMOJI['footwear']} Обувь: → {_format_item(outfit['footwear'])}")
-    else:
-        lbl = get_placeholder_label("footwear", colortype, regime)
-        lines.append(f"{SLOT_EMOJI['footwear']} Обувь: → {lbl or 'обувь — любая по сезону'}")
-
-    # Верхняя одежда
-    if outfit["outerwear"]:
-        lines.append(f"{SLOT_EMOJI['outerwear']} Верхняя одежда: → {_format_item(outfit['outerwear'])}")
-    elif temp <= 15:
-        lbl = get_placeholder_label("outerwear", colortype, regime)
-        if lbl:
-            lines.append(f"{SLOT_EMOJI['outerwear']} Верхняя одежда: → {lbl}")
-
-    # Аксессуары
-    acc_parts = []
-    for key in ("hat", "scarf", "gloves"):
-        if outfit[key]:
-            acc_parts.append(f"→ {_format_item(outfit[key])}")
-    if acc_parts:
-        lines.append("🎩 Аксессуары: " + " ".join(acc_parts))
-
-    lines.append("")
+    # Комментарий Касси
     if outfit_comment:
-        lines.append(f"💬 {outfit_comment}")
+        lines.append(f"\n💬 {outfit_comment}")
 
     return "\n".join(lines)

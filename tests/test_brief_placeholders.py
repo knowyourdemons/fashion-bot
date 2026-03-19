@@ -8,68 +8,74 @@ class FakeItem:
 
 from worker.tasks.morning_brief import _format_child_block
 
-def test_placeholder_outerwear():
+
+def _base_outfit(**overrides):
     outfit = {
         "thermal_top": None, "thermal_bottom": None,
         "underwear_items": [], "underwear_text": "трусики",
         "one_piece": None,
-        "top": FakeItem(type="свитер", color="серый"),
-        "bottom": FakeItem(type="штаны", color="розовый"),
-        "removable_layer": None,
-        "tights": FakeItem(type="колготки", color="бежевый"),
-        "socks": None,
-        "footwear": FakeItem(type="ботинки", color="синий"),
-        "outerwear": None,
+        "top": None, "bottom": None,
+        "removable_layer": None, "tights": None, "socks": None,
+        "footwear": None, "outerwear": None,
         "hat": None, "scarf": None, "gloves": None,
         "warnings": [], "all_items": [],
     }
+    outfit.update(overrides)
+    return outfit
+
+
+def test_underwear_text_shown():
+    """Бельё (невидимые вещи) показывается одной строкой."""
+    outfit = _base_outfit(
+        top=FakeItem(type="свитер", color="серый"),
+        bottom=FakeItem(type="штаны", color="розовый"),
+        tights=FakeItem(type="колготки", color="бежевый"),
+        footwear=FakeItem(type="ботинки", color="синий"),
+    )
     result = _format_child_block("Алиса", "садик", outfit, temp=3.0)
-    assert "(нет в гардеробе)" in result, f"FAIL: нет placeholder\n{result}"
-    assert "куртк" in result or "ветровк" in result or "пуховик" in result, \
-        f"FAIL: нет упоминания куртки\n{result}"
-    print("PASS: placeholder для outerwear при +3°C")
+    assert "Алиса" in result
+    assert "садик" in result
+    assert "трусики" in result  # underwear_text должен быть
+    assert "колготки" in result  # носки/колготки тоже невидимые
+    print("PASS: underwear_text и колготки отображаются")
+
 
 def test_no_placeholder_when_warm():
-    outfit = {
-        "thermal_top": None, "thermal_bottom": None,
-        "underwear_items": [], "underwear_text": "трусики",
-        "one_piece": None,
-        "top": FakeItem(type="футболка", color="белый"),
-        "bottom": FakeItem(type="шорты", color="розовый"),
-        "removable_layer": None, "tights": None, "socks": None,
-        "footwear": FakeItem(type="сандалии", color="белый"),
-        "outerwear": None,
-        "hat": None, "scarf": None, "gloves": None,
-        "warnings": [], "all_items": [],
-    }
+    """При тепле нет упоминания куртки в тексте (она на коллаже)."""
+    outfit = _base_outfit(
+        top=FakeItem(type="футболка", color="белый"),
+        bottom=FakeItem(type="шорты", color="розовый"),
+        footwear=FakeItem(type="сандалии", color="белый"),
+    )
     result = _format_child_block("Алиса", "садик", outfit, temp=20.0)
     assert "куртк" not in result, \
-        f"FAIL: при +20°C не должно быть куртки\n{result}"
-    print("PASS: нет placeholder для outerwear при +20°C")
+        f"FAIL: при +20°C не должно быть куртки в тексте\n{result}"
+    print("PASS: нет упоминания куртки при +20°C")
 
-def test_placeholder_footwear():
-    outfit = {
-        "thermal_top": None, "thermal_bottom": None,
-        "underwear_items": [], "underwear_text": "трусики",
-        "one_piece": None,
-        "top": FakeItem(type="кофта", color="синий"),
-        "bottom": FakeItem(type="штаны", color="серый"),
-        "removable_layer": None,
-        "tights": FakeItem(type="колготки", color="белый"),
-        "socks": None,
-        "footwear": None,
-        "outerwear": FakeItem(type="куртка", color="чёрный"),
-        "hat": None, "scarf": None, "gloves": None,
-        "warnings": [], "all_items": [],
-    }
+
+def test_visible_items_not_in_text():
+    """Видимые вещи (top/bottom/outerwear/footwear) НЕ дублируются в тексте."""
+    outfit = _base_outfit(
+        top=FakeItem(type="кофта", color="синий"),
+        bottom=FakeItem(type="штаны", color="серый"),
+        tights=FakeItem(type="колготки", color="белый"),
+        outerwear=FakeItem(type="куртка", color="чёрный"),
+        footwear=FakeItem(type="ботинки", color="коричневый"),
+    )
     result = _format_child_block("Алиса", "садик", outfit, temp=8.0)
-    assert "обувь" in result.lower(), \
-        f"FAIL: нет placeholder для обуви\n{result}"
-    assert "(нет в гардеробе)" in result, f"FAIL: нет '(нет в гардеробе)'\n{result}"
-    print("PASS: placeholder для footwear")
+    # Видимые вещи НЕ должны быть в тексте
+    assert "кофта" not in result, f"FAIL: кофта (top) не должна быть в тексте\n{result}"
+    assert "штаны" not in result, f"FAIL: штаны (bottom) не должны быть в тексте\n{result}"
+    assert "куртка" not in result, f"FAIL: куртка (outerwear) не должна быть в тексте\n{result}"
+    assert "ботинки" not in result, f"FAIL: ботинки (footwear) не должны быть в тексте\n{result}"
+    # Но невидимые должны быть
+    assert "трусики" in result
+    assert "колготки" in result
+    print("PASS: видимые вещи не дублируются, невидимые отображаются")
+
 
 if __name__ == "__main__":
-    test_placeholder_outerwear()
+    test_underwear_text_shown()
     test_no_placeholder_when_warm()
-    test_placeholder_footwear()
+    test_visible_items_not_in_text()
     print("Все тесты PASS")
