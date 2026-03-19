@@ -147,3 +147,57 @@ class WeatherService:
         await self._redis.set(key, json.dumps(data), ex=3600)
         logger.info("weather.fetched", city=city)
         return WeatherData(data)
+
+    async def get_forecast_day(self, city: str, day: int = 1) -> dict:
+        """Погода на день прогноза из wttr.in (day=0 сегодня, day=1 завтра).
+
+        Возвращает dict: temp_morning, temp_evening, precip_evening (как _get_weather).
+        Переиспользует кеш weather:cache:{city} (1h TTL).
+        """
+        key = f"weather:cache:{city}"
+        raw = None
+
+        cached = await self._redis.get(key)
+        if cached:
+            raw = json.loads(cached)
+            if "data" in raw and "current_condition" not in raw:
+                raw = raw["data"]
+
+        if raw is None:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"https://wttr.in/{city}?format=j1",
+                    headers={"Accept": "application/json"},
+                )
+                resp.raise_for_status()
+                raw = resp.json()
+            if "data" in raw and "current_condition" not in raw:
+                raw = raw["data"]
+            await self._redis.set(key, json.dumps(raw), ex=3600)
+
+        weather_days = raw.get("weather", [])
+        day_idx = min(day, len(weather_days) - 1)
+        day_data = weather_days[day_idx] if weather_days else {}
+        hourly = day_data.get("hourly", [])
+
+        # Утро ≈ 07:00 (time=700)
+        morning_h = next(
+            (h for h in hourly if int(h.get("time", "0")) >= 600), hourly[0] if hourly else {}
+        )
+        # Вечер ≈ 21:00 (time=2100)
+        evening_h = next(
+            (h for h in reversed(hourly) if int(h.get("time", "0")) >= 1800),
+            hourly[-1] if hourly else {},
+        )
+
+        temp_morning = float(morning_h.get("tempC", day_data.get("mintempC", 10)))
+        temp_evening = float(evening_h.get("tempC", temp_morning))
+        weather_code = int(morning_h.get("weatherCode", 116))
+        is_rain = weather_code in range(263, 300)
+        precip_evening = 60.0 if is_rain else 0.0
+
+        return {
+            "temp_morning": temp_morning,
+            "temp_evening": temp_evening,
+            "precip_evening": precip_evening,
+        }

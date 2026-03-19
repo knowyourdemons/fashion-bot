@@ -59,6 +59,14 @@ class Scheduler:
             replace_existing=True,
         )
 
+        # evening_brief — 20:00 по timezone юзера (каждый час :30, фильтрует внутри)
+        self._scheduler.add_job(
+            morning_brief.schedule_evening,
+            CronTrigger(hour="*", minute=30),
+            id="evening_brief",
+            replace_existing=True,
+        )
+
         # gap_analysis — 1-е число 09:00 UTC
         self._scheduler.add_job(
             gap_analysis.run,

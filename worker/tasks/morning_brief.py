@@ -670,6 +670,356 @@ async def send_morning_brief(payload: dict) -> dict:
         return {"sent": False, "error": str(e)}
 
 
+# ── Вечерний образ: schedule + task ───────────────────────────────────────
+
+_EVENING_DAY_NAMES = {0: "Пн", 1: "Вт", 2: "Ср", 3: "Чт", 4: "Пт", 5: "Сб", 6: "Вс"}
+_EVENING_MONTH_NAMES = {
+    1: "янв", 2: "фев", 3: "мар", 4: "апр", 5: "мая", 6: "июн",
+    7: "июл", 8: "авг", 9: "сен", 10: "окт", 11: "ноя", 12: "дек",
+}
+
+
+async def schedule_evening() -> None:
+    """Каждый час отбирает premium-юзеров у кого сейчас 20:xx → пушит generate_evening_brief."""
+    import redis.asyncio as aioredis
+    from datetime import timedelta
+    from sqlalchemy import select, or_
+    from datetime import timezone as _tz
+    from db.base import AsyncReadSession
+    from db.models.user import User
+    from core.queue import RedisQueue, QueuePriority
+    from core.permissions import get_effective_plan, is_brief_day_tomorrow
+
+    redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    queue = RedisQueue(redis_client)
+    count = 0
+
+    try:
+        async with AsyncReadSession() as session:
+            result = await session.execute(
+                select(User).where(
+                    User.onboarding_completed.is_(True),
+                    User.is_active.is_(True),
+                    User.deleted_at.is_(None),
+                    or_(
+                        User.plan != "free",
+                        User.trial_ends_at > datetime.now(_tz.utc),
+                    ),
+                )
+            )
+            users = list(result.scalars().all())
+
+        tomorrow_str = (date.today() + __import__("datetime").timedelta(days=1)).isoformat()
+
+        for user in users:
+            try:
+                tz = pytz.timezone(user.timezone or "Europe/Vilnius")
+                if datetime.now(tz).hour != 20:
+                    continue
+                effective_plan = get_effective_plan(user)
+                if not is_brief_day_tomorrow(effective_plan, user.timezone or "Europe/Vilnius"):
+                    continue
+                lock_key = f"lock:evening_brief:{user.id}:{tomorrow_str}"
+                acquired = await redis_client.set(lock_key, 1, ex=86400, nx=True)
+                if not acquired:
+                    continue
+                await queue.push(
+                    "generate_evening_brief",
+                    {"user_id": str(user.id)},
+                    priority=QueuePriority.LOW,
+                )
+                count += 1
+            except Exception as e:
+                logger.warning("evening_brief.schedule.user_error", user_id=str(user.id), error=str(e))
+    finally:
+        await redis_client.aclose()
+
+    logger.info("evening_brief.schedule_all", count=count, hour=datetime.utcnow().hour)
+
+
+@register("generate_evening_brief")
+async def generate_evening_brief(payload: dict) -> dict:
+    """Вечерний образ на завтра: погода(day=1) + гардероб → коллаж + push."""
+    import uuid as _uuid
+    from datetime import timedelta
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    import redis.asyncio as aioredis
+    from db.base import AsyncWriteSession, AsyncReadSession
+    from db.models.user import User
+    from db.crud.wardrobe import get_owner_items
+    from db.crud.brief_log import create_log
+    from core.queue import RedisQueue, QueuePriority
+    from core.permissions import get_effective_plan
+    from services.weather import WeatherService
+
+    user_id = _uuid.UUID(payload["user_id"])
+
+    async with AsyncReadSession() as session:
+        result = await session.execute(
+            select(User)
+            .options(selectinload(User.children))
+            .where(User.id == user_id, User.deleted_at.is_(None))
+        )
+        user = result.scalar_one_or_none()
+
+    if not user:
+        return {}
+
+    # Погода на ЗАВТРА через wttr.in day=1
+    tomorrow = date.today() + timedelta(days=1)
+    temp_m: float = 15.0
+    temp_e: float = 15.0
+    precip_e: float = 0.0
+
+    if user.city:
+        try:
+            redis_tmp = aioredis.from_url(settings.redis_url, decode_responses=False)
+            svc = WeatherService(redis_tmp)
+            w = await svc.get_forecast_day(user.city, day=1)
+            await redis_tmp.aclose()
+            temp_m = w["temp_morning"]
+            temp_e = w["temp_evening"]
+            precip_e = w.get("precip_evening", 0.0)
+        except Exception as e:
+            logger.warning("evening_brief.weather_failed", user_id=str(user_id), error=str(e))
+
+    sm = "+" if temp_m >= 0 else ""
+    weather_line = f"🌡 {user.city}: {sm}{temp_m:.0f}°C" if user.city else ""
+
+    # Заголовок коллажа "Завтра, Пн 24 мар · +8°C"
+    t_sign = "+" if temp_m >= 0 else ""
+    t_str = f"{t_sign}{temp_m:.0f}°C"
+    day_str = f"Завтра, {_EVENING_DAY_NAMES[tomorrow.weekday()]}, {tomorrow.day} {_EVENING_MONTH_NAMES[tomorrow.month]}"
+
+    is_adult = user.segment not in ("mom_girl", "mom_boy")
+
+    if is_adult:
+        # ── Взрослый вечерний бриф ───────────────────────────────────────
+        from worker.tasks.style_config import get_temp_regime as _gtr, COLORTYPE_PALETTES
+        from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
+        from services.image_builder import build_collage
+        from services.outfit_builder import build_outfit_slots, get_collage_params
+
+        regime = _gtr(temp_m)
+        colortype = getattr(user, "colortype", None) or "default"
+
+        async with AsyncReadSession() as session:
+            items = await get_owner_items(session, user.id, "user")
+
+        outer_advice = _REGIME_OUTER_ADVICE.get(regime, "куртка")
+        if items:
+            wardrobe_ctx = ", ".join(
+                f"{i.type} {i.color}" for i in
+                sorted(items, key=lambda x: float(x.score_item or 0), reverse=True)[:10]
+            )
+            prompt = (
+                f"Завтра {sm}{temp_m:.0f}°C, {regime}. Цветотип: {colortype}. "
+                f"Гардероб: {wardrobe_ctx}. "
+                f"Дай короткий (2-3 предложения) совет по образу на завтра "
+                f"используя вещи из гардероба. Русский язык, дружелюбный тон. Только обычный текст."
+            )
+        else:
+            prompt = (
+                f"Завтра {sm}{temp_m:.0f}°C, {regime}. Цветотип: {colortype}. "
+                f"Дай короткий (2-3 предложения) совет по образу на завтра. "
+                f"Русский язык, дружелюбный тон. Только обычный текст."
+            )
+
+        try:
+            pool = get_anthropic_pool()
+        except RuntimeError:
+            _r = aioredis.from_url(settings.redis_url, decode_responses=False)
+            init_anthropic_pool(_r)
+            pool = get_anthropic_pool()
+
+        try:
+            resp = await pool.create_message(
+                model="claude-haiku-4-5-20251001",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=200,
+            )
+            advice = resp.content[0].text.strip()
+        except Exception as e:
+            logger.warning("evening_brief.adult.haiku_failed", error=str(e))
+            advice = f"Завтра {sm}{temp_m:.0f}°C — планируй {outer_advice} ✨"
+
+        collage_header = f"{day_str} · {t_str}"
+        brief_text = (
+            f"🌙 Добрый вечер, {user.name}!\n"
+            f"{weather_line}\n\n"
+            f"🌅 Подготовила образ на завтра!\n{advice}"
+        )
+
+        # Коллаж из топ-вещей
+        outfit_slots: list[dict] = []
+        if items:
+            slot_order = ["outerwear", "top", "bottom", "one_piece", "footwear"]
+            seen_cg: set = set()
+            outfit: dict = {}
+            for item in sorted(items, key=lambda x: float(x.score_item or 0), reverse=True):
+                cg = item.category_group
+                if cg not in seen_cg and cg in slot_order:
+                    outfit[cg] = item
+                    seen_cg.add(cg)
+            outfit_slots = build_outfit_slots(outfit, child=None, temp=temp_m)
+
+        collage_bytes_val = None
+        if outfit_slots:
+            try:
+                collage_bytes_val = await build_collage(
+                    outfit_slots=outfit_slots,
+                    theme="adult",
+                    header_text=collage_header,
+                )
+            except Exception as e:
+                logger.warning("evening_brief.adult.collage_failed", error=str(e))
+
+        async with AsyncWriteSession() as session:
+            log = await create_log(
+                session,
+                user_id=user.id,
+                date=tomorrow,
+                weather_summary=weather_line,
+                outfit_description=brief_text,
+                outfit_items=[],
+                is_wow=False,
+            )
+            await session.commit()
+            brief_id = str(log.id)
+
+        redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+        try:
+            queue = RedisQueue(redis_client)
+            await queue.push(
+                "send_morning_brief",
+                {
+                    "telegram_id": user.telegram_id,
+                    "text": brief_text,
+                    "brief_id": brief_id,
+                    "is_adult": True,
+                    "collage_bytes_b64": (
+                        __import__("base64").b64encode(collage_bytes_val).decode()
+                        if collage_bytes_val else None
+                    ),
+                },
+                priority=QueuePriority.LOW,
+            )
+        finally:
+            await redis_client.aclose()
+
+        logger.info("evening_brief.adult_generated", user_id=str(user_id), brief_id=brief_id)
+        return {"brief_id": brief_id}
+
+    # ── Детский вечерний бриф ────────────────────────────────────────────
+    children = [c for c in (user.children or []) if c.deleted_at is None]
+    if not children:
+        return {}
+
+    from services.outfit_selector import _select_outfit, _get_temp_regime
+    from services.brief_formatter import _format_child_block
+    from services.outfit_builder import build_outfit_slots, get_collage_params
+    from services.image_builder import build_collage
+
+    _SEASONS_MAP = _SEASONS
+    today_real = date.today()
+    month = today_real.month
+    season = next(
+        (s for s, months in _SEASONS_MAP.items() if month in months),
+        "весна",
+    )
+
+    child_briefs: list[str] = []
+    all_outfit_ids: list[str] = []
+    all_outfit_slots: list[dict] = []
+    any_wow = False
+
+    for child in children:
+        async with AsyncReadSession() as session:
+            items = await get_owner_items(session, child.id, "child")
+        if not items:
+            continue
+
+        day_type = "садик" if tomorrow.weekday() < 5 else "прогулка"
+        outfit = _select_outfit(items, season, tomorrow, temp_m, temp_e, precip_e)
+        if not outfit:
+            continue
+
+        child_slots = build_outfit_slots(outfit, child=child, temp=temp_m)
+        all_outfit_slots.extend(child_slots)
+        outfit_ids = [str(v.id) for v in outfit.values() if hasattr(v, "id")]
+        all_outfit_ids.extend(outfit_ids)
+
+        child_brief = _format_child_block(child, outfit, temp_m)
+        child_briefs.append(child_brief)
+        if not any_wow:
+            any_wow = False
+
+    if not child_briefs:
+        return {}
+
+    # Заголовок коллажа с "Завтра"
+    first_child = children[0]
+    child_name = first_child.name
+    if user.segment in ("mom_girl", "mom_boy"):
+        collage_header = f"{day_str} · {t_str} · {child_name}"
+    else:
+        collage_header = f"{day_str} · {t_str}"
+
+    child_gender = getattr(first_child, "gender", "girl")
+    collage_theme = "boy" if child_gender == "boy" else "girl"
+
+    brief_text = (
+        f"🌙 Добрый вечер, {user.name}!\n"
+        + (f"{weather_line}\n\n" if weather_line else "\n")
+        + "🌅 Подготовила образ на завтра! Утром не нужно думать 😊\n\n"
+        + "\n\n".join(child_briefs)
+        + "\n\nКак тебе образ?"
+    )
+
+    async with AsyncWriteSession() as session:
+        log = await create_log(
+            session,
+            user_id=user.id,
+            date=tomorrow,
+            weather_summary=weather_line,
+            outfit_description="\n\n".join(child_briefs),
+            outfit_items=all_outfit_ids,
+            is_wow=any_wow,
+        )
+        await session.commit()
+        brief_id = str(log.id)
+
+    redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    try:
+        queue = RedisQueue(redis_client)
+        await queue.push(
+            "send_morning_brief",
+            {
+                "telegram_id": user.telegram_id,
+                "text": brief_text,
+                "brief_id": brief_id,
+                "outfit_slots": all_outfit_slots,
+                "collage_photo_ids": [],
+                "collage_labels": [],
+                "collage_photo_urls": [],
+                "collage_header": collage_header,
+                "collage_theme": collage_theme,
+            },
+            priority=QueuePriority.LOW,
+        )
+    finally:
+        await redis_client.aclose()
+
+    logger.info(
+        "evening_brief.child_generated",
+        user_id=str(user_id),
+        brief_id=brief_id,
+        children=len(children),
+    )
+    return {"brief_id": brief_id}
+
+
 @register("send_teaser")
 async def send_teaser(payload: dict) -> dict:
     """Тизер для free-юзеров в не-бриф дни — поддерживать engagement."""
