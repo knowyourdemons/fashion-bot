@@ -27,6 +27,7 @@ from bot.handlers.menu import get_main_menu
 from services.scoring import ScoringService, matrix_name_for_owner, calc_item_score
 from services.usage import get_limit_exceeded_msg, get_usage_str
 from core.permissions import get_effective_plan, get_limit
+from services.outfit_builder import color_circle
 
 logger = structlog.get_logger()
 
@@ -1917,8 +1918,7 @@ async def _show_wardrobe_page(message, user, page: int, owner_id=None, owner_typ
         lines = [f"👗 Гардероб ({total} вещей)\n"]
         for group, group_items in paged_groups.items():
             label = _CATEGORY_LABELS.get(group, group)
-            from services.outfit_builder import color_circle as _cc
-            names = ", ".join(f"{_cc(i.color)} {i.type} {i.color}" for i in group_items[:5])
+            names = ", ".join(f"{color_circle(i.color)} {i.type} {i.color}" for i in group_items[:5])
             lines.append(f"{label} ({len(group_items)}): {names}")
 
         buttons = []
