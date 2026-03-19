@@ -98,6 +98,23 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         start = time.monotonic()
         pool = get_anthropic_pool()
         system = _get_text_system(user)
+
+        # Добавить контекст гардероба в system prompt
+        try:
+            from bot.handlers.wardrobe import _get_owner
+            from db.base import AsyncReadSession
+            from services.outfit_builder import get_wardrobe_summary_cached
+            _owner_id, _owner_type = await _get_owner(user, context)
+            async with AsyncReadSession() as _wsess:
+                _wardrobe_ctx = await get_wardrobe_summary_cached(
+                    _owner_id, _owner_type, redis, _wsess
+                )
+            if _wardrobe_ctx and _wardrobe_ctx != "Гардероб пуст.":
+                system += f"\n\nГардероб пользователя:\n{_wardrobe_ctx}"
+                system += "\nОтвечай с учётом конкретных вещей. Предлагай реальные сочетания из этих вещей."
+        except Exception:
+            pass  # не критично — отвечаем без контекста
+
         response = await pool.create_message(
             model=HAIKU_MODEL,
             system=system,

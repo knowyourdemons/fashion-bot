@@ -47,3 +47,77 @@ async def handle_brief_feedback(update: Update, context: ContextTypes.DEFAULT_TY
         await query.message.reply_text(t("error.generic"))
         logger.error("brief.feedback.error", error=str(e))
         sentry_sdk.capture_exception(e)
+
+
+async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback pattern: ^reroll:{brief_id} → сгенерировать новый образ, исключая текущие вещи."""
+    query = update.callback_query
+    await query.answer()
+
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    redis = context.bot_data.get("redis")
+
+    from core.permissions import get_effective_plan, get_limit
+    plan = get_effective_plan(user)
+    reroll_limit = get_limit("reroll", plan)
+
+    if reroll_limit == 0:
+        await query.answer(
+            "🔄 Переодевание доступно в Premium! Нажми «Подписка» для доступа.",
+            show_alert=True,
+        )
+        return
+
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    reroll_key = f"reroll:{user.id}:{today}"
+    count = 0
+    if redis:
+        val = await redis.get(reroll_key)
+        count = int(val) if val else 0
+
+    if count >= reroll_limit:
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✨ Безлимит →", callback_data="show_upgrade"),
+        ]])
+        await query.message.reply_text(
+            f"На сегодня переодевания закончились ({reroll_limit}/день) 🙈\n"
+            "Завтра утром соберу новый образ!",
+            reply_markup=keyboard,
+        )
+        return
+
+    # Получить outfit_items из brief_log для исключения
+    parts = query.data.split(":", 1)
+    brief_id_str = parts[1] if len(parts) > 1 else None
+    exclude_ids: set = set()
+
+    if brief_id_str:
+        try:
+            from db.crud.brief_log import get_log
+            from db.base import AsyncReadSession
+            async with AsyncReadSession() as session:
+                log = await get_log(session, uuid.UUID(brief_id_str))
+            if log and log.outfit_items:
+                exclude_ids = {uuid.UUID(i) for i in log.outfit_items}
+        except Exception as e:
+            logger.warning("reroll.log_fetch_failed", error=str(e))
+
+    await query.message.reply_text("🔄 Подбираю другой вариант...")
+
+    from bot.handlers.wardrobe import _generate_outfit_for_user
+    await _generate_outfit_for_user(query.message, user, context, exclude_ids=exclude_ids)
+
+    if redis:
+        await redis.incr(reroll_key)
+        await redis.expire(reroll_key, 86400)
+
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    logger.info("reroll.done", user_id=str(user.id), excluded=len(exclude_ids))

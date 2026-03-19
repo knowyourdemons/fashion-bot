@@ -260,3 +260,64 @@ def color_circle(color_str: str) -> str:
         if key in color_lower:
             return emoji
     return "⚪"
+
+
+# ── Wardrobe summary для системного промпта чата ──────────────────────────
+
+_WARDROBE_GROUP_NAMES: dict[str, str] = {
+    "outerwear": "Верхняя одежда",
+    "top": "Верх",
+    "bottom": "Низ",
+    "one_piece": "Платья/комбинезоны",
+    "footwear": "Обувь",
+    "accessory": "Аксессуары",
+    "underwear": "Бельё",
+    "base_layer": "Базовый слой",
+}
+
+
+async def get_wardrobe_summary(owner_id, owner_type: str, session) -> str:
+    """Краткое описание гардероба для system prompt Haiku (max ~300 токенов)."""
+    from db.crud.wardrobe import get_owner_items
+    items = await get_owner_items(session, owner_id, owner_type)
+    if not items:
+        return "Гардероб пуст."
+
+    groups: dict[str, list[str]] = {}
+    for item in items:
+        cg = item.category_group or "другое"
+        groups.setdefault(cg, []).append(f"{item.type} ({item.color})")
+
+    lines = [f"В гардеробе {len(items)} вещей:"]
+    for cg, items_list in list(groups.items())[:8]:
+        name = _WARDROBE_GROUP_NAMES.get(cg, cg)
+        shown = items_list[:5]
+        extra = len(items_list) - 5
+        line = f"  {name}: {', '.join(shown)}"
+        if extra > 0:
+            line += f" и ещё {extra}"
+        lines.append(line)
+
+    return "\n".join(lines)
+
+
+async def get_wardrobe_summary_cached(owner_id, owner_type: str, redis, session) -> str:
+    """Wardrobe summary с кешем в Redis (1 час TTL)."""
+    cache_key = f"wardrobe_summary:{owner_id}"
+    if redis:
+        try:
+            cached = await redis.get(cache_key)
+            if cached:
+                return cached.decode() if isinstance(cached, bytes) else cached
+        except Exception:
+            pass
+
+    summary = await get_wardrobe_summary(owner_id, owner_type, session)
+
+    if redis:
+        try:
+            await redis.set(cache_key, summary, ex=3600)
+        except Exception:
+            pass
+
+    return summary

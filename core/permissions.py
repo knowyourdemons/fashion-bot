@@ -241,3 +241,22 @@ def is_trial_just_ended(user) -> bool:
 def can_gap_analysis(plan: str) -> bool:
     resolved = _PLAN_ALIAS.get(plan, plan)
     return bool(LIMITS.get(resolved, LIMITS["free"]).get("gap_analysis", False))
+
+
+def get_effective_limits(user) -> dict:
+    """Лимиты с учётом trial degradation (последние 3 дня trial → постепенное снижение)."""
+    plan = get_effective_plan(user)
+    limits = dict(LIMITS.get(plan, LIMITS["free"]))
+
+    if plan == "premium" and is_trial_active(user):
+        days_left = get_trial_days_left(user)
+        if days_left is not None:
+            if days_left <= 2:  # день 12
+                limits["reroll"] = 0
+            if days_left <= 1:  # день 13
+                limits["evening_brief"] = False
+            if days_left <= 0:  # день 14 (последний)
+                limits["chat_per_day"] = 1
+                limits["outfit_req_per_day"] = 1
+
+    return limits

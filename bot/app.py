@@ -61,6 +61,7 @@ def create_application() -> Application:
 
     # Callback queries (кнопки)
     app.add_handler(CallbackQueryHandler(brief.handle_brief_feedback, pattern="^brief_feedback:"))
+    app.add_handler(CallbackQueryHandler(brief.handle_reroll, pattern="^reroll:"))
     app.add_handler(CallbackQueryHandler(feedback.handle_feedback, pattern="^feedback:"))
     app.add_handler(CallbackQueryHandler(billing.handle_stay_free, pattern="^stay_free$"))
     app.add_handler(CallbackQueryHandler(billing.handle_pay_stars, pattern="^pay_stars:"))

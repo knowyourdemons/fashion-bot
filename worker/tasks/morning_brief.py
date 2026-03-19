@@ -43,15 +43,21 @@ async def schedule_all() -> None:
     redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
     queue = RedisQueue(redis_client)
     count = 0
+    teaser_count = 0
 
     try:
+        from sqlalchemy import or_
+        from datetime import timezone as _tz
         async with AsyncReadSession() as session:
             result = await session.execute(
                 select(User).where(
                     User.onboarding_completed.is_(True),
                     User.is_active.is_(True),
-                    User.plan != "free",
                     User.deleted_at.is_(None),
+                    or_(
+                        User.plan != "free",
+                        User.trial_ends_at > datetime.now(_tz.utc),
+                    ),
                 )
             )
             users = list(result.scalars().all())
@@ -75,10 +81,48 @@ async def schedule_all() -> None:
                 count += 1
             except Exception as e:
                 logger.warning("brief.schedule.user_error", user_id=str(user.id), error=str(e))
+
+        # Тизеры для pure free-юзеров в не-бриф дни
+        try:
+            from core.permissions import is_brief_day as _ibd_t
+            from sqlalchemy import or_ as _or2
+            async with AsyncReadSession() as session:
+                free_result = await session.execute(
+                    select(User).where(
+                        User.onboarding_completed.is_(True),
+                        User.is_active.is_(True),
+                        User.deleted_at.is_(None),
+                        User.plan == "free",
+                        User.trial_ends_at.is_(None),
+                    )
+                )
+                free_users = list(free_result.scalars().all())
+
+            for free_user in free_users:
+                try:
+                    tz = pytz.timezone(free_user.timezone or "Europe/Vilnius")
+                    if datetime.now(tz).hour != 7:
+                        continue
+                    if _ibd_t("free", free_user.timezone or "Europe/Vilnius"):
+                        continue  # бриф день → не тизер
+                    teaser_lock = f"lock:teaser:{free_user.id}:{date.today().isoformat()}"
+                    acquired = await redis_client.set(teaser_lock, 1, ex=86400, nx=True)
+                    if not acquired:
+                        continue
+                    await queue.push(
+                        "send_teaser",
+                        {"user_id": str(free_user.id)},
+                        priority=QueuePriority.LOW,
+                    )
+                    teaser_count += 1
+                except Exception as e:
+                    logger.warning("teaser.schedule.user_error", user_id=str(free_user.id), error=str(e))
+        except Exception as e:
+            logger.warning("teaser.schedule.error", error=str(e))
     finally:
         await redis_client.aclose()
 
-    logger.info("morning_brief.schedule_all", count=count, hour=datetime.utcnow().hour)
+    logger.info("morning_brief.schedule_all", count=count, teaser_count=teaser_count, hour=datetime.utcnow().hour)
 
 
 # ── Взрослый бриф ──────────────────────────────────────────────────────────
@@ -448,11 +492,26 @@ async def generate_brief(payload: dict) -> dict:
     for warn in global_warnings:
         header += f"{warn}\n"
 
+    # Trial degradation — уведомления
+    _trial_notice = ""
+    from core.permissions import get_trial_days_left as _gtdl
+    _days_left = _gtdl(user)
+    if _days_left is not None:
+        if _days_left == 3:
+            _trial_notice = "\n\n⏰ Осталось 3 дня Premium! Потом образы только вт/чт"
+        elif _days_left == 2:
+            _trial_notice = "\n\n⏰ Осталось 2 дня! Re-roll скоро станет недоступен"
+        elif _days_left == 1:
+            _trial_notice = "\n\n⏰ Последний день Premium — завтра базовый план"
+        elif _days_left == 0:
+            _trial_notice = "\n\n⏰ Это последний день Premium!"
+
     brief_text = (
         header
         + "\n\n"
         + "\n\n".join(child_briefs)
         + "\n\nКак тебе образ?"
+        + _trial_notice
     )
 
     # Сохранить BriefLog
@@ -540,7 +599,7 @@ async def send_morning_brief(payload: dict) -> dict:
     reply_markup = {
         "inline_keyboard": [[
             {"text": "👍 Надели", "callback_data": f"brief_feedback:up:{brief_id}"},
-            {"text": "👎 Другое", "callback_data": f"brief_feedback:down:{brief_id}"},
+            {"text": "🔄 Переодень", "callback_data": f"reroll:{brief_id}"},
         ]]
     }
 
@@ -609,3 +668,91 @@ async def send_morning_brief(payload: dict) -> dict:
     except Exception as e:
         logger.error("morning_brief.send_failed", telegram_id=telegram_id, error=str(e))
         return {"sent": False, "error": str(e)}
+
+
+@register("send_teaser")
+async def send_teaser(payload: dict) -> dict:
+    """Тизер для free-юзеров в не-бриф дни — поддерживать engagement."""
+    import uuid as _uuid
+    from sqlalchemy import select as _sel
+    from sqlalchemy.orm import selectinload as _sl
+    from db.base import AsyncReadSession
+    from db.models.user import User
+    import redis.asyncio as aioredis
+
+    user_id = _uuid.UUID(payload["user_id"])
+
+    async with AsyncReadSession() as session:
+        result = await session.execute(
+            _sel(User)
+            .options(_sl(User.children))
+            .where(User.id == user_id, User.deleted_at.is_(None))
+        )
+        user = result.scalar_one_or_none()
+
+    if not user:
+        return {}
+
+    # Не спамить: Redis lock
+    redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    try:
+        teaser_key = f"teaser_sent:{user.id}:{date.today().isoformat()}"
+        sent = await redis_client.exists(teaser_key)
+        if sent:
+            return {}
+        await redis_client.set(teaser_key, "1", ex=86400)
+
+        children = [c for c in (user.children or []) if c.deleted_at is None]
+        child = children[0] if children else None
+        child_name = child.name if child else None
+
+        # Погода (без сбоя если недоступна)
+        temp_str = ""
+        if user.city:
+            try:
+                from services.weather import WeatherService
+                svc = WeatherService(redis_client)
+                wd = await svc.get(user.city)
+                sm = "+" if wd.temp_c >= 0 else ""
+                temp_str = f"{sm}{wd.temp_c}°C"
+            except Exception:
+                pass
+
+        import random as _rand
+        if child_name:
+            teasers = [
+                f"Касси здесь! Есть идея образа для {child_name} на сегодня ✨\n"
+                "Образы каждый день — в Premium",
+                f"Сегодня {'(' + temp_str + ')' if temp_str else ''} знаю что надеть {child_name}! 🌤\n"
+                "Ежедневные образы доступны в Premium",
+                f"Видела новые вещи в гардеробе — могу собрать разные образы для {child_name}!\n"
+                "В Premium — образ каждое утро 🌅",
+            ]
+        else:
+            teasers = [
+                "Касси здесь! Сегодня есть идея образа для тебя ✨\n"
+                "Образы каждый день — в Premium",
+                f"{'(' + temp_str + ') ' if temp_str else ''}Знаю что надеть сегодня! 🌤\n"
+                "Ежедневные образы доступны в Premium",
+            ]
+
+        teaser_text = _rand.choice(teasers)
+
+        from config import settings as _settings
+        from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton
+        bot = Bot(token=_settings.telegram_bot_token)
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✨ Попробовать Premium", callback_data="show_upgrade"),
+        ]])
+        await bot.send_message(
+            chat_id=user.telegram_id,
+            text=teaser_text,
+            reply_markup=keyboard,
+        )
+        logger.info("teaser.sent", user_id=str(user.id))
+    except Exception as e:
+        logger.warning("teaser.failed", user_id=str(user.id), error=str(e))
+    finally:
+        await redis_client.aclose()
+
+    return {}

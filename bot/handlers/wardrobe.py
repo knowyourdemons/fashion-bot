@@ -872,6 +872,12 @@ async def _analyze_and_save(
                         photo_url=photo_url, show_in_collage=good_crop)
         existing_set.add(key)
         added.append(data)
+        # Инвалидировать кеш wardrobe summary
+        if redis:
+            try:
+                await redis.delete(f"wardrobe_summary:{owner_id}")
+            except Exception:
+                pass
 
     return added
 
@@ -1661,7 +1667,7 @@ async def handle_add_items_hint(update: Update, context: ContextTypes.DEFAULT_TY
 
 # ── handle_outfit_request (кнопка Образ дня из Гардероба) ───────────────────
 
-async def _generate_outfit_for_user(message, user, context) -> None:
+async def _generate_outfit_for_user(message, user, context, exclude_ids: set | None = None) -> None:
     """Общая логика генерации образа. Вызывается из меню и из inline-кнопки гардероба."""
     redis = context.bot_data.get("redis")
     from datetime import date as _date, datetime as _datetime
@@ -1746,7 +1752,13 @@ async def _generate_outfit_for_user(message, user, context) -> None:
         # Полностью случайный seed при каждом запросе
         import uuid as _uuid
         _random.seed(str(_uuid.uuid4()))
-        items_shuffled = list(items)
+        # Исключить вещи из предыдущего образа для re-roll
+        if exclude_ids:
+            items_shuffled = [i for i in items if i.id not in exclude_ids]
+            if len(items_shuffled) < 3:
+                items_shuffled = list(items)  # мало вещей → включить все
+        else:
+            items_shuffled = list(items)
         _random.shuffle(items_shuffled)
 
         today_date = _date.today()
@@ -1788,12 +1800,15 @@ async def _generate_outfit_for_user(message, user, context) -> None:
             await redis.incr(limit_key)
             await redis.expire(limit_key, 86400)
 
+        _reroll_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔄 Другой образ", callback_data="outfit_request"),
+        ]])
         if collage_bytes:
             await message.reply_photo(
-                photo=collage_bytes, caption=caption, reply_markup=get_main_menu()
+                photo=collage_bytes, caption=caption, reply_markup=_reroll_markup
             )
         else:
-            await message.reply_text(caption, reply_markup=get_main_menu())
+            await message.reply_text(caption, reply_markup=_reroll_markup)
 
     except Exception as e:
         logger.error("outfit_request.failed", error=str(e))
