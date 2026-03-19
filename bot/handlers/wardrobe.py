@@ -1648,7 +1648,7 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
 
     try:
         from services.weather import WeatherService
-        from services.outfit_builder import select_outfit, get_temp_regime, SEASONS, build_outfit_slots, get_collage_params
+        from services.outfit_builder import select_outfit, get_temp_regime, SEASONS, build_outfit_slots, get_collage_params, outfit_score_to_text
         from services.image_builder import build_collage
 
         # Найти детей
@@ -1720,6 +1720,13 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
 
         owner_label = child.name if child else (user.name or "")
         caption = f"🌤 {owner_label} · {temp_text}"
+
+        # Комментарий-совет Касси по скору образа
+        scored = [float(i.score_item) for i in outfit.get("all_items", []) if i.score_item]
+        if scored:
+            avg = sum(scored) / len(scored)
+            caption += f"\n\n{outfit_score_to_text(avg)}"
+
         outfit_warnings = outfit.get("warnings") or []
         if outfit_warnings:
             caption += "\n" + "\n".join(outfit_warnings)

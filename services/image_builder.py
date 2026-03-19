@@ -55,7 +55,7 @@ LABEL_TEXT      = (139, 123, 139)
 LABEL_DIVIDER   = (230, 222, 240)
 PLACEHOLDER_BG  = (240, 238, 240)
 SILHOUETTE_CLR  = (200, 192, 204)
-FOOTER_TEXT_CLR = (220, 215, 228)
+FOOTER_TEXT_CLR = (175, 165, 190)
 
 # ── Темы ─────────────────────────────────────────────────────────────────────
 _THEMES = {
@@ -108,13 +108,25 @@ def _get_placeholder_label(slot: str, gender: str = "girl") -> str:
 
 
 def format_collage_label(slot: str, item_type: str, item_color: str = "") -> str:
-    """Подпись карточки: 'Свитшот розовый' (без эмодзи, PIL не рендерит unicode emoji)."""
+    """Подпись: 'Леггинсы пыльно-роз.' — тип + полный цвет, без эмодзи, max 28 символов."""
     parts_t = (item_type or "").split()
-    parts_c = (item_color or "").split()
     short_type = parts_t[0].capitalize() if parts_t else ""
-    short_color = parts_c[0].lower()[:8] if parts_c else ""
-    label = f"{short_type} {short_color}".strip()
-    return label[:20] if label else _SLOT_NAMES_SHORT.get(slot, "Вещь")
+    color = (item_color or "").strip()
+
+    label = f"{short_type} {color}".strip() if color else short_type
+
+    if not label:
+        return _SLOT_NAMES_SHORT.get(slot, "Вещь")
+
+    if len(label) > 28:
+        cut = label[:27]
+        last_break = max(cut.rfind(" "), cut.rfind("-"))
+        if last_break > len(short_type):
+            label = cut[:last_break + 1].rstrip() + "."
+        else:
+            label = cut.rstrip() + "."
+
+    return label
 
 
 # ── Кэш теней ────────────────────────────────────────────────────────────────
@@ -447,7 +459,8 @@ def _draw_slot_card(canvas: Image.Image, slot_data: dict,
         label = format_collage_label(slot_key, item_type, item_color)
         _draw_card(canvas, slot_data["_thumb"], x, y, card_w, card_h, label, font)
     else:
-        ph_label = _get_placeholder_label(slot_key, gender)
+        # Уважаем temp-based label из outfit_builder; fallback — иконочное название
+        ph_label = slot_data.get("label") or _get_placeholder_label(slot_key, gender)
         ph = _make_placeholder(slot_key, ph_label, card_w, card_h,
                                adult=is_adult, gender=gender)
         mask = _rounded_mask(card_w, card_h, RADIUS)
@@ -459,7 +472,7 @@ def _build_layered_layout(
     slots: list,
     theme: str = "girl",
     header_text: str = "",
-    footer_text: str = "Касси · fashioncastle.app",
+    footer_text: str = "Касси -- твой личный стилист",
 ) -> Image.Image:
     """3-зонный layout коллажа.
     Зона 1: outerwear (full-width если фото, half-width если placeholder).
@@ -471,6 +484,9 @@ def _build_layered_layout(
     zone2 = [s for s in slots if s["slot"] in ("top", "removable_layer", "bottom", "one_piece")]
     zone3 = [s for s in slots if s["slot"] in ("footwear", "hat", "scarf", "gloves", "tights", "socks")]
 
+    # Зона 2 крупнее когда нет зоны 1 (тепло/жара)
+    zone2_card_h = int(ZONE2_CARD_H * 1.3) if not zone1 else ZONE2_CARD_H
+
     # Высота canvas
     h = LAYOUT_PAD
     if header_text:
@@ -478,7 +494,7 @@ def _build_layered_layout(
     if zone1:
         h += ZONE1_CARD_H + LAYOUT_GAP
     if zone2:
-        h += ZONE2_CARD_H + LAYOUT_GAP
+        h += zone2_card_h + LAYOUT_GAP
     if zone3:
         rows3 = math.ceil(min(len(zone3), 4) / 2)
         h += rows3 * (ZONE3_CARD_H + LAYOUT_GAP)
@@ -492,14 +508,15 @@ def _build_layered_layout(
     try:
         font    = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
         hfont   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 26)
-        ffont   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
+        ffont   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
     except Exception:
         font = hfont = ffont = ImageFont.load_default()
 
     y_cur = LAYOUT_PAD
 
-    # ── Header (Pilmoji для weather emoji) ───────────────────────────────────
+    # ── Header (plain PIL — emoji убраны из header_text) ─────────────────────
     if header_text:
+        hd = ImageDraw.Draw(canvas)
         try:
             bbox = hfont.getbbox(header_text)
             tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
@@ -507,10 +524,7 @@ def _build_layered_layout(
             tw, th = len(header_text) * 12, 26
         tx = max(LAYOUT_PAD, (CANVAS_W - tw) // 2)
         ty = y_cur + max(2, (HEADER_H - th) // 2)
-        canvas_rgb = canvas.convert("RGB")
-        with Pilmoji(canvas_rgb) as pmj:
-            pmj.text((tx, ty), header_text, fill=LABEL_TEXT, font=hfont)
-        canvas = canvas_rgb.convert("RGBA")
+        hd.text((tx, ty), header_text, fill=LABEL_TEXT + (255,), font=hfont)
         y_cur += HEADER_H + LAYOUT_GAP
 
     # ── Зона 1: outerwear ────────────────────────────────────────────────────
@@ -530,16 +544,16 @@ def _build_layered_layout(
     if zone2:
         if one_piece_slots:
             card_w = CANVAS_W - LAYOUT_PAD * 2
-            _draw_slot_card(canvas, one_piece_slots[0], LAYOUT_PAD, y_cur, card_w, ZONE2_CARD_H, font)
+            _draw_slot_card(canvas, one_piece_slots[0], LAYOUT_PAD, y_cur, card_w, zone2_card_h, font)
         else:
             card_w = (CANVAS_W - LAYOUT_PAD * 2 - LAYOUT_GAP) // 2
             if top_slots:
-                _draw_slot_card(canvas, top_slots[0], LAYOUT_PAD, y_cur, card_w, ZONE2_CARD_H, font)
+                _draw_slot_card(canvas, top_slots[0], LAYOUT_PAD, y_cur, card_w, zone2_card_h, font)
             if bot_slots:
                 _draw_slot_card(canvas, bot_slots[0],
                                 LAYOUT_PAD + card_w + LAYOUT_GAP, y_cur,
-                                card_w, ZONE2_CARD_H, font)
-        y_cur += ZONE2_CARD_H + LAYOUT_GAP
+                                card_w, zone2_card_h, font)
+        y_cur += zone2_card_h + LAYOUT_GAP
 
     # ── Зона 3: обувь + аксессуары ───────────────────────────────────────────
     card_w3 = (CANVAS_W - LAYOUT_PAD * 2 - LAYOUT_GAP) // 2

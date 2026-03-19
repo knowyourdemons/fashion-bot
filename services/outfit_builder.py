@@ -73,8 +73,7 @@ def get_collage_params(
     else:
         theme = "adult"
 
-    # Header
-    emoji = _weather_emoji(temp, precip)
+    # Header — без эмодзи (PIL/DejaVuSans не рендерит unicode emoji → квадраты)
     sign = "+" if (temp or 0) >= 0 else ""
     temp_str = f"{sign}{temp:.0f}°C" if temp is not None else ""
     day_str = f"{_DAY_NAMES[today.weekday()]}, {today.day} {_MONTH_NAMES[today.month]}"
@@ -83,15 +82,15 @@ def get_collage_params(
         context = child.name
         if day_type:
             context += f", {day_type}"
-        header = f"{emoji} {day_str} · {temp_str} · {context}"
+        header = f"{day_str} · {temp_str} · {context}"
     else:
         day_ctx = "выходной" if today.weekday() >= 5 else "будний день"
-        header = f"{emoji} {day_str} · {temp_str} · {day_ctx}"
+        header = f"{day_str} · {temp_str} · {day_ctx}"
 
     return {
         "theme": theme,
         "header_text": header,
-        "footer_text": "Касси · fashioncastle.app",
+        "footer_text": "Касси -- твой личный стилист",
     }
 
 
@@ -181,14 +180,30 @@ def build_outfit_slots(
 
             if needs_placeholder:
                 seen.add(slot_key)
-                slots.append({
+                ph_slot: dict = {
                     "slot": slot_key,
                     "has_item": False,
                     "photo_id": None,
                     "photo_url": None,
                     "adult": is_adult,
                     "gender": gender,
-                })
+                }
+                # Подпись placeholder по температуре
+                if slot_key == "outerwear":
+                    if _temp > 10:
+                        ph_slot["label"] = "Ветровка"
+                    elif _temp > 0:
+                        ph_slot["label"] = "Куртка"
+                    else:
+                        ph_slot["label"] = "Тёплая куртка"
+                elif slot_key == "footwear":
+                    if _temp > 20:
+                        ph_slot["label"] = "Сандалии"
+                    elif _temp > 5:
+                        ph_slot["label"] = "Кроссовки"
+                    else:
+                        ph_slot["label"] = "Ботинки"
+                slots.append(ph_slot)
 
     return slots
 
