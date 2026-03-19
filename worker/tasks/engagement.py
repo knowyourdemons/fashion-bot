@@ -96,6 +96,13 @@ async def check_engagement(payload: dict) -> dict:
             select(func.count(BriefLog.id)).where(BriefLog.user_id == user.id)
         ) or 0
 
+    # Liked briefs count (только для trial report дня 11)
+    liked_count = 0
+    if trial_day == 11:
+        async with AsyncReadSession() as session:
+            from db.crud.brief_log import count_liked_briefs as _clb
+            liked_count = await _clb(session, user.id)
+
     redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
     try:
         engagement_key = f"engagement:{user.id}:{date.today().isoformat()}"
@@ -103,24 +110,37 @@ async def check_engagement(payload: dict) -> dict:
             return {}
         await redis_client.set(engagement_key, "1", ex=86400)
 
-        # Estimate chat count from daily keys (approximate)
-        chat_count = brief_count * 2  # rough estimate
-
-        text = config["text"].format(
-            count=wardrobe_count,
-            child_name=child_name,
-            brief_count=brief_count,
-            chat_count=chat_count,
-        )
-
         from config import settings as _settings
         from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton
         bot = Bot(token=_settings.telegram_bot_token)
 
-        markup = None
-        if "button" in config:
-            label, callback = config["button"]
-            markup = InlineKeyboardMarkup([[InlineKeyboardButton(label, callback_data=callback)]])
+        # День 11 — подробный trial report
+        if trial_day == 11:
+            text = (
+                f"📊 Твой отчёт за 11 дней с Касси:\n\n"
+                f"👗 Образов собрано: {brief_count}\n"
+                f"👍 Понравились: {liked_count}\n"
+                f"📸 Вещей в гардеробе: {wardrobe_count}\n\n"
+                f"Касси уже знает стиль {child_name} и подбирает всё точнее!\n\n"
+                f"Через 3 дня Premium закончится.\n"
+                f"Без него: образы только вт/чт, без переодеваний."
+            )
+            markup = InlineKeyboardMarkup([[
+                InlineKeyboardButton("✨ Продолжить Premium", callback_data="show_upgrade"),
+                InlineKeyboardButton("📊 Сравнить планы", callback_data="compare_plans"),
+            ]])
+        else:
+            chat_count = brief_count * 2  # приблизительно
+            text = config["text"].format(
+                count=wardrobe_count,
+                child_name=child_name,
+                brief_count=brief_count,
+                chat_count=chat_count,
+            )
+            markup = None
+            if "button" in config:
+                label, callback = config["button"]
+                markup = InlineKeyboardMarkup([[InlineKeyboardButton(label, callback_data=callback)]])
 
         await bot.send_message(chat_id=user.telegram_id, text=text, reply_markup=markup)
         logger.info("engagement.sent", user_id=str(user.id), trial_day=trial_day)

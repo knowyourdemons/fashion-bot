@@ -64,6 +64,7 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(brief.handle_reroll, pattern="^reroll:"))
     app.add_handler(CallbackQueryHandler(feedback.handle_feedback, pattern="^feedback:"))
     app.add_handler(CallbackQueryHandler(billing.handle_stay_free, pattern="^stay_free$"))
+    app.add_handler(CallbackQueryHandler(billing.handle_compare_plans, pattern="^compare_plans$"))
     app.add_handler(CallbackQueryHandler(billing.handle_pay_stars, pattern="^pay_stars:"))
     app.add_handler(CallbackQueryHandler(billing.handle_confirm_stars, pattern="^confirm_stars:"))
     app.add_handler(CallbackQueryHandler(billing.handle_pay_stripe, pattern="^pay_stripe:"))

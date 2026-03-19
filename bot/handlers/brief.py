@@ -124,10 +124,45 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def handle_share(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Callback: share:{brief_id} → инструкция как переслать коллаж."""
+    """Callback: share:{brief_id} → переслать коллаж чистым фото без кнопок."""
     query = update.callback_query
     await query.answer()
-    await query.message.reply_text(
-        "📤 Перешли картинку выше — на ней всё написано!\n"
-        "Бабушка увидит имя, погоду и что надеть 👗"
-    )
+
+    parts = query.data.split(":", 1)
+    brief_id_str = parts[1] if len(parts) > 1 else None
+    if not brief_id_str:
+        await query.message.reply_text("📤 Перешли картинку выше бабушке — на ней всё написано 👗")
+        return
+
+    try:
+        from db.base import AsyncReadSession
+        async with AsyncReadSession() as session:
+            log = await get_log(session, uuid.UUID(brief_id_str))
+
+        if log and log.collage_file_id:
+            # Определить имя ребёнка для caption
+            user = context.user_data.get("db_user")
+            child_name = None
+            if user and user.segment in ("mom_girl", "mom_boy"):
+                from db.crud.children import get_children
+                async with AsyncReadSession() as session:
+                    children = await get_children(session, user.id)
+                if children:
+                    child_name = children[0].name
+
+            caption = (
+                f"👧 Образ для {child_name} на сегодня. Собрала Касси — AI-стилист 👗"
+                if child_name else
+                "Образ дня от Касси — AI-стилиста 👗"
+            )
+            await query.message.reply_photo(
+                photo=log.collage_file_id,
+                caption=caption,
+            )
+        else:
+            await query.message.reply_text(
+                "📤 Перешли картинку выше бабушке — на ней всё написано 👗"
+            )
+    except Exception as e:
+        logger.error("brief.share.error", error=str(e))
+        await query.message.reply_text("📤 Перешли картинку выше бабушке 👗")

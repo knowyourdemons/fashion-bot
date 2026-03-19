@@ -316,3 +316,27 @@ async def handle_stay_free(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """Пользователь выбрал остаться на free после trial."""
     query = update.callback_query
     await query.answer("Хорошо! Ты всегда можешь вернуться к Premium 💎")
+
+
+async def handle_compare_plans(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: compare_plans → таблица Free vs Premium."""
+    query = update.callback_query
+    await query.answer()
+    text = (
+        "📊 Free vs Premium\n\n"
+        "Free:\n"
+        "  Образы: вт/чт\n"
+        "  Переодень: —\n"
+        "  Вечерний образ: —\n"
+        "  Чат: 1/день\n\n"
+        "Premium (700⭐ / $9/мес):\n"
+        "  Образы: каждый день\n"
+        "  Переодень: 3/день\n"
+        "  Вечерний образ: ✅\n"
+        "  Чат: 20/день\n"
+    )
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+    markup = InlineKeyboardMarkup([[
+        InlineKeyboardButton("✨ Оформить Premium", callback_data="show_upgrade"),
+    ]])
+    await query.message.reply_text(text, reply_markup=markup)

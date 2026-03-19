@@ -696,6 +696,23 @@ async def send_morning_brief(payload: dict) -> dict:
                     json={"chat_id": telegram_id, "text": text, "reply_markup": reply_markup},
                 )
             resp.raise_for_status()
+
+            # Сохранить collage_file_id для возможности пересылки
+            if collage_bytes:
+                try:
+                    tg_result = resp.json()
+                    photos = tg_result.get("result", {}).get("photo", [])
+                    if photos:
+                        file_id = photos[-1]["file_id"]
+                        import uuid as _uuid2
+                        from db.base import AsyncWriteSession as _AWS
+                        from db.crud.brief_log import update_collage_file_id as _ucfi
+                        async with _AWS() as _s:
+                            await _ucfi(_s, _uuid2.UUID(brief_id), file_id)
+                            await _s.commit()
+                except Exception as e:
+                    logger.warning("morning_brief.save_file_id_failed", error=str(e))
+
         logger.info("morning_brief.sent", telegram_id=telegram_id, brief_id=brief_id, has_collage=bool(collage_bytes))
         return {"sent": True}
     except Exception as e:

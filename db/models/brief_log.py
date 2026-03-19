@@ -27,6 +27,7 @@ class BriefLog(Base):
         String(8), nullable=True
     )  # "up" / "down"
     is_wow: Mapped[bool] = mapped_column(Boolean, default=False)
+    collage_file_id: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
