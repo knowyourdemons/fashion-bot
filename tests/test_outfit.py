@@ -191,3 +191,61 @@ def test_underwear_items_is_list():
     """underwear_items всегда список."""
     result = _outfit(_basic_wardrobe())
     assert isinstance(result["underwear_items"], list)
+
+
+# ── Шорты при холодной температуре ───────────────────────────────────────────
+
+def _wardrobe_with_shorts():
+    return [
+        _item("top",      "кофта"),
+        _item("bottom",   "шорты"),
+        _item("bottom",   "джинсы"),
+        _item("footwear", "ботинки"),
+        _item("outerwear","куртка"),
+        _item("underwear","трусики"),
+    ]
+
+
+def test_no_shorts_in_cold_regime():
+    """Прохладно (<10°C) — шорты не должны выбираться если есть джинсы."""
+    from services.outfit_selector import _select_outfit
+    items = _wardrobe_with_shorts()
+    result = _select_outfit(items, "autumn", date.today(), temp_morning=8.0)
+    if result["bottom"] is not None:
+        assert "шорт" not in (result["bottom"].type or "").lower(), \
+            "При прохладной погоде шорты не должны выбираться"
+
+
+def test_no_shorts_in_cold_regime_cold():
+    """Холодно (<5°C) — шорты не должны выбираться если есть джинсы."""
+    from services.outfit_selector import _select_outfit
+    items = _wardrobe_with_shorts()
+    result = _select_outfit(items, "autumn", date.today(), temp_morning=3.0)
+    if result["bottom"] is not None:
+        assert "шорт" not in (result["bottom"].type or "").lower(), \
+            "При холодной погоде шорты не должны выбираться"
+
+
+def test_no_shorts_in_frost():
+    """Мороз (<0°C) — шорты не должны выбираться."""
+    from services.outfit_selector import _select_outfit
+    items = _wardrobe_with_shorts()
+    result = _select_outfit(items, "winter", date.today(), temp_morning=-5.0)
+    if result["bottom"] is not None:
+        assert "шорт" not in (result["bottom"].type or "").lower(), \
+            "При морозе шорты не должны выбираться"
+
+
+def test_shorts_ok_in_hot():
+    """Жара (>25°C) — шорты предпочтительны."""
+    from services.outfit_selector import _select_outfit
+    items = [
+        _item("top",      "футболка"),
+        _item("bottom",   "шорты"),
+        _item("bottom",   "джинсы"),
+        _item("underwear","трусики"),
+    ]
+    result = _select_outfit(items, "summer", date.today(), temp_morning=30.0)
+    if result["bottom"] is not None:
+        assert "шорт" in (result["bottom"].type or "").lower(), \
+            "При жаре должны выбираться шорты"

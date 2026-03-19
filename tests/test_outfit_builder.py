@@ -230,3 +230,58 @@ class TestBuildOutfitSlots:
         slots = build_outfit_slots(outfit, temp=None)
         slot_names = [s["slot"] for s in slots]
         assert "footwear" in slot_names
+
+    def test_item_color_in_slot(self):
+        """Real items должны содержать item_color."""
+        from services.outfit_builder import build_outfit_slots
+        item = _make_item("top", "футболка", color="синий")
+        outfit = {"top": item}
+        slots = build_outfit_slots(outfit, temp=20.0)
+        top_slot = next((s for s in slots if s["slot"] == "top" and s["has_item"]), None)
+        assert top_slot is not None
+        assert top_slot["item_color"] == "синий"
+
+    def test_item_color_empty_string_by_default(self):
+        """item_color — пустая строка если color не задан."""
+        from services.outfit_builder import build_outfit_slots
+        item = _make_item("top")
+        item.color = None  # override MagicMock default
+        outfit = {"top": item}
+        slots = build_outfit_slots(outfit, temp=20.0)
+        top_slot = next((s for s in slots if s["slot"] == "top" and s["has_item"]), None)
+        assert top_slot is not None
+        assert top_slot["item_color"] == ""
+
+
+# ── format_collage_label ──────────────────────────────────────────────────────
+
+import importlib.util as _ilu
+_pilmoji_available = pytest.mark.skipif(
+    _ilu.find_spec("pilmoji") is None,
+    reason="pilmoji not installed locally",
+)
+
+
+@_pilmoji_available
+class TestFormatCollageLabel:
+    def test_with_type_and_color(self):
+        from services.image_builder import format_collage_label
+        label = format_collage_label("top", "футболка", "синий")
+        assert "Футболка" in label
+        assert "синий" in label
+
+    def test_type_only_no_color(self):
+        from services.image_builder import format_collage_label
+        label = format_collage_label("top", "свитшот")
+        assert "Свитшот" in label
+
+    def test_empty_type_falls_back_to_slot_name(self):
+        from services.image_builder import format_collage_label
+        label = format_collage_label("footwear", "", "")
+        # Should return slot fallback name, not empty
+        assert len(label) > 0
+
+    def test_label_max_length(self):
+        from services.image_builder import format_collage_label
+        label = format_collage_label("top", "очень длинное название вещи", "оченьдлинныйцвет")
+        assert len(label) <= 20

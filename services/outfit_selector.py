@@ -146,8 +146,9 @@ def _select_outfit(
             or _first(cg="top")
         )
         result["bottom"] = (
-            _first(cg="bottom", prefer_contains="джинс")
-            or _first(cg="bottom", prefer_contains="брюк")
+            _first(cg="bottom", prefer_contains="джинс", type_not_contains="шорт")
+            or _first(cg="bottom", prefer_contains="брюк", type_not_contains="шорт")
+            or _first(cg="bottom", type_not_contains="шорт")
             or _first(cg="bottom")
         )
     else:  # мороз / сильный_мороз
@@ -157,7 +158,8 @@ def _select_outfit(
             or _first(cg="top")
         )
         result["bottom"] = (
-            _first(cg="bottom", prefer_contains="брюк")
+            _first(cg="bottom", prefer_contains="брюк", type_not_contains="шорт")
+            or _first(cg="bottom", type_not_contains="шорт")
             or _first(cg="bottom")
         )
 

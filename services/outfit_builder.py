@@ -155,6 +155,7 @@ def build_outfit_slots(
             slots.append({
                 "slot": slot_key,
                 "item_type": item.type,
+                "item_color": getattr(item, "color", "") or "",
                 "photo_id": item.photo_id,
                 "photo_url": getattr(item, "photo_url", None),
                 "has_item": True,
