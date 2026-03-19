@@ -1658,14 +1658,16 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
             from db.crud.children import get_children as _get_children
             children = await _get_children(session, user.id)
 
-        if not children:
+        is_no_kids = getattr(user, "segment", None) == "no_kids"
+
+        if not children and not is_no_kids:
             await query.message.reply_text(
                 "Добавь ребёнка в профиле чтобы получать образы 👧",
                 reply_markup=get_main_menu(),
             )
             return
 
-        child = children[0]
+        child = children[0] if children else None
 
         # Погода — fallback 10/12°C если город не задан или сервис недоступен
         temp_m, temp_e = 10.0, 12.0
@@ -1681,9 +1683,16 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
             logger.warning("outfit_request.weather_failed",
                 error=str(we), city=getattr(user, "city", None))
 
-        # Вещи ребёнка
+        # Вещи: для no_kids — из гардероба пользователя, иначе — ребёнка
+        if child:
+            owner_id_for_outfit, owner_type_for_outfit = child.id, "child"
+            colortype_for_outfit = getattr(child, "colortype", None) or "default"
+        else:
+            owner_id_for_outfit, owner_type_for_outfit = user.id, "user"
+            colortype_for_outfit = getattr(user, "colortype", None) or "default"
+
         async with AsyncReadSession() as session:
-            items = await get_owner_items(session, child.id, "child")
+            items = await get_owner_items(session, owner_id_for_outfit, owner_type_for_outfit)
 
         if not items:
             await query.message.reply_text(
@@ -1702,13 +1711,17 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
         season = SEASONS[today_date.month]
         outfit = select_outfit(items_shuffled, season, today_date, temp_m, temp_e)
 
-        all_slots = build_outfit_slots(outfit, child=child, temp=temp_m)
+        regime = get_temp_regime(temp_m)
+        all_slots = build_outfit_slots(
+            outfit, child=child, temp=temp_m, colortype=colortype_for_outfit, regime=regime
+        )
 
-        _collage_params = get_collage_params(child=child, temp=temp_m)
+        _collage_params = get_collage_params(child=child, user=user, temp=temp_m)
         sm = "+" if temp_m >= 0 else ""
         temp_text = f"{sm}{temp_m:.0f}°C"
 
-        caption = f"🌤 {child.name} · {temp_text}"
+        owner_label = child.name if child else (user.name or "")
+        caption = f"🌤 {owner_label} · {temp_text}"
         outfit_warnings = outfit.get("warnings") or []
         if outfit_warnings:
             caption += "\n" + "\n".join(outfit_warnings)

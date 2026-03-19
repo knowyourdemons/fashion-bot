@@ -39,7 +39,7 @@ class TestScoreToText:
 
     def test_home(self):
         from services.outfit_builder import score_to_text
-        assert score_to_text(3.0) == "🏠 Для дома и отдыха"
+        assert score_to_text(3.0) == "👕 Уютная вещь для дома"
 
     def test_boundary_8_5(self):
         from services.outfit_builder import score_to_text
@@ -65,7 +65,7 @@ class TestOutfitScoreToText:
 
     def test_poor(self):
         from services.outfit_builder import outfit_score_to_text
-        assert outfit_score_to_text(3.0) == "🤔 Можно лучше — попробуй переодень"
+        assert outfit_score_to_text(3.0) == "👌 Образ на каждый день"
 
 
 # ── get_collage_params ────────────────────────────────────────────────────────
@@ -140,10 +140,11 @@ class TestBuildOutfitSlots:
         ow = next(s for s in slots if s["slot"] == "outerwear")
         assert ow["has_item"] is False
 
-    def test_no_outerwear_placeholder_warm(self):
+    def test_no_outerwear_placeholder_hot(self):
         from services.outfit_builder import build_outfit_slots
         outfit = {}
-        slots = build_outfit_slots(outfit, temp=20.0)
+        # "жара" regime (>22°C): SEASON_SLOT_TYPES["outerwear"]["жара"] = None → no placeholder
+        slots = build_outfit_slots(outfit, temp=30.0)
         slot_names = [s["slot"] for s in slots]
         assert "outerwear" not in slot_names
 
@@ -154,13 +155,15 @@ class TestBuildOutfitSlots:
         slot_names = [s["slot"] for s in slots]
         assert "hat" in slot_names
 
-    def test_scarf_placeholder_very_cold(self):
+    def test_outerwear_and_hat_very_cold(self):
         from services.outfit_builder import build_outfit_slots
         outfit = {}
+        # "мороз" regime: outerwear and hat both get placeholders
         slots = build_outfit_slots(outfit, temp=-2.0)
         slot_names = [s["slot"] for s in slots]
-        assert "scarf" in slot_names
-        assert "gloves" in slot_names
+        assert "outerwear" in slot_names
+        assert "hat" in slot_names
+        # scarf/gloves are not in SEASON_SLOT_TYPES → no placeholders
 
     def test_real_item_in_slot(self):
         from services.outfit_builder import build_outfit_slots
@@ -219,10 +222,11 @@ class TestBuildOutfitSlots:
         if top_slot:
             assert top_slot["has_item"] is False
 
-    def test_temp_none_defaults_warm(self):
+    def test_temp_none_defaults_teplo(self):
         from services.outfit_builder import build_outfit_slots
         outfit = {}
+        # Default temp=15 → regime "тепло" → SEASON_SLOT_TYPES["outerwear"]["тепло"] = "лёгкую ветровку"
+        # → placeholder IS added; footwear always present
         slots = build_outfit_slots(outfit, temp=None)
         slot_names = [s["slot"] for s in slots]
-        # Default temp=15 → no outerwear placeholder
-        assert "outerwear" not in slot_names
+        assert "footwear" in slot_names

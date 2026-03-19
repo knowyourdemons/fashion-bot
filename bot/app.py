@@ -46,7 +46,7 @@ def create_application() -> Application:
 
     # Кнопки главного меню group=0 (Гардероб, Оценить образ, Профиль)
     app.add_handler(MessageHandler(filters.Regex("^👗 Гардероб$"), wardrobe.handle_wardrobe_menu))
-    app.add_handler(MessageHandler(filters.Regex(r"^✨ Что надеть\?$"), wardrobe.handle_rate_menu))
+    app.add_handler(MessageHandler(filters.Regex("^✨ Что надеть$"), wardrobe.handle_rate_menu))
     app.add_handler(MessageHandler(filters.Regex("^⚙️ Профиль$"), handle_profile))
 
     # ❓ Помощь — group=1 (явный приоритет перед text стилистом)
@@ -84,7 +84,7 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(wardrobe.handle_notify_ultra, pattern="^notify_ultra$"))
 
     # Текстовые сообщения → стилист — group=2 (после меню-хендлеров)
-    _menu_texts = filters.Regex(r"^(👗 Гардероб|✨ Что надеть\?|⚙️ Профиль|❓ Помощь)$")
+    _menu_texts = filters.Regex("^(👗 Гардероб|✨ Что надеть|⚙️ Профиль|❓ Помощь)$")
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND & ~_menu_texts, text.handle_text),
         group=2,

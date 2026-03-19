@@ -409,7 +409,9 @@ async def generate_brief(payload: dict) -> dict:
         ))
 
         # Собираем outfit_slots для коллажа
-        child_slots = build_outfit_slots(outfit, child=child, temp=_temp)
+        child_slots = build_outfit_slots(
+            outfit, child=child, temp=_temp, colortype=colortype, regime=regime
+        )
         all_outfit_slots.extend(child_slots)
 
         # Критическое предупреждение при морозе без тёплой одежды

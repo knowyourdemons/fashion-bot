@@ -7,6 +7,7 @@ from datetime import date
 
 from services.outfit_selector import _select_outfit, _get_temp_regime
 from services.brief_weather import _SEASONS
+from worker.tasks.style_config import get_placeholder_label, _needs_tights, get_temp_regime as _style_get_temp_regime
 
 # ── Public API (реэкспорт с публичными именами) ───────────────────────────
 
@@ -97,7 +98,7 @@ def get_collage_params(
 # ── Outfit slots builder ──────────────────────────────────────────────────────
 
 _SLOT_ORDER = [
-    "outerwear", "top", "bottom", "one_piece",
+    "outerwear", "top", "removable_layer", "bottom", "one_piece",
     "footwear", "hat", "scarf", "gloves", "tights",
 ]
 
@@ -107,18 +108,21 @@ def build_outfit_slots(
     child=None,
     user=None,
     temp: float | None = None,
+    colortype: str = "default",
+    regime: str | None = None,
 ) -> list[dict]:
     """Конвертирует outfit dict → outfit_slots для build_collage.
 
     Единая точка — и для morning_brief, и для wardrobe handler.
     Обувь показывается ВСЕГДА (ребёнок/взрослый не ходит босиком).
-    Куртка — плейсхолдер при temp ≤ 10°C.
+    Плейсхолдеры определяются через get_placeholder_label (SEASON_SLOT_TYPES).
     """
-    from worker.tasks.style_config import _needs_tights
-
     is_adult = child is None
     gender = getattr(child, "gender", "girl") if child else "girl"
     _temp = temp if temp is not None else 15.0
+
+    if regime is None:
+        regime = _style_get_temp_regime(_temp)
 
     has_one_piece = bool(outfit.get("one_piece"))
     has_top_bottom = bool(outfit.get("top") or outfit.get("bottom"))
@@ -138,7 +142,13 @@ def build_outfit_slots(
         if slot_key == "tights" and not _needs_tights(outfit, _temp):
             continue
 
-        item = outfit.get(slot_key)
+        # socks → tights fallback
+        if slot_key == "tights":
+            item = outfit.get("tights") or outfit.get("socks")
+        elif slot_key == "removable_layer":
+            item = outfit.get("removable_layer")
+        else:
+            item = outfit.get(slot_key)
 
         if item and getattr(item, "show_in_collage", True):
             seen.add(slot_key)
@@ -152,22 +162,21 @@ def build_outfit_slots(
                 "gender": gender,
             })
         else:
-            # Нужен ли плейсхолдер?
-            needs_placeholder = False
-            if slot_key == "outerwear" and _temp <= 10:
+            # Нужен ли плейсхолдер? Footwear — всегда. Остальное — через get_placeholder_label.
+            if slot_key == "footwear":
                 needs_placeholder = True
-            elif slot_key == "footwear":
-                needs_placeholder = True  # обувь нужна ВСЕГДА
-            elif slot_key == "hat" and _temp < 10:
-                needs_placeholder = True
-            elif slot_key == "scarf" and _temp < 5:
-                needs_placeholder = True
-            elif slot_key == "gloves" and _temp < 0:
-                needs_placeholder = True
-            elif slot_key in ("top", "bottom") and not has_one_piece:
-                needs_placeholder = True
-            elif slot_key == "one_piece" and not has_top_bottom:
-                needs_placeholder = True
+            elif slot_key == "removable_layer":
+                needs_placeholder = False  # плейсхолдер для removable_layer не нужен
+            else:
+                ph_label = get_placeholder_label(slot_key, colortype, regime)
+                needs_placeholder = ph_label is not None
+                # Для top/bottom/one_piece get_placeholder_label может вернуть None только
+                # если слот отсутствует в SEASON_SLOT_TYPES — тогда не показываем.
+                # Дополнительная защита: top/bottom нужны если нет one_piece
+                if slot_key in ("top", "bottom") and not has_one_piece and ph_label is not None:
+                    needs_placeholder = True
+                elif slot_key == "one_piece" and not has_top_bottom and ph_label is not None:
+                    needs_placeholder = True
 
             if needs_placeholder:
                 seen.add(slot_key)
@@ -193,7 +202,7 @@ def score_to_text(score: float) -> str:
         return "👍 Хорошая вещь"
     if score >= 5.0:
         return "👌 Базовая вещь"
-    return "🏠 Для дома и отдыха"
+    return "👕 Уютная вещь для дома"
 
 
 def outfit_score_to_text(score: float) -> str:
@@ -204,4 +213,4 @@ def outfit_score_to_text(score: float) -> str:
         return "👍 Отличный образ"
     if score >= 5.0:
         return "👌 Хороший образ"
-    return "🤔 Можно лучше — попробуй переодень"
+    return "👌 Образ на каждый день"
