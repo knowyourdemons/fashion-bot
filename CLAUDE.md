@@ -178,7 +178,7 @@ docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
 ## Тестирование
 ```bash
 docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
-# 570 тестов (март 2026)
+# 580 тестов (март 2026)
 ```
 
 ## Известные баги / TODO (v1.0)
@@ -232,20 +232,22 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - **Correlation ID**: ContextVar + structlog.contextvars, все логи включают request_id
 - **Pool tuning**: pool_pre_ping=True, pool_recycle=600 (detect stale connections)
 
-### Satori Collage Renderer
-- `build_collage_satori()` — magazine-style layout через Satori HTTP (http://172.18.0.1:3100)
-- Тёмный header "LOOK OF THE DAY" + child name + дата + температура
-- Карточки с пастельным фоном по цвету вещи (`_pastel_bg()`)
-- auto-trim фото (`_auto_trim()`), PNG-иконки placeholder
-- 3 зоны: hero outerwear → top+bottom (50/50) → footwear+accessories
-- Satori primary (~0.1 сек), PIL fallback при ошибке
-- Satori сервер: `renderer/server.mjs`, шрифт DejaVu, constraints: display:'flex' обязателен
+### Satori Collage Renderer — 6 стилей с ротацией
+- `build_collage_satori()` с round-robin по 6 стилям (`services/collage_styles.py`)
+- **magazine**: тёмный header, цветные карточки, палитра footer
+- **editorial**: белый фон, minimal, hero крупно, strip мелких
+- **story_card**: градиент из цветов образа, translucent карточки
+- **polaroid**: тёплый бежевый фон, белые рамки с тенью
+- **palette_first**: крупные цветовые блоки + вещи под ними
+- **pro_stylist**: flat lay стиль, минимум декора, offset layout
+- Каждый стиль: ~0.08-0.23 сек, auto-trim, pastel bg, silhouette placeholder
+- PIL fallback если Satori недоступен
 
-### Тесты: 425 → 570 (+145)
+### Тесты: 425 → 580 (+155)
 - `test_infra.py` (12) — Redis singleton, health check, ONNX safety, DB indexes
 - `test_phase2.py` (17) — queue ack/recovery, backoff, task tracking, pagination, atomic pool
 - `test_phase3.py` (22) — Lua rate limiter, cascade, concurrency, correlation ID, pool tuning
-- `test_satori.py` (22) — pastel colors, auto-trim, card structure, zones, palette, fallback, integration
+- `test_satori.py` (32) — 6 styles, round-robin, palette, zones, auto-trim, fallback, integration
 
 ## Роадмап
 

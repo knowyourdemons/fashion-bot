@@ -925,203 +925,35 @@ async def build_collage_satori(
     slots: list,
     header_text: str = "",
     footer_text: str = "Касси -- твой личный стилист",
+    style: Optional[str] = None,
 ) -> Optional[bytes]:
-    """Render collage via Satori. Returns PNG bytes or None on error."""
+    """Render collage via Satori with rotating styles.
+
+    6 styles: magazine, editorial, story_card, polaroid, palette_first, pro_stylist.
+    If style is None, uses round-robin rotation.
+    Returns PNG bytes or None on error.
+    """
     import time as _time
-    t0 = _time.monotonic()
+    from services.collage_styles import BUILDERS, next_style, collect_palette
 
-    # Split into zones
-    zone1 = [s for s in slots if s.get("slot") == "outerwear"]
-    zone2 = [s for s in slots if s.get("slot") in ("top", "removable_layer", "bottom", "one_piece")]
-    zone3 = [s for s in slots if s.get("slot") in ("footwear", "hat", "scarf", "gloves", "tights", "socks")]
-
-    body_rows: list = []
-    pad = 24
-
-    # Zone 1: hero outerwear
-    if zone1:
-        card = _satori_card(zone1[0], "100%", "340px")
-        body_rows.append(card)
-
-    # Zone 2: top + bottom or one_piece
-    one_piece = [s for s in zone2 if s.get("slot") == "one_piece"]
-    tops = [s for s in zone2 if s.get("slot") in ("top", "removable_layer")]
-    bots = [s for s in zone2 if s.get("slot") == "bottom"]
-
-    if one_piece:
-        body_rows.append(_satori_card(one_piece[0], "100%", "260px"))
-    elif tops or bots:
-        row_cards = []
-        if tops:
-            row_cards.append(_satori_card(tops[0], "50%", "260px"))
-        if bots:
-            row_cards.append(_satori_card(bots[0], "50%", "260px"))
-        if row_cards:
-            body_rows.append(_satori_row(row_cards))
-
-    # Zone 3: footwear + accessories
-    z3_shown = zone3[:4]
-    if z3_shown:
-        pct = f"{100 // len(z3_shown)}%" if len(z3_shown) <= 3 else "25%"
-        row_cards = [_satori_card(s, pct, "160px") for s in z3_shown]
-        body_rows.append(_satori_row(row_cards))
-
-    if not body_rows:
+    if not slots:
         return None
 
-    # Header
-    header_el = {
-        "type": "div",
-        "props": {
-            "style": {
-                "display": "flex",
-                "flexDirection": "column",
-                "justifyContent": "center",
-                "width": "100%",
-                "padding": f"{pad}px {pad}px 16px {pad}px",
-                "backgroundColor": "#1a1a2e",
-                "color": "#ffffff",
-                "fontFamily": "DejaVu",
-                "borderRadius": "0 0 0 0",
-            },
-            "children": [
-                {
-                    "type": "div",
-                    "props": {
-                        "style": {"display": "flex", "fontSize": 13, "color": "#9090B0", "letterSpacing": 3},
-                        "children": "LOOK OF THE DAY",
-                    },
-                },
-                {
-                    "type": "div",
-                    "props": {
-                        "style": {"display": "flex", "fontSize": 22, "marginTop": 4, "fontWeight": "bold"},
-                        "children": header_text or "Образ дня",
-                    },
-                },
-            ],
-        },
-    }
+    t0 = _time.monotonic()
+    chosen = style or next_style()
+    builder = BUILDERS.get(chosen, BUILDERS["magazine"])
+    palette = collect_palette(slots)
 
-    # Footer with palette circles
-    # Collect unique colors from slots that have items
-    _COLOR_HEX = {
-        "белый": "#F0F0F0", "чёрный": "#333333", "серый": "#999999",
-        "розовый": "#F4A0B0", "красный": "#D94040", "бордовый": "#8B2252",
-        "оранжевый": "#F0A030", "жёлтый": "#F0D030", "бежевый": "#E8D0B0",
-        "зелёный": "#60B060", "голубой": "#70B0D8", "синий": "#4060C0",
-        "фиолетовый": "#9060C0", "коричневый": "#8B6040", "лавандовый": "#B090D0",
-        "пыльно-розовый": "#D0A0A8", "серо-зелёный": "#80A888",
-    }
-    palette_colors: list[str] = []
-    seen_colors: set[str] = set()
-    for s in slots:
-        c = (s.get("item_color") or "").lower()
-        if c and c not in seen_colors:
-            seen_colors.add(c)
-            hex_c = "#C0B8C8"  # default muted
-            for key, val in _COLOR_HEX.items():
-                if key in c:
-                    hex_c = val
-                    break
-            palette_colors.append(hex_c)
+    try:
+        element, width, height = builder(slots, header_text, footer_text, palette)
+    except Exception as e:
+        logger.warning("satori.build_element_failed", style=chosen, error=str(e))
+        return None
 
-    circle_els = [
-        {
-            "type": "div",
-            "props": {
-                "style": {
-                    "display": "flex",
-                    "width": 18,
-                    "height": 18,
-                    "borderRadius": "50%",
-                    "backgroundColor": hx,
-                    "border": "2px solid #E8E0F0",
-                },
-            },
-        }
-        for hx in palette_colors[:6]
-    ]
-
-    footer_children: list = []
-    if circle_els:
-        footer_children.append({
-            "type": "div",
-            "props": {
-                "style": {"display": "flex", "gap": 6, "marginRight": 12},
-                "children": circle_els,
-            },
-        })
-    footer_children.append({
-        "type": "div",
-        "props": {
-            "style": {"display": "flex", "fontSize": 14, "color": "#AAA0B9"},
-            "children": footer_text,
-        },
-    })
-
-    footer_el = {
-        "type": "div",
-        "props": {
-            "style": {
-                "display": "flex",
-                "justifyContent": "center",
-                "alignItems": "center",
-                "width": "100%",
-                "padding": "12px 0",
-                "fontFamily": "DejaVu",
-            },
-            "children": footer_children,
-        },
-    }
-
-    # Body wrapper
-    body_el = {
-        "type": "div",
-        "props": {
-            "style": {
-                "display": "flex",
-                "flexDirection": "column",
-                "gap": 12,
-                "padding": f"16px {pad}px",
-                "width": "100%",
-            },
-            "children": body_rows,
-        },
-    }
-
-    # Root
-    # Calculate height: header ~80, body dynamic, footer ~44
-    n_rows = len(body_rows)
-    est_h = 80 + n_rows * 280 + 44 + pad * 2
-    # More precise: zone1=340+16, zone2=260+16, zone3=160+16
-    precise_h = 80 + 44 + 32  # header + footer + padding
-    if zone1:
-        precise_h += 340 + 12
-    if one_piece or tops or bots:
-        precise_h += 260 + 12
-    if z3_shown:
-        precise_h += 160 + 12
-    height = max(precise_h, 400)
-
-    root = {
-        "type": "div",
-        "props": {
-            "style": {
-                "display": "flex",
-                "flexDirection": "column",
-                "width": "100%",
-                "height": "100%",
-                "backgroundColor": "#FAF6FF",
-            },
-            "children": [header_el, body_el, footer_el],
-        },
-    }
-
-    result = await _render_satori(root, SATORI_W, height)
+    result = await _render_satori(element, width, height)
     dt = _time.monotonic() - t0
     if result:
-        logger.info("satori.collage_ok", size=len(result), time_ms=int(dt * 1000))
+        logger.info("satori.collage_ok", style=chosen, size=len(result), time_ms=int(dt * 1000))
     return result
 
 

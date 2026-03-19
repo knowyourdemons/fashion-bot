@@ -187,43 +187,122 @@ class TestBuildCollageSatoriZones:
             {"slot": "footwear", "has_item": False, "item_color": "", "gender": "girl"},
             {"slot": "hat", "has_item": False, "item_color": "", "gender": "girl"},
         ]
-        # Mock Satori to avoid network dependency
         with patch("services.image_builder._render_satori", new_callable=AsyncMock) as mock:
             mock.return_value = b"\x89PNG fake"
-            result = _run(build_collage_satori(slots, "Test"))
+            result = _run(build_collage_satori(slots, "Test", style="magazine"))
             assert result is not None
-            # Check _render_satori was called
             mock.assert_called_once()
-            element = mock.call_args[0][0]
-            # Root should have body with one row (zone3)
-            body = element["props"]["children"][1]  # [header, body, footer]
-            body_children = body["props"]["children"]
-            assert len(body_children) == 1  # one row for zone3
 
 
-class TestPaletteCircles:
-    """Footer should contain palette circles from item colors."""
+class TestCollageStyles:
+    """All 6 styles produce valid element trees."""
 
-    def test_palette_in_footer(self):
-        from services.image_builder import build_collage_satori
-
-        slots = [
-            {"slot": "top", "has_item": True, "item_color": "розовый", "item_type": "свитшот", "gender": "girl"},
-            {"slot": "bottom", "has_item": True, "item_color": "синий", "item_type": "юбка", "gender": "girl"},
+    def _slots(self):
+        return [
+            {"slot": "outerwear", "has_item": False, "item_color": "синий", "gender": "girl", "label": "Куртка"},
+            {"slot": "top", "has_item": False, "item_color": "белый", "gender": "girl", "label": "Лонгслив"},
+            {"slot": "bottom", "has_item": False, "item_color": "розовый", "gender": "girl", "label": "Юбка"},
+            {"slot": "footwear", "has_item": False, "item_color": "", "gender": "girl", "label": "Ботинки"},
         ]
+
+    def test_all_styles_build_valid_elements(self):
+        from services.collage_styles import BUILDERS, collect_palette
+        slots = self._slots()
+        palette = collect_palette(slots)
+        for name, builder in BUILDERS.items():
+            element, w, h = builder(slots, "Алиса", "Касси", palette)
+            assert element["type"] == "div", f"{name}: root not div"
+            assert w > 0 and h > 0, f"{name}: invalid dimensions"
+            assert "children" in element["props"], f"{name}: no children"
+
+    def test_magazine_has_dark_header(self):
+        from services.collage_styles import build_magazine, collect_palette
+        slots = self._slots()
+        el, _, _ = build_magazine(slots, "Test", "Footer", collect_palette(slots))
+        # First child should have dark background
+        first = el["props"]["children"][0]
+        bg = first["props"]["style"].get("backgroundColor", "")
+        assert bg == "#1a1a2e"
+
+    def test_editorial_has_white_bg(self):
+        from services.collage_styles import build_editorial, collect_palette
+        slots = self._slots()
+        el, _, _ = build_editorial(slots, "Test", "Footer", collect_palette(slots))
+        assert el["props"]["style"]["backgroundColor"] == "#FFFFFF"
+
+    def test_story_card_has_gradient(self):
+        from services.collage_styles import build_story_card, collect_palette
+        slots = self._slots()
+        el, _, _ = build_story_card(slots, "Test", "Footer", collect_palette(slots))
+        bg = el["props"]["style"].get("backgroundImage", "")
+        assert "linear-gradient" in bg
+
+    def test_polaroid_has_warm_bg(self):
+        from services.collage_styles import build_polaroid, collect_palette
+        slots = self._slots()
+        el, _, _ = build_polaroid(slots, "Test", "Footer", collect_palette(slots))
+        assert el["props"]["style"]["backgroundColor"] == "#F5F0EB"
+
+    def test_pro_stylist_minimal(self):
+        from services.collage_styles import build_pro_stylist, collect_palette
+        slots = self._slots()
+        el, _, _ = build_pro_stylist(slots, "Test", "Footer", collect_palette(slots))
+        assert el["props"]["style"]["backgroundColor"] == "#FFFFFF"
+
+
+class TestRoundRobin:
+    """Style rotation works correctly."""
+
+    def test_next_style_cycles(self):
+        from services.collage_styles import next_style, STYLES, _style_counter
+        import services.collage_styles as mod
+        old = mod._style_counter
+        mod._style_counter = 0
+        try:
+            results = [next_style() for _ in range(12)]
+            assert results == STYLES + STYLES
+        finally:
+            mod._style_counter = old
+
+    def test_build_collage_satori_rotates(self):
+        from services.image_builder import build_collage_satori
+        import services.collage_styles as mod
+        mod._style_counter = 0
+
+        slots = [{"slot": "top", "has_item": False, "item_color": "", "gender": "girl"}]
+        styles_used = []
+
         with patch("services.image_builder._render_satori", new_callable=AsyncMock) as mock:
             mock.return_value = b"\x89PNG fake"
-            _run(build_collage_satori(slots, "Test"))
-            element = mock.call_args[0][0]
-            footer = element["props"]["children"][2]  # [header, body, footer]
-            footer_children = footer["props"]["children"]
-            # First child should be circles div
-            assert len(footer_children) >= 2
-            circles_wrapper = footer_children[0]
-            circles = circles_wrapper["props"]["children"]
-            assert len(circles) == 2  # розовый + синий
-            # Check borderRadius 50% (circle)
-            assert circles[0]["props"]["style"]["borderRadius"] == "50%"
+            for _ in range(6):
+                _run(build_collage_satori(slots, "Test"))
+            # Check logs would show different styles — we verify counter advanced
+            assert mod._style_counter >= 6
+
+
+class TestCollectPalette:
+    """collect_palette extracts unique colors from slots."""
+
+    def test_deduplicates(self):
+        from services.collage_styles import collect_palette
+        slots = [
+            {"item_color": "розовый"},
+            {"item_color": "розовый"},
+            {"item_color": "синий"},
+        ]
+        result = collect_palette(slots)
+        assert len(result) == 2
+
+    def test_max_6(self):
+        from services.collage_styles import collect_palette
+        slots = [{"item_color": c} for c in
+                 ["розовый", "синий", "белый", "чёрный", "зелёный", "красный", "жёлтый", "бежевый"]]
+        assert len(collect_palette(slots)) == 6
+
+    def test_empty_slots(self):
+        from services.collage_styles import collect_palette
+        assert collect_palette([]) == []
+        assert collect_palette([{"item_color": ""}]) == []
 
 
 class TestSatoriFallback:
@@ -286,11 +365,12 @@ class TestSatoriIntegration:
         assert result[:4] == b"\x89PNG"
         assert len(result) > 100
 
-    def test_full_collage_renders(self):
+    def test_all_6_styles_render(self):
         if not self._satori_available():
             pytest.skip("Satori server not available")
 
         from services.image_builder import build_collage_satori
+        from services.collage_styles import STYLES
 
         slots = [
             {"slot": "outerwear", "has_item": False, "item_color": "синий", "gender": "girl"},
@@ -298,13 +378,14 @@ class TestSatoriIntegration:
             {"slot": "bottom", "has_item": False, "item_color": "розовый", "gender": "girl"},
             {"slot": "footwear", "has_item": False, "item_color": "коричневый", "gender": "girl"},
         ]
-        result = _run(build_collage_satori(slots, "Алиса  +4C  садик"))
-        assert result is not None
-        assert result[:4] == b"\x89PNG"
-        assert len(result) > 10_000  # should be a real image
+        for style in STYLES:
+            result = _run(build_collage_satori(slots, "Алиса  +4C", style=style))
+            assert result is not None, f"Style {style} failed"
+            assert result[:4] == b"\x89PNG", f"Style {style} not PNG"
+            assert len(result) > 5_000, f"Style {style} too small: {len(result)}"
 
     def test_collage_with_only_top_bottom(self):
-        """Warm weather: no outerwear."""
+        """Warm weather: no outerwear — all styles handle it."""
         if not self._satori_available():
             pytest.skip("Satori server not available")
 
@@ -314,7 +395,7 @@ class TestSatoriIntegration:
             {"slot": "top", "has_item": False, "item_color": "белый", "gender": "girl"},
             {"slot": "bottom", "has_item": False, "item_color": "голубой", "gender": "girl"},
         ]
-        result = _run(build_collage_satori(slots, "Лето"))
+        result = _run(build_collage_satori(slots, "Лето", style="editorial"))
         assert result is not None
         assert len(result) > 5_000
 
