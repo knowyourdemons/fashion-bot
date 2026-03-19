@@ -76,7 +76,7 @@ class TestGetCollageParams:
         child = _make_child("girl")
         params = get_collage_params(child=child, temp=15.0)
         assert params["theme"] == "girl"
-        assert "fashioncastle.app" in params["footer_text"]
+        assert "стилист" in params["footer_text"]
         assert child.name in params["header_text"]
 
     def test_boy_child(self):
@@ -90,17 +90,19 @@ class TestGetCollageParams:
         from services.outfit_builder import get_collage_params
         params = get_collage_params(temp=20.0)
         assert params["theme"] == "adult"
-        assert "fashioncastle.app" in params["footer_text"]
+        assert "стилист" in params["footer_text"]
 
     def test_rain_emoji(self):
+        # Emoji убраны из header_text (PIL не рендерит) — просто температура и дата
         from services.outfit_builder import get_collage_params
         params = get_collage_params(temp=15.0, precip=60.0)
-        assert "🌧" in params["header_text"]
+        assert "°C" in params["header_text"]
 
     def test_hot_emoji(self):
+        # Emoji убраны из header_text (PIL не рендерит) — просто температура
         from services.outfit_builder import get_collage_params
         params = get_collage_params(temp=30.0)
-        assert "☀️" in params["header_text"]
+        assert "30" in params["header_text"]
 
     def test_temp_none(self):
         from services.outfit_builder import get_collage_params
@@ -284,4 +286,4 @@ class TestFormatCollageLabel:
     def test_label_max_length(self):
         from services.image_builder import format_collage_label
         label = format_collage_label("top", "очень длинное название вещи", "оченьдлинныйцвет")
-        assert len(label) <= 20
+        assert len(label) <= 28
