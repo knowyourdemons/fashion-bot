@@ -178,7 +178,7 @@ docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
 ## Тестирование
 ```bash
 docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
-# 585 тестов (март 2026)
+# 595 тестов (март 2026)
 ```
 
 ## Известные баги / TODO (v1.0)
@@ -243,6 +243,14 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - Каждый стиль: ~0.08-0.23 сек, auto-trim, pastel bg, silhouette placeholder
 - PIL fallback если Satori недоступен
 
+### Цветотип через селфи (онбординг)
+- Новый шаг SELFIE_COLORTYPE в ConversationHandler после города
+- Claude Vision (sonnet-4-6) анализирует селфи → определяет Весна/Лето/Осень/Зима
+- Кнопка "Пропустить" → ручной выбор (ASK_COLORTYPE)
+- Fallback при ошибке Vision → ручной выбор
+- Resume поддержка (selfie_colortype step)
+- Prompt: анализ тона кожи, цвета волос и глаз → одно слово
+
 ### Roadmap фичи (v1.0 + v1.1)
 - **Текст брифа**: уже компактный (5-7 строк), fix температуры round() (убрал `.0`)
 - **Меню**: уже в целевой структуре (Что надеть full-width, Спросить Касси, Гардероб, Профиль, Помощь)
@@ -253,12 +261,13 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
   - День 13: evening_brief = False (schedule_evening)
   - День 14: chat = 1, outfit = 1 (text.py, help.py)
 
-### Тесты: 425 → 585 (+160)
+### Тесты: 425 → 595 (+170)
 - `test_infra.py` (12) — Redis singleton, health check, ONNX safety, DB indexes
 - `test_phase2.py` (17) — queue ack/recovery, backoff, task tracking, pagination, atomic pool
 - `test_phase3.py` (22) — Lua rate limiter, cascade, concurrency, correlation ID, pool tuning
 - `test_satori.py` (32) — 6 styles, round-robin, palette, zones, auto-trim, fallback, integration
 - `test_trial_wiring.py` (5) — trial degradation wired into brief, text, help, evening schedule
+- `test_selfie_colortype.py` (10) — selfie colortype onboarding step, transitions, resume, vision prompt
 
 ## Роадмап
 

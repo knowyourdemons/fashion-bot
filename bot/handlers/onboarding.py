@@ -57,7 +57,8 @@ logger = structlog.get_logger()
     CITY_SUGGEST,
     RESUME_CONFIRM,
     ASK_COLORTYPE,
-) = range(11)
+    SELFIE_COLORTYPE,
+) = range(12)
 
 # Backward compat aliases
 SEGMENT = WHO_FOR
@@ -72,6 +73,7 @@ _STEP_TO_STATE: dict[str, int] = {
     "child_shoe_size": CHILD_SHOE_SIZE,
     "city":            CITY,
     "colortype":       ASK_COLORTYPE,
+    "selfie_colortype": SELFIE_COLORTYPE,
 }
 
 # Тексты кнопок клавиатуры — не должны сохраняться как город
@@ -178,6 +180,30 @@ async def _ask_colortype(update: Update) -> None:
         "❄️ Зима — холодный, яркий (белый, чёрный, фуксия)\n\n"
         "Не знаю — пропустить",
         reply_markup=_COLORTYPE_KEYBOARD,
+    )
+
+
+_SELFIE_SKIP_KEYBOARD = ReplyKeyboardMarkup(
+    [["⏭ Пропустить"]], resize_keyboard=True, one_time_keyboard=True,
+)
+
+_COLORTYPE_VISION_PROMPT = (
+    "Проанализируй цветотип человека на фото. "
+    "Определи по тону кожи, цвету волос и глаз один из 4 цветотипов: "
+    "Весна (тёплый светлый), Лето (холодный мягкий), "
+    "Осень (тёплый глубокий), Зима (холодный яркий). "
+    "Ответь ОДНИМ словом: Весна, Лето, Осень или Зима. "
+    "Если не можешь определить — ответь: нет."
+)
+
+
+async def _ask_selfie_colortype(update: Update) -> None:
+    await update.effective_message.reply_text(
+        "📸 Хочешь узнать свой цветотип?\n\n"
+        "Пришли селфи при дневном свете — я определю по тону кожи, "
+        "цвету волос и глаз.\n\n"
+        "Или нажми «Пропустить» — выберешь вручную.",
+        reply_markup=_SELFIE_SKIP_KEYBOARD,
     )
 
 
@@ -517,9 +543,9 @@ async def handle_city_location(update: Update, context: ContextTypes.DEFAULT_TYP
     city, timezone = await _reverse_geocode(loc.latitude, loc.longitude)
     context.user_data["city"] = city
     context.user_data["timezone"] = timezone
-    await _save_user_fields(context.user_data["db_user"], onboarding_step="colortype")
-    await _ask_colortype(update)
-    return ASK_COLORTYPE
+    await _save_user_fields(context.user_data["db_user"], onboarding_step="selfie_colortype")
+    await _ask_selfie_colortype(update)
+    return SELFIE_COLORTYPE
 
 
 async def handle_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -546,9 +572,9 @@ async def handle_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         city, timezone = _extract_city_tz(results[0])
         context.user_data["city"] = city
         context.user_data["timezone"] = timezone
-        await _save_user_fields(context.user_data["db_user"], onboarding_step="colortype")
-        await _ask_colortype(update)
-        return ASK_COLORTYPE
+        await _save_user_fields(context.user_data["db_user"], onboarding_step="selfie_colortype")
+        await _ask_selfie_colortype(update)
+        return SELFIE_COLORTYPE
 
     context.user_data["city_candidates"] = results
     keyboard = InlineKeyboardMarkup([
@@ -575,12 +601,89 @@ async def handle_city_suggest(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["timezone"] = timezone
 
     await query.message.edit_reply_markup(reply_markup=None)
+    await _save_user_fields(context.user_data["db_user"], onboarding_step="selfie_colortype")
+    await _ask_selfie_colortype(update)
+    return SELFIE_COLORTYPE
+
+
+# ── Шаг 8a: Селфи для цветотипа ──────────────────────────────────────────
+
+async def handle_selfie_colortype(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Пользователь прислал селфи → Claude Vision определяет цветотип."""
+    photo = update.message.photo[-1]  # highest resolution
+    try:
+        import base64
+        file = await context.bot.get_file(photo.file_id)
+        buf = __import__("io").BytesIO()
+        await file.download_to_memory(buf)
+        photo_bytes = buf.getvalue()
+        b64 = base64.standard_b64encode(photo_bytes).decode()
+
+        from core.anthropic_client import get_anthropic_pool
+        pool = get_anthropic_pool()
+        response = await pool.create_message(
+            model="claude-sonnet-4-6",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": b64,
+                        },
+                    },
+                    {"type": "text", "text": _COLORTYPE_VISION_PROMPT},
+                ],
+            }],
+            max_tokens=20,
+        )
+        answer = (response.content[0].text or "").strip()
+        detected = None
+        for ct in ("Весна", "Лето", "Осень", "Зима"):
+            if ct.lower() in answer.lower():
+                detected = ct
+                break
+
+        if detected:
+            context.user_data["colortype"] = detected
+            _CT_EMOJI = {"Весна": "🌸", "Лето": "☀️", "Осень": "🍂", "Зима": "❄️"}
+            emoji = _CT_EMOJI.get(detected, "🎨")
+            await update.message.reply_text(
+                f"{emoji} Твой цветотип: **{detected}**\n\n"
+                "Буду подбирать цвета одежды специально для тебя!",
+                reply_markup=ReplyKeyboardRemove(),
+                parse_mode="Markdown",
+            )
+            logger.info("onboarding.colortype_detected", colortype=detected)
+            return await _finish_onboarding(update, context)
+        else:
+            await update.message.reply_text(
+                "Не смогла определить цветотип по фото 🤔\nВыбери вручную:",
+                reply_markup=_COLORTYPE_KEYBOARD,
+            )
+            await _save_user_fields(context.user_data["db_user"], onboarding_step="colortype")
+            return ASK_COLORTYPE
+
+    except Exception as e:
+        logger.warning("onboarding.selfie_colortype_failed", error=str(e))
+        await update.message.reply_text(
+            "Что-то пошло не так с анализом фото. Выбери цветотип вручную:",
+            reply_markup=_COLORTYPE_KEYBOARD,
+        )
+        await _save_user_fields(context.user_data["db_user"], onboarding_step="colortype")
+        return ASK_COLORTYPE
+
+
+async def handle_selfie_skip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Пользователь нажал 'Пропустить' → ручной выбор цветотипа."""
     await _save_user_fields(context.user_data["db_user"], onboarding_step="colortype")
     await _ask_colortype(update)
     return ASK_COLORTYPE
 
 
-# ── Шаг 8: Цветотип ───────────────────────────────────────────────────────
+# ── Шаг 8b: Цветотип (ручной) ────────────────────────────────────────────
 
 async def handle_colortype(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.message.text.strip()
@@ -684,6 +787,9 @@ async def _resume_step(update: Update, context: ContextTypes.DEFAULT_TYPE, user:
             )
         )
         return CHILD_SHOE_SIZE
+    if step == "selfie_colortype":
+        await _ask_selfie_colortype(update)
+        return SELFIE_COLORTYPE
     if step == "colortype":
         await _ask_colortype(update)
         return ASK_COLORTYPE
@@ -860,6 +966,10 @@ def build_conversation_handler() -> ConversationHandler:
             ],
             CITY_SUGGEST: [
                 CallbackQueryHandler(handle_city_suggest, pattern="^city_pick:"),
+            ],
+            SELFIE_COLORTYPE: [
+                MessageHandler(filters.PHOTO, handle_selfie_colortype),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_selfie_skip),
             ],
             ASK_COLORTYPE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_colortype),
