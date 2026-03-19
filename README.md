@@ -102,12 +102,13 @@ fashion-bot/
 │       └── ...
 │
 ├── core/
-│   ├── anthropic_client.py   # AnthropicPool: ротация ключей, circuit breaker
-│   ├── permissions.py        # Планы, лимиты, PRICES, LIMITS, get_effective_plan
-│   ├── scheduler.py          # APScheduler (cron задачи)
-│   ├── queue.py              # RedisQueue HIGH/LOW
-│   ├── rate_limiter.py       # RPM лимитер по ключу
-│   └── circuit_breaker.py    # Fault tolerance для внешних API
+│   ├── redis.py             # Singleton Redis client (init_redis/get_redis/close_redis)
+│   ├── anthropic_client.py  # AnthropicPool: atomic round-robin, circuit breaker
+│   ├── permissions.py       # Планы, лимиты, PRICES, LIMITS, get_effective_plan
+│   ├── scheduler.py         # APScheduler (cron задачи)
+│   ├── queue.py             # RedisQueue с at-least-once delivery (RPOPLPUSH + ack)
+│   ├── rate_limiter.py      # Atomic Lua script rate limiter
+│   └── circuit_breaker.py   # Fault tolerance для внешних API
 │
 ├── db/
 │   ├── base.py               # AsyncWriteSession / AsyncReadSession
@@ -119,7 +120,7 @@ fashion-bot/
 ├── services/
 │   ├── scoring.py            # Скоринг вещей и образов (по матрицам из БД)
 │   ├── weather.py            # wttr.in: советы по одежде (7 диапазонов температур)
-│   ├── image_processor.py    # Resize, EXIF strip, phash дедупликация
+│   ├── image_processor.py    # Resize, EXIF, phash, ONNX silueta bg removal
 │   ├── image_builder.py      # Генерация коллажей
 │   ├── usage.py              # Подсчёт дневных лимитов
 │   ├── notifications.py      # Push через Telegram Bot
@@ -133,7 +134,7 @@ fashion-bot/
 │   ├── yukassa_provider.py   # Заглушка (NotImplementedError)
 │   └── paddle_provider.py    # Заглушка (NotImplementedError)
 │
-├── tests/                    # pytest + pytest-asyncio (240+ тестов)
+├── tests/                    # pytest + pytest-asyncio (548 тестов)
 │   ├── test_smoke.py
 │   ├── test_unit.py
 │   └── ...
@@ -232,9 +233,9 @@ fashion-bot/
 ## AnthropicPool
 
 Пул API ключей с отказоустойчивостью (`core/anthropic_client.py`):
-- Ротация ключей round-robin
+- Atomic round-robin ротация ключей (asyncio.Lock + counter)
 - Circuit breaker per key (fail fast при перегрузке)
-- RPM лимитер через Redis (sliding window)
+- Atomic Lua script RPM лимитер через Redis (без race conditions)
 - Auto-failover при rate limit ошибках
 - Логирует токены: input/output/cache_hit/cache_write
 
@@ -369,15 +370,21 @@ CLOUDFLARE_R2_SECRET_KEY=
 ## Тесты
 
 ```bash
-pytest tests/test_smoke.py             # быстрые smoke тесты (~30 шт)
-pytest tests/test_unit.py              # unit тесты (~200 шт)
-pytest tests/ --ignore=tests/test_stylist.py  # все кроме flaky
+pytest tests/                          # все 548 тестов
+pytest tests/test_smoke.py             # smoke тесты (~45 шт)
+pytest tests/test_unit.py              # unit тесты (~100 шт)
+pytest tests/test_infra.py             # инфраструктурные тесты (12)
+pytest tests/test_phase2.py            # queue/backoff/pagination (17)
+pytest tests/test_phase3.py            # rate limiter/cascade/concurrency (22)
 ```
 
 **Покрытие:**
 - `test_smoke.py` — импорты, наличие функций, константы
 - `test_unit.py` — логика планов, Stars оплата, trial активация, лимиты
 - `test_billing.py` — Stripe webhook, Stars flow
+- `test_infra.py` — Redis singleton (no from_url leaks), health check, DB indexes, ONNX safety
+- `test_phase2.py` — queue ack/recovery, backoff delays, task tracking, pagination
+- `test_phase3.py` — Lua rate limiter, CASCADE→SET NULL, worker concurrency, correlation ID
 
 ---
 
@@ -385,7 +392,7 @@ pytest tests/ --ignore=tests/test_stylist.py  # все кроме flaky
 
 | Версия | Статус | Что |
 |--------|--------|-----|
-| **v1.1** | ✅ Текущая | Vision, Morning Brief, Stars + Stripe, /test_subscribe |
+| **v1.1** | ✅ Текущая | Vision, Morning Brief, Stars + Stripe, /test_subscribe, local rembg, infra hardening |
 | **v1.2** | Планируется | Онбординг жены, редактирование вещей, матрицы скоринга |
 | **v1.4** | Планируется | Cloudflare R2, Sentry, Paddle, полный referral |
 | **v2.0** | Будущее | Публичный запуск, analytics dashboard, Ultra план |

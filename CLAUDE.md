@@ -12,22 +12,24 @@
 ## Архитектура
 - **FastAPI** (порт 8000) + python-telegram-bot в режиме webhook
 - **Worker**: отдельный процесс (`python -m worker.consumer`), очередь через Redis (HIGH/LOW)
-- **БД**: PostgreSQL 16 (asyncpg + SQLAlchemy 2.0 async)
-- **Кэш/Очередь**: Redis 7
+- **БД**: PostgreSQL 16 (asyncpg + SQLAlchemy 2.0 async), pool_pre_ping + recycle 10 мин
+- **Кэш/Очередь**: Redis 7 через singleton `core/redis.py` (max_connections=32)
 - **AI**: Anthropic API через `AnthropicPool` (`core/anthropic_client.py`)
-- Два API ключа в пуле с watchdog (автопереключение при 429)
+- Два API ключа в пуле с atomic round-robin (asyncio.Lock) + circuit breaker
 
 ## Стек
 - Python 3.12, PTB 22.x, SQLAlchemy 2.0, asyncpg
 - Vision: claude-sonnet-4-6 (НЕ haiku — плохое качество!)
 - Чат/бриф/текст: claude-haiku-4-5-20251001
-- remove.bg size=small ($0.002/фото), fallback: RGB без удаления фона
+- Удаление фона: **local ONNX silueta** (1.3 сек), fallback: remove.bg API ($0.002), fallback: RGB
 - Prompt caching: ephemeral везде
+- onnxruntime 1.24.4, numpy 1.26.4 (модель: /root/.u2net/silueta.onnx, 43MB)
 
 ## Структура проекта
 ```
 bot/handlers/
   wardrobe.py      — Vision, коллаж, owner switching, генерация образа
+                     _track_task() для tracked background tasks
   onboarding.py    — ConversationHandler онбординга
   subscription.py  — /subscribe, /test_subscribe, Stars/Stripe
   text.py          — Haiku чат стилиста (_get_text_system по сегменту)
@@ -36,19 +38,27 @@ bot/handlers/
   help.py          — /help текст
   start.py         — /start handler
 bot/middleware/    — auth.py (загрузка user из БД), typing.py
+core/
+  redis.py         — singleton Redis client (init_redis/get_redis/close_redis)
+  queue.py         — RedisQueue с at-least-once delivery (RPOPLPUSH + ack)
+  anthropic_client.py — AnthropicPool: atomic round-robin, circuit breaker
+  rate_limiter.py  — atomic Lua script rate limiter (no race conditions)
+  scheduler.py     — APScheduler (cron задачи)
+  circuit_breaker.py
+  permissions.py   — лимиты, планы, trial логика (ЦЕНТРАЛЬНЫЙ ФАЙЛ)
 worker/tasks/
-  morning_brief.py       — бриф детский + взрослый (no_kids/pregnant)
+  morning_brief.py       — бриф детский + взрослый, paginated schedule_all (batch 500)
   style_config.py        — COLORTYPE_PALETTES, WOW_PHRASES, _needs_tights
   subscription_expiry.py — уведомления об окончании trial
   evening_push.py        — вечерний push в 20:00
-worker/consumer.py — FastWorker (HIGH) + SlowWorker (LOW)
+worker/consumer.py — FastWorker (HIGH, 4 concurrent) + SlowWorker (LOW, 2 concurrent)
 db/models/         — SQLAlchemy модели
 db/crud/           — CRUD операции
 db/seeds/          — taxonomy_seed, scoring_matrix_seed, dev_seed
 services/
+  image_processor.py — resize, EXIF, phash, ONNX silueta bg removal (thread-safe singleton)
   image_builder.py — 3-зонный коллаж, PNG-иконки, фоны
-  scoring.py, weather.py, image_processor.py, usage.py, i18n/
-permissions.py     — лимиты, планы, trial логика (ЦЕНТРАЛЬНЫЙ ФАЙЛ)
+  scoring.py, weather.py, usage.py, i18n/
 billing/           — stripe_provider.py, yukassa_provider.py (stub), paddle_provider.py (stub)
 assets/
   silhouettes/     — 23 PNG-иконки (300×300 RGBA, outline style)
@@ -61,7 +71,8 @@ assets/
 - Дедупликация: ОТКЛЮЧЕНА (мешала больше чем помогала, вернём в v1.2)
 - PIL НЕ рендерит unicode emoji — все тексты на коллаже БЕЗ эмодзи
 - Скор цифрой НЕ показывать юзеру — только текстовый комментарий Haiku или шаблон
-- remove.bg fallback: если API 402/ошибка → фото без удаления фона (RGB)
+- Удаление фона: silueta.onnx (43MB) local, ~1.3 сек. НЕ u2net.onnx (176MB, не хватает RAM)
+- App контейнер 1024MB (inference peak ~480MB + app ~110MB), worker 512MB
 - ssl=disable в DATABASE_URL: postgres не настроен на SSL
 - listen_addresses='*' в postgres.conf: иначе контейнеры не коннектятся
 - Иконки и фоны в git assets/ (не R2) — мгновенный доступ, нет HTTP
@@ -167,7 +178,7 @@ docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
 ## Тестирование
 ```bash
 docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
-# 425+ тестов
+# 548 тестов (март 2026)
 ```
 
 ## Известные баги / TODO (v1.0)
@@ -181,6 +192,50 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - photo_url пустой — фото только в Telegram file_id
 - SAWarning про Child.wardrobe_items overlaps — косметика
 - PTBUserWarning про per_message — косметика
+
+## Что сделано (19 марта 2026)
+
+### Локальное удаление фона (ONNX silueta)
+- **Проблема:** sess.run() зависал навсегда — выглядело как threading deadlock
+- **Причина:** OOM — контейнер 512MB, inference peak ~480MB + app ~110MB = 590MB > 512MB
+- **Решение:** memory 512→1024MB, silueta.onnx (43MB, не u2net 176MB)
+- `services/image_processor.py`: _run_silueta() → PNG с прозрачностью, 1.3 сек
+- Fallback chain: local ONNX → remove.bg API → оригинал RGB
+- Thread-safe singleton (threading.Lock + double-check)
+- `docker/Dockerfile`: curl + скачивание silueta.onnx при build
+
+### Инфраструктура: Фаза 1 (критические фиксы)
+- **Redis singleton** (`core/redis.py`): заменены 17 отдельных `from_url()` на один пул (32 conn)
+- **DB индексы** (миграция c3d4e5f6a7b8): 6 индексов
+  - `ix_wardrobe_items_owner` (owner_id, owner_type) WHERE deleted_at IS NULL
+  - `ix_children_user_id` WHERE deleted_at IS NULL
+  - `ix_brief_log_user_date`, `ix_outfit_log_user_date`, `ix_events_user_id`
+  - `ix_users_active_onboarded` для schedule_all()
+- **Health check** (`/health`): проверяет Redis ping + DB SELECT 1, 503 при сбое
+- **ONNX thread safety**: threading.Lock + double-check pattern
+
+### Инфраструктура: Фаза 2 (надёжность)
+- **Queue at-least-once** (`core/queue.py`): RPOPLPUSH → processing list → LREM on ack
+  - `recover_processing()` на старте worker'а — восстанавливает orphaned задачи
+- **Exponential backoff**: retry задержки 1s → 4s → 16s вместо мгновенного retry
+- **Background task tracking** (`wardrobe.py`): `_track_task()` вместо fire-and-forget
+  - Graceful shutdown: ждёт до 10 сек завершения in-flight задач
+- **Pagination schedule_all()**: batch по 500 пользователей (LIMIT/OFFSET)
+- **Atomic Anthropic pool**: asyncio.Lock + counter вместо itertools.cycle
+
+### Инфраструктура: Фаза 3 (масштабирование)
+- **Atomic rate limiter** (`core/rate_limiter.py`): Lua script (нет GET→INCR race)
+- **CASCADE → SET NULL** (миграция d4e5f6a7b8c9): brief_log, outfit_log, events
+  - Soft-delete user больше не удаляет логи
+- **Worker concurrency**: asyncio.Semaphore (fast=4, slow=2 параллельных задач)
+  - Drain in-flight задач при shutdown (30 сек)
+- **Correlation ID**: ContextVar + structlog.contextvars, все логи включают request_id
+- **Pool tuning**: pool_pre_ping=True, pool_recycle=600 (detect stale connections)
+
+### Тесты: 425 → 548 (+123)
+- `test_infra.py` (12) — Redis singleton, health check, ONNX safety, DB indexes
+- `test_phase2.py` (17) — queue ack/recovery, backoff, task tracking, pagination, atomic pool
+- `test_phase3.py` (22) — Lua rate limiter, cascade, concurrency, correlation ID, pool tuning
 
 ## Роадмап
 
@@ -199,7 +254,7 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - Оценка образа по фото (вещь vs outfit detection)
 - Gap analysis + growth alert WHO
 - Тизеры, engagement push, "переслать бабушке"
-- rembg u2net (когда VPS 8GB)
+- ~~rembg u2net~~ — ГОТОВО (silueta.onnx local)
 - Sentry, CI/CD
 
 ### v1.2 (май)

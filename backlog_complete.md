@@ -62,10 +62,23 @@
 - [ ] Vision: улучшить распознавание (носок≠шапка, ковёр не одежда)
 
 ### Инфраструктура
-- [ ] rembg u2net (когда VPS 8GB ~$40/мес)
+- [x] rembg local ONNX silueta (43MB, 1.3 сек, fallback remove.bg API) — ГОТОВО 2026-03-19
+- [x] Redis singleton (core/redis.py, 17 утечек закрыты) — ГОТОВО 2026-03-19
+- [x] DB индексы (6 критических, partial на soft-delete) — ГОТОВО 2026-03-19
+- [x] Health check реальный (Redis+DB, 503 при сбое) — ГОТОВО 2026-03-19
+- [x] Queue at-least-once (RPOPLPUSH+ack+recovery) — ГОТОВО 2026-03-19
+- [x] Exponential backoff (1s→4s→16s) — ГОТОВО 2026-03-19
+- [x] Background task tracking + graceful shutdown — ГОТОВО 2026-03-19
+- [x] Paginated schedule_all (batch 500) — ГОТОВО 2026-03-19
+- [x] Atomic rate limiter (Lua script) — ГОТОВО 2026-03-19
+- [x] CASCADE → SET NULL на логах — ГОТОВО 2026-03-19
+- [x] Worker concurrency (semaphore fast=4, slow=2) — ГОТОВО 2026-03-19
+- [x] Correlation ID (ContextVar + structlog) — ГОТОВО 2026-03-19
+- [x] Pool tuning (pre_ping, recycle 10min) — ГОТОВО 2026-03-19
+- [x] Atomic Anthropic pool rotation (asyncio.Lock) — ГОТОВО 2026-03-19
 - [ ] Sentry для error tracking
 - [ ] CI/CD (GitHub Actions → Docker build → deploy)
-- [ ] Cloudflare named tunnel (URL не меняется при рестарте)
+- [x] Cloudflare named tunnel (URL не меняется при рестарте) — УЖЕ БЫЛО
 - [ ] photo_url через R2 CDN (сейчас только telegram file_id)
 
 ---
