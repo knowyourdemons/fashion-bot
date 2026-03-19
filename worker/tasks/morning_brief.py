@@ -1,6 +1,6 @@
 """
 Morning Brief задача:
-- schedule_all(): каждый час ищет юзеров у кого 07:00 по timezone
+- schedule_all(): каждый час ищет юзеров у кого 07:00 + engagement push + тизеры
 - generate_brief(payload): погода + гардероб → BriefLog → push send_morning_brief
 - send_morning_brief(payload): отправляет сообщение через Telegram Bot API
 """
@@ -119,6 +119,37 @@ async def schedule_all() -> None:
                     logger.warning("teaser.schedule.user_error", user_id=str(free_user.id), error=str(e))
         except Exception as e:
             logger.warning("teaser.schedule.error", error=str(e))
+
+        # Engagement push для юзеров с trial
+        try:
+            async with AsyncReadSession() as session:
+                trial_result = await session.execute(
+                    select(User).where(
+                        User.onboarding_completed.is_(True),
+                        User.is_active.is_(True),
+                        User.deleted_at.is_(None),
+                        User.trial_started_at.isnot(None),
+                    )
+                )
+                trial_users = list(trial_result.scalars().all())
+
+            for trial_user in trial_users:
+                try:
+                    tz = pytz.timezone(trial_user.timezone or "Europe/Vilnius")
+                    if datetime.now(tz).hour != 10:
+                        continue
+                    eng_lock = f"lock:engagement_check:{trial_user.id}:{date.today().isoformat()}"
+                    if not await redis_client.set(eng_lock, 1, ex=86400, nx=True):
+                        continue
+                    await queue.push(
+                        "check_engagement",
+                        {"user_id": str(trial_user.id)},
+                        priority=QueuePriority.LOW,
+                    )
+                except Exception as e:
+                    logger.warning("engagement.schedule.user_error", user_id=str(trial_user.id), error=str(e))
+        except Exception as e:
+            logger.warning("engagement.schedule.error", error=str(e))
     finally:
         await redis_client.aclose()
 
@@ -600,6 +631,8 @@ async def send_morning_brief(payload: dict) -> dict:
         "inline_keyboard": [[
             {"text": "👍 Надели", "callback_data": f"brief_feedback:up:{brief_id}"},
             {"text": "🔄 Переодень", "callback_data": f"reroll:{brief_id}"},
+        ], [
+            {"text": "📤 Переслать бабушке", "callback_data": f"share:{brief_id}"},
         ]]
     }
 

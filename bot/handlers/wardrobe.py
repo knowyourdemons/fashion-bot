@@ -1543,12 +1543,17 @@ async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYP
         all_items = await get_owner_items(session, owner_id, owner_type)
     item_count = len(all_items)
 
-    # Кнопки: образ дня + список; switch-кнопки ниже
+    # Кнопки: образ дня + список; gap analysis для premium; switch-кнопки ниже
+    from core.permissions import get_effective_plan, can_gap_analysis
+    _ep = get_effective_plan(user)
     top_row = [
         InlineKeyboardButton("🌤 Образ дня", callback_data="outfit_request"),
         InlineKeyboardButton("👀 Посмотреть вещи", callback_data="show_wardrobe_list"),
     ]
-    markup = InlineKeyboardMarkup([top_row] + buttons)
+    extra_rows = []
+    if can_gap_analysis(_ep):
+        extra_rows.append([InlineKeyboardButton("📋 Что не хватает?", callback_data="gap_analysis")])
+    markup = InlineKeyboardMarkup([top_row] + extra_rows + buttons)
 
     await update.message.reply_text(
         f"👗 Гардероб: *{owner_name}* · {item_count} вещей",
@@ -1912,7 +1917,8 @@ async def _show_wardrobe_page(message, user, page: int, owner_id=None, owner_typ
         lines = [f"👗 Гардероб ({total} вещей)\n"]
         for group, group_items in paged_groups.items():
             label = _CATEGORY_LABELS.get(group, group)
-            names = ", ".join(f"{i.color} {i.type}" for i in group_items[:5])
+            from services.outfit_builder import color_circle as _cc
+            names = ", ".join(f"{_cc(i.color)} {i.type} {i.color}" for i in group_items[:5])
             lines.append(f"{label} ({len(group_items)}): {names}")
 
         buttons = []
@@ -1990,3 +1996,52 @@ async def handle_notify_ultra(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query
     await query.answer("Отлично! Уведомим тебя первой 🎉")
     # TODO: сохранить в БД список желающих Ultra
+
+
+async def handle_gap_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: gap_analysis → on-demand gap analysis."""
+    query = update.callback_query
+    await query.answer()
+
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    from core.permissions import get_effective_plan, can_gap_analysis
+    plan = get_effective_plan(user)
+    if not can_gap_analysis(plan):
+        await query.message.reply_text(
+            "📋 Анализ гардероба доступен в Premium!\n✨ Нажми «Подписка» для доступа."
+        )
+        return
+
+    await query.message.reply_text("📋 Анализирую гардероб...")
+
+    redis = context.bot_data.get("redis")
+    owner_id, owner_type = await _get_owner(user, context)
+
+    async with AsyncReadSession() as session:
+        items = await get_owner_items(session, owner_id, owner_type)
+
+    from services.gap_analysis import build_shopping_list, _get_current_season
+    from services.i18n.ru import t
+    import redis.asyncio as aioredis
+    from config import settings as _settings
+
+    redis_client = aioredis.from_url(_settings.redis_url, decode_responses=False)
+    try:
+        result = await build_shopping_list(user, items, redis_client)
+    finally:
+        await redis_client.aclose()
+
+    if result is None:
+        await query.message.reply_text(
+            "📸 Добавь больше вещей в гардероб — нужно минимум 5 для анализа!"
+        )
+    elif result == "lock":
+        await query.message.reply_text("⏳ Анализ уже выполняется, подожди немного...")
+    elif result == "":
+        await query.message.reply_text("✅ Гардероб укомплектован на этот сезон!")
+    else:
+        season = _get_current_season(user.timezone or "Europe/Vilnius")
+        await query.message.reply_text(t("shopping.header", season=season, list=result))

@@ -121,3 +121,13 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         pass
 
     logger.info("reroll.done", user_id=str(user.id), excluded=len(exclude_ids))
+
+
+async def handle_share(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: share:{brief_id} → инструкция как переслать коллаж."""
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text(
+        "📤 Перешли картинку выше — на ней всё написано!\n"
+        "Бабушка увидит имя, погоду и что надеть 👗"
+    )

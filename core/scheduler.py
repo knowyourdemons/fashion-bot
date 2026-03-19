@@ -114,3 +114,12 @@ class Scheduler:
             id="cleanup_r2",
             replace_existing=True,
         )
+
+        # growth_alert — 1-е число каждого месяца 08:30 UTC
+        from worker.tasks import growth_alert
+        self._scheduler.add_job(
+            growth_alert.run,
+            CronTrigger(day=1, hour=8, minute=30),
+            id="growth_alert",
+            replace_existing=True,
+        )

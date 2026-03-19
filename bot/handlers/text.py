@@ -69,6 +69,91 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not getattr(user, "onboarding_completed", True):
         return
 
+    # ── Режим редактирования профиля (edit_city) ──────────────────────────
+    editing = context.user_data.get("editing")
+    editing_ts = context.user_data.get("editing_ts", 0)
+    if editing and (time.time() - editing_ts) > 300:
+        context.user_data.pop("editing", None)
+        context.user_data.pop("editing_ts", None)
+        editing = None
+
+    if editing:
+        text_input = update.message.text.strip()
+        if text_input.lower() in ("отмена", "назад", "cancel", "/cancel"):
+            context.user_data.pop("editing", None)
+            context.user_data.pop("editing_ts", None)
+            await update.message.reply_text("Отменено ✅")
+            return
+        if editing == "city":
+            from services.brief_weather import _geocode_city
+            coords = await _geocode_city(text_input)
+            if not coords:
+                await update.message.reply_text(
+                    "Не нашла такой город 🤔\nПопробуй по-другому или напиши «отмена»"
+                )
+                return
+            import sqlalchemy as _sa
+            from db.models.user import User as _User
+            async with AsyncWriteSession() as _sess:
+                await _sess.execute(
+                    _sa.update(_User).where(_User.id == user.id).values(city=text_input)
+                )
+                await _sess.commit()
+            user.city = text_input
+            redis = context.bot_data.get("redis")
+            if redis:
+                await redis.delete(f"weather:cache:{text_input}")
+            context.user_data.pop("editing", None)
+            context.user_data.pop("editing_ts", None)
+            await update.message.reply_text(f"✅ Город обновлён: {text_input}")
+            return
+        return
+
+    # ── Мини-онбординг добавления ребёнка ─────────────────────────────────
+    adding_child = context.user_data.get("adding_child")
+    if adding_child:
+        text_input = update.message.text.strip()
+        step = adding_child.get("step")
+
+        if text_input.lower() in ("отмена", "назад", "cancel", "/cancel"):
+            context.user_data.pop("adding_child", None)
+            await update.message.reply_text("Отменено ✅")
+            return
+
+        if step == "name":
+            adding_child["name"] = text_input
+            adding_child["step"] = "birthdate"
+            context.user_data["adding_child"] = adding_child
+            await update.message.reply_text(
+                "📅 Когда родилась?\nНапример: «15.03.2022» или «3 года» (или «отмена»)"
+            )
+            return
+
+        if step == "birthdate":
+            from bot.handlers.onboarding import parse_birthdate
+            bd = parse_birthdate(text_input)
+            if bd is None:
+                await update.message.reply_text(
+                    "Не понял дату 🤔 Попробуй: «15.03.2022», «2 года 3 месяца», или «отмена»"
+                )
+                return
+            adding_child["birthdate"] = bd
+            adding_child["step"] = "size"
+            context.user_data["adding_child"] = adding_child
+            await update.message.reply_text(
+                "👕 Какой размер одежды? (например 92 или 104)\nИли напиши «пропустить»"
+            )
+            return
+
+        if step == "size":
+            if text_input.lower() not in ("пропустить", "skip", "-"):
+                adding_child["size"] = text_input
+            adding_child["step"] = "done"
+            context.user_data["adding_child"] = adding_child
+            from bot.handlers.profile import _finish_add_child
+            await _finish_add_child(update.message, user, context)
+            return
+
     # Лимит чата через Redis (отдельный от лимита фото)
     redis = context.bot_data.get("redis")
     effective_plan = get_effective_plan(user)
