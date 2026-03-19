@@ -88,22 +88,21 @@ def create_application() -> Application:
 
     # Profile editing callbacks
     from bot.handlers.profile import (
-        handle_edit_city, handle_edit_colortype,
-        handle_add_child_start, handle_new_child_gender,
+        handle_edit_city, handle_edit_colortype, handle_set_colortype,
+        handle_add_child_start, handle_new_child_gender, handle_edit_child_size,
     )
     app.add_handler(CallbackQueryHandler(handle_edit_city, pattern="^edit_city$"))
     app.add_handler(CallbackQueryHandler(handle_edit_colortype, pattern="^edit_colortype$"))
+    app.add_handler(CallbackQueryHandler(handle_set_colortype, pattern="^set_colortype:"))
     app.add_handler(CallbackQueryHandler(handle_add_child_start, pattern="^add_child_start$"))
     app.add_handler(CallbackQueryHandler(handle_new_child_gender, pattern="^new_child:"))
+    app.add_handler(CallbackQueryHandler(handle_edit_child_size, pattern="^edit_child_size:"))
 
     # Brief share
     app.add_handler(CallbackQueryHandler(brief.handle_share, pattern="^share:"))
 
     # Gap analysis
     app.add_handler(CallbackQueryHandler(wardrobe.handle_gap_analysis, pattern="^gap_analysis$"))
-
-    # edit_child_size — stub (from growth_alert button)
-    app.add_handler(CallbackQueryHandler(handle_profile, pattern="^edit_child_size$"))
 
     # Текстовые сообщения → стилист — group=2 (после меню-хендлеров)
     _menu_texts = filters.Regex("^(👗 Гардероб|✨ Что надеть|💬 Спросить Касси|👤 Профиль|❓ Помощь)$")

@@ -614,6 +614,14 @@ async def generate_brief(payload: dict) -> dict:
         outfit_ids_count=len(all_outfit_ids),
         collage_photos_count=len(collage_photo_ids),
     )
+
+    # Growth alert — проверить размеры детей (inline, после брифа)
+    try:
+        from worker.tasks.growth_alert import _check_children_growth
+        await _check_children_growth(user, children)
+    except Exception as _ga_err:
+        logger.warning("growth_alert.inline.error", error=str(_ga_err))
+
     return {"brief_id": brief_id}
 
 

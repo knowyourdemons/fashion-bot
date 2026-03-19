@@ -107,6 +107,59 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             context.user_data.pop("editing_ts", None)
             await update.message.reply_text(f"✅ Город обновлён: {text_input}")
             return
+
+        if editing == "child_size":
+            import uuid as _uuid
+            import sqlalchemy as _sa
+            from db.models.children import Child as _Child
+            child_id_str = context.user_data.get("editing_child_id", "")
+            parts_input = text_input.split()
+            new_size: str | None = None
+            new_shoe: float | None = None
+            try:
+                if parts_input:
+                    s = int(parts_input[0])
+                    if 56 <= s <= 176:
+                        new_size = str(s)
+                    else:
+                        await update.message.reply_text("Размер одежды должен быть от 56 до 176")
+                        return
+                if len(parts_input) >= 2:
+                    from bot.handlers.onboarding import _parse_shoe_size
+                    sh = _parse_shoe_size(parts_input[1])
+                    if sh and 15 <= sh <= 45:
+                        new_shoe = sh
+                    else:
+                        await update.message.reply_text("Размер обуви должен быть от 15 до 45")
+                        return
+            except ValueError:
+                await update.message.reply_text("Не понял размер 🤔 Например: «104» или «104 27»")
+                return
+            try:
+                child_id = _uuid.UUID(child_id_str)
+                vals: dict = {}
+                if new_size:
+                    vals["current_size"] = new_size
+                if new_shoe is not None:
+                    vals["shoe_size"] = new_shoe
+                if vals:
+                    async with AsyncWriteSession() as _sess:
+                        await _sess.execute(
+                            _sa.update(_Child).where(_Child.id == child_id).values(**vals)
+                        )
+                        await _sess.commit()
+            except Exception:
+                pass
+            context.user_data.pop("editing", None)
+            context.user_data.pop("editing_child_id", None)
+            context.user_data.pop("editing_ts", None)
+            parts_done = []
+            if new_size:
+                parts_done.append(f"одежда {new_size}")
+            if new_shoe:
+                parts_done.append(f"обувь {new_shoe}")
+            await update.message.reply_text(f"✅ Размер обновлён: {', '.join(parts_done) if parts_done else 'без изменений'}")
+            return
         return
 
     # ── Мини-онбординг добавления ребёнка ─────────────────────────────────
@@ -147,7 +200,32 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
         if step == "size":
             if text_input.lower() not in ("пропустить", "skip", "-"):
-                adding_child["size"] = text_input
+                try:
+                    s = int(text_input)
+                    if 56 <= s <= 176:
+                        adding_child["size"] = str(s)
+                    else:
+                        await update.message.reply_text("Размер одежды 56–176. Попробуй ещё раз или напиши «пропустить»")
+                        return
+                except ValueError:
+                    await update.message.reply_text("Напиши число, например 92. Или «пропустить»")
+                    return
+            adding_child["step"] = "shoe"
+            context.user_data["adding_child"] = adding_child
+            await update.message.reply_text(
+                "👟 Размер обуви? (например 27 или 26.5)\nИли напиши «пропустить»"
+            )
+            return
+
+        if step == "shoe":
+            if text_input.lower() not in ("пропустить", "skip", "-"):
+                from bot.handlers.onboarding import _parse_shoe_size
+                sh = _parse_shoe_size(text_input)
+                if sh and 15 <= sh <= 45:
+                    adding_child["shoe"] = sh
+                else:
+                    await update.message.reply_text("Размер обуви 15–45 (например 27 или 26.5). Или «пропустить»")
+                    return
             adding_child["step"] = "done"
             context.user_data["adding_child"] = adding_child
             from bot.handlers.profile import _finish_add_child

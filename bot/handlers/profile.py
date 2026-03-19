@@ -68,9 +68,19 @@ async def handle_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     edit_buttons = [
         [InlineKeyboardButton("🏙 Изменить город", callback_data="edit_city")],
-        [InlineKeyboardButton("🎨 Определить цветотип", callback_data="edit_colortype")],
+        [InlineKeyboardButton("🎨 Изменить цветотип", callback_data="edit_colortype")],
         [InlineKeyboardButton("👶 Добавить ребёнка", callback_data="add_child_start")],
     ]
+    # Кнопки редактирования детей
+    try:
+        async with AsyncReadSession() as _s2:
+            _ch = await get_children(_s2, user.id)
+        for _c in [c for c in _ch if not c.deleted_at][:3]:
+            edit_buttons.append([InlineKeyboardButton(
+                f"📏 Размер {_c.name}", callback_data=f"edit_child_size:{_c.id}"
+            )])
+    except Exception:
+        pass
     markup = InlineKeyboardMarkup(edit_buttons)
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown", reply_markup=markup)
 
@@ -85,12 +95,58 @@ async def handle_edit_city(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def handle_edit_colortype(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Callback: edit_colortype → ждать селфи для определения цветотипа."""
+    """Callback: edit_colortype → inline кнопки Весна/Лето/Осень/Зима."""
     query = update.callback_query
     await query.answer()
-    context.user_data["awaiting_colortype_selfie"] = True
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🌸 Весна", callback_data="set_colortype:spring"),
+        InlineKeyboardButton("☀️ Лето", callback_data="set_colortype:summer"),
+    ], [
+        InlineKeyboardButton("🍂 Осень", callback_data="set_colortype:autumn"),
+        InlineKeyboardButton("❄️ Зима", callback_data="set_colortype:winter"),
+    ]])
     await query.message.reply_text(
-        "🎨 Пришли селфи при дневном свете ☀️\nОпределю твой цветотип по фото!"
+        "🎨 Выбери свой цветотип:\n\n"
+        "🌸 Весна — тёплые светлые тона\n"
+        "☀️ Лето — холодные приглушённые\n"
+        "🍂 Осень — тёплые насыщенные\n"
+        "❄️ Зима — холодные контрастные",
+        reply_markup=keyboard,
+    )
+
+
+async def handle_set_colortype(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: set_colortype:{value} → сохранить цветотип."""
+    query = update.callback_query
+    await query.answer()
+    colortype = query.data.split(":")[1]
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+    import sqlalchemy as sa
+    from db.models.user import User as UserModel
+    async with AsyncWriteSession() as session:
+        await session.execute(
+            sa.update(UserModel).where(UserModel.id == user.id).values(colortype=colortype)
+        )
+        await session.commit()
+    user.colortype = colortype
+    label = _COLORTYPE_LABELS.get(colortype, colortype)
+    await query.message.reply_text(f"✅ Цветотип обновлён: {label}")
+
+
+async def handle_edit_child_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: edit_child_size:{child_id} → запросить новый размер."""
+    query = update.callback_query
+    await query.answer()
+    child_id_str = query.data.split(":")[1]
+    context.user_data["editing"] = "child_size"
+    context.user_data["editing_child_id"] = child_id_str
+    context.user_data["editing_ts"] = time.time()
+    await query.message.reply_text(
+        "👕 Укажи размер одежды (56–176) и обуви через пробел:\n"
+        "Например: «104 27» или «104» (только одежда)\n"
+        "Или напиши «отмена»"
     )
 
 
@@ -154,6 +210,7 @@ async def _finish_add_child(message, user, context) -> None:
     name = adding.get("name", "")
     birthdate = adding.get("birthdate")
     size = adding.get("size", "")
+    shoe = adding.get("shoe")
 
     if not name or not birthdate:
         await message.reply_text("Что-то пошло не так 🤔 Попробуй снова через /profile")
@@ -168,6 +225,7 @@ async def _finish_add_child(message, user, context) -> None:
                 gender=gender,
                 birthdate=birthdate,
                 current_size=size or None,
+                shoe_size=shoe,
             )
             session.add(child)
 

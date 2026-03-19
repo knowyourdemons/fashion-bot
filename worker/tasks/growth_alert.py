@@ -12,6 +12,56 @@ _WHO_SIZE = {
 }
 
 
+async def _check_children_growth(user, children: list) -> None:
+    """Проверяет размеры для конкретного юзера и отправляет алерт если нужно.
+    Вызывается inline из generate_brief."""
+    from config import settings
+    from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton
+
+    bot = Bot(token=settings.telegram_bot_token)
+    for child in children:
+        if not child.birthdate or not child.current_size:
+            continue
+        try:
+            age_months = (date.today() - child.birthdate).days // 30
+            expected = None
+            for threshold, size in sorted(_WHO_SIZE.items()):
+                if age_months >= threshold:
+                    expected = size
+            if expected is None:
+                continue
+            try:
+                current_size_int = int(str(child.current_size).split(".")[0])
+            except (ValueError, TypeError):
+                continue
+            if expected > current_size_int:
+                keyboard = InlineKeyboardMarkup([[
+                    InlineKeyboardButton(
+                        "📏 Обновить размер",
+                        callback_data=f"edit_child_size:{child.id}",
+                    ),
+                ]])
+                await bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=(
+                        f"📏 {child.name} подрос(ла)!\n"
+                        f"Размер в профиле: {child.current_size}, "
+                        f"ожидаемый по возрасту ({age_months} мес): {expected}\n\n"
+                        f"Обнови размер и проверь какие вещи пора менять 👗"
+                    ),
+                    reply_markup=keyboard,
+                )
+                logger.info(
+                    "growth_alert.sent",
+                    user_id=str(user.id),
+                    child_id=str(child.id),
+                    current=current_size_int,
+                    expected=expected,
+                )
+        except Exception as e:
+            logger.warning("growth_alert.child_error", child_id=str(child.id), error=str(e))
+
+
 async def run() -> None:
     """Ежемесячно проверяет размеры детей по ВОЗ и отправляет алерт если нужно."""
     from config import settings
@@ -59,9 +109,11 @@ async def run() -> None:
                     continue
 
                 if expected > current_size_int:
-                    gender_word = "дочка" if child.gender == "girl" else "сын"
                     keyboard = InlineKeyboardMarkup([[
-                        InlineKeyboardButton("📏 Обновить размер", callback_data="edit_child_size"),
+                        InlineKeyboardButton(
+                            "📏 Обновить размер",
+                            callback_data=f"edit_child_size:{child.id}",
+                        ),
                     ]])
                     await bot.send_message(
                         chat_id=user.telegram_id,
