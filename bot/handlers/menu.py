@@ -2,8 +2,9 @@ from telegram import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
 MAIN_MENU = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("👗 Гардероб"), KeyboardButton("✨ Что надеть")],
-        [KeyboardButton("⚙️ Профиль"), KeyboardButton("❓ Помощь")],
+        [KeyboardButton("✨ Что надеть")],
+        [KeyboardButton("👗 Гардероб"), KeyboardButton("💬 Спросить Касси")],
+        [KeyboardButton("👤 Профиль"), KeyboardButton("❓ Помощь")],
     ],
     resize_keyboard=True,
     is_persistent=True,

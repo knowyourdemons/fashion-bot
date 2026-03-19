@@ -1661,14 +1661,8 @@ async def handle_add_items_hint(update: Update, context: ContextTypes.DEFAULT_TY
 
 # ── handle_outfit_request (кнопка Образ дня из Гардероба) ───────────────────
 
-async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-
-    user = context.user_data.get("db_user")
-    if not user:
-        return
-
+async def _generate_outfit_for_user(message, user, context) -> None:
+    """Общая логика генерации образа. Вызывается из меню и из inline-кнопки гардероба."""
     redis = context.bot_data.get("redis")
     from datetime import date as _date, datetime as _datetime
     import random as _random
@@ -1687,14 +1681,14 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton("✨ Получить безлимит →", callback_data="show_upgrade")
         ]])
-        await query.message.reply_text(
+        await message.reply_text(
             f"✋ На сегодня лимит образов ({day_limit}/день).\n"
             "Следующий образ — завтра утром в 07:00 🌅",
             reply_markup=keyboard,
         )
         return
 
-    await query.message.reply_text("🌤 Собираю образ...")
+    await message.reply_text("🌤 Собираю образ...")
 
     try:
         from services.weather import WeatherService
@@ -1709,7 +1703,7 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
         is_no_kids = getattr(user, "segment", None) == "no_kids"
 
         if not children and not is_no_kids:
-            await query.message.reply_text(
+            await message.reply_text(
                 "Добавь ребёнка в профиле чтобы получать образы 👧",
                 reply_markup=get_main_menu(),
             )
@@ -1743,7 +1737,7 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
             items = await get_owner_items(session, owner_id_for_outfit, owner_type_for_outfit)
 
         if not items:
-            await query.message.reply_text(
+            await message.reply_text(
                 "Гардероб пуст — добавь вещи через фото 📸",
                 reply_markup=get_main_menu(),
             )
@@ -1766,10 +1760,6 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
 
         _day_type = ("садик" if today_date.weekday() < 5 else "прогулка") if child else ""
         _collage_params = get_collage_params(child=child, user=user, temp=temp_m, day_type=_day_type)
-        sm = "+" if temp_m >= 0 else ""
-        temp_text = f"{sm}{temp_m:.0f}°C"
-
-        owner_label = child.name if child else (user.name or "")
 
         # Тёплый комментарий Касси
         scored = [float(i.score_item) for i in outfit.get("all_items", []) if i.score_item]
@@ -1799,20 +1789,51 @@ async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TY
             await redis.expire(limit_key, 86400)
 
         if collage_bytes:
-            await query.message.reply_photo(
+            await message.reply_photo(
                 photo=collage_bytes, caption=caption, reply_markup=get_main_menu()
             )
         else:
-            await query.message.reply_text(caption, reply_markup=get_main_menu())
+            await message.reply_text(caption, reply_markup=get_main_menu())
 
     except Exception as e:
         logger.error("outfit_request.failed", error=str(e))
         import sentry_sdk as _sentry
         _sentry.capture_exception(e)
-        await query.message.reply_text(
+        await message.reply_text(
             "Не удалось собрать образ. Попробуй позже.",
             reply_markup=get_main_menu(),
         )
+
+
+async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Inline-кнопка 'Образ дня' в гардеробе → генерация образа."""
+    query = update.callback_query
+    await query.answer()
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+    await _generate_outfit_for_user(query.message, user, context)
+
+
+async def handle_what_to_wear(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Кнопка '✨ Что надеть' в главном меню → сразу генерирует образ."""
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+    await _generate_outfit_for_user(update.message, user, context)
+
+
+async def handle_ask_kassi(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Кнопка '💬 Спросить Касси' → подсказка для чата."""
+    user = context.user_data.get("db_user")
+    from permissions import get_effective_plan as _gep, get_limit as _gl
+    plan = _gep(user) if user else "free"
+    chat_limit = _gl("chat_per_day", plan)
+    await update.message.reply_text(
+        "Напиши вопрос про стиль — помогу! 👗\n"
+        f"(до {chat_limit} вопросов в день)",
+        reply_markup=get_main_menu(),
+    )
 
 
 # ── handle_list ─────────────────────────────────────────────────────────────
