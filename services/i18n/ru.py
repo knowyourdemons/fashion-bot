@@ -8,32 +8,51 @@ STRINGS: dict[str, str] = {
     "error.not_found": "Не найдено.",
 
     # Онбординг
+    "onboarding.welcome": (
+        "Привет! 👋 Я Касси — твой AI-стилист.\n\n"
+        "Каждое утро буду присылать готовый образ по погоде "
+        "из вещей, которые уже есть в шкафу.\n\n"
+        "Познакомимся за 2 минуты? 😊"
+    ),
+    "onboarding.btn_start": "🚀 Давай!",
+    "onboarding.who_for": "Для кого подбираем образы?",
+    "onboarding.btn_child": "👶 Для ребёнка",
+    "onboarding.btn_self": "👩 Для себя",
+    "onboarding.btn_both": "👩‍👧 И для ребёнка, и для себя",
+    "onboarding.gender": "Девочка или мальчик? 🎀",
+    "onboarding.btn_girl": "👧 Девочка",
+    "onboarding.btn_boy": "👦 Мальчик",
+    "onboarding.child_name_girl": "Как зовут? 💕",
+    "onboarding.child_name_boy": "Как зовут? 😊",
+    "onboarding.child_birthdate": "Когда родилась {name}?\n\nНапиши дату (15.03.2023) или возраст (3 года)",
+    "onboarding.child_birthdate_boy": "Когда родился {name}?\n\nНапиши дату (15.03.2023) или возраст (3 года)",
+    "onboarding.child_birthdate_error": "Не поняла 🤔 Напиши дату (15.03.2023) или просто возраст цифрой",
+    "onboarding.child_size": "Какой размер одежды {name}? 👗\n\nНапиши размер (86, 92, 104, 116...)\nИли возраст — подберу примерный",
+    "onboarding.child_shoe_size": "Размер обуви {name}? 👟\n\nНапиши число (26 или 26.5)",
+    "onboarding.btn_skip": "⏭ Пропустить",
+    "onboarding.city": "В каком городе живёте? 🏙\n\nНужно для прогноза погоды",
+    "onboarding.city_error": "Не нашла такой город 🤔 Попробуй написать по-другому",
+    "onboarding.colortype": "Хочешь узнать какие цвета идут {target}?\n\nПришли селфи при дневном свете ☀️ — определю цветотип\n(Весна, Лето, Осень или Зима)\n\nЭто поможет подбирать вещи по цветам 🎨",
+    "onboarding.btn_selfie": "📸 Пришлю фото",
+    "onboarding.btn_later": "⏭ Потом",
+    "onboarding.done": "🎉 Отлично!\n\nТеперь самое интересное — пришли 5 любимых вещей {target} и я соберу первый образ!\n\n📸 Фотографируй по одной вещи на светлом фоне",
+    "onboarding.item_count": "📸 Вещь {n} из 5...",
+    "onboarding.first_brief_ready": "✨ У тебя уже 5 вещей! Собираю первый образ — подожди пару секунд...",
+    # Backward compat
     "onboarding.start": (
-        "Привет! Я Касси 👗\n\n"
-        "Помогу собрать стильный гардероб для всей семьи.\n"
-        "Давай начнём — это займёт минуту!\n\n"
-        "Для кого подбираем образы?"
+        "Привет! 👋 Я Касси — твой AI-стилист.\n\n"
+        "Каждое утро буду присылать готовый образ по погоде "
+        "из вещей, которые уже есть в шкафу.\n\n"
+        "Познакомимся за 2 минуты? 😊"
     ),
     "onboarding.segment.mom_girl": "👧 Для дочки",
     "onboarding.segment.mom_boy":  "👦 Для сына",
     "onboarding.segment.pregnant": "🤰 Жду малыша",
     "onboarding.segment.no_kids":  "👩 Для себя",
-    "onboarding.child_name": "Как зовут дочку?",
-    "onboarding.child_birthdate": "Дата рождения? (дд.мм.гггг)",
-    "onboarding.child_size": (
-        "Размер одежды ребёнка? 👗\n\n"
-        "Введи размер (например: 86, 92, 104, 116)\n"
-        "Или возраст (1–12), если не знаешь размер"
-    ),
-    "onboarding.child_shoe_size": (
-        "Размер обуви ребёнка? 👟\n\n"
-        "Введи число (например: 26 или 26.5)"
-    ),
-    "onboarding.city": "Ваш город?",
+    "onboarding.child_name": "Как зовут?",
     "onboarding.trimester": "Какой триместр?",
     "onboarding.body_type": "Тип фигуры? (можно пропустить)",
     "onboarding.colortype_photo": "Пришли селфи для определения цветотипа (можно пропустить)",
-    "onboarding.done": "Отлично! Гардероб готов. Пришли фото вещи для начала 📸",
 
     # Гардероб
     "wardrobe.add.prompt": "Пришли фото вещи 📸",

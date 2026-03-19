@@ -473,8 +473,16 @@ async def _maybe_trigger_first_brief(user, owner_id, owner_type, message, contex
         async with AsyncReadSession() as session:
             wardrobe_count = await get_owner_items_count(session, owner_id, owner_type)
         if wardrobe_count < 5:
-            # Ещё не дотянули до 5 — вернём lock
+            # Ещё не дотянули до 5 — вернём lock и покажем прогресс
             await redis.delete(lock_key)
+            remaining = 5 - wardrobe_count
+            if remaining == 1:
+                suffix = "вещь"
+            elif remaining < 5:
+                suffix = "вещи"
+            else:
+                suffix = "вещей"
+            await message.reply_text(f"📸 Ещё {remaining} {suffix} — и я соберу первый образ!")
             return
         from core.queue import RedisQueue, QueuePriority
         queue = RedisQueue(redis)
@@ -484,7 +492,7 @@ async def _maybe_trigger_first_brief(user, owner_id, owner_type, message, contex
             priority=QueuePriority.HIGH,
         )
         await message.reply_text(
-            "✨ Отлично! Собираю первый образ — пришлю через несколько секунд..."
+            "✨ У тебя уже 5 вещей! Собираю первый образ — подожди пару секунд..."
         )
         logger.info("wardrobe.first_brief_triggered", user_id=str(user.id), count=wardrobe_count)
     except Exception as e:

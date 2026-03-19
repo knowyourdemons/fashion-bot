@@ -9,6 +9,7 @@ import redis.asyncio as aioredis
 
 from config import settings
 from core.queue import RedisQueue, QueuePriority
+from core.anthropic_client import init_anthropic_pool
 from worker.fast_worker import FastWorker
 from worker.slow_worker import SlowWorker
 
@@ -25,6 +26,8 @@ def _handle_signal(sig: signal.Signals) -> None:
 async def main() -> None:
     redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
     queue = RedisQueue(redis_client)
+
+    init_anthropic_pool(redis_client)
 
     fast_worker = FastWorker(queue, redis_client)
     slow_worker = SlowWorker(queue, redis_client)
