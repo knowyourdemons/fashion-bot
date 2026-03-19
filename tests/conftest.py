@@ -136,5 +136,7 @@ def event_loop():
     """One event loop for all async tests — prevents DB pool loop mismatch."""
     policy = _asyncio.get_event_loop_policy()
     loop = policy.new_event_loop()
+    _asyncio.set_event_loop(loop)
     yield loop
+    loop.close()
     loop.close()

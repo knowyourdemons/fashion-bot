@@ -4,7 +4,6 @@ PRIMARY: claude-haiku-4-5-20251001
 FALLBACK: claude-sonnet-4-6
 """
 import asyncio
-from itertools import cycle
 from typing import Any
 
 import anthropic
@@ -33,15 +32,18 @@ class AnthropicPool:
 
         self._clients = [anthropic.AsyncAnthropic(api_key=k) for k in keys]
         self._key_ids = [f"key_{i}" for i in range(len(keys))]
-        self._cycle = cycle(range(len(self._clients)))
+        self._counter = 0
+        self._lock = asyncio.Lock()
         self._rate_limiter = RateLimiter(redis_client)
         self._circuit_breakers = {
             kid: CircuitBreaker(redis_client, f"anthropic_{kid}")
             for kid in self._key_ids
         }
 
-    def _next_client(self) -> tuple[anthropic.AsyncAnthropic, str]:
-        idx = next(self._cycle)
+    async def _next_client(self) -> tuple[anthropic.AsyncAnthropic, str]:
+        async with self._lock:
+            idx = self._counter % len(self._clients)
+            self._counter += 1
         return self._clients[idx], self._key_ids[idx]
 
     async def create_message(
@@ -61,7 +63,7 @@ class AnthropicPool:
         last_error: Exception | None = None
 
         for attempt in range(MAX_RETRIES):
-            client, key_id = self._next_client()
+            client, key_id = await self._next_client()
             cb = self._circuit_breakers[key_id]
 
             try:

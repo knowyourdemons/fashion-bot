@@ -45,82 +45,94 @@ async def schedule_all() -> None:
     count = 0
     teaser_count = 0
 
+    _BATCH = 500
+
     try:
         from sqlalchemy import or_
         from datetime import timezone as _tz
-        async with AsyncReadSession() as session:
-            result = await session.execute(
-                select(User).where(
-                    User.onboarding_completed.is_(True),
-                    User.is_active.is_(True),
-                    User.deleted_at.is_(None),
-                    or_(
-                        User.plan != "free",
-                        User.trial_ends_at > datetime.now(_tz.utc),
-                    ),
-                )
-            )
-            users = list(result.scalars().all())
 
         today_str = date.today().isoformat()
+        offset = 0
+        users_batch: list = [None]  # sentinel to enter loop
 
-        for user in users:
-            try:
-                tz = pytz.timezone(user.timezone or "Europe/Vilnius")
-                if datetime.now(tz).hour != 7:
-                    continue
-                lock_key = f"lock:brief:{user.id}:{today_str}"
-                acquired = await redis_client.set(lock_key, 1, ex=86400, nx=True)
-                if not acquired:
-                    continue
-                await queue.push(
-                    "generate_brief",
-                    {"user_id": str(user.id)},
-                    priority=QueuePriority.HIGH,
+        while users_batch:
+            async with AsyncReadSession() as session:
+                result = await session.execute(
+                    select(User).where(
+                        User.onboarding_completed.is_(True),
+                        User.is_active.is_(True),
+                        User.deleted_at.is_(None),
+                        or_(
+                            User.plan != "free",
+                            User.trial_ends_at > datetime.now(_tz.utc),
+                        ),
+                    ).order_by(User.id).offset(offset).limit(_BATCH)
                 )
-                count += 1
-            except Exception as e:
-                logger.warning("brief.schedule.user_error", user_id=str(user.id), error=str(e))
+                users_batch = list(result.scalars().all())
+            offset += _BATCH
+
+            for user in users_batch:
+                try:
+                    tz = pytz.timezone(user.timezone or "Europe/Vilnius")
+                    if datetime.now(tz).hour != 7:
+                        continue
+                    lock_key = f"lock:brief:{user.id}:{today_str}"
+                    acquired = await redis_client.set(lock_key, 1, ex=86400, nx=True)
+                    if not acquired:
+                        continue
+                    await queue.push(
+                        "generate_brief",
+                        {"user_id": str(user.id)},
+                        priority=QueuePriority.HIGH,
+                    )
+                    count += 1
+                except Exception as e:
+                    logger.warning("brief.schedule.user_error", user_id=str(user.id), error=str(e))
 
         # Тизеры для pure free-юзеров в не-бриф дни
         try:
             from core.permissions import is_brief_day as _ibd_t
             from sqlalchemy import or_ as _or2
             from datetime import timezone as _tz2
-            async with AsyncReadSession() as session:
-                free_result = await session.execute(
-                    select(User).where(
-                        User.onboarding_completed.is_(True),
-                        User.is_active.is_(True),
-                        User.deleted_at.is_(None),
-                        User.plan == "free",
-                        _or2(
-                            User.trial_ends_at.is_(None),
-                            User.trial_ends_at <= datetime.now(_tz2.utc),
-                        ),
-                    )
-                )
-                free_users = list(free_result.scalars().all())
 
-            for free_user in free_users:
-                try:
-                    tz = pytz.timezone(free_user.timezone or "Europe/Vilnius")
-                    if datetime.now(tz).hour != 7:
-                        continue
-                    if _ibd_t("free", free_user.timezone or "Europe/Vilnius"):
-                        continue  # бриф день → не тизер
-                    teaser_lock = f"lock:teaser:{free_user.id}:{date.today().isoformat()}"
-                    acquired = await redis_client.set(teaser_lock, 1, ex=86400, nx=True)
-                    if not acquired:
-                        continue
-                    await queue.push(
-                        "send_teaser",
-                        {"user_id": str(free_user.id)},
-                        priority=QueuePriority.LOW,
+            _t_offset = 0
+            _t_batch: list = [None]
+            while _t_batch:
+                async with AsyncReadSession() as session:
+                    free_result = await session.execute(
+                        select(User).where(
+                            User.onboarding_completed.is_(True),
+                            User.is_active.is_(True),
+                            User.deleted_at.is_(None),
+                            User.plan == "free",
+                            _or2(
+                                User.trial_ends_at.is_(None),
+                                User.trial_ends_at <= datetime.now(_tz2.utc),
+                            ),
+                        ).order_by(User.id).offset(_t_offset).limit(_BATCH)
                     )
-                    teaser_count += 1
-                except Exception as e:
-                    logger.warning("teaser.schedule.user_error", user_id=str(free_user.id), error=str(e))
+                    _t_batch = list(free_result.scalars().all())
+                _t_offset += _BATCH
+
+                for free_user in _t_batch:
+                    try:
+                        tz = pytz.timezone(free_user.timezone or "Europe/Vilnius")
+                        if datetime.now(tz).hour != 7:
+                            continue
+                        if _ibd_t("free", free_user.timezone or "Europe/Vilnius"):
+                            continue  # бриф день → не тизер
+                        teaser_lock = f"lock:teaser:{free_user.id}:{date.today().isoformat()}"
+                        acquired = await redis_client.set(teaser_lock, 1, ex=86400, nx=True)
+                        if not acquired:
+                            continue
+                        await queue.push(
+                            "send_teaser",
+                            {"user_id": str(free_user.id)},
+                            priority=QueuePriority.LOW,
+                        )
+                        teaser_count += 1
+                    except Exception as e:
+                        logger.warning("teaser.schedule.user_error", user_id=str(free_user.id), error=str(e))
         except Exception as e:
             logger.warning("teaser.schedule.error", error=str(e))
 

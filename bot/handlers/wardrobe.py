@@ -13,6 +13,17 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
 from config import settings
+
+# ── Tracked background tasks ────────────────────────────────────────────────
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _track_task(coro, *, name: str | None = None) -> asyncio.Task:
+    """Create a tracked asyncio.Task that auto-removes itself when done."""
+    task = asyncio.create_task(coro, name=name)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 from core.anthropic_client import get_anthropic_pool
 from db.base import AsyncWriteSession, AsyncReadSession
 from db.crud.wardrobe import create, get_owner_items
@@ -461,7 +472,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             return
         owner_id, owner_type = await _get_owner(user, context)
         await update.message.reply_text("⭐ Оцениваю...")
-        asyncio.create_task(
+        _track_task(
             _rate_photos([file_id], "single", update.message,
                          context.bot, owner_id=owner_id, owner_type=owner_type)
         )
@@ -586,7 +597,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         length = await redis.rpush(list_key, file_id)
         if length == 1:
             await redis.expire(list_key, 15)
-            asyncio.create_task(
+            _track_task(
                 _collect_and_ask(media_group_id, update.message, redis)
             )
 
@@ -747,7 +758,7 @@ async def handle_photo_action(update: Update, context: ContextTypes.DEFAULT_TYPE
             await query.edit_message_text(get_limit_exceeded_msg(user))
             return
         await query.edit_message_text("📥 Добавляю в гардероб...")
-        asyncio.create_task(
+        _track_task(
             _process_media_group(
                 file_ids=file_ids,
                 user_id=str(user.id),
@@ -767,7 +778,7 @@ async def handle_photo_action(update: Update, context: ContextTypes.DEFAULT_TYPE
             await query.edit_message_text("Как оцениваем?", reply_markup=keyboard)
         else:
             await query.edit_message_text("⭐ Оцениваю...")
-            asyncio.create_task(_rate_photos(file_ids, "single", query.message, context.bot, owner_id=owner_id, owner_type=owner_type))
+            _track_task(_rate_photos(file_ids, "single", query.message, context.bot, owner_id=owner_id, owner_type=owner_type))
 
 
 
@@ -815,7 +826,7 @@ async def handle_rate_mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     file_ids = json.loads(raw if isinstance(raw, str) else raw.decode())
     await query.edit_message_text("⭐ Оцениваю...")
-    asyncio.create_task(_rate_photos(file_ids, mode, query.message, context.bot, owner_id=owner_id, owner_type=owner_type))
+    _track_task(_rate_photos(file_ids, mode, query.message, context.bot, owner_id=owner_id, owner_type=owner_type))
 
 
 # ── Обработка медиагруппы (добавление в гардероб) ──────────────────────────

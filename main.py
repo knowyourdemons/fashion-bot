@@ -84,6 +84,15 @@ async def startup() -> None:
 async def shutdown() -> None:
     if hasattr(app.state, "scheduler"):
         app.state.scheduler.stop()
+
+    # Wait for tracked background tasks (max 10s)
+    from bot.handlers.wardrobe import _background_tasks
+    if _background_tasks:
+        logger.info("shutdown.waiting_tasks", count=len(_background_tasks))
+        _, pending = await asyncio.wait(_background_tasks, timeout=10)
+        for t in pending:
+            t.cancel()
+
     if hasattr(app.state, "tg_app"):
         await app.state.tg_app.shutdown()
     await close_redis()

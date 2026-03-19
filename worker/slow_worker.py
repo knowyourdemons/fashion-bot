@@ -22,6 +22,9 @@ def register(task_type: str) -> Any:
     return decorator
 
 
+_BACKOFF = [1, 4, 16]
+
+
 class SlowWorker:
     QUEUES = [QueuePriority.NORMAL, QueuePriority.LOW]
     MAX_RETRIES = 3
@@ -56,10 +59,12 @@ class SlowWorker:
         handler = TASK_HANDLERS.get(msg.task_type)
         if not handler:
             logger.warning("slow_worker.unknown_task", task_type=msg.task_type)
+            await self._queue.ack(msg)
             return
 
         try:
             result = await handler(msg.payload)
+            await self._queue.ack(msg)
             await self._queue.store_result(msg.task_id, result or {})
             logger.info("slow_worker.task_done", task_id=msg.task_id, task_type=msg.task_type)
         except Exception as e:
@@ -67,13 +72,15 @@ class SlowWorker:
                 "slow_worker.task_error",
                 task_id=msg.task_id,
                 task_type=msg.task_type,
+                retry=msg.retry_count,
                 error=str(e),
             )
             if msg.retry_count >= self.MAX_RETRIES:
                 await self._queue.move_to_dead(msg, str(e))
             else:
-                msg.retry_count += 1
-                await self._queue.push(msg.task_type, msg.payload, QueuePriority.NORMAL)
+                delay = _BACKOFF[min(msg.retry_count, len(_BACKOFF) - 1)]
+                await asyncio.sleep(delay)
+                await self._queue.requeue(msg, QueuePriority.NORMAL)
 
     async def _heartbeat(self) -> None:
         key = f"worker:heartbeat:{self._worker_id}"

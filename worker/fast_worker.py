@@ -22,6 +22,10 @@ def register(task_type: str) -> Any:
     return decorator
 
 
+# Exponential backoff delays (seconds) by retry count
+_BACKOFF = [1, 4, 16]
+
+
 class FastWorker:
     QUEUES = [QueuePriority.HIGH]
     MAX_RETRIES = 3
@@ -37,6 +41,12 @@ class FastWorker:
 
     async def run(self, shutdown: asyncio.Event) -> None:
         logger.info("fast_worker.started")
+
+        # Recover orphaned messages from previous crash
+        recovered = await self._queue.recover_processing()
+        if recovered:
+            logger.info("fast_worker.recovered_tasks", count=recovered)
+
         while not shutdown.is_set():
             try:
                 msg = await self._queue.pop(self.QUEUES, timeout=5)
@@ -51,10 +61,12 @@ class FastWorker:
         handler = TASK_HANDLERS.get(msg.task_type)
         if not handler:
             logger.warning("fast_worker.unknown_task", task_type=msg.task_type)
+            await self._queue.ack(msg)
             return
 
         try:
             result = await handler(msg.payload)
+            await self._queue.ack(msg)
             await self._queue.store_result(msg.task_id, result or {})
             logger.info("fast_worker.task_done", task_id=msg.task_id, task_type=msg.task_type)
         except Exception as e:
@@ -62,13 +74,15 @@ class FastWorker:
                 "fast_worker.task_error",
                 task_id=msg.task_id,
                 task_type=msg.task_type,
+                retry=msg.retry_count,
                 error=str(e),
             )
             if msg.retry_count >= self.MAX_RETRIES:
                 await self._queue.move_to_dead(msg, str(e))
             else:
-                msg.retry_count += 1
-                await self._queue.push(msg.task_type, msg.payload, QueuePriority.HIGH)
+                delay = _BACKOFF[min(msg.retry_count, len(_BACKOFF) - 1)]
+                await asyncio.sleep(delay)
+                await self._queue.requeue(msg, QueuePriority.HIGH)
 
     async def _heartbeat(self) -> None:
         key = f"worker:heartbeat:{self._worker_id}"
