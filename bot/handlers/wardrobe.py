@@ -1826,7 +1826,7 @@ async def handle_what_to_wear(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def handle_ask_kassi(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Кнопка '💬 Спросить Касси' → подсказка для чата."""
     user = context.user_data.get("db_user")
-    from permissions import get_effective_plan as _gep, get_limit as _gl
+    from core.permissions import get_effective_plan as _gep, get_limit as _gl
     plan = _gep(user) if user else "free"
     chat_limit = _gl("chat_per_day", plan)
     await update.message.reply_text(

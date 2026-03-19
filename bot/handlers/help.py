@@ -2,7 +2,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from bot.handlers.menu import get_main_menu
-from permissions import get_effective_plan, get_limit
+from core.permissions import get_effective_plan, get_limit
 
 
 async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
