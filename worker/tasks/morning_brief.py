@@ -86,6 +86,7 @@ async def schedule_all() -> None:
         try:
             from core.permissions import is_brief_day as _ibd_t
             from sqlalchemy import or_ as _or2
+            from datetime import timezone as _tz2
             async with AsyncReadSession() as session:
                 free_result = await session.execute(
                     select(User).where(
@@ -93,7 +94,10 @@ async def schedule_all() -> None:
                         User.is_active.is_(True),
                         User.deleted_at.is_(None),
                         User.plan == "free",
-                        User.trial_ends_at.is_(None),
+                        _or2(
+                            User.trial_ends_at.is_(None),
+                            User.trial_ends_at <= datetime.now(_tz2.utc),
+                        ),
                     )
                 )
                 free_users = list(free_result.scalars().all())
