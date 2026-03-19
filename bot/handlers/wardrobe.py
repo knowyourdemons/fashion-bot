@@ -1226,11 +1226,32 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         # Полностью случайный seed при каждом запросе
         import uuid as _uuid
         _random.seed(str(_uuid.uuid4()))
-        # Исключить вещи из предыдущего образа для re-roll
-        if exclude_ids:
-            items_shuffled = [i for i in items if i.id not in exclude_ids]
+
+        # Накопленные исключения из Redis (все ранее показанные образы сегодня)
+        shown_key = f"outfit_shown:{user.id}:{owner_id_for_outfit}"
+        accumulated_ids: set = set(exclude_ids or [])
+        if redis:
+            try:
+                raw_shown = await redis.smembers(shown_key)
+                for raw in raw_shown:
+                    try:
+                        accumulated_ids.add(_uuid.UUID(raw.decode() if isinstance(raw, bytes) else raw))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        # Исключить все ранее показанные вещи
+        if accumulated_ids:
+            items_shuffled = [i for i in items if i.id not in accumulated_ids]
             if len(items_shuffled) < 3:
-                items_shuffled = list(items)  # мало вещей → включить все
+                # Мало вещей — сбросить историю, включить все
+                if redis:
+                    try:
+                        await redis.delete(shown_key)
+                    except Exception:
+                        pass
+                items_shuffled = list(items)
         else:
             items_shuffled = list(items)
         _random.shuffle(items_shuffled)
@@ -1273,6 +1294,14 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         if redis:
             await redis.incr(limit_key)
             await redis.expire(limit_key, 86400)
+            # Сохранить ID вещей этого образа — исключить при следующем reroll
+            try:
+                shown_item_ids = [str(i.id) for i in outfit.get("all_items", []) if hasattr(i, "id")]
+                if shown_item_ids:
+                    await redis.sadd(shown_key, *shown_item_ids)
+                    await redis.expire(shown_key, 86400)
+            except Exception:
+                pass
 
         _reroll_markup = InlineKeyboardMarkup([[
             InlineKeyboardButton("🔄 Другой образ", callback_data="outfit_request"),
