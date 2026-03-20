@@ -1221,16 +1221,21 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
 
         child = children[0] if children else None
 
-        # Погода — fallback 10/12°C если город не задан или сервис недоступен
+        # Погода — Open-Meteo (утро/день/вечер)
         temp_m, temp_e = 10.0, 12.0
+        _weather_data: dict = {}
         try:
-            if user.city and redis:
-                svc = WeatherService(redis)
-                wd = await svc.get(user.city)
-                temp_m = float(wd.temp_c)
-                temp_e = float(wd.evening_temp)
-                logger.info("outfit_request.weather_ok",
-                    city=user.city, temp_m=temp_m, temp_e=temp_e)
+            if user.city:
+                from services.brief_weather import _geocode_city, _get_weather
+                _coords = await _geocode_city(user.city)
+                if _coords:
+                    _weather_data = await _get_weather(
+                        _coords[0], _coords[1], user.timezone or "Europe/Vilnius"
+                    )
+                    temp_m = _weather_data.get("temp_morning") or 10.0
+                    temp_e = _weather_data.get("temp_evening") or temp_m
+                    logger.info("outfit_request.weather_ok",
+                        city=user.city, temp_m=temp_m, temp_e=temp_e)
         except Exception as we:
             logger.warning("outfit_request.weather_failed",
                 error=str(we), city=getattr(user, "city", None))
@@ -1296,7 +1301,13 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         )
 
         _day_type = ("садик" if today_date.weekday() < 5 else "прогулка") if child else ""
-        _collage_params = get_collage_params(child=child, user=user, temp=temp_m, day_type=_day_type)
+        _collage_params = get_collage_params(
+            child=child, user=user, temp=temp_m,
+            temp_now=_weather_data.get("temp_now"),
+            temp_day=_weather_data.get("temp_day"),
+            temp_evening=_weather_data.get("temp_evening"),
+            day_type=_day_type,
+        )
 
         # Тёплый комментарий Касси
         scored = [float(i.score_item) for i in outfit.get("all_items", []) if i.score_item]
