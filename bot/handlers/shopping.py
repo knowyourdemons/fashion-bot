@@ -70,4 +70,7 @@ async def handle_shopping(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             season=season,
             is_cached=is_cached,
         )
-        await update.message.reply_text(t("shopping.header", season=season, list=result))
+        header_text = t("shopping.header", season=season, list=result)
+        if child:
+            header_text = f"🛍 Что стоит купить {child.name} {season}:\n\n{result}"
+        await update.message.reply_text(header_text)

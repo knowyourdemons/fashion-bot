@@ -192,18 +192,38 @@ async def build_shopping_list(
             f"{expected_str}"
         )
 
+    # System prompt — включает контекст владельца
+    if is_child_wardrobe and child is not None:
+        from datetime import date as _date2
+        gender = getattr(child, "gender", "girl")
+        child_name = getattr(child, "name", "ребёнок")
+        age_str = ""
+        if getattr(child, "birthdate", None):
+            age_years = (_date2.today() - child.birthdate).days // 365
+            age_str = f", {age_years} лет"
+        gender_word = "девочка" if gender == "girl" else "мальчик"
+        size_str = f", размер {child.current_size}" if getattr(child, "current_size", None) else ""
+
+        system_prompt = (
+            f"Ты детский стилист. Анализируешь гардероб ребёнка.\n"
+            f"Ребёнок: {child_name}, {gender_word}{age_str}{size_str}.\n"
+            f"Рекомендуй ТОЛЬКО детские вещи для {'девочки' if gender == 'girl' else 'мальчика'} этого возраста.\n"
+            f"НЕ рекомендуй взрослые вещи. Учитывай что дети активны и растут быстро.\n"
+            f"Отвечай на русском. Кратко."
+        )
+    else:
+        system_prompt = "Ты стилист-аналитик для взрослой женщины. Отвечай только на русском. Кратко и по делу."
+
     user_prompt = (
         f"{owner_context}{colortype_str}\n"
         f"Сезон: {season}.\n\n"
         f"Гардероб ({len(sorted_items)} вещей):\n{items_lines}\n\n"
         f"{child_instruction}"
         f"Определи 5–7 конкретных вещей которых не хватает для этого сезона. "
-        f"Указывай цвет с учётом цветотипа. "
+        f"Указывай конкретный тип детской вещи и цвет. "
         f"Если гардероб полный — ответь пустой строкой. "
         f"Формат: нумерованный список, одна вещь на строку, без пояснений."
     )
-
-    system_prompt = "Ты стилист-аналитик. Отвечай только на русском. Кратко и по делу."
 
     # Установить lock перед вызовом Claude
     await redis.set(lock_key, "1", ex=60)
