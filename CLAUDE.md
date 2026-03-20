@@ -269,6 +269,10 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - `test_trial_wiring.py` (5) — trial degradation wired into brief, text, help, evening schedule
 - `test_selfie_colortype.py` (10) — selfie colortype onboarding step, transitions, resume, vision prompt
 
+## Документация
+- **WORKFLOW.md** — методология защитного проектирования (7 линз, 5 итераций, Three-Pass)
+- **claude_code_smart_brief.md** — спецификация умного брифа: два режима + погода + палитра
+
 ## Роадмап
 
 ### v1.0 remaining (до запуска жене)
@@ -276,6 +280,8 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - ~~Меню: "Что надеть" full-width + "Спросить Касси"~~ — ГОТОВО
 - ~~Текст брифа 15→5 строк~~ — ГОТОВО (уже компактный + round temp fix)
 - Visual polish: центрирование, иконки, контекст
+- Умный бриф: два режима (коллаж vs погодная карточка), см. `claude_code_smart_brief.md`
+- Текстовые фиксы: "AI-стилист" → "твой личный стилист", "переслать бабушке" → "переслать"
 
 ### v1.1 (апрель)
 - ~~Контекстный чат (wardrobe summary в system prompt)~~ — ГОТОВО
@@ -285,7 +291,7 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - /profile + /add_child
 - Оценка образа по фото (вещь vs outfit detection)
 - Gap analysis + growth alert WHO
-- Тизеры, engagement push, "переслать бабушке"
+- Тизеры, engagement push, кнопка "переслать" (inline или нативный forward)
 - ~~rembg u2net~~ — ГОТОВО (silueta.onnx local)
 - Sentry, CI/CD
 
