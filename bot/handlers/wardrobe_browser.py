@@ -418,8 +418,9 @@ async def handle_item_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         tags.append(color_dot)
     if tags:
         lines.append("  ".join(tags))
-    if item.created_at:
-        lines.append(f"Добавлена {item.created_at.strftime('%d.%m.%y')}")
+    _created = getattr(item, "created_at", None)
+    if _created:
+        lines.append(f"Добавлена {_created.strftime('%d.%m.%y')}")
     wc = getattr(item, "wear_count", 0) or 0
     if wc > 0:
         lines.append(f"Надевали {wc} раз")

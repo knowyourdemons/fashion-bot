@@ -46,7 +46,7 @@ def create_application() -> Application:
 
     # Кнопки главного меню
     app.add_handler(MessageHandler(filters.Regex("^✨ Что надеть$"), wardrobe.handle_what_to_wear))
-    app.add_handler(MessageHandler(filters.Regex("^(👗|👧|👦) Гардероб$"), wardrobe.handle_wardrobe_menu))
+    app.add_handler(MessageHandler(filters.Regex("^(👗|👧|👦|👩) Гардероб$"), wardrobe.handle_wardrobe_menu))
     app.add_handler(MessageHandler(filters.Regex("^💬 Спросить Касси$"), wardrobe.handle_ask_kassi))
     app.add_handler(MessageHandler(filters.Regex("^👤 Профиль$"), handle_profile))
 
