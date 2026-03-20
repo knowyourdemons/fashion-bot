@@ -414,15 +414,14 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
 
     header_children: list = []
     if name_part:
-        header_children.append(_text(name_part, 18, "#333", fontWeight="bold"))
-    if date_part:
-        # Date + palette dots on same line
         header_children.append(
             _row([
-                _text(date_part, 12, "#999"),
-                _row(_circles(palette[:3], 8), gap=3, marginLeft="auto"),
+                _text(name_part, 16, "#333", fontWeight="bold"),
+                _row(_circles(palette[:1], 10), gap=0, marginLeft="auto"),
             ], alignItems="center"),
         )
+    if date_part:
+        header_children.append(_text(date_part, 11, "#AAA"))
 
     ws = _weather_strip_element(weather_data) if weather_data else None
     if ws:
@@ -430,7 +429,7 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
     elif temp_part:
         header_children.append(_text(temp_part, 13, "#888"))
 
-    header_el = _col(header_children, gap=3, padding="20px 24px 10px")
+    header_el = _col(header_children, gap=2, padding="20px 24px 10px")
 
     body_rows: list = []
 
@@ -463,10 +462,11 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
     # Footer: weather comment + palette + Касси
     footer_el = _footer_comment(footer_text, palette)
 
-    h = 60 + 16  # header
+    h = 70  # header
+    if ws: h += 65  # weather strip
     if hero: h += 232
     if op or tops or bots: h += 182
-    if small: h += 102
+    if small: h += 110
     h += 56  # footer
     h = max(h, 480)
 
@@ -488,12 +488,16 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
 
     header_children: list = []
     if name_part:
-        header_children.append(_text(name_part, 16, "#222", fontWeight="bold"))
+        header_children.append(
+            _row([
+                _text(name_part, 16, "#222", fontWeight="bold"),
+                _row(_circles(palette[:2], 10), gap=3, marginLeft="auto"),
+            ], alignItems="center"),
+        )
     if date_part:
         header_children.append(
             _row([
                 _text(date_part, 11, "#999"),
-                _row(_circles(palette[:3], 8), gap=3, marginLeft="auto"),
             ], alignItems="center"),
         )
     ws = _weather_strip_element(weather_data) if weather_data else None
