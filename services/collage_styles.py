@@ -670,8 +670,23 @@ def _recommended_color_hex(slot: str, colortype: str = "default") -> str:
 
 
 def _section_label(text_str: str) -> dict:
-    """Section header: "ПОД ОДЕЖДУ", "ОДЕЖДА", etc."""
-    return _text(text_str, 9, "#B0A0B0", letterSpacing=1, marginBottom=2)
+    """Section header with line: "ОДЕЖДА ————————————"."""
+    return _row([
+        _text(text_str, 9, "#B0A0B0", letterSpacing=1, flexShrink=0),
+        {
+            "type": "div",
+            "props": {
+                "style": {
+                    "display": "flex",
+                    "flex": 1,
+                    "height": 1,
+                    "backgroundColor": "#E0D8E0",
+                    "marginLeft": 8,
+                    "marginTop": 5,
+                },
+            },
+        },
+    ], alignItems="center", marginTop=4)
 
 
 def _item_row(slot: str, color_name: str, label: str,
