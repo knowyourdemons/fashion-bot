@@ -428,10 +428,32 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
 
     header_children: list = []
     if name_part:
-        name_row = [_text(name_part, 16, "#333", fontWeight="bold")]
         if palette:
-            name_row.append(_row(_circles(palette[:3], 10), gap=4, marginLeft="auto"))
-        header_children.append(_row(name_row, alignItems="center"))
+            header_children.append({
+                "type": "div",
+                "props": {
+                    "style": {
+                        "display": "flex",
+                        "flexDirection": "row",
+                        "justifyContent": "space-between",
+                        "alignItems": "center",
+                        "width": "100%",
+                    },
+                    "children": [
+                        {"type": "div", "props": {
+                            "style": {"display": "flex", "fontFamily": "DejaVu", "fontSize": 15,
+                                       "fontWeight": 700, "color": "#333"},
+                            "children": name_part,
+                        }},
+                        {"type": "div", "props": {
+                            "style": {"display": "flex", "flexDirection": "row", "gap": 4},
+                            "children": _circles(palette[:3], 9),
+                        }},
+                    ],
+                },
+            })
+        else:
+            header_children.append(_text(name_part, 15, "#333", fontWeight="bold"))
 
     ws = _weather_strip_element(weather_data) if weather_data else None
     if ws:
@@ -439,48 +461,41 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
     elif temp_part:
         header_children.append(_text(temp_part, 13, "#888"))
 
-    header_el = _col(header_children, gap=3, padding="20px 24px 10px")
+    header_el = _col(header_children, gap=3, padding="20px 24px 8px")
 
-    # Divider
-    _fl_divider = {
-        "type": "div",
-        "props": {"style": {"display": "flex", "width": "100%", "height": 1, "backgroundColor": "#E8DCD0", "marginBottom": 4}},
-    }
+    body_rows: list = []
 
-    body_rows: list = [_fl_divider]
-
-    # Hero: outerwear — compact
+    # Hero: outerwear — centered, NOT full width (like reference)
     if hero:
-        body_rows.append(_card(hero[0], "100%", "120px", radius=16, img_w="70%", img_h="60%"))
+        body_rows.append(
+            _row([_card(hero[0], "65%", "120px", radius=16, img_w="70%", img_h="60%")],
+                 justifyContent="center"),
+        )
 
-    # Main: top + bottom side by side (or one_piece full width)
+    # Main: top + bottom — slightly different sizes for "free layout" feel
     op = [s for s in main if s.get("slot") == "one_piece"]
     tops = [s for s in main if s.get("slot") in ("top", "removable_layer")]
     bots = [s for s in main if s.get("slot") == "bottom"]
     if op:
-        body_rows.append(_card(op[0], "100%", "150px", radius=14))
+        body_rows.append(_card(op[0], "100%", "140px", radius=14))
     elif tops or bots:
         cards = []
         if tops:
-            cards.append(_card(tops[0], "48%", "150px", radius=14))
+            cards.append(_card(tops[0], "44%", "140px", radius=14))
         if bots:
-            cards.append(_card(bots[0], "48%", "150px", radius=14))
-        body_rows.append(_row(cards, justifyContent="space-between"))
+            cards.append(_card(bots[0], "52%", "155px", radius=14))
+        body_rows.append(_row(cards, justifyContent="space-between", alignItems="flex-end"))
 
-    # Small: footwear + accessories — bigger for real photos to show
+    # Small: shifted right for asymmetry
     if small:
-        sm_cards = [_card(s, f"{90 // max(len(small), 1)}%", "110px",
-                          radius=12, label_size=11, img_w="80%", img_h="70%") for s in small]
-        body_rows.append(_row(sm_cards, gap=8, justifyContent="center"))
+        sm_cards = [_card(s, f"{85 // max(len(small), 1)}%", "100px",
+                          radius=12, label_size=11, img_w="75%", img_h="65%") for s in small]
+        body_rows.append(_row(sm_cards, gap=8, justifyContent="flex-end"))
 
     body = _col(body_rows, gap=10, padding="0 20px")
 
-    # Footer with divider + advice (same as moodboard)
-    _fl_footer_div = {
-        "type": "div",
-        "props": {"style": {"display": "flex", "width": "100%", "height": 1, "backgroundColor": "#E8DCD0"}},
-    }
-    footer_parts = [_fl_footer_div]
+    # Footer: advice in card + Касси
+    footer_inner = []
     if footer_text:
         if "дожд" in footer_text.lower() or "зонт" in footer_text.lower():
             _e = "🌧"
@@ -488,15 +503,17 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
             _e = "🧣"
         else:
             _e = "✨"
-        footer_parts.append(_text(f"{_e} {footer_text}", 12, "#777", fontStyle="italic"))
-    footer_parts.append(_text("Касси", 10, "#B0A8B8"))
-    footer_el = _col(footer_parts, gap=4, padding="8px 24px 16px")
+        footer_inner.append(_text(f"{_e} {footer_text}", 12, "#666"))
+    footer_inner.append(_text("Касси", 10, "#B0A8B8"))
+    footer_el = _col([
+        _white_card(footer_inner, backgroundColor="#FFF5EE", borderRadius=14, padding="10px 14px"),
+    ], gap=0, padding="4px 20px 14px")
 
-    h = 65  # header
+    h = 60  # header
     if ws: h += 65
     if hero: h += 132
-    if op or tops or bots: h += 162
-    if small: h += 122
+    if op or tops or bots: h += 168
+    if small: h += 112
     h += 55  # footer
     _fl = max(1, (len(footer_text) // 35 + 1)) if footer_text else 0
     h += _fl * 16
