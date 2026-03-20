@@ -597,9 +597,8 @@ def _lighten(hex_color: str) -> str:
 # STYLE: BRIEF CARD — morning brief as dressing-order list with weather
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _color_dot(color_name: str) -> dict:
-    """Small color dot for item list."""
-    hex_c = _color_hex(color_name)
+def _color_dot(hex_color: str) -> dict:
+    """Small color dot (CSS div, not emoji)."""
     return {
         "type": "div",
         "props": {
@@ -607,13 +606,26 @@ def _color_dot(color_name: str) -> dict:
                 "display": "flex",
                 "width": 10, "height": 10,
                 "borderRadius": "50%",
-                "backgroundColor": hex_c,
-                "marginTop": 4,
-                "marginRight": 6,
+                "backgroundColor": hex_color,
+                "marginTop": 3,
+                "marginRight": 8,
                 "flexShrink": 0,
             },
         },
     }
+
+
+def _recommended_color_hex(slot: str, colortype: str = "default") -> str:
+    """Get recommended color HEX for a placeholder slot based on colortype palette."""
+    try:
+        from worker.tasks.style_config import COLORTYPE_PALETTES
+        palette = COLORTYPE_PALETTES.get(colortype, COLORTYPE_PALETTES.get("default", {}))
+        colors = palette.get(slot, palette.get("outerwear", ["нейтральный"]))
+        if colors:
+            return _color_hex(colors[0])
+    except Exception:
+        pass
+    return "#B0B8C0"  # neutral gray-blue fallback
 
 
 def _section_label(text_str: str) -> dict:
@@ -621,14 +633,25 @@ def _section_label(text_str: str) -> dict:
     return _text(text_str, 9, "#B0A0B0", letterSpacing=1, marginBottom=2)
 
 
-def _item_row(color: str, label: str, is_placeholder: bool = False) -> dict:
-    """Single item row with color dot."""
-    children = [_color_dot(color)]
+def _item_row(slot: str, color_name: str, label: str,
+              is_placeholder: bool = False, colortype: str = "default") -> dict:
+    """Single item row with color dot.
+    Real item: dot = actual item color.
+    Placeholder: dot = recommended color from colortype palette.
+    """
     if is_placeholder:
-        children.append(_text(label, 14, "#AAA"))
-        children.append(_text("добавь", 11, "#C8A0B0", marginLeft="auto"))
+        dot_hex = _recommended_color_hex(slot, colortype)
+        children = [
+            _color_dot(dot_hex),
+            _text(label, 14, "#AAA"),
+            _text("добавь", 11, "#C8A0B0", marginLeft="auto"),
+        ]
     else:
-        children.append(_text(label, 14, "#333", fontWeight="500"))
+        dot_hex = _color_hex(color_name)
+        children = [
+            _color_dot(dot_hex),
+            _text(label, 14, "#333", fontWeight="500"),
+        ]
     return _row(children, gap=0, alignItems="center")
 
 
@@ -645,7 +668,7 @@ def _white_card(children: list, **extra) -> dict:
 
 def build_brief_card(slots: list, header_text: str, footer_text: str,
                      palette: list[str], *, weather_data: dict = None,
-                     outfit: dict = None) -> tuple[dict, int, int]:
+                     outfit: dict = None, colortype: str = "default") -> tuple[dict, int, int]:
     """Morning brief card: items in dressing order + weather."""
     W = 420
     weather_data = weather_data or {}
@@ -695,10 +718,10 @@ def build_brief_card(slots: list, header_text: str, footer_text: str,
             if s.get("has_item"):
                 color = s.get("item_color", "")
                 label = f"{s.get('item_type', '')} {color}".strip()
-                clothes_rows.append(_item_row(color, label))
+                clothes_rows.append(_item_row(sk, color, label))
             else:
                 ph = s.get("label") or _get_placeholder_label(sk, s.get("gender", "girl"))
-                clothes_rows.append(_item_row("серый", ph, is_placeholder=True))
+                clothes_rows.append(_item_row(sk, "", ph, is_placeholder=True, colortype=colortype))
 
     # ── ОБУВЬ ──
     foot_rows: list = []
@@ -707,9 +730,9 @@ def build_brief_card(slots: list, header_text: str, footer_text: str,
             if s.get("has_item"):
                 color = s.get("item_color", "")
                 label = f"{s.get('item_type', '')} {color}".strip()
-                foot_rows.append(_item_row(color, label))
+                foot_rows.append(_item_row("footwear", color, label))
             else:
-                foot_rows.append(_item_row("серый", "Обувь", is_placeholder=True))
+                foot_rows.append(_item_row("footwear", "", "Обувь", is_placeholder=True, colortype=colortype))
 
     # ── НА ВЫХОД ──
     exit_rows: list = []
@@ -719,10 +742,10 @@ def build_brief_card(slots: list, header_text: str, footer_text: str,
             if s.get("has_item"):
                 color = s.get("item_color", "")
                 label = f"{s.get('item_type', '')} {color}".strip()
-                exit_rows.append(_item_row(color, label))
+                exit_rows.append(_item_row(sk, color, label))
             else:
                 ph = s.get("label") or _get_placeholder_label(sk, s.get("gender", "girl"))
-                exit_rows.append(_item_row("серый", ph, is_placeholder=True))
+                exit_rows.append(_item_row(sk, "", ph, is_placeholder=True, colortype=colortype))
 
     # ── Build items card with section labels ──
     items_content: list = []

@@ -754,9 +754,10 @@ async def generate_brief(payload: dict) -> dict:
                     else:
                         _weather_footer = "Хорошей прогулки!"
 
+            _child_ct = getattr(children[0], "colortype", "") if children else ""
             _el, _w, _h = build_brief_card(
                 all_outfit_slots, collage_header, _weather_footer, _palette,
-                weather_data=weather, outfit=_first_outfit,
+                weather_data=weather, outfit=_first_outfit, colortype=_child_ct or "default",
             )
             from services.image_builder import _render_satori
             _brief_card_bytes = await _render_satori(_el, _w, _h)
