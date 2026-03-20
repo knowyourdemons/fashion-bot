@@ -81,29 +81,43 @@ def _color_hex(color_name: str) -> str:
 
 
 def collect_palette(slots: list, colortype: str = "") -> list[str]:
-    """Color palette: from actual items + colortype recommendations."""
-    # Colors from actual items
+    """Color palette: from actual items + placeholder recommended colors + colortype."""
     seen: set[str] = set()
     result: list[str] = []
-    for s in slots:
-        c = (s.get("item_color") or "").lower()
-        if c and c not in seen:
-            seen.add(c)
-            result.append(_color_hex(c))
 
-    # Add colortype-based colors for variety
+    # 1. Colors from actual items (real wardrobe)
+    for s in slots:
+        if s.get("has_item"):
+            c = (s.get("item_color") or "").lower()
+            if c:
+                h = _color_hex(c)
+                if h not in seen:
+                    seen.add(h)
+                    result.append(h)
+
+    # 2. Recommended colors from placeholders (what to buy)
+    for s in slots:
+        if not s.get("has_item"):
+            slot_key = s.get("slot", "top")
+            h = _recommended_color_hex(slot_key, colortype)
+            if h and h not in seen:
+                seen.add(h)
+                result.append(h)
+
+    # 3. Fill with colortype base palette if still short
     _CT_PALETTE = {
-        "Весна": ["#F4A0B0", "#F0D030", "#60B060", "#E8D0B0"],
-        "Лето": ["#70B0D8", "#B090D0", "#D0A0A8", "#999999"],
-        "Осень": ["#8B6040", "#F0A030", "#60B060", "#8B2252"],
+        "Весна": ["#F0A878", "#E07060", "#60B060", "#E8D0B0"],
+        "Лето": ["#B090D0", "#80C8A0", "#D0A0A8", "#90B0C0"],
+        "Осень": ["#C8A830", "#C07050", "#808040", "#8B6040"],
         "Зима": ["#D94040", "#4060C0", "#333333", "#F0F0F0"],
     }
     if colortype and colortype in _CT_PALETTE:
         for c in _CT_PALETTE[colortype]:
-            if c not in result:
+            if c not in seen:
+                seen.add(c)
                 result.append(c)
 
-    return result[:6]
+    return result[:5]
 
 
 # ── Zone splitting ───────────────────────────────────────────────────────────
@@ -429,7 +443,7 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
     elif temp_part:
         header_children.append(_text(temp_part, 13, "#888"))
 
-    header_el = _col(header_children, gap=2, padding="20px 24px 10px")
+    header_el = _col(header_children, gap=2, padding="24px 24px 10px")
 
     body_rows: list = []
 
@@ -491,23 +505,32 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
         header_children.append(
             _row([
                 _text(name_part, 16, "#222", fontWeight="bold"),
-                _row(_circles(palette[:2], 10), gap=3, marginLeft="auto"),
+                _row(_circles(palette[:3], 10), gap=4, marginLeft="auto"),
             ], alignItems="center"),
         )
-    if date_part:
-        header_children.append(
-            _row([
-                _text(date_part, 11, "#999"),
-            ], alignItems="center"),
-        )
+
     ws = _weather_strip_element(weather_data) if weather_data else None
     if ws:
         header_children.append(ws)
     elif temp_part:
         header_children.append(_text(temp_part, 12, "#888"))
-    header_el = _col(header_children, gap=3, padding="20px 24px 14px")
+    header_el = _col(header_children, gap=4, padding="28px 24px 14px")
 
-    body_rows: list = []
+    # Divider after header/weather
+    _divider = {
+        "type": "div",
+        "props": {
+            "style": {
+                "display": "flex",
+                "width": "100%",
+                "height": 1,
+                "backgroundColor": "#E8E0E8",
+                "marginBottom": 4,
+            },
+        },
+    }
+
+    body_rows: list = [_divider]
 
     if hero:
         body_rows.append(_card(hero[0], "100%", "190px", radius=12, shadow=False, img_w="75%", img_h="68%"))
