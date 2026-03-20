@@ -924,12 +924,14 @@ async def _render_satori(element: dict, width: int, height: int) -> Optional[byt
 async def build_collage_satori(
     slots: list,
     header_text: str = "",
-    footer_text: str = "Касси -- твой личный стилист",
+    footer_text: str = "",
     style: Optional[str] = None,
+    weather_data: Optional[dict] = None,
+    colortype: str = "",
 ) -> Optional[bytes]:
     """Render collage via Satori with rotating styles.
 
-    6 styles: magazine, editorial, story_card, polaroid, palette_first, pro_stylist.
+    3 styles: flat_lay, moodboard, story.
     If style is None, uses round-robin rotation.
     Returns PNG bytes or None on error.
     """
@@ -942,10 +944,13 @@ async def build_collage_satori(
     t0 = _time.monotonic()
     chosen = style or next_style()
     builder = BUILDERS.get(chosen, BUILDERS["flat_lay"])
-    palette = collect_palette(slots)
+    palette = collect_palette(slots, colortype=colortype)
 
     try:
-        element, width, height = builder(slots, header_text, footer_text, palette)
+        element, width, height = builder(
+            slots, header_text, footer_text, palette,
+            weather_data=weather_data or {},
+        )
     except Exception as e:
         logger.warning("satori.build_element_failed", style=chosen, error=str(e))
         return None
@@ -966,7 +971,9 @@ async def build_collage(
     photo_urls: Optional[list] = None,
     theme: str = "girl",
     header_text: str = "",
-    footer_text: str = "Касси -- твой личный стилист",
+    footer_text: str = "",
+    weather_data: Optional[dict] = None,
+    colortype: str = "",
 ) -> Optional[bytes]:
     """
     Собирает коллаж.
@@ -1001,6 +1008,7 @@ async def build_collage(
             # Try Satori first, fallback to PIL
             satori_result = await build_collage_satori(
                 outfit_slots, header_text, footer_text,
+                weather_data=weather_data, colortype=colortype,
             )
             if satori_result:
                 return satori_result

@@ -233,16 +233,100 @@ def _circles(palette: list[str], size: int = 18) -> list[dict]:
     ]
 
 
+def _wmo_to_icon_name(code: int) -> str:
+    """WMO weather code → icon filename."""
+    if code in (0, 1):
+        return "sun"
+    if code in (2, 3):
+        return "partly_cloudy"
+    if code in (45, 48):
+        return "fog"
+    if code in (51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82):
+        return "rain"
+    if code in (71, 73, 75, 77, 85, 86):
+        return "snow"
+    if code in (95, 96, 99):
+        return "thunder"
+    return "partly_cloudy"
+
+
+_weather_icon_cache: dict[str, str] = {}
+
+
+def _weather_icon_uri(name: str) -> Optional[str]:
+    """Load weather PNG icon as data URI. Cached."""
+    if name in _weather_icon_cache:
+        return _weather_icon_cache[name]
+    import os
+    path = os.path.join(os.path.dirname(__file__), "..", "assets", "weather", f"{name}.png")
+    if os.path.exists(path):
+        with open(path, "rb") as f:
+            data = f.read()
+        uri = _img_to_data_uri(data)
+        _weather_icon_cache[name] = uri
+        return uri
+    return None
+
+
+def _weather_strip_element(weather_data: dict) -> Optional[dict]:
+    """Build weather strip with PNG icons: ☀+4° → 🌤+7° → 🌧+2°."""
+    parts = []
+    for key, label in [("temp_morning", "утро"), ("temp_day", "день"), ("temp_evening", "вечер")]:
+        temp = weather_data.get(key)
+        if temp is None:
+            continue
+        wmo_key = key.replace("temp_", "wmo_")
+        wmo = weather_data.get(wmo_key, 2)
+        icon_name = _wmo_to_icon_name(wmo)
+        icon_uri = _weather_icon_uri(icon_name)
+        sign = "+" if temp >= 0 else ""
+
+        children: list = []
+        if icon_uri:
+            children.append({
+                "type": "img",
+                "props": {
+                    "src": icon_uri,
+                    "width": 24, "height": 24,
+                    "style": {"objectFit": "contain"},
+                },
+            })
+        children.append(_text(f"{sign}{temp:.0f}°", 14, "#555", fontWeight="bold"))
+        children.append(_text(label, 10, "#999"))
+
+        parts.append({
+            "type": "div",
+            "props": {
+                "style": {
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "alignItems": "center",
+                    "gap": 2,
+                },
+                "children": children,
+            },
+        })
+
+    if not parts:
+        return None
+
+    # Add arrows between parts
+    elements: list = []
+    for i, p in enumerate(parts):
+        elements.append(p)
+        if i < len(parts) - 1:
+            elements.append(_text("→", 12, "#CCC"))
+
+    return _row(elements, gap=8, justifyContent="center", alignItems="center",
+                padding="8px 0")
+
+
 def _weather_strip(header_text: str) -> Optional[dict]:
-    """Build weather strip: +4° утро → +7° день → +2° вечер.
-    Satori can't render emoji, so we use text labels."""
-    # Parse temp from header: "Пт, 20 мар · сейчас +5°C · Алиса, садик"
+    """Fallback: text-only weather strip from header."""
     h_parts = (header_text or "").split(" · ")
     temp_part = h_parts[1] if len(h_parts) > 1 else ""
     if not temp_part or "°" not in temp_part:
         return None
-
-    # Simple display of the temperature string
     return _text(temp_part, 13, "#777", marginTop=2)
 
 
@@ -263,24 +347,36 @@ def _footer_comment(footer_text: str, palette: list[str]) -> dict:
 # Instagram-friendly, cozy aesthetic
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def build_flat_lay(slots: list, header_text: str, footer_text: str,
-                   palette: list[str]) -> tuple[dict, int, int]:
-    hero, main, small = _split_zones(slots)
-    W = 440
-    bg = "#FFF8F2"
-
-    # Parse header: "Пт, 20 мар · +5°C · Алиса, садик" → parts
+def _parse_header(header_text: str) -> tuple[str, str, str]:
+    """Parse 'Пт, 20 мар · +4°/+6°/+6° · Алиса, садик' → (date, temp, name)."""
     h_parts = (header_text or "Образ дня").split(" · ")
     date_part = h_parts[0] if h_parts else ""
     temp_part = h_parts[1] if len(h_parts) > 1 else ""
     name_part = h_parts[2] if len(h_parts) > 2 else ""
+    return date_part, temp_part, name_part
+
+
+def build_flat_lay(slots: list, header_text: str, footer_text: str,
+                   palette: list[str], *, weather_data: dict = None) -> tuple[dict, int, int]:
+    hero, main, small = _split_zones(slots)
+    W = 440
+    bg = "#FFF8F2"
+    weather_data = weather_data or {}
+
+    date_part, temp_part, name_part = _parse_header(header_text)
 
     header_children: list = []
     if name_part:
         header_children.append(_text(name_part, 18, "#333", fontWeight="bold"))
-    if date_part or temp_part:
-        sub = " · ".join(p for p in [date_part, temp_part] if p)
-        header_children.append(_text(sub, 13, "#888"))
+    if date_part:
+        header_children.append(_text(date_part, 12, "#999"))
+
+    # Weather strip with PNG icons
+    ws = _weather_strip_element(weather_data) if weather_data else None
+    if ws:
+        header_children.append(ws)
+    elif temp_part:
+        header_children.append(_text(temp_part, 13, "#888"))
 
     header_el = _col(header_children, gap=3, padding="20px 24px 10px")
 
@@ -331,22 +427,23 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def build_moodboard(slots: list, header_text: str, footer_text: str,
-                    palette: list[str]) -> tuple[dict, int, int]:
+                    palette: list[str], *, weather_data: dict = None) -> tuple[dict, int, int]:
     hero, main, small = _split_zones(slots)
     W = 440
+    weather_data = weather_data or {}
 
-    # Parse header parts
-    h_parts = (header_text or "Образ дня").split(" · ")
-    date_part = h_parts[0] if h_parts else ""
-    temp_part = h_parts[1] if len(h_parts) > 1 else ""
-    name_part = h_parts[2] if len(h_parts) > 2 else ""
+    date_part, temp_part, name_part = _parse_header(header_text)
 
     header_children: list = []
     if name_part:
         header_children.append(_text(name_part, 16, "#222", fontWeight="bold"))
-    sub = " · ".join(p for p in [date_part, temp_part] if p)
-    if sub:
-        header_children.append(_text(sub, 12, "#888"))
+    if date_part:
+        header_children.append(_text(date_part, 11, "#999"))
+    ws = _weather_strip_element(weather_data) if weather_data else None
+    if ws:
+        header_children.append(ws)
+    elif temp_part:
+        header_children.append(_text(temp_part, 12, "#888"))
     header_el = _col(header_children, gap=3, padding="20px 24px 14px")
 
     body_rows: list = []
@@ -392,26 +489,27 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def build_story(slots: list, header_text: str, footer_text: str,
-                palette: list[str]) -> tuple[dict, int, int]:
+                palette: list[str], *, weather_data: dict = None) -> tuple[dict, int, int]:
     hero, main, small = _split_zones(slots)
     W = 440
+    weather_data = weather_data or {}
 
-    # Gradient-like bg using palette colors (Satori doesn't support CSS gradients
-    # so we use a solid light purple — matches the story ref)
     bg = "#E8E0F0" if not palette else _lighten(palette[0])
 
-    # Parse header parts
-    h_parts = (header_text or "Образ дня").split(" · ")
-    date_part = h_parts[0] if h_parts else ""
-    temp_part = h_parts[1] if len(h_parts) > 1 else ""
-    name_part = h_parts[2] if len(h_parts) > 2 else h_parts[0]
+    date_part, temp_part, name_part = _parse_header(header_text)
+    if not name_part:
+        name_part = date_part  # fallback
 
     header_children: list = [
         _text(name_part, 22, "#333", fontWeight="bold", textAlign="center"),
     ]
-    sub = " · ".join(p for p in [date_part, temp_part] if p)
-    if sub:
-        header_children.append(_text(sub.upper(), 11, "#666", letterSpacing=1, textAlign="center"))
+    if date_part and name_part != date_part:
+        header_children.append(_text(date_part.upper(), 10, "#666", letterSpacing=1, textAlign="center"))
+    ws = _weather_strip_element(weather_data) if weather_data else None
+    if ws:
+        header_children.append(ws)
+    elif temp_part:
+        header_children.append(_text(temp_part, 12, "#777", textAlign="center"))
 
     header_el = _col(header_children, gap=4, padding="24px 24px 8px", alignItems="center")
 

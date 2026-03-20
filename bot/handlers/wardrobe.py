@@ -1330,6 +1330,9 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             outfit_slots=all_slots,
             theme=_collage_params["theme"],
             header_text=_collage_params["header_text"],
+            footer_text=_collage_params.get("footer_text", ""),
+            weather_data=_weather_data,
+            colortype=colortype_for_outfit,
         )
 
         # Сохранить BriefLog для кнопок feedback
