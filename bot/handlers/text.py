@@ -107,7 +107,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 await redis.delete(f"weather:cache:{text_input}")
             context.user_data.pop("editing", None)
             context.user_data.pop("editing_ts", None)
-            await update.message.reply_text(f"✅ Город обновлён: {text_input}")
+            from telegram import ReplyKeyboardRemove
+            await update.message.reply_text(
+                f"✅ Город обновлён: {text_input}",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+            from bot.handlers.menu import get_main_menu
+            await update.message.reply_text("Меню:", reply_markup=get_main_menu())
             return
 
         if editing == "child_size":

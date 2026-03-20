@@ -60,6 +60,7 @@ def get_collage_params(
     child=None,
     user=None,
     temp: float | None = None,
+    temp_now: float | None = None,
     temp_day: float | None = None,
     temp_evening: float | None = None,
     precip: float = 0,
@@ -77,16 +78,25 @@ def get_collage_params(
         theme = "adult"
 
     # Header — без эмодзи (PIL/DejaVuSans не рендерит unicode emoji → квадраты)
-    sign = "+" if (temp or 0) >= 0 else ""
     day_str = f"{_DAY_NAMES[today.weekday()]}, {today.day} {_MONTH_NAMES[today.month]}"
 
-    # Температурная строка: утро→день→вечер или утро→вечер
-    if temp is not None and temp_day is not None and temp_evening is not None:
-        sd = "+" if temp_day >= 0 else ""
-        se = "+" if temp_evening >= 0 else ""
-        temp_str = f"{sign}{temp:.0f} / {sd}{temp_day:.0f} / {se}{temp_evening:.0f}°C"
+    # Температурная строка: "сейчас +9, днём +11, вечером +5"
+    parts: list[str] = []
+    if temp_now is not None:
+        sn = "+" if temp_now >= 0 else ""
+        parts.append(f"сейчас {sn}{temp_now:.0f}")
     elif temp is not None:
-        temp_str = f"{sign}{temp:.0f}°C"
+        sm = "+" if temp >= 0 else ""
+        parts.append(f"утро {sm}{temp:.0f}")
+    if temp_day is not None:
+        sd = "+" if temp_day >= 0 else ""
+        parts.append(f"день {sd}{temp_day:.0f}")
+    if temp_evening is not None:
+        se = "+" if temp_evening >= 0 else ""
+        parts.append(f"вечер {se}{temp_evening:.0f}")
+
+    if parts:
+        temp_str = ", ".join(parts) + "°C"
     else:
         temp_str = ""
 
@@ -94,10 +104,10 @@ def get_collage_params(
         context = child.name
         if day_type:
             context += f", {day_type}"
-        header = f"{day_str} · {temp_str} · {context}"
+        header = f"{day_str} · {temp_str} · {context}" if temp_str else f"{day_str} · {context}"
     else:
         day_ctx = "выходной" if today.weekday() >= 5 else "будний день"
-        header = f"{day_str} · {temp_str} · {day_ctx}"
+        header = f"{day_str} · {temp_str} · {day_ctx}" if temp_str else f"{day_str} · {day_ctx}"
 
     return {
         "theme": theme,

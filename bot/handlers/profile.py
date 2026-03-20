@@ -86,12 +86,64 @@ async def handle_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 async def handle_edit_city(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Callback: edit_city → запросить новый город."""
+    """Callback: edit_city → запросить новый город с кнопкой геолокации."""
+    from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
     query = update.callback_query
     await query.answer()
     context.user_data["editing"] = "city"
     context.user_data["editing_ts"] = time.time()
-    await query.message.reply_text("🏙 В каком городе живёте?\n\nНапиши название города (или «отмена»)")
+    location_keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("📍 Определить автоматически", request_location=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+    await query.message.reply_text(
+        "🏙 В каком городе живёте?\n\nНапиши название города или отправь геолокацию (или «отмена»)",
+        reply_markup=location_keyboard,
+    )
+
+
+async def handle_edit_city_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработка геолокации при editing=city."""
+    user = context.user_data.get("db_user")
+    editing = context.user_data.get("editing")
+    if not user or editing != "city":
+        return
+
+    loc = update.message.location
+    if not loc:
+        return
+
+    from telegram import ReplyKeyboardRemove
+    from bot.handlers.onboarding import _reverse_geocode
+
+    city_name, tz_str = await _reverse_geocode(loc.latitude, loc.longitude)
+
+    import sqlalchemy as sa
+    from db.models.user import User as UserModel
+    async with AsyncWriteSession() as session:
+        await session.execute(
+            sa.update(UserModel).where(UserModel.id == user.id).values(
+                city=city_name, timezone=tz_str,
+            )
+        )
+        await session.commit()
+    user.city = city_name
+    user.timezone = tz_str
+
+    redis = context.bot_data.get("redis")
+    if redis:
+        await redis.delete(f"weather:cache:{city_name}")
+
+    context.user_data.pop("editing", None)
+    context.user_data.pop("editing_ts", None)
+    await update.message.reply_text(
+        f"✅ Город обновлён: {city_name}",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    # Показать основное меню
+    from bot.handlers.menu import get_main_menu
+    await update.message.reply_text("Меню:", reply_markup=get_main_menu())
 
 
 async def handle_edit_colortype(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

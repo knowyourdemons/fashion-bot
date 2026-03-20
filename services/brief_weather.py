@@ -40,14 +40,19 @@ async def _get_weather(lat: float, lon: float, tz: str) -> dict:
                     "latitude": lat,
                     "longitude": lon,
                     "hourly": "temperature_2m,precipitation_probability",
+                    "current": "temperature_2m",
                     "timezone": tz,
                     "forecast_days": 1,
                 },
             )
-            hourly = resp.json().get("hourly", {})
+            data = resp.json()
+            hourly = data.get("hourly", {})
             temps = hourly.get("temperature_2m", [])
             precip = hourly.get("precipitation_probability", [])
+            current = data.get("current", {})
+            temp_now = current.get("temperature_2m")
             return {
+                "temp_now": round(temp_now, 1) if temp_now is not None else None,
                 "temp_morning": round(temps[7], 1) if len(temps) > 7 else None,
                 "temp_day": round(temps[14], 1) if len(temps) > 14 else None,
                 "temp_evening": round(temps[18], 1) if len(temps) > 18 else None,
@@ -56,4 +61,4 @@ async def _get_weather(lat: float, lon: float, tz: str) -> dict:
             }
     except Exception as e:
         logger.warning("brief.weather.failed", error=str(e))
-        return {"temp_morning": None, "temp_day": None, "temp_evening": None, "precip_evening": 0, "precip_max": 0}
+        return {"temp_now": None, "temp_morning": None, "temp_day": None, "temp_evening": None, "precip_evening": 0, "precip_max": 0}

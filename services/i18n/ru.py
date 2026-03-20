@@ -119,7 +119,7 @@ STRINGS: dict[str, str] = {
     ),
     "shopping.too_few_items": "Добавь хотя бы 5 вещей в гардероб, и я смогу сделать анализ 📸",
     "shopping.generating": "🔍 Анализирую гардероб...",
-    "shopping.header": "🛍 Что стоит купить этой {season}:\n\n{list}",
+    "shopping.header": "🛍 Что стоит купить {season}:\n\n{list}",
     "shopping.empty_result": "Гардероб выглядит хорошо — пока ничего срочного докупать не нужно 👍",
     "shopping.error": "Не удалось проанализировать гардероб. Попробуй позже.",
 

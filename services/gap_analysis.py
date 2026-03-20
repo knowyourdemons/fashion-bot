@@ -13,6 +13,12 @@ _SEASON_MAP = {
     9: "осень", 10: "осень", 11: "осень",
 }
 
+# Творительный падеж для "Что стоит купить этой {season}"
+_SEASON_INSTRUMENTAL = {
+    "зима": "зимой", "весна": "весной",
+    "лето": "летом", "осень": "осенью",
+}
+
 
 def _get_current_season(tz_str: str) -> str:
     try:
@@ -21,7 +27,8 @@ def _get_current_season(tz_str: str) -> str:
         month = datetime.now(tz).month
     except Exception:
         month = datetime.now(timezone.utc).month
-    return _SEASON_MAP.get(month, "весна")
+    season = _SEASON_MAP.get(month, "весна")
+    return _SEASON_INSTRUMENTAL.get(season, season)
 
 
 async def build_shopping_list(
@@ -53,20 +60,40 @@ async def build_shopping_list(
     if cached:
         return cached.decode() if isinstance(cached, bytes) else cached
 
-    # Определить сезон
-    season = _get_current_season(user.timezone or "Europe/Vilnius")
+    # Определить сезон (именительный для промпта)
+    try:
+        import pytz
+        _tz = pytz.timezone(user.timezone or "Europe/Vilnius")
+        _month = datetime.now(_tz).month
+    except Exception:
+        _month = datetime.now(timezone.utc).month
+    season = _SEASON_MAP.get(_month, "весна")
 
-    # Owner context
+    # Owner context — детальный для ребёнка
     segment = getattr(user, "segment", "") or ""
     is_child_wardrobe = segment in ("mom_girl", "mom_boy")
 
-    if is_child_wardrobe:
-        if child is not None and getattr(child, "birthdate", None):
-            from datetime import date
-            age_years = (date.today() - child.birthdate).days // 365
-            owner_context = f"Детский гардероб, возраст ребёнка {age_years} лет."
-        else:
-            owner_context = "Детский гардероб."
+    if is_child_wardrobe and child is not None:
+        from datetime import date as _date
+        child_parts: list[str] = []
+        gender = getattr(child, "gender", "girl")
+        gender_word = "девочка" if gender == "girl" else "мальчик"
+        child_parts.append(f"Детский гардероб, {gender_word}")
+        if getattr(child, "birthdate", None):
+            age_days = (_date.today() - child.birthdate).days
+            age_years = age_days // 365
+            age_months = (age_days % 365) // 30
+            if age_years < 2:
+                child_parts.append(f"{age_years} г. {age_months} мес.")
+            else:
+                child_parts.append(f"{age_years} лет")
+        if getattr(child, "current_size", None):
+            child_parts.append(f"размер одежды {child.current_size}")
+        if getattr(child, "shoe_size", None):
+            child_parts.append(f"обувь {child.shoe_size}")
+        owner_context = ", ".join(child_parts) + "."
+    elif is_child_wardrobe:
+        owner_context = "Детский гардероб."
     else:
         owner_context = "Взрослая женщина."
 
@@ -89,10 +116,20 @@ async def build_shopping_list(
     colortype = user.colortype or ""
     colortype_str = f"\nЦветотип: {colortype}." if colortype else ""
 
+    child_instruction = ""
+    if is_child_wardrobe and child is not None:
+        gender = getattr(child, "gender", "girl")
+        child_instruction = (
+            "ВАЖНО: это детский гардероб. Рекомендуй ТОЛЬКО детские вещи, "
+            f"подходящие по возрасту и размеру для {'девочки' if gender == 'girl' else 'мальчика'}. "
+            "Учитывай что дети быстро растут — практичные вещи важнее модных. "
+        )
+
     user_prompt = (
         f"{owner_context}{colortype_str}\n"
         f"Сезон: {season}.\n\n"
         f"Гардероб ({len(sorted_items)} вещей):\n{items_lines}\n\n"
+        f"{child_instruction}"
         f"Определи 5–7 конкретных вещей которых не хватает для этого сезона. "
         f"Указывай цвет с учётом цветотипа. "
         f"Если гардероб полный — ответь пустой строкой. "

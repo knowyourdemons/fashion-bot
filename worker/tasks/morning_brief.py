@@ -296,7 +296,8 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
     # Заголовок коллажа для взрослых
     precip_e_adult = weather.get("precip_evening", 0)
     temp_d_adult = weather.get("temp_day")
-    _collage_params = get_collage_params(user=user, temp=temp_m, temp_day=temp_d_adult, temp_evening=temp_e, precip=precip_e_adult or 0)
+    temp_now_adult = weather.get("temp_now")
+    _collage_params = get_collage_params(user=user, temp=temp_m, temp_now=temp_now_adult, temp_day=temp_d_adult, temp_evening=temp_e, precip=precip_e_adult or 0)
     collage_header = _collage_params["header_text"]
 
     collage_bytes_val = None
@@ -587,22 +588,28 @@ async def generate_brief(payload: dict) -> dict:
     # ── Заголовок с погодой ──────────────────────────────────────────────
     weather_line = ""
     temp_d = weather.get("temp_day")
-    if temp_m is not None:
-        sm = "+" if temp_m >= 0 else ""
-        se = "+" if (temp_e or 0) >= 0 else ""
+    temp_now = weather.get("temp_now")
+    if temp_now is not None or temp_m is not None:
+        parts_w: list[str] = []
+        if temp_now is not None:
+            sn = "+" if temp_now >= 0 else ""
+            parts_w.append(f"сейчас {sn}{round(temp_now)}°C")
         if temp_d is not None:
             sd = "+" if temp_d >= 0 else ""
-            weather_line = f"{user.city}: {sm}{round(temp_m)}°C → {sd}{round(temp_d)}°C → {se}{round(temp_e)}°C"
-        else:
-            weather_line = f"{user.city}: {sm}{round(temp_m)}°C → вечером {se}{round(temp_e)}°C"
+            parts_w.append(f"днём {sd}{round(temp_d)}°C")
+        if temp_e is not None:
+            se = "+" if temp_e >= 0 else ""
+            parts_w.append(f"вечером {se}{round(temp_e)}°C")
+        weather_line = f"{user.city}: {', '.join(parts_w)}"
     else:
         logger.warning("brief.weather.empty", city=user.city)
 
     # Заголовок коллажа — берём из первого ребёнка
     _first_child = children[0] if children else None
+    temp_now_child = weather.get("temp_now")
     _collage_params = get_collage_params(
-        child=_first_child, temp=temp_m, temp_day=temp_d, temp_evening=temp_e,
-        precip=precip_e or 0, day_type=day_type,
+        child=_first_child, temp=temp_m, temp_now=temp_now_child, temp_day=temp_d,
+        temp_evening=temp_e, precip=precip_e or 0, day_type=day_type,
     )
     collage_header = _collage_params["header_text"]
     collage_theme = _collage_params["theme"]

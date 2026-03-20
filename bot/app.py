@@ -17,7 +17,7 @@ def create_application() -> Application:
     )
     from bot.handlers.onboarding import build_conversation_handler
     from bot.handlers.menu import get_main_menu
-    from bot.handlers.profile import handle_profile
+    from bot.handlers.profile import handle_profile, handle_edit_city_location
     from bot.middleware.auth import AuthMiddleware
     from bot.middleware.typing import TypingMiddleware
 
@@ -103,6 +103,9 @@ def create_application() -> Application:
 
     # Gap analysis
     app.add_handler(CallbackQueryHandler(wardrobe.handle_gap_analysis, pattern="^gap_analysis$"))
+
+    # Геолокация для смены города в профиле
+    app.add_handler(MessageHandler(filters.LOCATION, handle_edit_city_location))
 
     # Текстовые сообщения → стилист — group=2 (после меню-хендлеров)
     _menu_texts = filters.Regex("^(👗 Гардероб|✨ Что надеть|💬 Спросить Касси|👤 Профиль|❓ Помощь)$")
