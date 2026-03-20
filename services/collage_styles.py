@@ -339,14 +339,14 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
     temp_part = h_parts[1] if len(h_parts) > 1 else ""
     name_part = h_parts[2] if len(h_parts) > 2 else ""
 
-    header_children: list = [
-        _row([
-            _text("LOOK OF THE DAY", 9, "#999", letterSpacing=1),
-            _row(_circles(palette[:4], 14), gap=4, marginLeft="auto"),
-        ], justifyContent="space-between", alignItems="center"),
-    ]
+    header_children: list = []
     if name_part:
-        header_children.append(_text(name_part, 16, "#222", fontWeight="bold"))
+        header_children.append(
+            _row([
+                _text(name_part, 16, "#222", fontWeight="bold"),
+                _row(_circles(palette[:4], 14), gap=4, marginLeft="auto"),
+            ], justifyContent="space-between", alignItems="center"),
+        )
     sub = " · ".join(p for p in [date_part, temp_part] if p)
     if sub:
         header_children.append(_text(sub, 12, "#888"))

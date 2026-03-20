@@ -61,7 +61,7 @@ async def handle_shopping(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text(t("shopping.empty_result"))
     else:
         season = _get_current_season(user.timezone or "Europe/Vilnius")
-        ttl = await redis.ttl(f"gap_analysis:v4:{user.id}")
+        ttl = await redis.ttl(f"gap_analysis:v5:{user.id}")
         is_cached = ttl < 86000
         logger.info(
             "shopping.sent",

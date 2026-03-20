@@ -49,7 +49,7 @@ async def build_shopping_list(
         return None
 
     # Cache version — bump when prompt/logic changes to invalidate old cache
-    _CACHE_VER = "v4"
+    _CACHE_VER = "v5"
     lock_key = f"gap_lock:{user.id}"
     cache_key = f"gap_analysis:{_CACHE_VER}:{user.id}"
 
@@ -205,19 +205,21 @@ async def build_shopping_list(
         gender_word = "девочка" if gender == "girl" else "мальчик"
 
         system_prompt = (
-            f"Ты помогаешь маме купить одежду для ребёнка. "
-            f"Ребёнок: {child_name}, {gender_word}, {age_years} лет. "
-            f"Отвечай ТОЛЬКО нумерованным списком на русском."
+            f"Ты помогаешь маме купить одежду для ребёнка {child_name} ({gender_word}, {age_years} лет). "
+            f"Отвечай ТОЛЬКО нумерованным списком. Без заголовков, без markdown, без пояснений."
         )
+        # Few-shot example для правильного формата и детских вещей
         user_prompt = (
-            f"У {child_name} ({age_years} лет, {gender_word}) в гардеробе:\n"
-            f"{items_lines}\n\n"
+            f"Пример для мальчика 4 лет весной:\n"
+            f"1. Ветровка детская голубая\n"
+            f"2. Толстовка с капюшоном серая\n"
+            f"3. Джоггеры детские тёмно-синие\n"
+            f"4. Кроссовки детские белые\n"
+            f"5. Шапка тонкая серая\n\n"
+            f"Теперь для {child_name} ({gender_word}, {age_years} лет).\n"
+            f"В гардеробе: {items_lines}\n"
             f"Сезон: {season}.\n"
-            f"Каких ДЕТСКИХ вещей для {gender_word} {age_years} лет не хватает?\n"
-            f"Напиши 5-7 вещей с цветом.\n"
-            f"Примеры детских вещей: боди, леггинсы, комбинезон, толстовка, "
-            f"водолазка, кроссовки детские, джинсы детские, платье.\n"
-            f"НЕ пиши: рубашка, блузка, брюки, туфли, кардиган — это взрослое."
+            f"Напиши 5-7 ДЕТСКИХ вещей для {'девочки' if gender == 'girl' else 'мальчика'} {age_years} лет с цветом:"
         )
     else:
         system_prompt = "Ты стилист. Помогаешь составить список покупок. Отвечай нумерованным списком на русском."
@@ -235,10 +237,12 @@ async def build_shopping_list(
         from core.anthropic_client import get_anthropic_pool
         pool = get_anthropic_pool()
 
+        # Sonnet for children (better at following constraints), Haiku for adults
+        _model = "claude-sonnet-4-6" if is_child_wardrobe else "claude-haiku-4-5-20251001"
         response = await pool.create_message(
             messages=[{"role": "user", "content": user_prompt}],
-            max_tokens=800,
-            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            model=_model,
             system=system_prompt,
         )
 
