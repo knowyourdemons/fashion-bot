@@ -537,10 +537,32 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
 
     header_children: list = []
     if name_part:
-        name_row = [_text(name_part, 16, "#222", fontWeight="bold")]
         if palette:
-            name_row.append(_row(_circles(palette[:3], 10), gap=4, marginLeft="auto"))
-        header_children.append(_row(name_row, alignItems="center"))
+            header_children.append({
+                "type": "div",
+                "props": {
+                    "style": {
+                        "display": "flex",
+                        "flexDirection": "row",
+                        "justifyContent": "space-between",
+                        "alignItems": "center",
+                        "width": "100%",
+                    },
+                    "children": [
+                        {"type": "div", "props": {
+                            "style": {"display": "flex", "fontFamily": "DejaVu", "fontSize": 16,
+                                       "fontWeight": 700, "color": "#222"},
+                            "children": name_part,
+                        }},
+                        {"type": "div", "props": {
+                            "style": {"display": "flex", "flexDirection": "row", "gap": 4},
+                            "children": _circles(palette[:3], 9),
+                        }},
+                    ],
+                },
+            })
+        else:
+            header_children.append(_text(name_part, 16, "#222", fontWeight="bold"))
 
     ws = _weather_strip_element(weather_data) if weather_data else None
     if ws:
