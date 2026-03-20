@@ -334,7 +334,7 @@ class TestSatoriIntegration:
     def _satori_available(self) -> bool:
         try:
             import urllib.request
-            r = urllib.request.urlopen("http://172.18.0.1:3100/health", timeout=2)
+            r = urllib.request.urlopen("http://renderer:3100/health", timeout=2)
             return r.status == 200
         except Exception:
             return False

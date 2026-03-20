@@ -734,7 +734,7 @@ def _build_grid(images: list, labels: list, theme: str = "girl",
 
 # ── Satori renderer ──────────────────────────────────────────────────────────
 
-SATORI_URL = "http://172.18.0.1:3100/render"
+SATORI_URL = "http://renderer:3100/render"
 SATORI_TIMEOUT = 15
 SATORI_W = 800
 
