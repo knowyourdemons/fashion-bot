@@ -153,15 +153,19 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 if new_size:
                     vals["current_size"] = new_size
                 if new_shoe is not None:
-                    vals["shoe_size"] = new_shoe
+                    vals["shoe_size"] = int(new_shoe)  # model expects Integer
                 if vals:
                     async with AsyncWriteSession() as _sess:
                         await _sess.execute(
                             _sa.update(_Child).where(_Child.id == child_id).values(**vals)
                         )
                         await _sess.commit()
-            except Exception:
-                pass
+            except Exception as _e:
+                import structlog as _sl
+                _sl.get_logger().error("edit_child_size.failed", error=str(_e), child_id=child_id_str)
+                await update.message.reply_text("Ошибка сохранения размера. Попробуй ещё раз.")
+                context.user_data.pop("editing", None)
+                return
             context.user_data.pop("editing", None)
             context.user_data.pop("editing_child_id", None)
             context.user_data.pop("editing_ts", None)

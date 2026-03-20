@@ -121,19 +121,25 @@ def _card(slot_data: dict, width: str, height: str, *,
           ph_opacity: str = "0.4", show_label: bool = True) -> dict:
     """Universal item card with photo/placeholder + optional label."""
     is_placeholder = not slot_data.get("has_item")
-    # Placeholder: pastel fill by color type. Real photo: light bg.
+
+    # Colors: placeholder = saturated pastel, real photo = white
     if is_placeholder:
-        bg_color = bg or _pastel_bg(slot_data.get("item_color", ""))
+        slot_key = slot_data.get("slot", "top")
+        # Distinct pastel per slot type (not gray!)
+        _SLOT_PASTELS = {
+            "outerwear": "#E8DDD5", "top": "#FFE4E8", "bottom": "#DDE4FF",
+            "one_piece": "#F0E4F5", "footwear": "#E4EEF5", "hat": "#E8F0E4",
+            "scarf": "#F5EAE0", "gloves": "#E4E8F0", "tights": "#F0E8F0",
+            "socks": "#F0E8F0",
+        }
+        bg_color = bg or _SLOT_PASTELS.get(slot_key, "#F0ECE8")
     else:
         bg_color = bg or "#FFFFFF"
 
     children: list = []
-    img = _get_img_el(slot_data, img_w, img_h, ph_opacity)
-    if img:
-        children.append(img)
 
-    # Label only for placeholders or if explicitly requested
-    if show_label and is_placeholder:
+    if is_placeholder:
+        # Placeholder: pastel fill + label text centered, NO gray silhouette
         label = _get_slot_label(slot_data)
         children.append({
             "type": "div",
@@ -141,13 +147,17 @@ def _card(slot_data: dict, width: str, height: str, *,
                 "style": {
                     "display": "flex",
                     "fontFamily": "DejaVu",
-                    "fontSize": label_size,
-                    "color": "#8B7B8B",
-                    "marginTop": 4,
+                    "fontSize": label_size + 2,
+                    "color": "#9A8A9A",
                 },
                 "children": label,
             },
         })
+    else:
+        # Real photo
+        img = _get_img_el(slot_data, img_w, img_h, ph_opacity)
+        if img:
+            children.append(img)
 
     style: dict = {
         "display": "flex",
