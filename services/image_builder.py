@@ -976,6 +976,8 @@ async def build_collage(
     try:
         if outfit_slots:
             # Скачать фото для реальных вещей
+            real_count = sum(1 for s in outfit_slots if s.get("has_item"))
+            logger.info("image_builder.download_start", real_items=real_count, total_slots=len(outfit_slots))
             async with httpx.AsyncClient(timeout=15.0) as client:
                 for slot_data in outfit_slots:
                     if slot_data.get("has_item"):
@@ -988,10 +990,12 @@ async def build_collage(
                             try:
                                 slot_data["_thumb"] = _make_thumb(photo_bytes)
                                 slot_data["_photo_bytes"] = photo_bytes
+                                logger.info("image_builder.photo_ok", slot=slot_data.get("slot"), size=len(photo_bytes))
                             except Exception as e:
                                 logger.warning("image_builder.decode_failed", error=str(e))
                                 slot_data["has_item"] = False
                         else:
+                            logger.warning("image_builder.photo_download_empty", slot=slot_data.get("slot"), photo_url=str(slot_data.get("photo_url",""))[:60])
                             slot_data["has_item"] = False
 
             # Try Satori first, fallback to PIL
