@@ -616,6 +616,33 @@ def _color_dot(color_name: str) -> dict:
     }
 
 
+def _section_label(text_str: str) -> dict:
+    """Section header: "ПОД ОДЕЖДУ", "ОДЕЖДА", etc."""
+    return _text(text_str, 9, "#B0A0B0", letterSpacing=1, marginBottom=2)
+
+
+def _item_row(color: str, label: str, is_placeholder: bool = False) -> dict:
+    """Single item row with color dot."""
+    children = [_color_dot(color)]
+    if is_placeholder:
+        children.append(_text(label, 14, "#AAA"))
+        children.append(_text("добавь", 11, "#C8A0B0", marginLeft="auto"))
+    else:
+        children.append(_text(label, 14, "#333", fontWeight="500"))
+    return _row(children, gap=0, alignItems="center")
+
+
+def _white_card(children: list, **extra) -> dict:
+    """White card with rounded corners."""
+    style = {
+        "display": "flex", "flexDirection": "column",
+        "backgroundColor": "#FFFFFF", "borderRadius": 14,
+        "padding": "14px 16px", "gap": 7, "width": "100%",
+        **extra,
+    }
+    return {"type": "div", "props": {"style": style, "children": children}}
+
+
 def build_brief_card(slots: list, header_text: str, footer_text: str,
                      palette: list[str], *, weather_data: dict = None,
                      outfit: dict = None) -> tuple[dict, int, int]:
@@ -626,92 +653,22 @@ def build_brief_card(slots: list, header_text: str, footer_text: str,
 
     date_part, temp_part, name_part = _parse_header(header_text)
 
-    # Header
+    # ── Header ──
     header_children = []
     if date_part:
-        header_children.append(_text(date_part.upper(), 11, "#B08060", letterSpacing=1))
+        header_children.append(_text(date_part.upper(), 10, "#B08060", letterSpacing=1))
     if name_part:
-        header_children.append(_text(name_part, 18, "#333", fontWeight="bold"))
+        header_children.append(_text(name_part, 20, "#333", fontWeight="bold"))
 
-    # Weather strip
+    header_el = _col(header_children, gap=2, padding="20px 20px 8px")
+
+    # ── Weather strip ──
     ws = _weather_strip_element(weather_data)
+    weather_card = None
     if ws:
-        header_children.append(ws)
+        weather_card = _white_card([ws])
 
-    header_el = _col(header_children, gap=3, padding="20px 24px 12px")
-
-    # Items list in dressing order
-    item_rows: list = []
-
-    # ОДЕЖДА group (main visible items)
-    clothes_items: list = []
-    for s in slots:
-        slot_key = s.get("slot", "")
-        if slot_key in ("top", "removable_layer", "bottom", "one_piece"):
-            if s.get("has_item"):
-                color = s.get("item_color", "")
-                label = f"{s.get('item_type', '')} {color}".strip()
-                clothes_items.append(
-                    _row([_color_dot(color), _text(label, 14, "#333")], gap=0, alignItems="center")
-                )
-            else:
-                ph_label = s.get("label") or _get_placeholder_label(slot_key, s.get("gender", "girl"))
-                clothes_items.append(
-                    _row([
-                        _color_dot("серый"),
-                        _text(ph_label, 14, "#999"),
-                        _text("добавь", 11, "#CC8855", marginLeft="auto"),
-                    ], gap=0, alignItems="center")
-                )
-
-    # OUTERWEAR + accessories (НА ВЫХОД)
-    exit_items: list = []
-    for s in slots:
-        slot_key = s.get("slot", "")
-        if slot_key in ("outerwear", "hat", "scarf", "gloves"):
-            if s.get("has_item"):
-                color = s.get("item_color", "")
-                label = f"{s.get('item_type', '')} {color}".strip()
-                exit_items.append(
-                    _row([_color_dot(color), _text(label, 14, "#333")], gap=0, alignItems="center")
-                )
-            else:
-                ph_label = s.get("label") or _get_placeholder_label(slot_key, s.get("gender", "girl"))
-                exit_items.append(
-                    _row([
-                        _color_dot("серый"),
-                        _text(ph_label, 14, "#999"),
-                        _text("добавь", 11, "#CC8855", marginLeft="auto"),
-                    ], gap=0, alignItems="center")
-                )
-
-    # FOOTWEAR
-    foot_items: list = []
-    for s in slots:
-        if s.get("slot") == "footwear":
-            if s.get("has_item"):
-                color = s.get("item_color", "")
-                label = f"{s.get('item_type', '')} {color}".strip()
-                foot_items.append(
-                    _row([_color_dot(color), _text(label, 14, "#333")], gap=0, alignItems="center")
-                )
-            else:
-                foot_items.append(
-                    _row([
-                        _color_dot("серый"),
-                        _text("Обувь", 14, "#999"),
-                        _text("добавь", 11, "#CC8855", marginLeft="auto"),
-                    ], gap=0, alignItems="center")
-                )
-
-    # Build sections
-    all_list_items = clothes_items + foot_items + exit_items
-    if all_list_items:
-        list_section = _col(all_list_items, gap=6, padding="12px 20px",
-                           backgroundColor="#FFFFFF", borderRadius=12)
-        item_rows.append(list_section)
-
-    # ПОД ОДЕЖДУ
+    # ── ПОД ОДЕЖДУ (first — dressing order!) ──
     under_parts = []
     if outfit.get("underwear_text"):
         under_parts.append(outfit["underwear_text"])
@@ -723,27 +680,96 @@ def build_brief_card(slots: list, header_text: str, footer_text: str,
     if leg and hasattr(leg, "type"):
         under_parts.append(getattr(leg, "type", "колготки"))
 
+    under_card = None
     if under_parts:
-        under_el = _col([
-            _text("ПОД ОДЕЖДУ", 10, "#AAA", letterSpacing=1),
+        under_card = _white_card([
+            _section_label("ПОД ОДЕЖДУ"),
             _text(", ".join(under_parts), 13, "#888"),
-        ], gap=2, padding="10px 20px", backgroundColor="#F8F6FA", borderRadius=10)
-        item_rows.append(under_el)
+        ], backgroundColor="#F8F6FA")
 
-    body = _col(item_rows, gap=8, padding="0 16px")
+    # ── ОДЕЖДА ──
+    clothes_rows: list = []
+    for s in slots:
+        sk = s.get("slot", "")
+        if sk in ("top", "removable_layer", "bottom", "one_piece"):
+            if s.get("has_item"):
+                color = s.get("item_color", "")
+                label = f"{s.get('item_type', '')} {color}".strip()
+                clothes_rows.append(_item_row(color, label))
+            else:
+                ph = s.get("label") or _get_placeholder_label(sk, s.get("gender", "girl"))
+                clothes_rows.append(_item_row("серый", ph, is_placeholder=True))
 
-    # Footer: weather advice
-    footer_el = _footer_comment(footer_text, palette)
+    # ── ОБУВЬ ──
+    foot_rows: list = []
+    for s in slots:
+        if s.get("slot") == "footwear":
+            if s.get("has_item"):
+                color = s.get("item_color", "")
+                label = f"{s.get('item_type', '')} {color}".strip()
+                foot_rows.append(_item_row(color, label))
+            else:
+                foot_rows.append(_item_row("серый", "Обувь", is_placeholder=True))
 
-    h = 70  # header
-    h += len(all_list_items) * 28 + 36  # items list
-    if under_parts: h += 50
-    h += 56  # footer
-    if ws: h += 60  # weather strip
-    h = max(h, 350)
+    # ── НА ВЫХОД ──
+    exit_rows: list = []
+    for s in slots:
+        sk = s.get("slot", "")
+        if sk in ("outerwear", "hat", "scarf", "gloves"):
+            if s.get("has_item"):
+                color = s.get("item_color", "")
+                label = f"{s.get('item_type', '')} {color}".strip()
+                exit_rows.append(_item_row(color, label))
+            else:
+                ph = s.get("label") or _get_placeholder_label(sk, s.get("gender", "girl"))
+                exit_rows.append(_item_row("серый", ph, is_placeholder=True))
 
-    root = _col([header_el, body, footer_el], gap=8,
-                backgroundColor="#FFF5F0", borderRadius=20, height="100%")
+    # ── Build items card with section labels ──
+    items_content: list = []
+    if clothes_rows:
+        items_content.append(_section_label("ОДЕЖДА"))
+        items_content.extend(clothes_rows)
+    if foot_rows:
+        items_content.append(_section_label("ОБУВЬ"))
+        items_content.extend(foot_rows)
+    if exit_rows:
+        items_content.append(_section_label("НА ВЫХОД"))
+        items_content.extend(exit_rows)
+
+    items_card = _white_card(items_content) if items_content else None
+
+    # ── Footer: weather advice ──
+    footer_children = []
+    if footer_text:
+        footer_children.append(_text(f"💬 {footer_text}", 12, "#777", fontStyle="italic"))
+        footer_children.append(_text("— Касси", 10, "#B0A8B8"))
+    else:
+        footer_children.append(_text("Касси", 10, "#B0A8B8"))
+    footer_el = _col(footer_children, gap=3, padding="8px 20px 16px", alignItems="flex-start")
+
+    # ── Assemble (dressing order: under → clothes → shoes → exit) ──
+    body_parts = []
+    if weather_card:
+        body_parts.append(weather_card)
+    if under_card:
+        body_parts.append(under_card)
+    if items_card:
+        body_parts.append(items_card)
+
+    body = _col(body_parts, gap=8, padding="0 16px")
+
+    # Height calc
+    h = 56  # header
+    if weather_card: h += 70
+    n_items = len(clothes_rows) + len(foot_rows) + len(exit_rows)
+    n_sections = (1 if clothes_rows else 0) + (1 if foot_rows else 0) + (1 if exit_rows else 0)
+    h += n_items * 28 + n_sections * 20 + 40  # items card
+    if under_card: h += 55
+    h += 50  # footer
+    h = max(h, 380)
+
+    root = _col([header_el, body, footer_el], gap=6,
+                backgroundColor="#F7F0F4", borderRadius=20, height="100%")
     return root, W, h
 
 
