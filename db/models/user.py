@@ -1,8 +1,8 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional, TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Enum, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,6 +33,8 @@ class User(Base):
         nullable=True,
     )
     body_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    trimester: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 1/2/3 for pregnant
+    due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # ПДР для беременных
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Stripe

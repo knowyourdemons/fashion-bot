@@ -1,17 +1,17 @@
 """
 Онбординг флоу — ConversationHandler.
 
-Шаги:
-  0. Welcome screen (Касси intro + progress bar)
-  1. WHO_FOR: для кого (ребёнок / себя / оба)
-  2. CHILD_GENDER: девочка / мальчик
-  3. Имя ребёнка
-  4. Дата рождения (fuzzy: "3 года", "15.03.2023", ...)
-  5. Размер одежды
-  6. Размер обуви
-  7. Город (геолокация / текст + Nominatim саджжест)
-  8. Цветотип
-  Финал → создать Child, onboarding_completed=True → показать главное меню
+Шаги (упрощённый 3-step flow):
+  0. Welcome screen (progress bar)
+  1. WHO_FOR: для кого (ребёнок / себя / оба / беременна)
+  2. CHILD_GENDER: девочка / мальчик (child/both paths)
+  3. CHILD_NAME: имя ребёнка (child/both paths)
+  4. CHILD_BIRTHDATE: дата рождения (child/both paths)
+  5. CITY: город (геолокация / текст + Nominatim)
+  6. CITY_SUGGEST: уточнение города
+  7. RESUME_CONFIRM: продолжить / начать заново
+  8. PREGNANT_TRIMESTER: триместр (pregnant path)
+  Финал → создать Child (если нужно), onboarding_completed=True → главное меню
 """
 import structlog
 import sentry_sdk
@@ -51,29 +51,23 @@ logger = structlog.get_logger()
     CHILD_GENDER,
     CHILD_NAME,
     CHILD_BIRTHDATE,
-    CHILD_SIZE,
-    CHILD_SHOE_SIZE,
     CITY,
     CITY_SUGGEST,
     RESUME_CONFIRM,
-    ASK_COLORTYPE,
-    SELFIE_COLORTYPE,
-) = range(12)
+    PREGNANT_TRIMESTER,
+) = range(9)
 
 # Backward compat aliases
 SEGMENT = WHO_FOR
 ALSO_SELF = CHILD_GENDER
 
 _STEP_TO_STATE: dict[str, int] = {
-    "segment":         WHO_FOR,
-    "child_gender":    CHILD_GENDER,
-    "child_name":      CHILD_NAME,
-    "child_birthdate": CHILD_BIRTHDATE,
-    "child_size":      CHILD_SIZE,
-    "child_shoe_size": CHILD_SHOE_SIZE,
-    "city":            CITY,
-    "colortype":       ASK_COLORTYPE,
-    "selfie_colortype": SELFIE_COLORTYPE,
+    "segment":              WHO_FOR,
+    "child_gender":         CHILD_GENDER,
+    "child_name":           CHILD_NAME,
+    "child_birthdate":      CHILD_BIRTHDATE,
+    "city":                 CITY,
+    "pregnant_trimester":   PREGNANT_TRIMESTER,
 }
 
 # Тексты кнопок клавиатуры — не должны сохраняться как город
@@ -84,35 +78,10 @@ _CITY_KEYBOARD_LABELS = {
     "Ввести вручную",
 }
 
-_COLORTYPE_MAP = {
-    "🌸 Весна": "Весна",
-    "☀️ Лето": "Лето",
-    "🍂 Осень": "Осень",
-    "❄️ Зима": "Зима",
-    "🤷 Не знаю": None,
-}
-
-_COLORTYPE_KEYBOARD = ReplyKeyboardMarkup(
-    [
-        ["🌸 Весна", "☀️ Лето"],
-        ["🍂 Осень", "❄️ Зима"],
-        ["🤷 Не знаю"],
-    ],
-    resize_keyboard=True,
-    one_time_keyboard=True,
-)
-
-_AGE_TO_SIZE = {
-    1: 80, 2: 92, 3: 98, 4: 104,
-    5: 110, 6: 116, 7: 122, 8: 128,
-    9: 134, 10: 140, 11: 146, 12: 152,
-    13: 158, 14: 164, 15: 170, 16: 176,
-}
-
 
 # ── Прогресс-бар ────────────────────────────────────────────────────────────
 
-def progress_bar(step: int, total: int = 5) -> str:
+def progress_bar(step: int, total: int = 3) -> str:
     filled = "🟪" * step
     empty = "⬜" * (total - step)
     return filled + empty
@@ -169,42 +138,6 @@ async def _ask_city(update: Update) -> None:
         one_time_keyboard=True,
     )
     await update.effective_message.reply_text(t("onboarding.city"), reply_markup=keyboard)
-
-
-async def _ask_colortype(update: Update) -> None:
-    await update.effective_message.reply_text(
-        "🎨 Какой у тебя цветотип?\n\n"
-        "🌸 Весна — тёплый, светлый (персик, золото, коралл)\n"
-        "☀️ Лето — холодный, мягкий (лаванда, пудра, мята)\n"
-        "🍂 Осень — тёплый, глубокий (горчица, терракота, олива)\n"
-        "❄️ Зима — холодный, яркий (белый, чёрный, фуксия)\n\n"
-        "Не знаю — пропустить",
-        reply_markup=_COLORTYPE_KEYBOARD,
-    )
-
-
-_SELFIE_SKIP_KEYBOARD = ReplyKeyboardMarkup(
-    [["⏭ Пропустить"]], resize_keyboard=True, one_time_keyboard=True,
-)
-
-_COLORTYPE_VISION_PROMPT = (
-    "Проанализируй цветотип человека на фото. "
-    "Определи по тону кожи, цвету волос и глаз один из 4 цветотипов: "
-    "Весна (тёплый светлый), Лето (холодный мягкий), "
-    "Осень (тёплый глубокий), Зима (холодный яркий). "
-    "Ответь ОДНИМ словом: Весна, Лето, Осень или Зима. "
-    "Если не можешь определить — ответь: нет."
-)
-
-
-async def _ask_selfie_colortype(update: Update) -> None:
-    await update.effective_message.reply_text(
-        "📸 Хочешь узнать свой цветотип?\n\n"
-        "Пришли селфи при дневном свете — я определю по тону кожи, "
-        "цвету волос и глаз.\n\n"
-        "Или нажми «Пропустить» — выберешь вручную.",
-        reply_markup=_SELFIE_SKIP_KEYBOARD,
-    )
 
 
 async def _reverse_geocode(lat: float, lon: float) -> tuple[str, str]:
@@ -279,18 +212,6 @@ def _short_label(display_name: str) -> str:
     return f"{parts[0]}, {parts[-1]}" if len(parts) >= 2 else parts[0]
 
 
-def _parse_shoe_size(text: str) -> float | None:
-    """Принимает размер обуви целым или дробным (18–50). Примеры: 26, 26.5, 26,5"""
-    try:
-        normalized = text.strip().replace(",", ".")
-        size = float(normalized)
-        if 18 <= size <= 50:
-            return size
-        return None
-    except ValueError:
-        return None
-
-
 # ── Entry point ────────────────────────────────────────────────────────────
 
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -333,14 +254,12 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         )
         return RESUME_CONFIRM
 
-    # Новый пользователь → приветствие Касси
+    # Новый пользователь → приветствие
     pb = progress_bar(0)
     welcome_text = (
         f"{pb}\n\n"
-        "Привет! 👋 Я Касси — твой личный стилист.\n\n"
-        "Каждое утро буду присылать готовый образ по погоде "
-        "из вещей, которые уже есть в шкафу.\n\n"
-        "Познакомимся за 2 минуты? 😊"
+        "Привет! Помогу собирать образы по погоде из вещей, которые уже есть. "
+        "2 вопроса и начнём 👋"
     )
     keyboard = InlineKeyboardMarkup([[
         InlineKeyboardButton("🚀 Давай!", callback_data="welcome:start"),
@@ -360,7 +279,8 @@ async def handle_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("👶 Для ребёнка", callback_data="who_for:child")],
             [InlineKeyboardButton("👩 Для себя", callback_data="who_for:self")],
-            [InlineKeyboardButton("👩‍👧 И для ребёнка, и для себя", callback_data="who_for:both")],
+            [InlineKeyboardButton("👩‍👧 Для ребёнка и для себя", callback_data="who_for:both")],
+            [InlineKeyboardButton("🤰 Беременна", callback_data="who_for:pregnant")],
         ]),
     )
     return WHO_FOR
@@ -372,14 +292,14 @@ async def handle_who_for(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     query = update.callback_query
     await query.answer()
     user = context.user_data.get("db_user")
-    choice = query.data.split(":")[1]  # child / self / both
+    choice = query.data.split(":")[1]  # child / self / both / pregnant
 
     if choice == "self":
         segment = "no_kids"
         context.user_data["segment"] = segment
         context.user_data["also_self"] = False
         await _save_user_fields(user, segment=segment, onboarding_step="city")
-        pb = progress_bar(3)
+        pb = progress_bar(2)
         await query.message.reply_text(
             f"{pb}\n\n" + t("onboarding.city"),
             reply_markup=ReplyKeyboardMarkup(
@@ -389,13 +309,27 @@ async def handle_who_for(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             )
         )
         return CITY
+
+    elif choice == "pregnant":
+        segment = "pregnant"
+        context.user_data["segment"] = segment
+        context.user_data["also_self"] = False
+        await _save_user_fields(user, segment=segment, onboarding_step="child_name")
+        pb = progress_bar(1)
+        await query.message.reply_text(
+            f"{pb}\n\nКак тебя зовут?",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        # Reuse CHILD_NAME state for pregnant name input
+        return CHILD_NAME
+
     else:
         # child or both
         context.user_data["also_self"] = (choice == "both")
         await _save_user_fields(user, onboarding_step="child_gender")
-        pb = progress_bar(2)
+        pb = progress_bar(1)
         await query.message.reply_text(
-            f"{pb}\n\nДевочка или мальчик? 🎀",
+            f"{pb}\n\nДевочка или мальчик?",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("👧 Девочка", callback_data="child_gender:girl"),
                  InlineKeyboardButton("👦 Мальчик", callback_data="child_gender:boy")],
@@ -420,9 +354,8 @@ async def handle_child_gender(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["segment"] = segment
     user = context.user_data.get("db_user")
     await _save_user_fields(user, segment=segment, onboarding_step="child_name")
-    pb = progress_bar(2)
-    name_q = "Как зовут? 💕" if gender == "girl" else "Как зовут? 😊"
-    await query.message.reply_text(f"{pb}\n\n{name_q}", reply_markup=ReplyKeyboardRemove())
+    pb = progress_bar(1)
+    await query.message.reply_text(f"{pb}\n\nКак зовут?", reply_markup=ReplyKeyboardRemove())
     return CHILD_NAME
 
 
@@ -431,15 +364,36 @@ async def handle_also_self(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     return await handle_child_gender(update, context)
 
 
-# ── Шаг 3: Имя ребёнка ────────────────────────────────────────────────────
+# ── Шаг 3: Имя ребёнка / Имя беременной ─────────────────────────────────
 
 async def handle_child_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     name = update.message.text.strip()
     if not name:
-        await update.message.reply_text("Введи имя ребёнка:")
+        await update.message.reply_text("Введи имя:")
         return CHILD_NAME
-    context.user_data["child_name"] = name
+
     user = context.user_data.get("db_user")
+    segment = context.user_data.get("segment", "")
+
+    # Pregnant path: save name → ask trimester
+    if segment == "pregnant":
+        context.user_data["pregnant_name"] = name
+        await _save_user_fields(user, name=name, onboarding_step="pregnant_trimester")
+        pb = progress_bar(2)
+        await update.message.reply_text(
+            f"{pb}\n\nКакой триместр?",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("1-й", callback_data="trimester:1"),
+                    InlineKeyboardButton("2-й", callback_data="trimester:2"),
+                    InlineKeyboardButton("3-й", callback_data="trimester:3"),
+                ],
+            ]),
+        )
+        return PREGNANT_TRIMESTER
+
+    # Child path: save name → ask birthdate
+    context.user_data["child_name"] = name
     await _save_user_fields(user, onboarding_step="child_birthdate")
     gender = context.user_data.get("child_gender", "girl")
     pb = progress_bar(2)
@@ -449,6 +403,27 @@ async def handle_child_name(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         date_q = f"Когда родилась {name}?\n\nНапиши дату (15.03.2023) или возраст (3 года)"
     await update.message.reply_text(f"{pb}\n\n{date_q}")
     return CHILD_BIRTHDATE
+
+
+# ── Шаг: Триместр (pregnant path) ────────────────────────────────────────
+
+async def handle_pregnant_trimester(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    trimester = int(query.data.split(":")[1])
+    context.user_data["trimester"] = trimester
+    user = context.user_data.get("db_user")
+    await _save_user_fields(user, trimester=trimester, onboarding_step="city")
+    pb = progress_bar(2)
+    await query.message.reply_text(
+        f"{pb}\n\n" + t("onboarding.city"),
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton("📍 Определить автоматически", request_location=True)],
+             [KeyboardButton("✏️ Ввести вручную")]],
+            resize_keyboard=True, one_time_keyboard=True,
+        )
+    )
+    return CITY
 
 
 # ── Шаг 4: Дата рождения ──────────────────────────────────────────────────
@@ -462,71 +437,13 @@ async def handle_child_birthdate(update: Update, context: ContextTypes.DEFAULT_T
         )
         return CHILD_BIRTHDATE
     context.user_data["child_birthdate"] = birthdate
-    # Also extract age for size suggestion
     age_years = (date.today() - birthdate).days // 365
     context.user_data["child_age"] = age_years
     user = context.user_data.get("db_user")
-    await _save_user_fields(user, onboarding_step="child_size")
-    child_name = context.user_data.get("child_name", "ребёнка")
-    pb = progress_bar(3)
-    await update.message.reply_text(
-        f"{pb}\n\nКакой размер одежды {child_name}? 👗\n\n"
-        "Напиши размер (86, 92, 104, 116...)\nИли возраст — подберу примерный"
-    )
-    return CHILD_SIZE
-
-
-# ── Шаг 5: Размер одежды ──────────────────────────────────────────────────
-
-async def handle_child_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.message.text.strip()
-    child_name = context.user_data.get("child_name", "ребёнка")
-    size = text
-    try:
-        val = int(text)
-        if 1 <= val <= 16:
-            size = str(_AGE_TO_SIZE.get(val, val * 6 + 74))
-        # else it's already a size number like 92, 104 etc.
-    except ValueError:
-        if text.lower() in ("не знаю", "не знаю размер", "пропустить"):
-            age = context.user_data.get("child_age", 3)
-            size = str(_AGE_TO_SIZE.get(age, "92"))
-    context.user_data["child_size"] = size
-    user = context.user_data.get("db_user")
-    await _save_user_fields(user, onboarding_step="child_shoe_size")
-    pb = progress_bar(3)
-    await update.message.reply_text(
-        f"{pb}\n\nРазмер обуви {child_name}? 👟\n\n"
-        "Напиши число (26 или 26.5)",
-        reply_markup=ReplyKeyboardMarkup(
-            [["⏭ Пропустить"]], resize_keyboard=True, one_time_keyboard=True
-        )
-    )
-    return CHILD_SHOE_SIZE
-
-
-# ── Шаг 6: Размер обуви ───────────────────────────────────────────────────
-
-async def handle_child_shoe_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.message.text.strip()
-    if text == "⏭ Пропустить":
-        context.user_data["child_shoe_size"] = None
-    else:
-        shoe_size = _parse_shoe_size(text)
-        if shoe_size is None:
-            await update.message.reply_text(
-                "Введи размер обуви числом (26, 26.5) или нажми ⏭ Пропустить",
-                reply_markup=ReplyKeyboardMarkup(
-                    [["⏭ Пропустить"]], resize_keyboard=True, one_time_keyboard=True
-                )
-            )
-            return CHILD_SHOE_SIZE
-        context.user_data["child_shoe_size"] = shoe_size
-    user = context.user_data.get("db_user")
     await _save_user_fields(user, onboarding_step="city")
-    pb = progress_bar(4)
+    pb = progress_bar(2)
     await update.message.reply_text(
-        f"{pb}\n\nВ каком городе живёте? 🏙\n\nНужно для прогноза погоды",
+        f"{pb}\n\n" + t("onboarding.city"),
         reply_markup=ReplyKeyboardMarkup(
             [[KeyboardButton("📍 Определить автоматически", request_location=True)],
              [KeyboardButton("✏️ Ввести вручную")]],
@@ -536,16 +453,14 @@ async def handle_child_shoe_size(update: Update, context: ContextTypes.DEFAULT_T
     return CITY
 
 
-# ── Шаг 7: Город ──────────────────────────────────────────────────────────
+# ── Шаг 5: Город ──────────────────────────────────────────────────────────
 
 async def handle_city_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     loc = update.message.location
     city, timezone = await _reverse_geocode(loc.latitude, loc.longitude)
     context.user_data["city"] = city
     context.user_data["timezone"] = timezone
-    await _save_user_fields(context.user_data["db_user"], onboarding_step="selfie_colortype")
-    await _ask_selfie_colortype(update)
-    return SELFIE_COLORTYPE
+    return await _finish_onboarding(update, context)
 
 
 async def handle_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -572,9 +487,7 @@ async def handle_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         city, timezone = _extract_city_tz(results[0])
         context.user_data["city"] = city
         context.user_data["timezone"] = timezone
-        await _save_user_fields(context.user_data["db_user"], onboarding_step="selfie_colortype")
-        await _ask_selfie_colortype(update)
-        return SELFIE_COLORTYPE
+        return await _finish_onboarding(update, context)
 
     context.user_data["city_candidates"] = results
     keyboard = InlineKeyboardMarkup([
@@ -601,95 +514,6 @@ async def handle_city_suggest(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["timezone"] = timezone
 
     await query.message.edit_reply_markup(reply_markup=None)
-    await _save_user_fields(context.user_data["db_user"], onboarding_step="selfie_colortype")
-    await _ask_selfie_colortype(update)
-    return SELFIE_COLORTYPE
-
-
-# ── Шаг 8a: Селфи для цветотипа ──────────────────────────────────────────
-
-async def handle_selfie_colortype(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Пользователь прислал селфи → Claude Vision определяет цветотип."""
-    photo = update.message.photo[-1]  # highest resolution
-    try:
-        import base64
-        file = await context.bot.get_file(photo.file_id)
-        buf = __import__("io").BytesIO()
-        await file.download_to_memory(buf)
-        photo_bytes = buf.getvalue()
-        b64 = base64.standard_b64encode(photo_bytes).decode()
-
-        from core.anthropic_client import get_anthropic_pool
-        pool = get_anthropic_pool()
-        response = await pool.create_message(
-            model="claude-sonnet-4-6",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/jpeg",
-                            "data": b64,
-                        },
-                    },
-                    {"type": "text", "text": _COLORTYPE_VISION_PROMPT},
-                ],
-            }],
-            max_tokens=20,
-        )
-        answer = (response.content[0].text or "").strip()
-        detected = None
-        for ct in ("Весна", "Лето", "Осень", "Зима"):
-            if ct.lower() in answer.lower():
-                detected = ct
-                break
-
-        if detected:
-            context.user_data["colortype"] = detected
-            _CT_EMOJI = {"Весна": "🌸", "Лето": "☀️", "Осень": "🍂", "Зима": "❄️"}
-            emoji = _CT_EMOJI.get(detected, "🎨")
-            await update.message.reply_text(
-                f"{emoji} Твой цветотип: **{detected}**\n\n"
-                "Буду подбирать цвета одежды специально для тебя!",
-                reply_markup=ReplyKeyboardRemove(),
-                parse_mode="Markdown",
-            )
-            logger.info("onboarding.colortype_detected", colortype=detected)
-            return await _finish_onboarding(update, context)
-        else:
-            await update.message.reply_text(
-                "Не смогла определить цветотип по фото 🤔\nВыбери вручную:",
-                reply_markup=_COLORTYPE_KEYBOARD,
-            )
-            await _save_user_fields(context.user_data["db_user"], onboarding_step="colortype")
-            return ASK_COLORTYPE
-
-    except Exception as e:
-        logger.warning("onboarding.selfie_colortype_failed", error=str(e))
-        await update.message.reply_text(
-            "Что-то пошло не так с анализом фото. Выбери цветотип вручную:",
-            reply_markup=_COLORTYPE_KEYBOARD,
-        )
-        await _save_user_fields(context.user_data["db_user"], onboarding_step="colortype")
-        return ASK_COLORTYPE
-
-
-async def handle_selfie_skip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Пользователь нажал 'Пропустить' → ручной выбор цветотипа."""
-    await _save_user_fields(context.user_data["db_user"], onboarding_step="colortype")
-    await _ask_colortype(update)
-    return ASK_COLORTYPE
-
-
-# ── Шаг 8b: Цветотип (ручной) ────────────────────────────────────────────
-
-async def handle_colortype(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.message.text.strip()
-    # Принять любой текст — если не в карте, то None (пропустить)
-    colortype = _COLORTYPE_MAP.get(text)
-    context.user_data["colortype"] = colortype
     return await _finish_onboarding(update, context)
 
 
@@ -704,19 +528,17 @@ async def handle_resume_confirm(update: Update, context: ContextTypes.DEFAULT_TY
         return await _resume_step(update, context, user)
 
     # Начать заново — сбросить step в БД и в контексте
-    for key in ("segment", "child_gender", "child_name", "child_birthdate", "child_size",
-                "child_shoe_size", "city", "timezone", "city_candidates", "colortype",
-                "also_self", "child_age"):
+    for key in ("segment", "child_gender", "child_name", "child_birthdate",
+                "city", "timezone", "city_candidates",
+                "also_self", "child_age", "pregnant_name", "trimester"):
         context.user_data.pop(key, None)
     await _save_user_fields(user, onboarding_step=None, segment=None)
-    # Show Касси welcome again
+    # Show welcome again
     pb = progress_bar(0)
     welcome_text = (
         f"{pb}\n\n"
-        "Привет! 👋 Я Касси — твой личный стилист.\n\n"
-        "Каждое утро буду присылать готовый образ по погоде "
-        "из вещей, которые уже есть в шкафу.\n\n"
-        "Познакомимся за 2 минуты? 😊"
+        "Привет! Помогу собирать образы по погоде из вещей, которые уже есть. "
+        "2 вопроса и начнём 👋"
     )
     keyboard = InlineKeyboardMarkup([[
         InlineKeyboardButton("🚀 Давай!", callback_data="welcome:start"),
@@ -736,14 +558,15 @@ async def _resume_step(update: Update, context: ContextTypes.DEFAULT_TYPE, user:
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("👶 Для ребёнка", callback_data="who_for:child")],
                 [InlineKeyboardButton("👩 Для себя", callback_data="who_for:self")],
-                [InlineKeyboardButton("👩‍👧 И для ребёнка, и для себя", callback_data="who_for:both")],
+                [InlineKeyboardButton("👩‍👧 Для ребёнка и для себя", callback_data="who_for:both")],
+                [InlineKeyboardButton("🤰 Беременна", callback_data="who_for:pregnant")],
             ]),
         )
         return WHO_FOR
     if step == "child_gender":
-        pb = progress_bar(2)
+        pb = progress_bar(1)
         await update.effective_message.reply_text(
-            f"{pb}\n\nДевочка или мальчик? 🎀",
+            f"{pb}\n\nДевочка или мальчик?",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("👧 Девочка", callback_data="child_gender:girl"),
                  InlineKeyboardButton("👦 Мальчик", callback_data="child_gender:boy")],
@@ -751,10 +574,15 @@ async def _resume_step(update: Update, context: ContextTypes.DEFAULT_TYPE, user:
         )
         return CHILD_GENDER
     if step == "child_name":
-        gender = context.user_data.get("child_gender", "girl" if segment == "mom_girl" else "boy")
-        pb = progress_bar(2)
-        name_q = "Как зовут? 💕" if gender == "girl" else "Как зовут? 😊"
-        await update.effective_message.reply_text(f"{pb}\n\n{name_q}", reply_markup=ReplyKeyboardRemove())
+        pb = progress_bar(1)
+        if segment == "pregnant":
+            await update.effective_message.reply_text(
+                f"{pb}\n\nКак тебя зовут?", reply_markup=ReplyKeyboardRemove()
+            )
+        else:
+            await update.effective_message.reply_text(
+                f"{pb}\n\nКак зовут?", reply_markup=ReplyKeyboardRemove()
+            )
         return CHILD_NAME
     if step == "child_birthdate":
         child_name = context.user_data.get("child_name", "")
@@ -769,30 +597,19 @@ async def _resume_step(update: Update, context: ContextTypes.DEFAULT_TYPE, user:
             date_q = t("onboarding.child_birthdate")
         await update.effective_message.reply_text(f"{pb}\n\n{date_q}")
         return CHILD_BIRTHDATE
-    if step == "child_size":
-        child_name = context.user_data.get("child_name", "ребёнка")
-        pb = progress_bar(3)
+    if step == "pregnant_trimester":
+        pb = progress_bar(2)
         await update.effective_message.reply_text(
-            f"{pb}\n\nКакой размер одежды {child_name}? 👗\n\n"
-            "Напиши размер (86, 92, 104, 116...)\nИли возраст — подберу примерный"
+            f"{pb}\n\nКакой триместр?",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("1-й", callback_data="trimester:1"),
+                    InlineKeyboardButton("2-й", callback_data="trimester:2"),
+                    InlineKeyboardButton("3-й", callback_data="trimester:3"),
+                ],
+            ]),
         )
-        return CHILD_SIZE
-    if step == "child_shoe_size":
-        child_name = context.user_data.get("child_name", "ребёнка")
-        pb = progress_bar(3)
-        await update.effective_message.reply_text(
-            f"{pb}\n\nРазмер обуви {child_name}? 👟\n\nНапиши число (26 или 26.5)",
-            reply_markup=ReplyKeyboardMarkup(
-                [["⏭ Пропустить"]], resize_keyboard=True, one_time_keyboard=True
-            )
-        )
-        return CHILD_SHOE_SIZE
-    if step == "selfie_colortype":
-        await _ask_selfie_colortype(update)
-        return SELFIE_COLORTYPE
-    if step == "colortype":
-        await _ask_colortype(update)
-        return ASK_COLORTYPE
+        return PREGNANT_TRIMESTER
     # step == "city"
     await _ask_city(update)
     return CITY
@@ -809,11 +626,11 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
     segment = context.user_data.get("segment") or (user.segment or "no_kids")
     city = context.user_data.get("city", "")
     timezone = context.user_data.get("timezone", "Europe/Vilnius")
-    colortype = context.user_data.get("colortype")
+    also_self = context.user_data.get("also_self", False)
 
     # Проверка обязательных полей для ребёнка
     if segment in ("mom_girl", "mom_boy"):
-        required = ["child_name", "child_birthdate", "child_size"]
+        required = ["child_name", "child_birthdate"]
         missing = [k for k in required if not context.user_data.get(k)]
         if missing:
             logger.error("onboarding.missing_fields", missing=missing, user_id=str(user.id))
@@ -823,17 +640,24 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return ConversationHandler.END
 
     try:
+        update_values = dict(
+            city=city,
+            timezone=timezone,
+            onboarding_step=None,
+            onboarding_completed=True,
+        )
+
+        # Save trimester for pregnant
+        if segment == "pregnant":
+            trimester = context.user_data.get("trimester")
+            if trimester:
+                update_values["trimester"] = trimester
+
         async with AsyncWriteSession() as session:
             await session.execute(
                 sa.update(User)
                 .where(User.id == user.id)
-                .values(
-                    city=city,
-                    timezone=timezone,
-                    colortype=colortype,
-                    onboarding_step=None,
-                    onboarding_completed=True,
-                )
+                .values(**update_values)
             )
 
             if segment in ("mom_girl", "mom_boy"):
@@ -841,8 +665,6 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 child_name = context.user_data["child_name"]
                 child_birthdate = context.user_data["child_birthdate"]
                 child_gender = "girl" if segment == "mom_girl" else "boy"
-                child_size = context.user_data.get("child_size")
-                child_shoe = context.user_data.get("child_shoe_size")
                 existing = await session.execute(
                     sa.select(_Child).where(
                         _Child.user_id == user.id,
@@ -856,8 +678,6 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
                             name=child_name,
                             birthdate=child_birthdate,
                             gender=child_gender,
-                            current_size=child_size,
-                            shoe_size=child_shoe,
                         )
                     )
                 else:
@@ -867,8 +687,6 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
                         name=child_name,
                         birthdate=child_birthdate,
                         gender=child_gender,
-                        current_size=child_size,
-                        shoe_size=child_shoe,
                     )
 
             await session.commit()
@@ -877,22 +695,17 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user.onboarding_step = None
         user.city = city
         user.timezone = timezone
-        user.colortype = colortype
         # Флаг для text handler: не вызывать Касси для этого же сообщения
         context.user_data["onboarding_just_completed"] = True
 
-        child_name = context.user_data.get("child_name")
-        if segment in ("mom_girl", "mom_boy") and child_name:
-            item_target = f"вещей {child_name}"
-        else:
-            item_target = "из своего шкафа"
-
+        # Build finish message
         welcome = (
-            f"🎉 Отлично, {user.name}!\n\n"
-            f"Теперь самое интересное — пришли 5 любимых вещей {item_target} "
-            "и я соберу первый образ!\n\n"
+            "Отлично! Сфоткай 3-5 вещей из шкафа — я соберу первый образ.\n\n"
             "📸 Фотографируй по одной вещи на светлом фоне"
         )
+        if also_self and segment in ("mom_girl", "mom_boy"):
+            welcome += "\n\nПозже добавим и твой гардероб тоже."
+
         await update.effective_message.reply_text(
             welcome, reply_markup=get_main_menu()
         )
@@ -901,7 +714,6 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
             user_id=str(user.id),
             segment=segment,
             city=city,
-            colortype=colortype,
         )
 
     except Exception as e:
@@ -915,9 +727,9 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # ── /cancel fallback ───────────────────────────────────────────────────────
 
 async def handle_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    for key in ("segment", "child_gender", "child_name", "child_birthdate", "child_size",
-                "child_shoe_size", "city", "timezone", "city_candidates", "colortype",
-                "also_self", "child_age"):
+    for key in ("segment", "child_gender", "child_name", "child_birthdate",
+                "city", "timezone", "city_candidates",
+                "also_self", "child_age", "pregnant_name", "trimester"):
         context.user_data.pop(key, None)
     await update.message.reply_text(
         "Отменено. /start чтобы начать заново",
@@ -954,12 +766,6 @@ def build_conversation_handler() -> ConversationHandler:
             CHILD_BIRTHDATE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_child_birthdate),
             ],
-            CHILD_SIZE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_child_size),
-            ],
-            CHILD_SHOE_SIZE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_child_shoe_size),
-            ],
             CITY: [
                 MessageHandler(filters.LOCATION, handle_city_location),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_city_text),
@@ -967,12 +773,8 @@ def build_conversation_handler() -> ConversationHandler:
             CITY_SUGGEST: [
                 CallbackQueryHandler(handle_city_suggest, pattern="^city_pick:"),
             ],
-            SELFIE_COLORTYPE: [
-                MessageHandler(filters.PHOTO, handle_selfie_colortype),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_selfie_skip),
-            ],
-            ASK_COLORTYPE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_colortype),
+            PREGNANT_TRIMESTER: [
+                CallbackQueryHandler(handle_pregnant_trimester, pattern="^trimester:"),
             ],
         },
         fallbacks=[CommandHandler("cancel", handle_cancel)],

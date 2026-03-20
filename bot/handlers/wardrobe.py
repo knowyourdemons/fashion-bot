@@ -166,9 +166,9 @@ async def _maybe_trigger_first_brief(user, owner_id, owner_type, message, contex
         from db.crud.wardrobe import get_owner_items_count
         async with AsyncReadSession() as session:
             wardrobe_count = await get_owner_items_count(session, owner_id, owner_type)
-        if wardrobe_count < 5:
+        if wardrobe_count < 3:
             await redis.delete(lock_key)
-            remaining = 5 - wardrobe_count
+            remaining = 3 - wardrobe_count
             if remaining == 1:
                 suffix = "вещь"
             elif remaining < 5:
@@ -632,9 +632,28 @@ async def _handle_single_photo(
 
         lines = []
         if added:
-            lines.append(f"✅ Добавила {len(added)} вещей:")
-            for d in added:
-                lines.append(f"→ {_item_label(d)}")
+            # Guided first photos: counter + micro-praise
+            async with AsyncReadSession() as _cnt_sess:
+                _all_now = await get_owner_items(_cnt_sess, owner_id, owner_type)
+            _total_now = len(_all_now)
+            _first_outfit_threshold = 3
+
+            if _total_now < _first_outfit_threshold:
+                _left = _first_outfit_threshold - _total_now
+                _praise = f"✅ {_item_label(added[0])}"
+                if len(added) > 1:
+                    for d in added[1:]:
+                        _praise += f"\n✅ {_item_label(d)}"
+                _praise += f"\n\nЕщё {_left} и соберу первый образ ({_total_now}/{_first_outfit_threshold})"
+                lines.append(_praise)
+            elif _total_now == _first_outfit_threshold:
+                for d in added:
+                    lines.append(f"✅ {_item_label(d)}")
+                lines.append(f"\n🎉 Есть {_first_outfit_threshold} вещи! Собираю первый образ...")
+            else:
+                lines.append(f"✅ Добавила {len(added)} вещей:")
+                for d in added:
+                    lines.append(f"→ {_item_label(d)}")
         if not added:
             lines.append("🤔 На фото не найдено одежды")
 
