@@ -122,24 +122,26 @@ def _card(slot_data: dict, width: str, height: str, *,
     """Universal item card with photo/placeholder + optional label."""
     is_placeholder = not slot_data.get("has_item")
 
-    # Colors: placeholder = saturated pastel, real photo = white
+    # Distinct saturated pastel per slot (matching Miro references)
+    _SLOT_PASTELS = {
+        "outerwear": "#C8D8E8", "top": "#FFD0D8", "bottom": "#C8D0F0",
+        "one_piece": "#E0D0F0", "footwear": "#D0E0F0", "hat": "#D0E8D0",
+        "scarf": "#F0DCC8", "gloves": "#D0D8F0", "tights": "#E8D8E8",
+        "socks": "#E8D8E8",
+    }
     if is_placeholder:
         slot_key = slot_data.get("slot", "top")
-        # Distinct pastel per slot type (not gray!)
-        _SLOT_PASTELS = {
-            "outerwear": "#E8DDD5", "top": "#FFE4E8", "bottom": "#DDE4FF",
-            "one_piece": "#F0E4F5", "footwear": "#E4EEF5", "hat": "#E8F0E4",
-            "scarf": "#F5EAE0", "gloves": "#E4E8F0", "tights": "#F0E8F0",
-            "socks": "#F0E8F0",
-        }
-        bg_color = bg or _SLOT_PASTELS.get(slot_key, "#F0ECE8")
+        bg_color = bg or _SLOT_PASTELS.get(slot_key, "#E0D8D0")
     else:
         bg_color = bg or "#FFFFFF"
 
     children: list = []
 
     if is_placeholder:
-        # Placeholder: pastel fill + label text centered, NO gray silhouette
+        # Silhouette on pastel background + label below (like Miro refs)
+        img = _get_img_el(slot_data, img_w, img_h, "0.35")
+        if img:
+            children.append(img)
         label = _get_slot_label(slot_data)
         children.append({
             "type": "div",
@@ -147,8 +149,9 @@ def _card(slot_data: dict, width: str, height: str, *,
                 "style": {
                     "display": "flex",
                     "fontFamily": "DejaVu",
-                    "fontSize": label_size + 2,
-                    "color": "#9A8A9A",
+                    "fontSize": label_size,
+                    "color": "#8A7A8A",
+                    "marginTop": 4,
                 },
                 "children": label,
             },
@@ -219,6 +222,35 @@ def _circles(palette: list[str], size: int = 18) -> list[dict]:
     ]
 
 
+def _weather_strip(header_text: str) -> Optional[dict]:
+    """Build weather strip: +4° утро → +7° день → +2° вечер.
+    Satori can't render emoji, so we use text labels."""
+    # Parse temp from header: "Пт, 20 мар · сейчас +5°C · Алиса, садик"
+    h_parts = (header_text or "").split(" · ")
+    temp_part = h_parts[1] if len(h_parts) > 1 else ""
+    if not temp_part or "°" not in temp_part:
+        return None
+
+    # Simple display of the temperature string
+    return _text(temp_part, 13, "#777", marginTop=2)
+
+
+def _footer_comment(footer_text: str, palette: list[str]) -> dict:
+    """Footer with weather comment + palette dots + Касси."""
+    children: list = []
+    # Weather/outfit comment if present and not just "Касси..."
+    if footer_text and "Касси" not in footer_text:
+        children.append(_text(footer_text, 12, "#888", fontStyle="italic"))
+    # Palette + Касси
+    footer_row: list = []
+    if palette:
+        footer_row.append(_row(_circles(palette[:4], 12), gap=4))
+    footer_row.append(_text("Касси", 11, "#AAA0B0"))
+    children.append(_row(footer_row, gap=8, justifyContent="center", alignItems="center"))
+
+    return _col(children, gap=6, padding="10px 24px 16px", alignItems="center")
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # STYLE 1: FLAT LAY — items "laid out on bed", warm pastel, free layout
 # Instagram-friendly, cozy aesthetic
@@ -252,45 +284,41 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
 
     body_rows: list = []
 
-    # Hero: outerwear — large card (full width)
+    # Hero: outerwear — LARGE (clear hierarchy)
     if hero:
-        body_rows.append(_card(hero[0], "100%", "200px", radius=20,
-                               bg="#F5EDE8", img_w="80%", img_h="75%"))
+        body_rows.append(_card(hero[0], "100%", "220px", radius=20, img_w="80%", img_h="70%"))
 
     # Main: top + bottom side by side (or one_piece full width)
     op = [s for s in main if s.get("slot") == "one_piece"]
     tops = [s for s in main if s.get("slot") in ("top", "removable_layer")]
     bots = [s for s in main if s.get("slot") == "bottom"]
     if op:
-        body_rows.append(_card(op[0], "100%", "160px", radius=16, bg="#F0E8F0"))
+        body_rows.append(_card(op[0], "100%", "170px", radius=16))
     elif tops or bots:
         cards = []
         if tops:
-            cards.append(_card(tops[0], "48%", "160px", radius=16, bg="#FFE8E8"))
+            cards.append(_card(tops[0], "48%", "170px", radius=16))
         if bots:
-            cards.append(_card(bots[0], "48%", "160px", radius=16, bg="#E8E8FF"))
+            cards.append(_card(bots[0], "48%", "170px", radius=16))
         body_rows.append(_row(cards, justifyContent="space-between"))
 
-    # Small: footwear + accessories — smaller cards
+    # Small: footwear + accessories — noticeably smaller
     if small:
-        sm_cards = [_card(s, f"{90 // max(len(small), 1)}%", "100px",
-                          radius=12, label_size=11, img_w="70%", img_h="60%",
-                          bg="#F0F0FF") for s in small]
+        sm_cards = [_card(s, f"{90 // max(len(small), 1)}%", "90px",
+                          radius=12, label_size=11, img_w="65%", img_h="55%") for s in small]
         body_rows.append(_row(sm_cards, gap=8, justifyContent="center"))
 
     body = _col(body_rows, gap=10, padding="0 20px")
 
-    # Footer: comment + Касси
-    footer_el = _col([
-        _text(footer_text or "Касси -- твой личный стилист", 12, "#B0A098"),
-    ], gap=4, padding="12px 24px 20px")
+    # Footer: weather comment + palette + Касси
+    footer_el = _footer_comment(footer_text, palette)
 
     h = 60 + 16  # header
-    if hero: h += 212
-    if op or tops or bots: h += 172
-    if small: h += 112
-    h += 44  # footer
-    h = max(h, 450)
+    if hero: h += 232
+    if op or tops or bots: h += 182
+    if small: h += 102
+    h += 56  # footer
+    h = max(h, 480)
 
     root = _col([header_el, body, footer_el], gap=0, backgroundColor=bg, height="100%")
     return root, W, h
@@ -326,45 +354,37 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
 
     body_rows: list = []
 
-    # Hero: outerwear — large, minimal bg
     if hero:
-        body_rows.append(_card(hero[0], "100%", "180px", radius=12,
-                               bg="#F8F7F5", shadow=False, img_w="75%", img_h="70%"))
+        body_rows.append(_card(hero[0], "100%", "190px", radius=12, shadow=False, img_w="75%", img_h="68%"))
 
-    # Main: cards side by side
     op = [s for s in main if s.get("slot") == "one_piece"]
     tops = [s for s in main if s.get("slot") in ("top", "removable_layer")]
     bots = [s for s in main if s.get("slot") == "bottom"]
     if op:
-        body_rows.append(_card(op[0], "100%", "160px", radius=12, bg="#F8F7F5", shadow=False))
+        body_rows.append(_card(op[0], "100%", "160px", radius=12, shadow=False))
     elif tops or bots:
         cards = []
         if tops:
-            cards.append(_card(tops[0], "48%", "160px", radius=12, bg="#FFF5F5", shadow=False))
+            cards.append(_card(tops[0], "48%", "160px", radius=12, shadow=False))
         if bots:
-            cards.append(_card(bots[0], "48%", "160px", radius=12, bg="#F5F5FF", shadow=False))
+            cards.append(_card(bots[0], "48%", "160px", radius=12, shadow=False))
         body_rows.append(_row(cards, justifyContent="space-between"))
 
-    # Small row
     if small:
-        sm_cards = [_card(s, f"{90 // max(len(small), 1)}%", "90px",
-                          radius=10, label_size=11, shadow=False, bg="#F5F8F5",
-                          img_w="65%", img_h="55%") for s in small]
+        sm_cards = [_card(s, f"{90 // max(len(small), 1)}%", "85px",
+                          radius=10, label_size=11, shadow=False,
+                          img_w="60%", img_h="50%") for s in small]
         body_rows.append(_row(sm_cards, gap=8, justifyContent="center"))
 
     body = _col(body_rows, gap=10, padding="0 20px")
+    footer_el = _footer_comment(footer_text, palette)
 
-    # Footer
-    footer_el = _col([
-        _text(footer_text or "Касси -- твой личный стилист", 11, "#BBB"),
-    ], gap=4, padding="14px 24px 20px", alignItems="flex-end")
-
-    h = 56
-    if hero: h += 192
+    h = 60
+    if hero: h += 202
     if op or tops or bots: h += 172
-    if small: h += 102
-    h += 44
-    h = max(h, 420)
+    if small: h += 97
+    h += 56
+    h = max(h, 440)
 
     root = _col([header_el, body, footer_el], gap=0, backgroundColor="#FFFFFF", height="100%")
     return root, W, h
@@ -431,17 +451,14 @@ def build_story(slots: list, header_text: str, footer_text: str,
 
     body = _col(body_rows, gap=10, padding="0 20px")
 
-    # Footer
-    footer_el = _col([
-        _text(footer_text or "Касси -- твой личный стилист", 11, "#666"),
-    ], gap=4, padding="12px 24px 20px", alignItems="center")
+    footer_el = _footer_comment(footer_text, palette)
 
     h = 70
     if hero: h += 192
     if op or tops or bots: h += 162
     if small: h += 102
-    h += 40
-    h = max(h, 440)
+    h += 56
+    h = max(h, 460)
 
     root = _col([header_el, body, footer_el], gap=0, backgroundColor=bg, height="100%")
     return root, W, h

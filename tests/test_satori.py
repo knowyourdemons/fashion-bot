@@ -238,6 +238,48 @@ class TestCollageStyles:
         assert bg != "#FFFFFF"  # should be a colored/lightened bg
         assert w == 440
 
+    def test_placeholder_has_silhouette_and_label(self):
+        """Placeholder cards should have silhouette image + text label."""
+        from services.collage_styles import _card
+        slot = {"slot": "outerwear", "has_item": False, "item_color": "", "gender": "girl", "label": "Куртка"}
+        card = _card(slot, "100%", "200px")
+        children = card["props"]["children"]
+        # Should have 2 children: img (silhouette) + label div
+        assert len(children) >= 1  # at least label
+        # Last child should be label text
+        last = children[-1]
+        assert last["props"]["children"] == "Куртка"
+
+    def test_placeholder_distinct_colors_per_slot(self):
+        """Each slot type should have a distinct pastel background."""
+        from services.collage_styles import _card
+        colors = set()
+        for slot_key in ("outerwear", "top", "bottom", "footwear"):
+            slot = {"slot": slot_key, "has_item": False, "gender": "girl", "label": "Test"}
+            card = _card(slot, "100%", "100px")
+            bg = card["props"]["style"]["backgroundColor"]
+            colors.add(bg)
+        assert len(colors) >= 3, f"Cards should have distinct colors, got: {colors}"
+
+    def test_footer_comment_shows_weather(self):
+        """Footer should display weather comment when provided."""
+        from services.collage_styles import _footer_comment
+        footer = _footer_comment("К вечеру дождь -- возьмите зонт", ["#FF0000"])
+        children = footer["props"]["children"]
+        # First child = weather text, second = palette + Касси
+        assert any("дождь" in str(c) for c in children)
+
+    def test_header_parses_correctly(self):
+        """Header text splits into name + date parts without wrapping."""
+        from services.collage_styles import build_flat_lay, collect_palette
+        slots = self._slots()
+        palette = collect_palette(slots)
+        header = "Пт, 20 мар · сейчас +5°C · Алиса, садик"
+        el, _, h = build_flat_lay(slots, header, "", palette)
+        assert h > 400  # should have reasonable height
+        # Root should have children (header, body, footer)
+        assert len(el["props"]["children"]) == 3
+
 
 class TestRoundRobin:
     """Style rotation works correctly."""

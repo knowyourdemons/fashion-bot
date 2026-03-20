@@ -76,7 +76,6 @@ class TestGetCollageParams:
         child = _make_child("girl")
         params = get_collage_params(child=child, temp=15.0)
         assert params["theme"] == "girl"
-        assert "стилист" in params["footer_text"]
         assert child.name in params["header_text"]
 
     def test_boy_child(self):
@@ -90,7 +89,16 @@ class TestGetCollageParams:
         from services.outfit_builder import get_collage_params
         params = get_collage_params(temp=20.0)
         assert params["theme"] == "adult"
-        assert "стилист" in params["footer_text"]
+
+    def test_footer_weather_warning(self):
+        from services.outfit_builder import get_collage_params
+        params = get_collage_params(temp=10.0, temp_evening=2.0)
+        assert "вечеру" in params["footer_text"]
+
+    def test_footer_rain_warning(self):
+        from services.outfit_builder import get_collage_params
+        params = get_collage_params(temp=15.0, precip=60.0)
+        assert "дождь" in params["footer_text"]
 
     def test_rain_emoji(self):
         # Emoji убраны из header_text (PIL не рендерит) — просто температура и дата
