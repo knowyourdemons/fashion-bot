@@ -132,7 +132,7 @@ async def handle_share(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     parts = query.data.split(":", 1)
     brief_id_str = parts[1] if len(parts) > 1 else None
     if not brief_id_str:
-        await query.message.reply_text("📤 Перешли картинку выше бабушке — на ней всё написано 👗")
+        await query.message.reply_text("📤 Перешли картинку выше — на ней всё написано 👗")
         return
 
     try:
@@ -152,9 +152,9 @@ async def handle_share(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     child_name = children[0].name
 
             caption = (
-                f"👧 Образ для {child_name} на сегодня. Собрала Касси — AI-стилист 👗"
+                f"Образ для {child_name} на сегодня. Собрала Касси — твой личный стилист 👗"
                 if child_name else
-                "Образ дня от Касси — AI-стилиста 👗"
+                "Образ дня от Касси — твоего личного стилиста 👗"
             )
             await query.message.reply_photo(
                 photo=log.collage_file_id,
@@ -162,8 +162,8 @@ async def handle_share(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
         else:
             await query.message.reply_text(
-                "📤 Перешли картинку выше бабушке — на ней всё написано 👗"
+                "📤 Перешли картинку выше — на ней всё написано 👗"
             )
     except Exception as e:
         logger.error("brief.share.error", error=str(e))
-        await query.message.reply_text("📤 Перешли картинку выше бабушке 👗")
+        await query.message.reply_text("📤 Перешли картинку выше 👗")

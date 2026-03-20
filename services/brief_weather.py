@@ -49,9 +49,11 @@ async def _get_weather(lat: float, lon: float, tz: str) -> dict:
             precip = hourly.get("precipitation_probability", [])
             return {
                 "temp_morning": round(temps[7], 1) if len(temps) > 7 else None,
+                "temp_day": round(temps[14], 1) if len(temps) > 14 else None,
                 "temp_evening": round(temps[18], 1) if len(temps) > 18 else None,
                 "precip_evening": precip[18] if len(precip) > 18 else 0,
+                "precip_max": max(precip[:18]) if len(precip) > 18 else 0,
             }
     except Exception as e:
         logger.warning("brief.weather.failed", error=str(e))
-        return {"temp_morning": None, "temp_evening": None, "precip_evening": 0}
+        return {"temp_morning": None, "temp_day": None, "temp_evening": None, "precip_evening": 0, "precip_max": 0}

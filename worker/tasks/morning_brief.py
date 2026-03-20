@@ -295,7 +295,8 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
 
     # Заголовок коллажа для взрослых
     precip_e_adult = weather.get("precip_evening", 0)
-    _collage_params = get_collage_params(user=user, temp=temp_m, precip=precip_e_adult or 0)
+    temp_d_adult = weather.get("temp_day")
+    _collage_params = get_collage_params(user=user, temp=temp_m, temp_day=temp_d_adult, temp_evening=temp_e, precip=precip_e_adult or 0)
     collage_header = _collage_params["header_text"]
 
     collage_bytes_val = None
@@ -414,6 +415,7 @@ async def generate_brief(payload: dict) -> dict:
     all_outfit_slots: list[dict] = []
     any_wow = False
     global_warnings: list[str] = []
+    weather_card_bytes: bytes | None = None  # Mode B card
 
     for child in children:
         async with AsyncReadSession() as session:
@@ -421,6 +423,72 @@ async def generate_brief(payload: dict) -> dict:
 
         if not items:
             child_briefs.append(f"👧 {child.name}: гардероб пуст. Добавь вещи!")
+            continue
+
+        # ── Mode B check: мало реальных фото → погодная карточка ──
+        real_photos = sum(
+            1 for i in items
+            if (getattr(i, "photo_url", None) or getattr(i, "photo_id", None))
+            and getattr(i, "show_in_collage", True)
+            and getattr(i, "category_group", "") != "underwear"
+        )
+        total_visible = sum(
+            1 for i in items
+            if getattr(i, "show_in_collage", True)
+            and getattr(i, "category_group", "") != "underwear"
+        )
+        placeholder_ratio = 1 - (real_photos / max(total_visible, 1))
+
+        if real_photos < 3 or placeholder_ratio > 0.5:
+            # ── MODE B: погодная карточка ──
+            from services.weather_card import build_weather_card, generate_weather_advice, season_palette
+            from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
+            from core.redis import get_redis as _get_redis_b
+
+            try:
+                _pool_b = get_anthropic_pool()
+            except RuntimeError:
+                _r_b = _get_redis_b()
+                init_anthropic_pool(_r_b)
+                _pool_b = get_anthropic_pool()
+
+            temp_d = weather.get("temp_day") or temp_m
+            precip_max = weather.get("precip_max", precip_e or 0)
+
+            advice = await generate_weather_advice(
+                pool=_pool_b,
+                child_name=child.name,
+                temp_morning=temp_m or 10.0,
+                temp_day=temp_d,
+                temp_evening=temp_e or temp_m or 10.0,
+                precip_max=precip_max,
+                day_type=day_type,
+            )
+
+            weather_card_bytes = build_weather_card(
+                child_name=child.name,
+                day_type=day_type,
+                temp_morning=temp_m or 10.0,
+                temp_day=temp_d,
+                temp_evening=temp_e or temp_m or 10.0,
+                precip_max=precip_max,
+                advice_text=advice,
+                items_count=len(items),
+            )
+
+            # Текстовый бриф для Mode B
+            sm_b = "+" if (temp_m or 0) >= 0 else ""
+            child_briefs.append(
+                f"👧 {child.name} ({day_type}):\n"
+                f"💬 {advice}"
+            )
+
+            logger.info(
+                "brief.mode_b",
+                child=child.name,
+                real_photos=real_photos,
+                total_visible=total_visible,
+            )
             continue
 
         outfit = _select_outfit(items, season, today, temp_m, temp_e, precip_e or 0)
@@ -518,17 +586,23 @@ async def generate_brief(payload: dict) -> dict:
 
     # ── Заголовок с погодой ──────────────────────────────────────────────
     weather_line = ""
+    temp_d = weather.get("temp_day")
     if temp_m is not None:
         sm = "+" if temp_m >= 0 else ""
         se = "+" if (temp_e or 0) >= 0 else ""
-        weather_line = f"{user.city}: {sm}{round(temp_m)}°C → вечером {se}{round(temp_e)}°C"
+        if temp_d is not None:
+            sd = "+" if temp_d >= 0 else ""
+            weather_line = f"{user.city}: {sm}{round(temp_m)}°C → {sd}{round(temp_d)}°C → {se}{round(temp_e)}°C"
+        else:
+            weather_line = f"{user.city}: {sm}{round(temp_m)}°C → вечером {se}{round(temp_e)}°C"
     else:
         logger.warning("brief.weather.empty", city=user.city)
 
     # Заголовок коллажа — берём из первого ребёнка
     _first_child = children[0] if children else None
     _collage_params = get_collage_params(
-        child=_first_child, temp=temp_m, precip=precip_e or 0, day_type=day_type
+        child=_first_child, temp=temp_m, temp_day=temp_d, temp_evening=temp_e,
+        precip=precip_e or 0, day_type=day_type,
     )
     collage_header = _collage_params["header_text"]
     collage_theme = _collage_params["theme"]
@@ -553,13 +627,22 @@ async def generate_brief(payload: dict) -> dict:
         elif _days_left == 0:
             _trial_notice = "\n\n⏰ Это последний день Premium!"
 
-    brief_text = (
-        header.rstrip()
-        + "\n\n"
-        + "\n\n".join(child_briefs)
-        + "\n\nКак тебе образ?"
-        + _trial_notice
-    )
+    if weather_card_bytes:
+        # Mode B: no "Как тебе образ?" — there's no outfit to rate
+        brief_text = (
+            header.rstrip()
+            + "\n\n"
+            + "\n\n".join(child_briefs)
+            + _trial_notice
+        )
+    else:
+        brief_text = (
+            header.rstrip()
+            + "\n\n"
+            + "\n\n".join(child_briefs)
+            + "\n\nКак тебе образ?"
+            + _trial_notice
+        )
 
     # Сохранить BriefLog
     async with AsyncWriteSession() as session:
@@ -605,28 +688,38 @@ async def generate_brief(payload: dict) -> dict:
     redis_client = get_redis()
     try:
         queue = RedisQueue(redis_client)
+        _payload: dict = {
+            "telegram_id": user.telegram_id,
+            "text": brief_text,
+            "brief_id": brief_id,
+        }
+        if weather_card_bytes:
+            # Mode B: weather card instead of collage
+            import base64 as _b64_enc
+            _payload["weather_card_b64"] = _b64_enc.b64encode(weather_card_bytes).decode()
+        else:
+            # Mode A: collage
+            _payload["outfit_slots"] = all_outfit_slots
+            _payload["collage_photo_ids"] = collage_photo_ids
+            _payload["collage_labels"] = collage_labels
+            _payload["collage_photo_urls"] = collage_photo_urls
+            _payload["collage_header"] = collage_header
+            _payload["collage_theme"] = collage_theme
+
         await queue.push(
             "send_morning_brief",
-            {
-                "telegram_id": user.telegram_id,
-                "text": brief_text,
-                "brief_id": brief_id,
-                "outfit_slots": all_outfit_slots,
-                "collage_photo_ids": collage_photo_ids,
-                "collage_labels": collage_labels,
-                "collage_photo_urls": collage_photo_urls,
-                "collage_header": collage_header,
-                "collage_theme": collage_theme,
-            },
+            _payload,
             priority=QueuePriority.HIGH,
         )
     finally:
         pass  # singleton — не закрываем
 
+    _mode = "B" if weather_card_bytes else "A"
     logger.info(
         "morning_brief.generated",
         user_id=str(user_id),
         brief_id=brief_id,
+        mode=_mode,
         outfit_ids_count=len(all_outfit_ids),
         collage_photos_count=len(collage_photo_ids),
     )
@@ -651,20 +744,38 @@ async def send_morning_brief(payload: dict) -> dict:
     brief_id = payload["brief_id"]
     is_adult = payload.get("is_adult", False)
 
-    reply_markup = {
-        "inline_keyboard": [[
-            {"text": "👍 Надели", "callback_data": f"brief_feedback:up:{brief_id}"},
-            {"text": "🔄 Переодень", "callback_data": f"reroll:{brief_id}"},
-        ], [
-            {"text": "📤 Переслать бабушке", "callback_data": f"share:{brief_id}"},
-        ]]
-    }
+    is_weather_card = bool(payload.get("weather_card_b64"))
+
+    if is_weather_card:
+        # Mode B: CTA to add items, no outfit feedback buttons
+        reply_markup = {
+            "inline_keyboard": [[
+                {"text": "📸 Добавить вещи", "callback_data": "add_items_hint"},
+            ]]
+        }
+    else:
+        reply_markup = {
+            "inline_keyboard": [[
+                {"text": "👍 Надели", "callback_data": f"brief_feedback:up:{brief_id}"},
+                {"text": "🔄 Переодень", "callback_data": f"reroll:{brief_id}"},
+            ], [
+                {"text": "📤 Переслать", "callback_data": f"share:{brief_id}"},
+            ]]
+        }
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             collage_bytes = None
 
-            if is_adult:
+            if is_weather_card:
+                # Mode B: weather card PNG
+                wc_b64 = payload.get("weather_card_b64")
+                if wc_b64:
+                    try:
+                        collage_bytes = _b64.b64decode(wc_b64)
+                    except Exception as e:
+                        logger.warning("morning_brief.weather_card.decode_failed", error=str(e))
+            elif is_adult:
                 # Взрослый бриф: коллаж уже собран и закодирован в base64
                 collage_b64 = payload.get("collage_bytes_b64")
                 if collage_b64:
@@ -705,6 +816,8 @@ async def send_morning_brief(payload: dict) -> dict:
                         logger.warning("morning_brief.collage_failed", error=str(e))
 
             if collage_bytes:
+                _fname = "weather_card.png" if is_weather_card else "collage.jpg"
+                _mime = "image/png" if is_weather_card else "image/jpeg"
                 resp = await client.post(
                     f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendPhoto",
                     data={
@@ -712,7 +825,7 @@ async def send_morning_brief(payload: dict) -> dict:
                         "caption": text,
                         "reply_markup": json.dumps(reply_markup),
                     },
-                    files={"photo": ("collage.jpg", collage_bytes, "image/jpeg")},
+                    files={"photo": (_fname, collage_bytes, _mime)},
                 )
             else:
                 resp = await client.post(

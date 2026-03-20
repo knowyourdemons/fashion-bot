@@ -337,7 +337,7 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     pb = progress_bar(0)
     welcome_text = (
         f"{pb}\n\n"
-        "Привет! 👋 Я Касси — твой AI-стилист.\n\n"
+        "Привет! 👋 Я Касси — твой личный стилист.\n\n"
         "Каждое утро буду присылать готовый образ по погоде "
         "из вещей, которые уже есть в шкафу.\n\n"
         "Познакомимся за 2 минуты? 😊"
@@ -713,7 +713,7 @@ async def handle_resume_confirm(update: Update, context: ContextTypes.DEFAULT_TY
     pb = progress_bar(0)
     welcome_text = (
         f"{pb}\n\n"
-        "Привет! 👋 Я Касси — твой AI-стилист.\n\n"
+        "Привет! 👋 Я Касси — твой личный стилист.\n\n"
         "Каждое утро буду присылать готовый образ по погоде "
         "из вещей, которые уже есть в шкафу.\n\n"
         "Познакомимся за 2 минуты? 😊"

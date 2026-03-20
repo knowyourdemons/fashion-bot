@@ -60,6 +60,8 @@ def get_collage_params(
     child=None,
     user=None,
     temp: float | None = None,
+    temp_day: float | None = None,
+    temp_evening: float | None = None,
     precip: float = 0,
     day_type: str = "",
 ) -> dict:
@@ -76,8 +78,17 @@ def get_collage_params(
 
     # Header — без эмодзи (PIL/DejaVuSans не рендерит unicode emoji → квадраты)
     sign = "+" if (temp or 0) >= 0 else ""
-    temp_str = f"{sign}{temp:.0f}°C" if temp is not None else ""
     day_str = f"{_DAY_NAMES[today.weekday()]}, {today.day} {_MONTH_NAMES[today.month]}"
+
+    # Температурная строка: утро→день→вечер или утро→вечер
+    if temp is not None and temp_day is not None and temp_evening is not None:
+        sd = "+" if temp_day >= 0 else ""
+        se = "+" if temp_evening >= 0 else ""
+        temp_str = f"{sign}{temp:.0f} / {sd}{temp_day:.0f} / {se}{temp_evening:.0f}°C"
+    elif temp is not None:
+        temp_str = f"{sign}{temp:.0f}°C"
+    else:
+        temp_str = ""
 
     if child:
         context = child.name
