@@ -135,8 +135,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                         await update.message.reply_text("Размер одежды должен быть от 56 до 176")
                         return
                 if len(parts_input) >= 2:
-                    from bot.handlers.onboarding import _parse_shoe_size
-                    sh = _parse_shoe_size(parts_input[1])
+                    try:
+                        sh = float(parts_input[1].replace(",", "."))
+                    except (ValueError, TypeError):
+                        sh = None
                     if sh and 15 <= sh <= 45:
                         new_shoe = sh
                     else:
