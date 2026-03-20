@@ -77,26 +77,17 @@ def get_collage_params(
     else:
         theme = "adult"
 
-    # Header — без эмодзи (PIL/DejaVuSans не рендерит unicode emoji → квадраты)
+    # Header на коллаже — краткий, без дублирования с текстом caption
+    # Текст caption уже содержит подробную погоду, поэтому здесь только ключевое
     day_str = f"{_DAY_NAMES[today.weekday()]}, {today.day} {_MONTH_NAMES[today.month]}"
 
-    # Температурная строка: "сейчас +9, днём +11, вечером +5"
-    parts: list[str] = []
+    # Показываем текущую температуру (или утреннюю) — кратко
     if temp_now is not None:
         sn = "+" if temp_now >= 0 else ""
-        parts.append(f"сейчас {sn}{temp_now:.0f}")
+        temp_str = f"{sn}{temp_now:.0f}°C"
     elif temp is not None:
         sm = "+" if temp >= 0 else ""
-        parts.append(f"утро {sm}{temp:.0f}")
-    if temp_day is not None:
-        sd = "+" if temp_day >= 0 else ""
-        parts.append(f"день {sd}{temp_day:.0f}")
-    if temp_evening is not None:
-        se = "+" if temp_evening >= 0 else ""
-        parts.append(f"вечер {se}{temp_evening:.0f}")
-
-    if parts:
-        temp_str = ", ".join(parts) + "°C"
+        temp_str = f"{sm}{temp:.0f}°C"
     else:
         temp_str = ""
 

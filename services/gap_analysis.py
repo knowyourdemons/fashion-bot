@@ -116,13 +116,64 @@ async def build_shopping_list(
     colortype = user.colortype or ""
     colortype_str = f"\nЦветотип: {colortype}." if colortype else ""
 
+    # Контекст из скоринговых матриц и SEASON_SLOT_TYPES
     child_instruction = ""
+    scoring_context = ""
+
     if is_child_wardrobe and child is not None:
         gender = getattr(child, "gender", "girl")
+        gender_word = "девочки" if gender == "girl" else "мальчика"
+
+        # Матрица скоринга — какие критерии важны для этого возраста
+        from services.scoring import matrix_name_for_owner
+        matrix_name = matrix_name_for_owner(user, child)
+
+        try:
+            from db.base import AsyncReadSession as _ARS
+            from db.models.scoring_matrix import ScoringMatrix as _SM
+            from sqlalchemy import select as _sel
+            async with _ARS() as _sess:
+                _res = await _sess.execute(
+                    _sel(_SM).where(_SM.name == matrix_name, _SM.is_active.is_(True))
+                )
+                _matrix = _res.scalar_one_or_none()
+            if _matrix:
+                criteria_keys = [k for k in _matrix.criteria if not k.startswith("_")]
+                scoring_context = f"Критерии оценки для {matrix_name}: {', '.join(criteria_keys)}.\n"
+        except Exception:
+            pass
+
+        # Базовые вещи по текущей погоде из SEASON_SLOT_TYPES
+        from worker.tasks.style_config import SEASON_SLOT_TYPES, get_temp_regime
+        from services.brief_weather import _geocode_city, _get_weather
+
+        expected_items: list[str] = []
+        try:
+            coords = await _geocode_city(user.city or "")
+            if coords:
+                w = await _get_weather(coords[0], coords[1], user.timezone or "Europe/Vilnius")
+                _temp = w.get("temp_now") or w.get("temp_morning") or 10.0
+            else:
+                _temp = 10.0
+            regime = get_temp_regime(_temp)
+            for slot, regimes in SEASON_SLOT_TYPES.items():
+                item_type = regimes.get(regime)
+                if item_type:
+                    expected_items.append(f"{slot}: {item_type}")
+        except Exception:
+            pass
+
+        expected_str = ""
+        if expected_items:
+            expected_str = f"По текущей погоде ребёнку нужно: {', '.join(expected_items)}.\n"
+
         child_instruction = (
-            "ВАЖНО: это детский гардероб. Рекомендуй ТОЛЬКО детские вещи, "
-            f"подходящие по возрасту и размеру для {'девочки' if gender == 'girl' else 'мальчика'}. "
-            "Учитывай что дети быстро растут — практичные вещи важнее модных. "
+            f"ВАЖНО: это детский гардероб для {gender_word}. "
+            f"Рекомендуй ТОЛЬКО детские вещи подходящие по возрасту и размеру. "
+            f"Практичные вещи важнее модных. Дети быстро растут. "
+            f"Не рекомендуй взрослые вещи (рубашки, пиджаки, офисная одежда).\n"
+            f"{scoring_context}"
+            f"{expected_str}"
         )
 
     user_prompt = (
