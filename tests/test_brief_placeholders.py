@@ -53,8 +53,8 @@ def test_no_placeholder_when_warm():
     print("PASS: нет упоминания куртки при +20°C")
 
 
-def test_visible_items_not_in_text():
-    """Видимые вещи (top/bottom/outerwear/footwear) НЕ дублируются в тексте."""
+def test_all_items_in_dressing_order():
+    """Утренний бриф = текст, все вещи показываются в порядке одевания."""
     outfit = _base_outfit(
         top=FakeItem(type="кофта", color="синий"),
         bottom=FakeItem(type="штаны", color="серый"),
@@ -63,19 +63,25 @@ def test_visible_items_not_in_text():
         footwear=FakeItem(type="ботинки", color="коричневый"),
     )
     result = _format_child_block("Алиса", "садик", outfit, temp=8.0)
-    # Видимые вещи НЕ должны быть в тексте
-    assert "кофта" not in result, f"FAIL: кофта (top) не должна быть в тексте\n{result}"
-    assert "штаны" not in result, f"FAIL: штаны (bottom) не должны быть в тексте\n{result}"
-    assert "куртка" not in result, f"FAIL: куртка (outerwear) не должна быть в тексте\n{result}"
-    assert "ботинки" not in result, f"FAIL: ботинки (footwear) не должны быть в тексте\n{result}"
-    # Но невидимые должны быть
+    # Все вещи должны быть в тексте (бриф = текст без коллажа)
+    assert "кофта" in result, f"FAIL: кофта должна быть в тексте\n{result}"
+    assert "штаны" in result, f"FAIL: штаны должны быть в тексте\n{result}"
+    assert "куртка" in result, f"FAIL: куртка должна быть в тексте\n{result}"
+    assert "ботинки" in result, f"FAIL: ботинки должны быть в тексте\n{result}"
+    # Невидимые тоже
     assert "трусики" in result
     assert "колготки" in result
-    print("PASS: видимые вещи не дублируются, невидимые отображаются")
+    # Порядок: ПОД ОДЕЖДУ → ОДЕЖДА → ОБУВЬ → НА ВЫХОД
+    idx_under = result.index("ПОД ОДЕЖДУ")
+    idx_clothes = result.index("ОДЕЖДА")
+    idx_shoes = result.index("ОБУВЬ")
+    idx_exit = result.index("НА ВЫХОД")
+    assert idx_under < idx_clothes < idx_shoes < idx_exit
+    print("PASS: все вещи в порядке одевания")
 
 
 if __name__ == "__main__":
     test_underwear_text_shown()
     test_no_placeholder_when_warm()
-    test_visible_items_not_in_text()
+    test_all_items_in_dressing_order()
     print("Все тесты PASS")

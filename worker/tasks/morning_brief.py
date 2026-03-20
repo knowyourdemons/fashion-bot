@@ -19,7 +19,7 @@ from services.outfit_builder import build_outfit_slots, get_collage_params
 # ── Реэкспорт из сервисных модулей (backward compat для тестов) ────────────
 from services.brief_weather import _SEASONS, _geocode_city, _get_weather
 from services.outfit_selector import _get_temp_regime, _select_outfit
-from services.brief_formatter import _format_item, _format_child_block
+from services.brief_formatter import _format_item, _format_child_block, format_weather_line
 
 logger = structlog.get_logger()
 
@@ -616,9 +616,18 @@ async def generate_brief(payload: dict) -> dict:
     collage_header = _collage_params["header_text"]
     collage_theme = _collage_params["theme"]
 
-    header = f"🌅 Доброе утро, {user.name}!\n"
-    if weather_line:
-        header += f"🌡 {weather_line}\n"
+    # Weather line с эмодзи для текстового брифа
+    _DAY_NAMES_FULL = {0: "ПОНЕДЕЛЬНИК", 1: "ВТОРНИК", 2: "СРЕДА", 3: "ЧЕТВЕРГ", 4: "ПЯТНИЦА", 5: "СУББОТА", 6: "ВОСКРЕСЕНЬЕ"}
+    _MONTH_NAMES_FULL = {1: "ЯНВАРЯ", 2: "ФЕВРАЛЯ", 3: "МАРТА", 4: "АПРЕЛЯ", 5: "МАЯ", 6: "ИЮНЯ", 7: "ИЮЛЯ", 8: "АВГУСТА", 9: "СЕНТЯБРЯ", 10: "ОКТЯБРЯ", 11: "НОЯБРЯ", 12: "ДЕКАБРЯ"}
+    _day_name = _DAY_NAMES_FULL.get(today.weekday(), "")
+    _date_str = f"{_day_name}, {today.day} {_MONTH_NAMES_FULL.get(today.month, '')}"
+
+    _first_child_name = children[0].name if children else ""
+    weather_emoji_line = format_weather_line(weather) if weather else ""
+
+    header = f"<b>{_date_str}</b>\n<b>{_first_child_name}</b>, {day_type}\n"
+    if weather_emoji_line:
+        header += f"{weather_emoji_line}\n"
 
     # Weather alerts из services/weather.py (ветер, осадки, дельта вечера)
     if user.city:
@@ -650,22 +659,13 @@ async def generate_brief(payload: dict) -> dict:
         elif _days_left == 0:
             _trial_notice = "\n\n⏰ Это последний день Premium!"
 
-    if weather_card_bytes:
-        # Mode B: no "Как тебе образ?" — there's no outfit to rate
-        brief_text = (
-            header.rstrip()
-            + "\n\n"
-            + "\n\n".join(child_briefs)
-            + _trial_notice
-        )
-    else:
-        brief_text = (
-            header.rstrip()
-            + "\n\n"
-            + "\n\n".join(child_briefs)
-            + "\n\nКак тебе образ?"
-            + _trial_notice
-        )
+    # Утренний бриф = текст в порядке одевания, без коллажа
+    brief_text = (
+        header.rstrip()
+        + "\n\n"
+        + "\n\n".join(child_briefs)
+        + _trial_notice
+    )
 
     # Сохранить BriefLog
     async with AsyncWriteSession() as session:
@@ -707,7 +707,7 @@ async def generate_brief(payload: dict) -> dict:
     else:
         collage_photo_urls = []
 
-    # Push send task
+    # Push send task — утренний бриф = text only (без коллажа)
     redis_client = get_redis()
     try:
         queue = RedisQueue(redis_client)
@@ -715,19 +715,9 @@ async def generate_brief(payload: dict) -> dict:
             "telegram_id": user.telegram_id,
             "text": brief_text,
             "brief_id": brief_id,
+            "text_only": True,  # утренний бриф = текст, не картинка
+            "parse_mode": "HTML",
         }
-        if weather_card_bytes:
-            # Mode B: weather card instead of collage
-            import base64 as _b64_enc
-            _payload["weather_card_b64"] = _b64_enc.b64encode(weather_card_bytes).decode()
-        else:
-            # Mode A: collage
-            _payload["outfit_slots"] = all_outfit_slots
-            _payload["collage_photo_ids"] = collage_photo_ids
-            _payload["collage_labels"] = collage_labels
-            _payload["collage_photo_urls"] = collage_photo_urls
-            _payload["collage_header"] = collage_header
-            _payload["collage_theme"] = collage_theme
 
         await queue.push(
             "send_morning_brief",
@@ -766,14 +756,23 @@ async def send_morning_brief(payload: dict) -> dict:
     text = payload["text"]
     brief_id = payload["brief_id"]
     is_adult = payload.get("is_adult", False)
+    is_text_only = payload.get("text_only", False)
+    parse_mode = payload.get("parse_mode")
 
     is_weather_card = bool(payload.get("weather_card_b64"))
 
     if is_weather_card:
-        # Mode B: CTA to add items, no outfit feedback buttons
         reply_markup = {
             "inline_keyboard": [[
                 {"text": "📸 Добавить вещи", "callback_data": "add_items_hint"},
+            ]]
+        }
+    elif is_text_only:
+        # Утренний текстовый бриф — кнопки без переслать (нечего пересылать)
+        reply_markup = {
+            "inline_keyboard": [[
+                {"text": "👍 Надели", "callback_data": f"brief_feedback:up:{brief_id}"},
+                {"text": "🔄 Переодень", "callback_data": f"reroll:{brief_id}"},
             ]]
         }
     else:
@@ -788,6 +787,23 @@ async def send_morning_brief(payload: dict) -> dict:
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
+            # Text-only mode (утренний бриф) — отправить текст без фото
+            if is_text_only:
+                _send_data: dict = {
+                    "chat_id": telegram_id,
+                    "text": text,
+                    "reply_markup": json.dumps(reply_markup),
+                }
+                if parse_mode:
+                    _send_data["parse_mode"] = parse_mode
+                resp = await client.post(
+                    f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+                    json=_send_data,
+                )
+                resp.raise_for_status()
+                logger.info("morning_brief.sent_text", telegram_id=telegram_id, brief_id=brief_id)
+                return {"sent": True}
+
             collage_bytes = None
 
             if is_weather_card:

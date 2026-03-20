@@ -389,14 +389,14 @@ def test_all_items_no_duplicates():
 # ── Блок 2: _format_child_block ──────────────────────────────────────────────
 
 def test_format_basic():
-    """Имя и day_type присутствуют; видимые вещи НЕ дублируются в тексте."""
+    """Имя и day_type присутствуют; все вещи в текстовом брифе."""
     outfit = _empty_outfit()
     outfit["top"] = FakeItem(type="футболка", color="белый")
     text = _format_child_block("Алиса", "садик", outfit)
     assert "Алиса" in text
     assert "садик" in text
-    # Видимые вещи на коллаже — не дублируем в тексте
-    assert "футболка" not in text
+    # Утренний бриф = текст, все вещи показываются
+    assert "футболка" in text
 
 
 def test_format_no_score_ever():
@@ -430,38 +430,36 @@ def test_format_thermals():
     outfit = _empty_outfit()
     outfit["thermal_top"] = FakeItem(category_group="underwear", type="термолонгслив", color="серый")
     text = _format_child_block("Алиса", "прогулка", outfit)
-    assert "Под одежду" in text
+    assert "ПОД ОДЕЖДУ" in text
     assert "термобельё" in text.lower()
 
 
 def test_format_outerwear():
-    """Верхняя одежда НЕ дублируется в тексте — она на коллаже."""
+    """Верхняя одежда показывается в группе 'НА ВЫХОД'."""
     outfit = _empty_outfit()
     outfit["outerwear"] = FakeItem(category_group="outerwear", type="куртка", color="красный")
     text = _format_child_block("Алиса", "садик", outfit)
-    assert "Верхняя одежда" not in text
-    assert "куртка" not in text
+    assert "куртка" in text
+    assert "НА ВЫХОД" in text
 
 
 def test_format_accessories():
-    """Аксессуары (шапка/шарф) — на коллаже, НЕ дублируются в тексте."""
+    """Аксессуары (шапка/шарф) — в группе 'НА ВЫХОД'."""
     outfit = _empty_outfit()
     outfit["hat"] = FakeItem(category_group="accessory", type="шапка", color="синий")
     outfit["scarf"] = FakeItem(category_group="accessory", type="шарф", color="серый")
     text = _format_child_block("Алиса", "прогулка", outfit)
-    assert "Аксессуары" not in text
-    assert "шапка" not in text
-    assert "шарф" not in text
+    assert "шапка" in text
+    assert "шарф" in text
 
 
 def test_format_removable_layer():
-    """Съёмный слой — на коллаже, НЕ дублируется в тексте."""
+    """Съёмный слой показывается в группе ОДЕЖДА."""
     outfit = _empty_outfit()
     outfit["top"] = FakeItem(type="футболка", color="белый")
     outfit["removable_layer"] = FakeItem(type="худи", color="серый")
     text = _format_child_block("Алиса", "садик", outfit)
-    assert "снять вечером" not in text
-    assert "худи" not in text
+    assert "худи" in text
 
 
 def test_format_underwear_text_fallback():
@@ -613,7 +611,7 @@ def test_precip_above_threshold_warning():
 def test_format_item_color_not_in_type():
     """Цвет не в названии типа → добавляется в скобках."""
     item = FakeItem(type="кофта", color="синий")
-    assert _format_item(item) == "кофта (синий)"
+    assert _format_item(item) == "кофта синий"
 
 
 def test_format_item_color_in_type_no_duplicate():
