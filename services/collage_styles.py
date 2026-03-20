@@ -669,78 +669,134 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
 # STYLE 3: STORY — gradient bg from palette, bold name, for sharing/stories
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _frosted_card(slot_data: dict, width: str, height: str, *,
+                   radius: int = 18, label_size: int = 13,
+                   img_w: str = "70%", img_h: str = "60%") -> dict:
+    """Frosted glass card for story style — semi-transparent white."""
+    is_placeholder = not slot_data.get("has_item")
+    children: list = []
+
+    if is_placeholder:
+        label = _get_slot_label(slot_data)
+        children.append({
+            "type": "div", "props": {
+                "style": {"display": "flex", "fontFamily": "DejaVu",
+                           "fontSize": label_size, "color": "#8A7A8A"},
+                "children": label,
+            },
+        })
+    else:
+        img = _get_img_el(slot_data, img_w, img_h, "1")
+        if img:
+            children.append(img)
+
+    return {"type": "div", "props": {
+        "style": {
+            "display": "flex", "flexDirection": "column",
+            "alignItems": "center", "justifyContent": "center",
+            "width": width, "height": height,
+            "backgroundColor": "rgba(255,255,255,0.55)",
+            "borderRadius": radius, "overflow": "hidden",
+        },
+        "children": children,
+    }}
+
+
 def build_story(slots: list, header_text: str, footer_text: str,
                 palette: list[str], *, weather_data: dict = None) -> tuple[dict, int, int]:
     hero, main, small = _split_zones(slots)
     W = 440
     weather_data = weather_data or {}
 
-    # Gradient-like bg: blend first two palette colors
+    # Gradient-like bg from palette (Satori can't do CSS gradients)
+    # Use a blend: light purple-pink
     if len(palette) >= 2:
         bg = _lighten(palette[0])
     elif palette:
         bg = _lighten(palette[0])
     else:
-        bg = "#E8E0F0"
+        bg = "#E0D8F0"
 
     date_part, temp_part, name_part = _parse_header(header_text)
     if not name_part:
         name_part = date_part
 
-    name_row = [_text(name_part, 22, "#333", fontWeight="bold")]
-    if palette:
-        name_row.append(_row(_circles(palette[:3], 10), gap=4, marginLeft="auto"))
+    # ── Header: name large centered, date below ──
     header_children: list = [
-        _row(name_row, alignItems="center", justifyContent="center"),
+        _text(name_part, 22, "#333", fontWeight="bold", textAlign="center"),
     ]
     if date_part and name_part != date_part:
         header_children.append(
-            _text(date_part.upper(), 10, "#666", letterSpacing=1, textAlign="center"),
+            _text(date_part.upper(), 10, "#777", letterSpacing=1, textAlign="center"),
         )
+
     ws = _weather_strip_element(weather_data) if weather_data else None
     if ws:
         header_children.append(ws)
-    elif temp_part:
-        header_children.append(_text(temp_part, 12, "#777", textAlign="center"))
 
-    header_el = _col(header_children, gap=4, padding="24px 24px 8px", alignItems="center")
+    header_el = _col(header_children, gap=4, padding="28px 24px 8px", alignItems="center")
 
+    # ── Body: frosted glass cards, no dividers ──
     body_rows: list = []
 
-    # Hero: outerwear — no bg override, use _SLOT_PASTELS
+    # Hero: largest frosted card
     if hero:
-        body_rows.append(_card(hero[0], "100%", "180px", radius=20, img_w="78%", img_h="72%"))
+        body_rows.append(
+            _row([_frosted_card(hero[0], "65%", "120px", radius=20)],
+                 justifyContent="center"),
+        )
 
+    # Main
     op = [s for s in main if s.get("slot") == "one_piece"]
     tops = [s for s in main if s.get("slot") in ("top", "removable_layer")]
     bots = [s for s in main if s.get("slot") == "bottom"]
     if op:
-        body_rows.append(_card(op[0], "100%", "150px", radius=16))
+        body_rows.append(
+            _row([_frosted_card(op[0], "65%", "130px")], justifyContent="center"),
+        )
     elif tops or bots:
         cards = []
         if tops:
-            cards.append(_card(tops[0], "48%", "150px", radius=16))
+            cards.append(_frosted_card(tops[0], "46%", "120px"))
         if bots:
-            cards.append(_card(bots[0], "48%", "150px", radius=16))
-        body_rows.append(_row(cards, justifyContent="space-between"))
+            cards.append(_frosted_card(bots[0], "46%", "120px"))
+        body_rows.append(_row(cards, gap=10, justifyContent="center"))
 
+    # Small
     if small:
-        sm_cards = [_card(s, f"{90 // max(len(small), 1)}%", "90px",
-                          radius=14, label_size=11, img_w="65%", img_h="55%") for s in small]
-        body_rows.append(_row(sm_cards, gap=8, justifyContent="center"))
+        sm = [_frosted_card(s, f"{80 // max(len(small), 1)}%", "80px",
+                             radius=14, label_size=11, img_w="60%", img_h="50%")
+              for s in small]
+        body_rows.append(_row(sm, gap=8, justifyContent="center"))
 
     body = _col(body_rows, gap=10, padding="0 20px")
 
-    footer_el = _footer_comment(footer_text, palette)
+    # ── Footer: advice + Касси (no divider, transparent) ──
+    footer_children = []
+    if footer_text:
+        if "дожд" in footer_text.lower() or "зонт" in footer_text.lower():
+            _e = "🌧"
+        elif "холод" in footer_text.lower() or "теплее" in footer_text.lower():
+            _e = "🧣"
+        else:
+            _e = "✨"
+        footer_children.append(_text(f"{_e} {footer_text}", 11, "#555", fontStyle="italic"))
+    footer_children.append(_text("Касси", 10, "#888"))
+    footer_el = _col(footer_children, gap=3, padding="8px 24px 16px", alignItems="center")
 
-    h = 70
-    if hero: h += 192
-    if op or tops or bots: h += 162
-    if small: h += 102
-    h += 56
-    h = max(h, 460)
+    # Height
+    h = 70  # header
+    if ws: h += 60
+    if hero: h += 132
+    if op or tops or bots: h += 132
+    if small: h += 92
+    h += 45  # footer
+    _fl = max(1, (len(footer_text) // 38 + 1)) if footer_text else 0
+    h += _fl * 14
+    h = max(h, 480)
 
-    root = _col([header_el, body, footer_el], gap=0, backgroundColor=bg, height="100%")
+    root = _col([header_el, body, footer_el], gap=0,
+                backgroundColor=bg, borderRadius=24, height="100%")
     return root, W, h
 
 
