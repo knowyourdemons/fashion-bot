@@ -234,18 +234,24 @@ def _circles(palette: list[str], size: int = 18) -> list[dict]:
 
 
 def _wmo_to_icon_name(code: int) -> str:
-    """WMO weather code → icon filename."""
+    """WMO weather code → icon filename (9 icons for all conditions)."""
     if code in (0, 1):
         return "sun"
-    if code in (2, 3):
+    if code == 2:
         return "partly_cloudy"
+    if code == 3:
+        return "cloud"
     if code in (45, 48):
         return "fog"
-    if code in (51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82):
+    if code in (51, 53, 55):  # drizzle
+        return "drizzle"
+    if code in (56, 57, 66, 67):  # freezing drizzle/rain → sleet
+        return "sleet"
+    if code in (61, 63, 65, 80, 81, 82):  # rain / showers
         return "rain"
-    if code in (71, 73, 75, 77, 85, 86):
+    if code in (71, 73, 75, 77, 85, 86):  # snow
         return "snow"
-    if code in (95, 96, 99):
+    if code in (95, 96, 99):  # thunderstorm
         return "thunder"
     return "partly_cloudy"
 
@@ -367,7 +373,12 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
 
     header_children: list = []
     if name_part:
-        header_children.append(_text(name_part, 18, "#333", fontWeight="bold"))
+        header_children.append(
+            _row([
+                _text(name_part, 18, "#333", fontWeight="bold"),
+                _row(_circles(palette[:4], 12), gap=4, marginLeft="auto"),
+            ], justifyContent="space-between", alignItems="center"),
+        )
     if date_part:
         header_children.append(_text(date_part, 12, "#999"))
 
@@ -436,7 +447,12 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
 
     header_children: list = []
     if name_part:
-        header_children.append(_text(name_part, 16, "#222", fontWeight="bold"))
+        header_children.append(
+            _row([
+                _text(name_part, 16, "#222", fontWeight="bold"),
+                _row(_circles(palette[:3], 12), gap=4, marginLeft="auto"),
+            ], justifyContent="space-between", alignItems="center"),
+        )
     if date_part:
         header_children.append(_text(date_part, 11, "#999"))
     ws = _weather_strip_element(weather_data) if weather_data else None

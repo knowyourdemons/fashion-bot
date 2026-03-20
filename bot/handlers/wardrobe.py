@@ -1320,17 +1320,16 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         else:
             comment = _warm_outfit_comment(6.0, child_name_str, temp_m, has_ow, missing)
 
-        caption = f"✨ {comment}"
-
-        outfit_warnings = outfit.get("warnings") or []
-        if outfit_warnings:
-            caption += "\n\n" + "\n".join(outfit_warnings)
+        # Comment goes ON the collage (footer), not in caption
+        _weather_footer = _collage_params.get("footer_text", "")
+        _collage_footer = _weather_footer if _weather_footer else comment
+        caption = ""  # no separate text — everything on the collage
 
         collage_bytes = await build_collage(
             outfit_slots=all_slots,
             theme=_collage_params["theme"],
             header_text=_collage_params["header_text"],
-            footer_text=_collage_params.get("footer_text", ""),
+            footer_text=_collage_footer,
             weather_data=_weather_data,
             colortype=colortype_for_outfit,
         )

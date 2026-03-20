@@ -93,13 +93,34 @@ def _fog():
     return img
 
 
+def _drizzle():
+    """Light rain — fewer, thinner drops."""
+    img = _cloud()
+    d = ImageDraw.Draw(img)
+    for x in [16, 28]:
+        d.line([(x, 40), (x - 2, 44)], fill=(130, 170, 220, 160), width=1)
+    return img
+
+
+def _sleet():
+    """Mix rain + snow."""
+    img = _cloud()
+    d = ImageDraw.Draw(img)
+    d.line([(14, 40), (11, 46)], fill=(100, 150, 220, 200), width=2)
+    d.ellipse([22, 40, 26, 44], fill=(180, 200, 230, 220))
+    d.line([(34, 40), (31, 46)], fill=(100, 150, 220, 200), width=2)
+    return img
+
+
 if __name__ == "__main__":
     icons = {
         "sun": _sun(),
         "partly_cloudy": _partly_cloudy(),
         "cloud": _cloud(),
         "rain": _rain(),
+        "drizzle": _drizzle(),
         "snow": _snow(),
+        "sleet": _sleet(),
         "thunder": _thunder(),
         "fog": _fog(),
     }

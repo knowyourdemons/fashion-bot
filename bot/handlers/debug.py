@@ -108,6 +108,11 @@ async def handle_debug_brief(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     try:
+        # Clear brief lock for debug
+        from datetime import date as _d
+        _lock = f"lock:brief:{user.id}:{_d.today().isoformat()}"
+        await redis.delete(_lock)
+
         from core.queue import RedisQueue, QueuePriority
         queue = RedisQueue(redis)
         await queue.push(
