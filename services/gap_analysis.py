@@ -49,7 +49,7 @@ async def build_shopping_list(
         return None
 
     # Cache version — bump when prompt/logic changes to invalidate old cache
-    _CACHE_VER = "v3"
+    _CACHE_VER = "v4"
     lock_key = f"gap_lock:{user.id}"
     cache_key = f"gap_analysis:{_CACHE_VER}:{user.id}"
 
@@ -194,38 +194,39 @@ async def build_shopping_list(
             f"{expected_str}"
         )
 
-    # System prompt — включает контекст владельца
+    # Промпт — простой и прямолинейный (Haiku теряет фокус на длинных промптах)
     if is_child_wardrobe and child is not None:
         from datetime import date as _date2
         gender = getattr(child, "gender", "girl")
         child_name = getattr(child, "name", "ребёнок")
-        age_str = ""
+        age_years = 3
         if getattr(child, "birthdate", None):
             age_years = (_date2.today() - child.birthdate).days // 365
-            age_str = f", {age_years} лет"
         gender_word = "девочка" if gender == "girl" else "мальчик"
-        size_str = f", размер {child.current_size}" if getattr(child, "current_size", None) else ""
 
         system_prompt = (
-            f"Ты детский стилист. Анализируешь гардероб ребёнка.\n"
-            f"Ребёнок: {child_name}, {gender_word}{age_str}{size_str}.\n"
-            f"Рекомендуй ТОЛЬКО детские вещи для {'девочки' if gender == 'girl' else 'мальчика'} этого возраста.\n"
-            f"НЕ рекомендуй взрослые вещи. Учитывай что дети активны и растут быстро.\n"
-            f"Отвечай на русском. Кратко."
+            f"Ты помогаешь маме купить одежду для ребёнка. "
+            f"Ребёнок: {child_name}, {gender_word}, {age_years} лет. "
+            f"Отвечай ТОЛЬКО нумерованным списком на русском."
+        )
+        user_prompt = (
+            f"У {child_name} ({age_years} лет, {gender_word}) в гардеробе:\n"
+            f"{items_lines}\n\n"
+            f"Сезон: {season}.\n"
+            f"Каких ДЕТСКИХ вещей для {gender_word} {age_years} лет не хватает?\n"
+            f"Напиши 5-7 вещей с цветом.\n"
+            f"Примеры детских вещей: боди, леггинсы, комбинезон, толстовка, "
+            f"водолазка, кроссовки детские, джинсы детские, платье.\n"
+            f"НЕ пиши: рубашка, блузка, брюки, туфли, кардиган — это взрослое."
         )
     else:
-        system_prompt = "Ты стилист-аналитик для взрослой женщины. Отвечай только на русском. Кратко и по делу."
-
-    user_prompt = (
-        f"{owner_context}{colortype_str}\n"
-        f"Сезон: {season}.\n\n"
-        f"Гардероб ({len(sorted_items)} вещей):\n{items_lines}\n\n"
-        f"{child_instruction}"
-        f"Определи 5–7 конкретных вещей которых не хватает для этого сезона. "
-        f"Указывай конкретный тип детской вещи и цвет. "
-        f"Если гардероб полный — ответь пустой строкой. "
-        f"Формат: нумерованный список, одна вещь на строку, без пояснений."
-    )
+        system_prompt = "Ты стилист. Помогаешь составить список покупок. Отвечай нумерованным списком на русском."
+        user_prompt = (
+            f"{owner_context}{colortype_str}\n"
+            f"Сезон: {season}.\n\n"
+            f"Гардероб ({len(sorted_items)} вещей):\n{items_lines}\n\n"
+            f"Каких вещей не хватает на этот сезон? Напиши 5-7 вещей с цветом."
+        )
 
     # Установить lock перед вызовом Claude
     await redis.set(lock_key, "1", ex=60)
