@@ -46,7 +46,7 @@ def create_application() -> Application:
 
     # Кнопки главного меню
     app.add_handler(MessageHandler(filters.Regex("^✨ Что надеть$"), wardrobe.handle_what_to_wear))
-    app.add_handler(MessageHandler(filters.Regex("^👗 Гардероб$"), wardrobe.handle_wardrobe_menu))
+    app.add_handler(MessageHandler(filters.Regex("^(👗|👧|👦) Гардероб$"), wardrobe.handle_wardrobe_menu))
     app.add_handler(MessageHandler(filters.Regex("^💬 Спросить Касси$"), wardrobe.handle_ask_kassi))
     app.add_handler(MessageHandler(filters.Regex("^👤 Профиль$"), handle_profile))
 
@@ -120,7 +120,7 @@ def create_application() -> Application:
     app.add_handler(MessageHandler(filters.LOCATION, handle_edit_city_location))
 
     # Текстовые сообщения → стилист — group=2 (после меню-хендлеров)
-    _menu_texts = filters.Regex("^(👗 Гардероб|✨ Что надеть|💬 Спросить Касси|👤 Профиль|❓ Помощь)$")
+    _menu_texts = filters.Regex("^((👗|👧|👦) Гардероб|✨ Что надеть|💬 Спросить Касси|👤 Профиль|❓ Помощь)$")
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND & ~_menu_texts, text.handle_text),
         group=2,

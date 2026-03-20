@@ -373,16 +373,16 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
 
     header_children: list = []
     if name_part:
+        header_children.append(_text(name_part, 18, "#333", fontWeight="bold"))
+    if date_part:
+        # Date + palette dots on same line
         header_children.append(
             _row([
-                _text(name_part, 18, "#333", fontWeight="bold"),
-                _row(_circles(palette[:4], 12), gap=4, marginLeft="auto"),
-            ], justifyContent="space-between", alignItems="center"),
+                _text(date_part, 12, "#999"),
+                _row(_circles(palette[:3], 8), gap=3, marginLeft="auto"),
+            ], alignItems="center"),
         )
-    if date_part:
-        header_children.append(_text(date_part, 12, "#999"))
 
-    # Weather strip with PNG icons
     ws = _weather_strip_element(weather_data) if weather_data else None
     if ws:
         header_children.append(ws)
@@ -447,14 +447,14 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
 
     header_children: list = []
     if name_part:
+        header_children.append(_text(name_part, 16, "#222", fontWeight="bold"))
+    if date_part:
         header_children.append(
             _row([
-                _text(name_part, 16, "#222", fontWeight="bold"),
-                _row(_circles(palette[:3], 12), gap=4, marginLeft="auto"),
-            ], justifyContent="space-between", alignItems="center"),
+                _text(date_part, 11, "#999"),
+                _row(_circles(palette[:3], 8), gap=3, marginLeft="auto"),
+            ], alignItems="center"),
         )
-    if date_part:
-        header_children.append(_text(date_part, 11, "#999"))
     ws = _weather_strip_element(weather_data) if weather_data else None
     if ws:
         header_children.append(ws)
@@ -510,17 +510,28 @@ def build_story(slots: list, header_text: str, footer_text: str,
     W = 440
     weather_data = weather_data or {}
 
-    bg = "#E8E0F0" if not palette else _lighten(palette[0])
+    # Gradient-like bg: blend first two palette colors
+    if len(palette) >= 2:
+        bg = _lighten(palette[0])
+    elif palette:
+        bg = _lighten(palette[0])
+    else:
+        bg = "#E8E0F0"
 
     date_part, temp_part, name_part = _parse_header(header_text)
     if not name_part:
-        name_part = date_part  # fallback
+        name_part = date_part
 
     header_children: list = [
         _text(name_part, 22, "#333", fontWeight="bold", textAlign="center"),
     ]
     if date_part and name_part != date_part:
-        header_children.append(_text(date_part.upper(), 10, "#666", letterSpacing=1, textAlign="center"))
+        header_children.append(
+            _row([
+                _text(date_part.upper(), 10, "#666", letterSpacing=1),
+                _row(_circles(palette[:4], 8), gap=3, marginLeft=8),
+            ], justifyContent="center", alignItems="center"),
+        )
     ws = _weather_strip_element(weather_data) if weather_data else None
     if ws:
         header_children.append(ws)
