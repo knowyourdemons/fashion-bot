@@ -77,19 +77,20 @@ def get_collage_params(
     else:
         theme = "adult"
 
-    # Header на коллаже — краткий, без дублирования с текстом caption
-    # Текст caption уже содержит подробную погоду, поэтому здесь только ключевое
     day_str = f"{_DAY_NAMES[today.weekday()]}, {today.day} {_MONTH_NAMES[today.month]}"
 
-    # Показываем текущую температуру (или утреннюю) — кратко
-    if temp_now is not None:
-        sn = "+" if temp_now >= 0 else ""
-        temp_str = f"{sn}{temp_now:.0f}°C"
-    elif temp is not None:
-        sm = "+" if temp >= 0 else ""
-        temp_str = f"{sm}{temp:.0f}°C"
-    else:
-        temp_str = ""
+    # Temperature string: "+4° / +7° / +2°" (morning/day/evening)
+    def _s(t):
+        return ("+" if t >= 0 else "") + f"{t:.0f}°"
+
+    temp_parts = []
+    if temp is not None:
+        temp_parts.append(_s(temp))
+    if temp_day is not None:
+        temp_parts.append(_s(temp_day))
+    if temp_evening is not None:
+        temp_parts.append(_s(temp_evening))
+    temp_str = " / ".join(temp_parts) if temp_parts else ""
 
     if child:
         context = child.name

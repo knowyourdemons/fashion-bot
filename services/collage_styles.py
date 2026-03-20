@@ -341,7 +341,7 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
 
     header_children: list = [
         _row([
-            _text("LOOK OF THE DAY", 10, "#999", letterSpacing=2),
+            _text("LOOK OF THE DAY", 9, "#999", letterSpacing=1),
             _row(_circles(palette[:4], 14), gap=4, marginLeft="auto"),
         ], justifyContent="space-between", alignItems="center"),
     ]
@@ -420,33 +420,26 @@ def build_story(slots: list, header_text: str, footer_text: str,
 
     body_rows: list = []
 
-    # Hero: outerwear — frosted card
+    # Hero: outerwear — no bg override, use _SLOT_PASTELS
     if hero:
-        body_rows.append(_card(hero[0], "100%", "180px", radius=20,
-                               bg="rgba(255,255,255,0.7)", img_w="78%", img_h="72%"))
+        body_rows.append(_card(hero[0], "100%", "180px", radius=20, img_w="78%", img_h="72%"))
 
-    # Main
     op = [s for s in main if s.get("slot") == "one_piece"]
     tops = [s for s in main if s.get("slot") in ("top", "removable_layer")]
     bots = [s for s in main if s.get("slot") == "bottom"]
     if op:
-        body_rows.append(_card(op[0], "100%", "150px", radius=16,
-                               bg="rgba(255,255,255,0.6)"))
+        body_rows.append(_card(op[0], "100%", "150px", radius=16))
     elif tops or bots:
         cards = []
         if tops:
-            cards.append(_card(tops[0], "48%", "150px", radius=16,
-                               bg="rgba(255,255,255,0.6)"))
+            cards.append(_card(tops[0], "48%", "150px", radius=16))
         if bots:
-            cards.append(_card(bots[0], "48%", "150px", radius=16,
-                               bg="rgba(255,255,255,0.6)"))
+            cards.append(_card(bots[0], "48%", "150px", radius=16))
         body_rows.append(_row(cards, justifyContent="space-between"))
 
-    # Small
     if small:
         sm_cards = [_card(s, f"{90 // max(len(small), 1)}%", "90px",
-                          radius=14, label_size=11, img_w="65%", img_h="55%",
-                          bg="rgba(255,255,255,0.5)") for s in small]
+                          radius=14, label_size=11, img_w="65%", img_h="55%") for s in small]
         body_rows.append(_row(sm_cards, gap=8, justifyContent="center"))
 
     body = _col(body_rows, gap=10, padding="0 20px")

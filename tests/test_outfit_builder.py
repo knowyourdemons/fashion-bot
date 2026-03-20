@@ -104,7 +104,7 @@ class TestGetCollageParams:
         # Emoji убраны из header_text (PIL не рендерит) — просто температура и дата
         from services.outfit_builder import get_collage_params
         params = get_collage_params(temp=15.0, precip=60.0)
-        assert "°C" in params["header_text"]
+        assert "°" in params["header_text"]
 
     def test_hot_emoji(self):
         # Emoji убраны из header_text (PIL не рендерит) — просто температура
