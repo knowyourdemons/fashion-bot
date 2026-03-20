@@ -427,15 +427,13 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
     date_part, temp_part, name_part = _parse_header(header_text)
 
     header_children: list = []
-    if name_part:
+    # Palette dots top-right
+    if palette:
         header_children.append(
-            _row([
-                _text(name_part, 16, "#333", fontWeight="bold"),
-                _row(_circles(palette[:1], 10), gap=0, marginLeft="auto"),
-            ], alignItems="center"),
+            _row(_circles(palette[:3], 10), gap=4, justifyContent="flex-end"),
         )
-    if date_part:
-        header_children.append(_text(date_part, 11, "#AAA"))
+    if name_part:
+        header_children.append(_text(name_part, 16, "#333", fontWeight="bold"))
 
     ws = _weather_strip_element(weather_data) if weather_data else None
     if ws:
@@ -443,13 +441,19 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
     elif temp_part:
         header_children.append(_text(temp_part, 13, "#888"))
 
-    header_el = _col(header_children, gap=2, padding="24px 24px 10px")
+    header_el = _col(header_children, gap=3, padding="20px 24px 10px")
 
-    body_rows: list = []
+    # Divider
+    _fl_divider = {
+        "type": "div",
+        "props": {"style": {"display": "flex", "width": "100%", "height": 1, "backgroundColor": "#E8DCD0", "marginBottom": 4}},
+    }
 
-    # Hero: outerwear — LARGE (clear hierarchy)
+    body_rows: list = [_fl_divider]
+
+    # Hero: outerwear — adaptive size
     if hero:
-        body_rows.append(_card(hero[0], "100%", "220px", radius=20, img_w="80%", img_h="70%"))
+        body_rows.append(_card(hero[0], "100%", "150px", radius=20, img_w="75%", img_h="65%"))
 
     # Main: top + bottom side by side (or one_piece full width)
     op = [s for s in main if s.get("slot") == "one_piece"]
@@ -473,15 +477,31 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
 
     body = _col(body_rows, gap=10, padding="0 20px")
 
-    # Footer: weather comment + palette + Касси
-    footer_el = _footer_comment(footer_text, palette)
+    # Footer with divider + advice (same as moodboard)
+    _fl_footer_div = {
+        "type": "div",
+        "props": {"style": {"display": "flex", "width": "100%", "height": 1, "backgroundColor": "#E8DCD0"}},
+    }
+    footer_parts = [_fl_footer_div]
+    if footer_text:
+        if "дожд" in footer_text.lower() or "зонт" in footer_text.lower():
+            _e = "🌧"
+        elif "холод" in footer_text.lower() or "теплее" in footer_text.lower():
+            _e = "🧣"
+        else:
+            _e = "✨"
+        footer_parts.append(_text(f"{_e} {footer_text}", 12, "#777", fontStyle="italic"))
+    footer_parts.append(_text("Касси", 10, "#B0A8B8"))
+    footer_el = _col(footer_parts, gap=4, padding="8px 24px 16px")
 
-    h = 70  # header
-    if ws: h += 65  # weather strip
-    if hero: h += 232
+    h = 65  # header
+    if ws: h += 65
+    if hero: h += 162  # reduced from 232
     if op or tops or bots: h += 182
-    if small: h += 110
-    h += 56  # footer
+    if small: h += 102
+    h += 55  # footer
+    _fl = max(1, (len(footer_text) // 35 + 1)) if footer_text else 0
+    h += _fl * 16
     h = max(h, 480)
 
     root = _col([header_el, body, footer_el], gap=0, backgroundColor=bg, height="100%")
