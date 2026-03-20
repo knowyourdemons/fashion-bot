@@ -440,11 +440,13 @@ class TestSelectOutfit:
         assert any("слоями" in w for w in result["warnings"])
 
     def test_already_worn_today_skipped(self):
-        """Вещь, надетая сегодня, не предлагается."""
+        """Вещь, надетая сегодня, пропускается если есть альтернативы (>= 3 available)."""
         items = self._items([
             {"category_group": "top", "type": "кофта синяя", "last_worn": self.today},
             {"category_group": "top", "type": "свитер красный", "last_worn": None},
             {"category_group": "bottom", "type": "джинсы"},
+            {"category_group": "footwear", "type": "кроссовки"},
+            {"category_group": "outerwear", "type": "куртка"},
         ])
         result = self._select_outfit(items, "spring", self.today, temp_morning=10.0)
         if result["top"]:

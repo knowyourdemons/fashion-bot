@@ -56,6 +56,9 @@ def _select_outfit(
         i for i in items
         if (not i.season or season in i.season) and i.last_worn != today
     ]
+    # Fallback: if too few items after last_worn filter, include all seasonal
+    if len(available) < 3:
+        available = [i for i in items if not i.season or season in i.season]
 
     def _first(cg=None, type_contains=None, type_not_contains=None,
                prefer_contains=None, exclude_ids=None):

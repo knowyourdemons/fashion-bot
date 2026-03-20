@@ -1276,11 +1276,11 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             except Exception:
                 pass
 
-        # Исключить все ранее показанные вещи
+        # Исключить ранее показанные. Сброс если осталось < половины гардероба.
         if accumulated_ids:
             items_shuffled = [i for i in items if i.id not in accumulated_ids]
-            if len(items_shuffled) < 3:
-                # Мало вещей — сбросить историю, включить все
+            _min_remaining = max(3, len(items) // 2)
+            if len(items_shuffled) < _min_remaining:
                 if redis:
                     try:
                         await redis.delete(shown_key)

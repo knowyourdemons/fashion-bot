@@ -145,16 +145,16 @@ def test_excludes_worn_today():
         assert result["top"].id != worn_top.id, "Вещь с last_worn=today не должна выбираться"
 
 
-def test_only_worn_items_gives_none():
-    """Если все вещи надеты сегодня → top=None."""
+def test_only_worn_items_fallback():
+    """Если все вещи надеты сегодня но гардероб мал — fallback включает все."""
     today = date.today()
     items = [
         _item("top", "футболка", last_worn=today),
         _item("bottom", "джинсы", last_worn=today),
     ]
     result = _outfit(items)
-    assert result["top"] is None
-    assert result["bottom"] is None
+    # With < 3 available, fallback includes worn items
+    assert result["top"] is not None or result["bottom"] is not None
 
 
 # ── Сезонная фильтрация ────────────────────────────────────────────────────────
