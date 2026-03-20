@@ -941,7 +941,7 @@ async def build_collage_satori(
 
     t0 = _time.monotonic()
     chosen = style or next_style()
-    builder = BUILDERS.get(chosen, BUILDERS["magazine"])
+    builder = BUILDERS.get(chosen, BUILDERS["flat_lay"])
     palette = collect_palette(slots)
 
     try:

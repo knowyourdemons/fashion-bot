@@ -189,13 +189,13 @@ class TestBuildCollageSatoriZones:
         ]
         with patch("services.image_builder._render_satori", new_callable=AsyncMock) as mock:
             mock.return_value = b"\x89PNG fake"
-            result = _run(build_collage_satori(slots, "Test", style="magazine"))
+            result = _run(build_collage_satori(slots, "Test", style="flat_lay"))
             assert result is not None
             mock.assert_called_once()
 
 
 class TestCollageStyles:
-    """All 6 styles produce valid element trees."""
+    """All 3 styles produce valid element trees."""
 
     def _slots(self):
         return [
@@ -215,39 +215,28 @@ class TestCollageStyles:
             assert w > 0 and h > 0, f"{name}: invalid dimensions"
             assert "children" in element["props"], f"{name}: no children"
 
-    def test_magazine_has_dark_header(self):
-        from services.collage_styles import build_magazine, collect_palette
+    def test_flat_lay_warm_bg(self):
+        from services.collage_styles import build_flat_lay, collect_palette
         slots = self._slots()
-        el, _, _ = build_magazine(slots, "Test", "Footer", collect_palette(slots))
-        # First child should have dark background
-        first = el["props"]["children"][0]
-        bg = first["props"]["style"].get("backgroundColor", "")
-        assert bg == "#1a1a2e"
+        el, w, _ = build_flat_lay(slots, "Test", "Footer", collect_palette(slots))
+        assert el["props"]["style"]["backgroundColor"] == "#FFF8F2"
+        assert w == 440
 
-    def test_editorial_has_white_bg(self):
-        from services.collage_styles import build_editorial, collect_palette
+    def test_moodboard_white_bg(self):
+        from services.collage_styles import build_moodboard, collect_palette
         slots = self._slots()
-        el, _, _ = build_editorial(slots, "Test", "Footer", collect_palette(slots))
+        el, w, _ = build_moodboard(slots, "Test", "Footer", collect_palette(slots))
         assert el["props"]["style"]["backgroundColor"] == "#FFFFFF"
+        assert w == 440
 
-    def test_story_card_has_gradient(self):
-        from services.collage_styles import build_story_card, collect_palette
+    def test_story_colored_bg(self):
+        from services.collage_styles import build_story, collect_palette
         slots = self._slots()
-        el, _, _ = build_story_card(slots, "Test", "Footer", collect_palette(slots))
-        bg = el["props"]["style"].get("backgroundImage", "")
-        assert "linear-gradient" in bg
-
-    def test_polaroid_has_warm_bg(self):
-        from services.collage_styles import build_polaroid, collect_palette
-        slots = self._slots()
-        el, _, _ = build_polaroid(slots, "Test", "Footer", collect_palette(slots))
-        assert el["props"]["style"]["backgroundColor"] == "#F5F0EB"
-
-    def test_pro_stylist_minimal(self):
-        from services.collage_styles import build_pro_stylist, collect_palette
-        slots = self._slots()
-        el, _, _ = build_pro_stylist(slots, "Test", "Footer", collect_palette(slots))
-        assert el["props"]["style"]["backgroundColor"] == "#FFFFFF"
+        palette = collect_palette(slots)
+        el, w, _ = build_story(slots, "Test", "Footer", palette)
+        bg = el["props"]["style"]["backgroundColor"]
+        assert bg != "#FFFFFF"  # should be a colored/lightened bg
+        assert w == 440
 
 
 class TestRoundRobin:
@@ -259,7 +248,7 @@ class TestRoundRobin:
         old = mod._style_counter
         mod._style_counter = 0
         try:
-            results = [next_style() for _ in range(12)]
+            results = [next_style() for _ in range(6)]
             assert results == STYLES + STYLES
         finally:
             mod._style_counter = old
@@ -395,7 +384,7 @@ class TestSatoriIntegration:
             {"slot": "top", "has_item": False, "item_color": "белый", "gender": "girl"},
             {"slot": "bottom", "has_item": False, "item_color": "голубой", "gender": "girl"},
         ]
-        result = _run(build_collage_satori(slots, "Лето", style="editorial"))
+        result = _run(build_collage_satori(slots, "Лето", style="moodboard"))
         assert result is not None
         assert len(result) > 5_000
 
