@@ -218,18 +218,26 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
                    palette: list[str]) -> tuple[dict, int, int]:
     hero, main, small = _split_zones(slots)
     W = 440
-
-    # Warm pastel background
     bg = "#FFF8F2"
 
-    # Header: "ЗАВТРА" + child name + palette dots
-    header_children: list = [
-        _text("ЗАВТРА", 11, "#B0A090", letterSpacing=2),
-        _row([
-            _text(header_text or "Образ дня", 20, "#333", fontWeight="bold"),
-            _row(_circles(palette[:3], 14), gap=4, marginLeft="auto"),
-        ], justifyContent="space-between", alignItems="center"),
-    ]
+    # Parse header: "Пт, 20 мар · +5°C · Алиса, садик" → parts
+    h_parts = (header_text or "Образ дня").split(" · ")
+    date_part = h_parts[0] if h_parts else ""
+    temp_part = h_parts[1] if len(h_parts) > 1 else ""
+    name_part = h_parts[2] if len(h_parts) > 2 else ""
+
+    header_children: list = []
+    if name_part:
+        header_children.append(
+            _row([
+                _text(name_part, 18, "#333", fontWeight="bold"),
+                _row(_circles(palette[:3], 14), gap=4, marginLeft="auto"),
+            ], justifyContent="space-between", alignItems="center"),
+        )
+    if date_part or temp_part:
+        sub = " · ".join(p for p in [date_part, temp_part] if p)
+        header_children.append(_text(sub, 13, "#888"))
+
     header_el = _col(header_children, gap=4, padding="20px 24px 12px")
 
     body_rows: list = []
@@ -287,15 +295,24 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
     hero, main, small = _split_zones(slots)
     W = 440
 
-    # Header: "LOOK OF THE DAY" + palette dots + header text
+    # Parse header parts
+    h_parts = (header_text or "Образ дня").split(" · ")
+    date_part = h_parts[0] if h_parts else ""
+    temp_part = h_parts[1] if len(h_parts) > 1 else ""
+    name_part = h_parts[2] if len(h_parts) > 2 else ""
+
     header_children: list = [
         _row([
             _text("LOOK OF THE DAY", 10, "#999", letterSpacing=2),
             _row(_circles(palette[:4], 14), gap=4, marginLeft="auto"),
         ], justifyContent="space-between", alignItems="center"),
-        _text(header_text or "Образ дня", 18, "#222", fontWeight="bold", marginTop=4),
     ]
-    header_el = _col(header_children, gap=2, padding="20px 24px 14px")
+    if name_part:
+        header_children.append(_text(name_part, 16, "#222", fontWeight="bold"))
+    sub = " · ".join(p for p in [date_part, temp_part] if p)
+    if sub:
+        header_children.append(_text(sub, 12, "#888"))
+    header_el = _col(header_children, gap=3, padding="20px 24px 14px")
 
     body_rows: list = []
 
@@ -356,16 +373,18 @@ def build_story(slots: list, header_text: str, footer_text: str,
     # so we use a solid light purple — matches the story ref)
     bg = "#E8E0F0" if not palette else _lighten(palette[0])
 
-    # Header: child name large, date small
-    parts = (header_text or "Образ дня").split(" · ", 1)
-    name_part = parts[-1] if len(parts) > 1 else parts[0]
-    date_part = parts[0] if len(parts) > 1 else ""
+    # Parse header parts
+    h_parts = (header_text or "Образ дня").split(" · ")
+    date_part = h_parts[0] if h_parts else ""
+    temp_part = h_parts[1] if len(h_parts) > 1 else ""
+    name_part = h_parts[2] if len(h_parts) > 2 else h_parts[0]
 
     header_children: list = [
-        _text(name_part, 24, "#333", fontWeight="bold", textAlign="center"),
+        _text(name_part, 22, "#333", fontWeight="bold", textAlign="center"),
     ]
-    if date_part:
-        header_children.append(_text(date_part.upper(), 11, "#777", letterSpacing=1, textAlign="center"))
+    sub = " · ".join(p for p in [date_part, temp_part] if p)
+    if sub:
+        header_children.append(_text(sub.upper(), 11, "#666", letterSpacing=1, textAlign="center"))
 
     header_el = _col(header_children, gap=4, padding="24px 24px 8px", alignItems="center")
 
