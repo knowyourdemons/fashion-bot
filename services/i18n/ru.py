@@ -14,45 +14,12 @@ STRINGS: dict[str, str] = {
         "из вещей, которые уже есть в шкафу.\n\n"
         "Познакомимся за 2 минуты? 😊"
     ),
-    "onboarding.btn_start": "🚀 Давай!",
-    "onboarding.who_for": "Для кого подбираем образы?",
-    "onboarding.btn_child": "👶 Для ребёнка",
-    "onboarding.btn_self": "👩 Для себя",
-    "onboarding.btn_both": "👩‍👧 И для ребёнка, и для себя",
-    "onboarding.gender": "Девочка или мальчик? 🎀",
-    "onboarding.btn_girl": "👧 Девочка",
-    "onboarding.btn_boy": "👦 Мальчик",
-    "onboarding.child_name_girl": "Как зовут? 💕",
-    "onboarding.child_name_boy": "Как зовут? 😊",
     "onboarding.child_birthdate": "Когда родилась {name}?\n\nНапиши дату (15.03.2023) или возраст (3 года)",
     "onboarding.child_birthdate_boy": "Когда родился {name}?\n\nНапиши дату (15.03.2023) или возраст (3 года)",
     "onboarding.child_birthdate_error": "Не поняла 🤔 Напиши дату (15.03.2023) или просто возраст цифрой",
-    "onboarding.child_size": "Какой размер одежды {name}? 👗\n\nНапиши размер (86, 92, 104, 116...)\nИли возраст — подберу примерный",
-    "onboarding.child_shoe_size": "Размер обуви {name}? 👟\n\nНапиши число (26 или 26.5)",
-    "onboarding.btn_skip": "⏭ Пропустить",
     "onboarding.city": "В каком городе живёте? 🏙\n\nНужно для прогноза погоды",
     "onboarding.city_error": "Не нашла такой город 🤔 Попробуй написать по-другому",
-    "onboarding.colortype": "Хочешь узнать какие цвета идут {target}?\n\nПришли селфи при дневном свете ☀️ — определю цветотип\n(Весна, Лето, Осень или Зима)\n\nЭто поможет подбирать вещи по цветам 🎨",
-    "onboarding.btn_selfie": "📸 Пришлю фото",
-    "onboarding.btn_later": "⏭ Потом",
     "onboarding.done": "🎉 Отлично!\n\nТеперь самое интересное — пришли 5 любимых вещей {target} и я соберу первый образ!\n\n📸 Фотографируй по одной вещи на светлом фоне",
-    "onboarding.item_count": "📸 Вещь {n} из 5...",
-    "onboarding.first_brief_ready": "✨ У тебя уже 5 вещей! Собираю первый образ — подожди пару секунд...",
-    # Backward compat
-    "onboarding.start": (
-        "Привет! 👋 Я Касси — твой личный стилист.\n\n"
-        "Каждое утро буду присылать готовый образ по погоде "
-        "из вещей, которые уже есть в шкафу.\n\n"
-        "Познакомимся за 2 минуты? 😊"
-    ),
-    "onboarding.segment.mom_girl": "👧 Для дочки",
-    "onboarding.segment.mom_boy":  "👦 Для сына",
-    "onboarding.segment.pregnant": "🤰 Жду малыша",
-    "onboarding.segment.no_kids":  "👩 Для себя",
-    "onboarding.child_name": "Как зовут?",
-    "onboarding.trimester": "Какой триместр?",
-    "onboarding.body_type": "Тип фигуры? (можно пропустить)",
-    "onboarding.colortype_photo": "Пришли селфи для определения цветотипа (можно пропустить)",
 
     # Гардероб
     "wardrobe.add.prompt": "Пришли фото вещи 📸",
@@ -66,15 +33,6 @@ STRINGS: dict[str, str] = {
         "👉 /subscribe — 14 дней бесплатно"
     ),
     "wardrobe.empty": "Гардероб пуст. Пришли фото вещи для начала.",
-    "wardrobe.list.header": "Твой гардероб ({count} вещей):",
-
-    # Morning Brief
-    "brief.header": "🌅 Доброе утро, {name}!",
-    "brief.weather": "Сегодня {weather}",
-    "brief.outfit": "Предлагаю образ:",
-    "brief.wow": "✨ Такой образ обычно предлагают стилисты за $200+",
-    "brief.feedback": "Как тебе образ?",
-    "brief.no_brief_free": "Morning Brief доступен на Premium. 👉 /subscribe — 14 дней бесплатно",
 
     # Feedback
     "feedback.thanks_up": "Отлично! Рада, что понравилось 👍",
@@ -87,8 +45,6 @@ STRINGS: dict[str, str] = {
     "billing.premium_yearly":    "💎 Premium — $72/год (5500 ⭐) 🏆",
     "billing.success": "Подписка оформлена! Спасибо ✨",
     "billing.cancelled": "Подписка отменена.",
-    "billing.expiry.3days": "Подписка истекает через 3 дня. Продлить?",
-    "billing.expiry.today": "Подписка истекает сегодня. Продлить?",
 
     # Trial
     "trial.activated": (
@@ -104,11 +60,6 @@ STRINGS: dict[str, str] = {
         "Чтобы продолжить без ограничений — выбери план:\n"
         "👉 /subscribe"
     ),
-
-    # Напоминания
-    "reminder.3days": "Привет! Не забывай про Morning Brief 👗",
-    "reminder.7days": "Твой гардероб скучает — загляни?",
-    "reminder.30days": "Давно не виделись! Есть новые вещи?",
 
     # Шоппинг-лист
     "shopping.premium_only": (
@@ -129,8 +80,17 @@ STRINGS: dict[str, str] = {
         "📸 Пришли фото → добавлю в гардероб\n"
         "🌅 Morning Brief — образ на день по погоде\n"
         "👗 /wardrobe — список вещей\n"
+        "🛍 /shopping — что стоит купить\n"
         "💳 /subscribe — Premium (14 дней бесплатно)\n"
+        "👤 Профиль — город, цветотип, дети\n"
         "❓ /help — эта справка"
+    ),
+
+    # Реферальная программа
+    "referral.info": (
+        "🎁 Пригласи подругу!\n\n"
+        "Твой код: {code}\n"
+        "Поделись ссылкой — подруга получит 14 дней Premium бесплатно."
     ),
 }
 

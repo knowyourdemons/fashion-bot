@@ -225,9 +225,11 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
             f"{i.type} {i.color}" for i in
             sorted(items, key=lambda x: float(x.score_item or 0), reverse=True)[:10]
         )
+        body_type = getattr(user, "body_type", None)
+        body_hint = f" Тип фигуры: {body_type}." if body_type else ""
         prompt = (
             f"Погода: {sm}{temp_m:.0f}°C, {regime}. "
-            f"Цветотип: {colortype}. "
+            f"Цветотип: {colortype}.{body_hint} "
             f"Гардероб: {wardrobe_context}. "
             f"Дай короткий (2-3 предложения) совет по образу на день "
             f"используя вещи из гардероба. Говори на русском, тон дружелюбный. "
@@ -617,6 +619,20 @@ async def generate_brief(payload: dict) -> dict:
     header = f"🌅 Доброе утро, {user.name}!\n"
     if weather_line:
         header += f"🌡 {weather_line}\n"
+
+    # Weather alerts из services/weather.py (ветер, осадки, дельта вечера)
+    if user.city:
+        try:
+            from services.weather import WeatherService
+            from core.redis import get_redis as _get_redis_w
+            _ws = WeatherService(_get_redis_w())
+            _wd = await _ws.get(user.city)
+            _weather_alerts = _wd.get_alerts()
+            for _wa in _weather_alerts:
+                global_warnings.append(_wa)
+        except Exception:
+            pass
+
     for warn in global_warnings:
         header += f"{warn}\n"
 

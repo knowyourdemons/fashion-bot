@@ -1426,8 +1426,20 @@ async def _show_wardrobe_page(message, user, page: int, owner_id=None, owner_typ
         lines = [f"👗 Гардероб ({total} вещей)\n"]
         for group, group_items in paged_groups.items():
             label = _CATEGORY_LABELS.get(group, group)
-            names = ", ".join(f"{color_circle(i.color)} {i.type} {i.color}" for i in group_items[:5])
-            lines.append(f"{label} ({len(group_items)}): {names}")
+            item_strs = []
+            for i in group_items[:5]:
+                parts = [f"{color_circle(i.color)} {i.type} {i.color}"]
+                brand = getattr(i, "brand", None)
+                if brand:
+                    parts[0] += f" ({brand})"
+                wc = getattr(i, "wear_count", 0) or 0
+                if wc > 0:
+                    parts.append(f"×{wc}")
+                sc = getattr(i, "score_item", None)
+                if sc is not None:
+                    parts.append(score_to_text(float(sc)).split(" ", 1)[0])  # just emoji
+                item_strs.append(" ".join(parts))
+            lines.append(f"{label} ({len(group_items)}): {', '.join(item_strs)}")
 
         buttons = []
         if page > 0:

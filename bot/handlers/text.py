@@ -23,27 +23,29 @@ HAIKU_MODEL = "claude-haiku-4-5-20251001"
 def _get_text_system(user) -> str:
     segment = getattr(user, "segment", "no_kids") or "no_kids"
     colortype = getattr(user, "colortype", None)
-    colortype_text = f"Цветотип пользователя: {colortype}." if colortype else ""
+    body_type = getattr(user, "body_type", None)
+    colortype_text = f"Цветотип: {colortype}." if colortype else ""
+    body_text = f" Тип фигуры: {body_type}." if body_type else ""
 
     if segment in ("mom_girl", "mom_boy"):
         gender = "девочки" if segment == "mom_girl" else "мальчика"
         context_line = (
             f"Пользователь — мама {gender}. "
             f"Отвечай про детскую и женскую моду. "
-            f"{colortype_text}"
+            f"{colortype_text}{body_text}"
         )
     elif segment == "pregnant":
         context_line = (
             f"Пользователь беременна. "
             f"Отвечай про моду для беременных и будущих мам. "
-            f"{colortype_text}"
+            f"{colortype_text}{body_text}"
         )
     else:  # no_kids
         context_line = (
             f"Пользователь без детей. "
             f"Отвечай ТОЛЬКО про взрослую моду и стиль. "
             f"НЕ упоминай детей, семью с детьми, детскую одежду. "
-            f"{colortype_text}"
+            f"{colortype_text}{body_text}"
         )
 
     return (

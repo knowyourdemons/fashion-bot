@@ -66,6 +66,11 @@ async def handle_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except Exception as e:
         logger.error("profile.children.error", error=str(e))
 
+    # Реферальный код
+    ref_code = getattr(user, "referral_code", None)
+    if ref_code:
+        lines.append(f"\n🎁 Твой реферальный код: `{ref_code}`")
+
     edit_buttons = [
         [InlineKeyboardButton("🏙 Изменить город", callback_data="edit_city")],
         [InlineKeyboardButton("🎨 Изменить цветотип", callback_data="edit_colortype")],

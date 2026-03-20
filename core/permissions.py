@@ -20,8 +20,6 @@ LIMITS: dict[str, dict[str, Any]] = {
         "children_max":       1,
         "reroll":             0,
         "evening_brief":      False,
-        "weather_alert":      False,
-        "calendar":           False,
         "gap_analysis":       False,
     },
     "premium": {
@@ -35,8 +33,6 @@ LIMITS: dict[str, dict[str, Any]] = {
         "children_max":       3,
         "reroll":             3,
         "evening_brief":      True,
-        "weather_alert":      True,
-        "calendar":           True,
         "gap_analysis":       True,
     },
     # ultra — отложен до v2.0, но plan="ultra" в БД должен работать без краша
@@ -51,8 +47,6 @@ LIMITS: dict[str, dict[str, Any]] = {
         "children_max":       10,
         "reroll":             10,
         "evening_brief":      True,
-        "weather_alert":      True,
-        "calendar":           True,
         "gap_analysis":       True,
     },
     "admin": {
@@ -66,8 +60,6 @@ LIMITS: dict[str, dict[str, Any]] = {
         "children_max":       99,
         "reroll":             9999,
         "evening_brief":      True,
-        "weather_alert":      True,
-        "calendar":           True,
         "gap_analysis":       True,
     },
 }

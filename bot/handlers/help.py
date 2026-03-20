@@ -11,17 +11,9 @@ async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     _eff = get_effective_limits(user) if user else {}
     chat_limit = _eff.get("chat_per_day", get_limit("chat_per_day", plan))
 
+    from services.i18n.ru import t
     text = (
-        "Привет! Я Касси — твой личный стилист 👗\n\n"
-        "📸 Пришли фото вещей — добавлю в гардероб\n"
-        "✨ Что надеть — соберу образ по погоде\n"
-        "💬 Напиши вопрос — дам совет по стилю\n"
-        "👗 Гардероб — список вещей и образы\n\n"
-        "Каждое утро в 07:00 — готовый образ на день!\n\n"
-        "Советы:\n"
-        "• Фотографируй вещи по одной на светлом фоне\n"
-        "• Чем больше вещей — тем интереснее образы\n"
-        "• Нажми 👍 Надели — я запомню и буду учитывать\n\n"
-        f"(до {chat_limit} вопросов в день)"
+        t("help.text")
+        + f"\n\n(до {chat_limit} вопросов в день)"
     )
     await update.message.reply_text(text, reply_markup=get_main_menu())

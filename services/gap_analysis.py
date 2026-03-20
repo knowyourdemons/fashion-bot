@@ -95,7 +95,10 @@ async def build_shopping_list(
     elif is_child_wardrobe:
         owner_context = "Детский гардероб."
     else:
+        body_type = getattr(user, "body_type", None)
         owner_context = "Взрослая женщина."
+        if body_type:
+            owner_context = f"Взрослая женщина, тип фигуры: {body_type}."
 
     # Топ-50 по score_item DESC (None → в конец)
     sorted_items = sorted(
@@ -114,7 +117,20 @@ async def build_shopping_list(
     )
 
     colortype = user.colortype or ""
-    colortype_str = f"\nЦветотип: {colortype}." if colortype else ""
+    colortype_str = ""
+    if colortype:
+        colortype_str = f"\nЦветотип: {colortype}."
+        # Подсказка по палитре из COLORTYPE_PALETTES
+        try:
+            from worker.tasks.style_config import COLORTYPE_PALETTES
+            palette = COLORTYPE_PALETTES.get(colortype, {})
+            if palette:
+                color_hints = []
+                for slot, colors in list(palette.items())[:4]:
+                    color_hints.append(f"{slot}: {', '.join(colors[:2])}")
+                colortype_str += f" Рекомендуемые цвета: {'; '.join(color_hints)}."
+        except Exception:
+            pass
 
     # Контекст из скоринговых матриц и SEASON_SLOT_TYPES
     child_instruction = ""
