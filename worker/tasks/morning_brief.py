@@ -732,6 +732,28 @@ async def generate_brief(payload: dict) -> dict:
             elif precip_e and precip_e > 50:
                 _weather_footer = "Возможен дождь — возьмите зонт"
 
+            # Fallback: use last child's outfit comment if no weather advice
+            if not _weather_footer and child_briefs:
+                # Extract comment from child_briefs (after 💬 marker)
+                for _cb in child_briefs:
+                    if "💬" in _cb:
+                        _parts = _cb.split("💬", 1)
+                        if len(_parts) > 1:
+                            _comment = _parts[1].strip().split("\n")[0].strip()
+                            # Remove HTML tags
+                            import re
+                            _weather_footer = re.sub(r"<[^>]+>", "", _comment).strip()
+                            break
+                if not _weather_footer:
+                    # Generic based on temp
+                    _t = temp_m or 10
+                    if _t < 5:
+                        _weather_footer = f"На улице {'+' if _t >= 0 else ''}{_t:.0f}° — одевайтесь теплее!"
+                    elif _t < 15:
+                        _weather_footer = f"Прохладно {'+' if _t >= 0 else ''}{_t:.0f}° — не забудьте куртку"
+                    else:
+                        _weather_footer = "Хорошей прогулки!"
+
             _el, _w, _h = build_brief_card(
                 all_outfit_slots, collage_header, _weather_footer, _palette,
                 weather_data=weather, outfit=_first_outfit,

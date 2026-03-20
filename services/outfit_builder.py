@@ -101,13 +101,20 @@ def get_collage_params(
         day_ctx = "выходной" if today.weekday() >= 5 else "будний день"
         header = f"{day_str} · {temp_str} · {day_ctx}" if temp_str else f"{day_str} · {day_ctx}"
 
-    # Footer: weather-aware comment
+    # Footer: weather-aware comment (always show something)
     footer = ""
     if temp_evening is not None and temp is not None and temp - temp_evening >= 5:
         se = "+" if temp_evening >= 0 else ""
-        footer = f"К вечеру {se}{temp_evening:.0f}°C -- оденьте потеплее на забирание"
+        footer = f"К вечеру {se}{temp_evening:.0f}° -- оденьте потеплее"
     elif precip > 50:
         footer = "Возможен дождь -- возьмите зонт"
+    elif temp is not None:
+        if temp < 5:
+            footer = f"Холодно {'+' if temp >= 0 else ''}{temp:.0f}° -- одевайтесь теплее"
+        elif temp < 15:
+            footer = f"Прохладно {'+' if temp >= 0 else ''}{temp:.0f}° -- куртка пригодится"
+        else:
+            footer = "Отличная погода для прогулки!"
 
     return {
         "theme": theme,
