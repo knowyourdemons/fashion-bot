@@ -451,28 +451,28 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
 
     body_rows: list = [_fl_divider]
 
-    # Hero: outerwear — adaptive size
+    # Hero: outerwear — compact
     if hero:
-        body_rows.append(_card(hero[0], "100%", "150px", radius=20, img_w="75%", img_h="65%"))
+        body_rows.append(_card(hero[0], "100%", "120px", radius=16, img_w="70%", img_h="60%"))
 
     # Main: top + bottom side by side (or one_piece full width)
     op = [s for s in main if s.get("slot") == "one_piece"]
     tops = [s for s in main if s.get("slot") in ("top", "removable_layer")]
     bots = [s for s in main if s.get("slot") == "bottom"]
     if op:
-        body_rows.append(_card(op[0], "100%", "170px", radius=16))
+        body_rows.append(_card(op[0], "100%", "150px", radius=14))
     elif tops or bots:
         cards = []
         if tops:
-            cards.append(_card(tops[0], "48%", "170px", radius=16))
+            cards.append(_card(tops[0], "48%", "150px", radius=14))
         if bots:
-            cards.append(_card(bots[0], "48%", "170px", radius=16))
+            cards.append(_card(bots[0], "48%", "150px", radius=14))
         body_rows.append(_row(cards, justifyContent="space-between"))
 
-    # Small: footwear + accessories — noticeably smaller
+    # Small: footwear + accessories — bigger for real photos to show
     if small:
-        sm_cards = [_card(s, f"{90 // max(len(small), 1)}%", "90px",
-                          radius=12, label_size=11, img_w="65%", img_h="55%") for s in small]
+        sm_cards = [_card(s, f"{90 // max(len(small), 1)}%", "110px",
+                          radius=12, label_size=11, img_w="80%", img_h="70%") for s in small]
         body_rows.append(_row(sm_cards, gap=8, justifyContent="center"))
 
     body = _col(body_rows, gap=10, padding="0 20px")
@@ -496,9 +496,9 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
 
     h = 65  # header
     if ws: h += 65
-    if hero: h += 162  # reduced from 232
-    if op or tops or bots: h += 182
-    if small: h += 102
+    if hero: h += 132
+    if op or tops or bots: h += 162
+    if small: h += 122
     h += 55  # footer
     _fl = max(1, (len(footer_text) // 35 + 1)) if footer_text else 0
     h += _fl * 16
@@ -553,25 +553,25 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
     body_rows: list = [_divider]
 
     if hero:
-        body_rows.append(_card(hero[0], "100%", "190px", radius=12, shadow=False, img_w="75%", img_h="68%"))
+        body_rows.append(_card(hero[0], "100%", "120px", radius=12, shadow=False, img_w="70%", img_h="60%"))
 
     op = [s for s in main if s.get("slot") == "one_piece"]
     tops = [s for s in main if s.get("slot") in ("top", "removable_layer")]
     bots = [s for s in main if s.get("slot") == "bottom"]
     if op:
-        body_rows.append(_card(op[0], "100%", "160px", radius=12, shadow=False))
+        body_rows.append(_card(op[0], "100%", "150px", radius=12, shadow=False))
     elif tops or bots:
         cards = []
         if tops:
-            cards.append(_card(tops[0], "48%", "160px", radius=12, shadow=False))
+            cards.append(_card(tops[0], "48%", "150px", radius=12, shadow=False))
         if bots:
-            cards.append(_card(bots[0], "48%", "160px", radius=12, shadow=False))
+            cards.append(_card(bots[0], "48%", "150px", radius=12, shadow=False))
         body_rows.append(_row(cards, justifyContent="space-between"))
 
     if small:
-        sm_cards = [_card(s, f"{90 // max(len(small), 1)}%", "85px",
+        sm_cards = [_card(s, f"{90 // max(len(small), 1)}%", "110px",
                           radius=10, label_size=11, shadow=False,
-                          img_w="60%", img_h="50%") for s in small]
+                          img_w="80%", img_h="70%") for s in small]
         body_rows.append(_row(sm_cards, gap=8, justifyContent="center"))
 
     body = _col(body_rows, gap=10, padding="0 20px")
@@ -596,9 +596,9 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
 
     h = 75  # header + weather
     if ws: h += 65
-    if hero: h += 202
-    if op or tops or bots: h += 172
-    if small: h += 100
+    if hero: h += 132
+    if op or tops or bots: h += 162
+    if small: h += 122
     h += 60  # footer with divider
     _footer_lines = max(1, (len(footer_text) // 35 + 1)) if footer_text else 0
     h += _footer_lines * 16
