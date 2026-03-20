@@ -222,11 +222,11 @@ class TestCollageStyles:
         assert el["props"]["style"]["backgroundColor"] == "#FFF8F2"
         assert w == 440
 
-    def test_moodboard_white_bg(self):
+    def test_moodboard_warm_bg(self):
         from services.collage_styles import build_moodboard, collect_palette
         slots = self._slots()
         el, w, _ = build_moodboard(slots, "Test", "Footer", collect_palette(slots))
-        assert el["props"]["style"]["backgroundColor"] == "#FFFFFF"
+        assert el["props"]["style"]["backgroundColor"] == "#FFF8F2"
         assert w == 440
 
     def test_story_colored_bg(self):

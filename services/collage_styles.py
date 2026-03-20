@@ -501,20 +501,20 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
     date_part, temp_part, name_part = _parse_header(header_text)
 
     header_children: list = []
-    if name_part:
+    # Palette dots top-right
+    if palette:
         header_children.append(
-            _row([
-                _text(name_part, 16, "#222", fontWeight="bold"),
-                _row(_circles(palette[:3], 10), gap=4, marginLeft="auto"),
-            ], alignItems="center"),
+            _row(_circles(palette[:3], 10), gap=4, justifyContent="flex-end"),
         )
+    if name_part:
+        header_children.append(_text(name_part, 16, "#222", fontWeight="bold"))
 
     ws = _weather_strip_element(weather_data) if weather_data else None
     if ws:
         header_children.append(ws)
     elif temp_part:
         header_children.append(_text(temp_part, 12, "#888"))
-    header_el = _col(header_children, gap=4, padding="28px 24px 14px")
+    header_el = _col(header_children, gap=4, padding="22px 24px 14px")
 
     # Divider after header/weather
     _divider = {
@@ -555,16 +555,36 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
         body_rows.append(_row(sm_cards, gap=8, justifyContent="center"))
 
     body = _col(body_rows, gap=10, padding="0 20px")
-    footer_el = _footer_comment(footer_text, palette)
 
-    h = 60
+    # Footer with divider + advice
+    _footer_divider = {
+        "type": "div",
+        "props": {"style": {"display": "flex", "width": "100%", "height": 1, "backgroundColor": "#E8E0E8"}},
+    }
+    footer_children = [_footer_divider]
+    if footer_text:
+        # Pick emoji
+        if "дожд" in footer_text.lower() or "зонт" in footer_text.lower():
+            _e = "🌧"
+        elif "холод" in footer_text.lower() or "теплее" in footer_text.lower():
+            _e = "🧣"
+        else:
+            _e = "✨"
+        footer_children.append(_text(f"{_e} {footer_text}", 12, "#777", fontStyle="italic"))
+    footer_children.append(_text("Касси", 10, "#B0A8B8", textAlign="right"))
+    footer_el = _col(footer_children, gap=4, padding="8px 24px 18px")
+
+    h = 75  # header + weather
+    if ws: h += 65
     if hero: h += 202
     if op or tops or bots: h += 172
-    if small: h += 97
-    h += 56
-    h = max(h, 440)
+    if small: h += 100
+    h += 60  # footer with divider
+    _footer_lines = max(1, (len(footer_text) // 35 + 1)) if footer_text else 0
+    h += _footer_lines * 16
+    h = max(h, 500)
 
-    root = _col([header_el, body, footer_el], gap=0, backgroundColor="#FFFFFF", height="100%")
+    root = _col([header_el, body, footer_el], gap=0, backgroundColor="#FFF8F2", height="100%")
     return root, W, h
 
 
