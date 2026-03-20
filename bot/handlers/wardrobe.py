@@ -1108,21 +1108,24 @@ async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE
     if target == "user":
         new_owner_id = user.id
         new_owner_type = "user"
-        owner_label = f"👗 Гардероб: {user.name}"
+        owner_label = f"👩 Гардероб: {user.name}"
+        context.user_data["active_owner_type"] = "user"
     elif target == "child" and child_id_str:
         try:
             child_id = _uuid.UUID(child_id_str)
         except ValueError:
             await query.answer("Ошибка: неверный ID")
             return
-        # Валидация — child должен принадлежать этому пользователю
         child = next((c for c in children if c.id == child_id), None)
         if not child:
             await query.answer("Ребёнок не найден")
             return
         new_owner_id = child_id
         new_owner_type = "child"
-        owner_label = f"👧 Гардероб: {child.name}"
+        _child_icon = "👧" if child.gender == "girl" else "👦"
+        owner_label = f"{_child_icon} Гардероб: {child.name}"
+        context.user_data["active_owner_type"] = "child"
+        context.user_data["active_owner_gender"] = child.gender
     else:
         return
 
@@ -1150,11 +1153,12 @@ async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Кнопка переключения на другого owner
     if new_owner_type == "child":
-        switch_btn = InlineKeyboardButton("👗 Мои вещи", callback_data="switch_owner:user")
+        switch_btn = InlineKeyboardButton("👩 Мои вещи", callback_data="switch_owner:user")
     elif children:
         child = children[0]
+        _sw_icon = "👧" if child.gender == "girl" else "👦"
         switch_btn = InlineKeyboardButton(
-            f"👧 Вещи {child.name}",
+            f"{_sw_icon} Вещи {child.name}",
             callback_data=f"switch_owner:child:{child.id}"
         )
     else:
@@ -1180,6 +1184,11 @@ async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         if "not modified" not in str(e).lower():
             await query.message.reply_text(header, reply_markup=new_markup)
+
+    # Update bottom keyboard menu with new owner icon
+    await query.message.reply_text(
+        "👆", reply_markup=get_main_menu(user, context),
+    )
 
 
 async def handle_add_items_hint(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
