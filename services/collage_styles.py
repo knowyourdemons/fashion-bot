@@ -48,8 +48,9 @@ def _color_hex(color_name: str) -> str:
     return "#C0B8C8"
 
 
-def collect_palette(slots: list) -> list[str]:
-    """Unique color HEX values from slots."""
+def collect_palette(slots: list, colortype: str = "") -> list[str]:
+    """Color palette: from actual items + colortype recommendations."""
+    # Colors from actual items
     seen: set[str] = set()
     result: list[str] = []
     for s in slots:
@@ -57,6 +58,19 @@ def collect_palette(slots: list) -> list[str]:
         if c and c not in seen:
             seen.add(c)
             result.append(_color_hex(c))
+
+    # Add colortype-based colors for variety
+    _CT_PALETTE = {
+        "Весна": ["#F4A0B0", "#F0D030", "#60B060", "#E8D0B0"],
+        "Лето": ["#70B0D8", "#B090D0", "#D0A0A8", "#999999"],
+        "Осень": ["#8B6040", "#F0A030", "#60B060", "#8B2252"],
+        "Зима": ["#D94040", "#4060C0", "#333333", "#F0F0F0"],
+    }
+    if colortype and colortype in _CT_PALETTE:
+        for c in _CT_PALETTE[colortype]:
+            if c not in result:
+                result.append(c)
+
     return result[:6]
 
 
@@ -133,15 +147,13 @@ def _card(slot_data: dict, width: str, height: str, *,
         slot_key = slot_data.get("slot", "top")
         bg_color = bg or _SLOT_PASTELS.get(slot_key, "#E0D8D0")
     else:
-        bg_color = bg or "#FFFFFF"
+        # Real photo: transparent bg (no white card)
+        bg_color = bg or "transparent"
 
     children: list = []
 
     if is_placeholder:
-        # Silhouette on pastel background + label below (like Miro refs)
-        img = _get_img_el(slot_data, img_w, img_h, "0.35")
-        if img:
-            children.append(img)
+        # Clean pastel fill + text label only (no silhouette icons)
         label = _get_slot_label(slot_data)
         children.append({
             "type": "div",
@@ -149,15 +161,14 @@ def _card(slot_data: dict, width: str, height: str, *,
                 "style": {
                     "display": "flex",
                     "fontFamily": "DejaVu",
-                    "fontSize": label_size,
-                    "color": "#8A7A8A",
-                    "marginTop": 4,
+                    "fontSize": label_size + 1,
+                    "color": "#9A8A9A",
                 },
                 "children": label,
             },
         })
     else:
-        # Real photo
+        # Real photo — no bg card
         img = _get_img_el(slot_data, img_w, img_h, ph_opacity)
         if img:
             children.append(img)
@@ -236,19 +247,15 @@ def _weather_strip(header_text: str) -> Optional[dict]:
 
 
 def _footer_comment(footer_text: str, palette: list[str]) -> dict:
-    """Footer with weather comment + palette dots + Касси."""
+    """Footer: weather advice centered + palette dots + Касси."""
     children: list = []
-    # Weather/outfit comment if present and not just "Касси..."
+    # Weather/outfit advice (italic, centered)
     if footer_text and "Касси" not in footer_text:
-        children.append(_text(footer_text, 12, "#888", fontStyle="italic"))
-    # Palette + Касси
-    footer_row: list = []
-    if palette:
-        footer_row.append(_row(_circles(palette[:4], 12), gap=4))
-    footer_row.append(_text("Касси", 11, "#AAA0B0"))
-    children.append(_row(footer_row, gap=8, justifyContent="center", alignItems="center"))
+        children.append(_text(footer_text, 12, "#777", fontStyle="italic", textAlign="center"))
+    # Касси — small, centered
+    children.append(_text("Касси", 10, "#B0A8B8", textAlign="center"))
 
-    return _col(children, gap=6, padding="10px 24px 16px", alignItems="center")
+    return _col(children, gap=4, padding="10px 24px 16px", alignItems="center")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -270,17 +277,12 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
 
     header_children: list = []
     if name_part:
-        header_children.append(
-            _row([
-                _text(name_part, 18, "#333", fontWeight="bold"),
-                _row(_circles(palette[:3], 14), gap=4, marginLeft="auto"),
-            ], justifyContent="space-between", alignItems="center"),
-        )
+        header_children.append(_text(name_part, 18, "#333", fontWeight="bold"))
     if date_part or temp_part:
         sub = " · ".join(p for p in [date_part, temp_part] if p)
         header_children.append(_text(sub, 13, "#888"))
 
-    header_el = _col(header_children, gap=4, padding="20px 24px 12px")
+    header_el = _col(header_children, gap=3, padding="20px 24px 10px")
 
     body_rows: list = []
 
@@ -341,12 +343,7 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
 
     header_children: list = []
     if name_part:
-        header_children.append(
-            _row([
-                _text(name_part, 16, "#222", fontWeight="bold"),
-                _row(_circles(palette[:4], 14), gap=4, marginLeft="auto"),
-            ], justifyContent="space-between", alignItems="center"),
-        )
+        header_children.append(_text(name_part, 16, "#222", fontWeight="bold"))
     sub = " · ".join(p for p in [date_part, temp_part] if p)
     if sub:
         header_children.append(_text(sub, 12, "#888"))
