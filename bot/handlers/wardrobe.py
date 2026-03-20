@@ -1185,11 +1185,6 @@ async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE
         if "not modified" not in str(e).lower():
             await query.message.reply_text(header, reply_markup=new_markup)
 
-    # Update bottom keyboard menu with new owner icon
-    await query.message.reply_text(
-        "👆", reply_markup=get_main_menu(user, context),
-    )
-
 
 async def handle_add_items_hint(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Callback: подсказка как добавить вещи (при пустом гардеробе)."""
