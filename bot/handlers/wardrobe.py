@@ -1302,10 +1302,29 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             header_text=_collage_params["header_text"],
         )
 
+        # Сохранить BriefLog для кнопок feedback
+        from db.base import AsyncWriteSession as _AWS_outfit
+        from db.crud.brief_log import create_log as _create_log_outfit
+        _outfit_ids = [str(i.id) for i in outfit.get("all_items", []) if hasattr(i, "id")]
+        try:
+            async with _AWS_outfit() as _s_outfit:
+                _log = await _create_log_outfit(
+                    _s_outfit,
+                    user_id=user.id,
+                    date=today_date,
+                    weather_summary=f"{temp_m}°C",
+                    outfit_description=caption,
+                    outfit_items=_outfit_ids,
+                    is_wow=bool(scored and sum(scored) / len(scored) >= 8.0),
+                )
+                await _s_outfit.commit()
+                _outfit_brief_id = str(_log.id)
+        except Exception:
+            _outfit_brief_id = ""
+
         if redis:
             await redis.incr(limit_key)
             await redis.expire(limit_key, 86400)
-            # Сохранить ID вещей этого образа — исключить при следующем reroll
             try:
                 shown_item_ids = [str(i.id) for i in outfit.get("all_items", []) if hasattr(i, "id")]
                 if shown_item_ids:
@@ -1314,15 +1333,22 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             except Exception:
                 pass
 
-        _reroll_markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("🔄 Другой образ", callback_data="outfit_request"),
-        ]])
+        _outfit_buttons = [[
+            InlineKeyboardButton("👍 Надели", callback_data=f"brief_feedback:up:{_outfit_brief_id}"),
+            InlineKeyboardButton("🔄 Переодень", callback_data="outfit_request"),
+        ]]
+        if collage_bytes and _outfit_brief_id:
+            _outfit_buttons.append([
+                InlineKeyboardButton("📤 Переслать", callback_data=f"share:{_outfit_brief_id}"),
+            ])
+        _outfit_markup = InlineKeyboardMarkup(_outfit_buttons)
+
         if collage_bytes:
             await message.reply_photo(
-                photo=collage_bytes, caption=caption, reply_markup=_reroll_markup
+                photo=collage_bytes, caption=caption, reply_markup=_outfit_markup
             )
         else:
-            await message.reply_text(caption, reply_markup=_reroll_markup)
+            await message.reply_text(caption, reply_markup=_outfit_markup)
 
     except Exception as e:
         logger.error("outfit_request.failed", error=str(e))
