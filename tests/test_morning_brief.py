@@ -490,9 +490,11 @@ def test_geocode_empty_result():
 
 def test_geocode_network_error():
     """Ошибка сети → None (не crash)."""
+    import services.brief_weather as _bw
+    _bw._geocode_mem.pop("UnknownCity123", None)  # ensure clean
     mock = _MockHttpxClient(raise_exc=Exception("network timeout"))
     with patch("httpx.AsyncClient", return_value=mock):
-        result = _run(_geocode_city("Vilnius"))
+        result = _run(_geocode_city("UnknownCity123"))
     assert result is None
 
 

@@ -32,7 +32,32 @@ def wmo_to_emoji(code: int) -> str:
     return "🌤"
 
 
+_geocode_mem: dict[str, tuple[float, float] | None] = {}
+
+
 async def _geocode_city(city: str) -> tuple[float, float] | None:
+    """Geocode with in-memory + Redis cache (7 days TTL)."""
+    if not city:
+        return None
+
+    # In-memory cache (lives until container restart)
+    if city in _geocode_mem:
+        return _geocode_mem[city]
+
+    # Redis cache
+    try:
+        from core.redis import get_redis
+        _r = get_redis()
+        cached = await _r.get(f"geocode:{city}")
+        if cached:
+            lat, lon = cached.decode().split(",")
+            result = (float(lat), float(lon))
+            _geocode_mem[city] = result
+            return result
+    except Exception:
+        pass
+
+    # Nominatim API
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
@@ -42,13 +67,38 @@ async def _geocode_city(city: str) -> tuple[float, float] | None:
             )
             data = resp.json()
             if data:
-                return float(data[0]["lat"]), float(data[0]["lon"])
+                result = (float(data[0]["lat"]), float(data[0]["lon"]))
+                _geocode_mem[city] = result
+                # Redis: 7 days TTL
+                try:
+                    _r = get_redis()
+                    await _r.set(f"geocode:{city}", f"{result[0]},{result[1]}", ex=604800)
+                except Exception:
+                    pass
+                return result
     except Exception as e:
         logger.warning("brief.geocode.failed", city=city, error=str(e))
+
+    _geocode_mem[city] = None
     return None
 
 
+_EMPTY_WEATHER = {"temp_now": None, "temp_morning": None, "temp_day": None, "temp_evening": None, "precip_evening": 0, "precip_max": 0, "wmo_morning": 0, "wmo_day": 0, "wmo_evening": 0}
+
+
 async def _get_weather(lat: float, lon: float, tz: str) -> dict:
+    # Redis cache: 15 min TTL
+    import json as _json
+    _cache_key = f"weather_om:{lat:.2f}:{lon:.2f}"
+    try:
+        from core.redis import get_redis
+        _r = get_redis()
+        _cached = await _r.get(_cache_key)
+        if _cached:
+            return _json.loads(_cached)
+    except Exception:
+        pass
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
@@ -69,7 +119,7 @@ async def _get_weather(lat: float, lon: float, tz: str) -> dict:
             current = data.get("current", {})
             temp_now = current.get("temperature_2m")
             wmo_codes = hourly.get("weather_code", [])
-            return {
+            result = {
                 "temp_now": round(temp_now, 1) if temp_now is not None else None,
                 "temp_morning": round(temps[7], 1) if len(temps) > 7 else None,
                 "temp_day": round(temps[14], 1) if len(temps) > 14 else None,
@@ -80,6 +130,12 @@ async def _get_weather(lat: float, lon: float, tz: str) -> dict:
                 "wmo_day": wmo_codes[14] if len(wmo_codes) > 14 else 0,
                 "wmo_evening": wmo_codes[18] if len(wmo_codes) > 18 else 0,
             }
+            # Cache 15 min
+            try:
+                await _r.set(_cache_key, _json.dumps(result), ex=900)
+            except Exception:
+                pass
+            return result
     except Exception as e:
         logger.warning("brief.weather.failed", error=str(e))
-        return {"temp_now": None, "temp_morning": None, "temp_day": None, "temp_evening": None, "precip_evening": 0, "precip_max": 0}
+        return dict(_EMPTY_WEATHER)
