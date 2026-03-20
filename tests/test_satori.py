@@ -215,18 +215,24 @@ class TestCollageStyles:
             assert w > 0 and h > 0, f"{name}: invalid dimensions"
             assert "children" in element["props"], f"{name}: no children"
 
-    def test_flat_lay_warm_bg(self):
+    def test_flat_lay_palette_bg(self):
         from services.collage_styles import build_flat_lay, collect_palette
         slots = self._slots()
-        el, w, _ = build_flat_lay(slots, "Test", "Footer", collect_palette(slots))
-        assert el["props"]["style"]["backgroundColor"] == "#FFF8F2"
+        palette = collect_palette(slots)
+        el, w, _ = build_flat_lay(slots, "Test", "Footer", palette)
+        bg = el["props"]["style"]["backgroundColor"]
+        # Background should be palette-tinted (not fixed #FFF8F2)
+        assert bg != "#FFF8F2" or not palette
         assert w == 440
 
-    def test_moodboard_warm_bg(self):
+    def test_moodboard_palette_bg(self):
         from services.collage_styles import build_moodboard, collect_palette
         slots = self._slots()
-        el, w, _ = build_moodboard(slots, "Test", "Footer", collect_palette(slots))
-        assert el["props"]["style"]["backgroundColor"] == "#FFF8F2"
+        palette = collect_palette(slots)
+        el, w, _ = build_moodboard(slots, "Test", "Footer", palette)
+        bg = el["props"]["style"]["backgroundColor"]
+        # Background should be palette-tinted (not fixed #FFF8F2)
+        assert bg != "#FFF8F2" or not palette
         assert w == 440
 
     def test_story_colored_bg(self):

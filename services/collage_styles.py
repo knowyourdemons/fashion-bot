@@ -86,14 +86,22 @@ def collect_palette(slots: list, colortype: str = "") -> list[str]:
     result: list[str] = []
 
     # 1. Colors from actual items (real wardrobe)
+    #    Split compound colors: "розово-серый", "красный/синий", "белый с синим"
+    import re
     for s in slots:
         if s.get("has_item"):
             c = (s.get("item_color") or "").lower()
             if c:
-                h = _color_hex(c)
-                if h not in seen:
-                    seen.add(h)
-                    result.append(h)
+                # Split on separators: -, /, +, " с ", " и "
+                parts = re.split(r'[-/+]|\s+[сиСИ]\s+', c)
+                for part in parts:
+                    part = part.strip()
+                    if not part:
+                        continue
+                    h = _color_hex(part)
+                    if h not in seen:
+                        seen.add(h)
+                        result.append(h)
 
     # 2. Recommended colors from placeholders (what to buy)
     for s in slots:
@@ -421,7 +429,8 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
                    palette: list[str], *, weather_data: dict = None) -> tuple[dict, int, int]:
     hero, main, small = _split_zones(slots)
     W = 440
-    bg = "#FFF8F2"
+    # Tint background from palette (subtle pastel from first color)
+    bg = _lighten(palette[0], 0.82) if palette else "#FFF8F2"
     weather_data = weather_data or {}
 
     date_part, temp_part, name_part = _parse_header(header_text)
@@ -450,9 +459,9 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
                 _name_text,
                 {"type": "div", "props": {
                     "style": {"display": "flex", "flexDirection": "row",
-                               "gap": 5, "marginLeft": "auto", "width": 40,
+                               "gap": 4, "marginLeft": "auto",
                                "justifyContent": "flex-end"},
-                    "children": _circles(palette[:2], 10) if palette else [],
+                    "children": _circles(palette[:5], 10) if palette else [],
                 }},
             ],
         },
@@ -578,7 +587,7 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
                         }},
                         {"type": "div", "props": {
                             "style": {"display": "flex", "flexDirection": "row", "gap": 4},
-                            "children": _circles(palette[:3], 9),
+                            "children": _circles(palette[:5], 9),
                         }},
                     ],
                 },
@@ -661,7 +670,9 @@ def build_moodboard(slots: list, header_text: str, footer_text: str,
     h += _footer_lines * 16
     h = max(h, 500)
 
-    root = _col([header_el, body, footer_el], gap=0, backgroundColor="#FFF8F2", height="100%")
+    # Tint background from palette
+    mb_bg = _lighten(palette[0], 0.82) if palette else "#FFF8F2"
+    root = _col([header_el, body, footer_el], gap=0, backgroundColor=mb_bg, height="100%")
     return root, W, h
 
 
@@ -708,12 +719,22 @@ def build_story(slots: list, header_text: str, footer_text: str,
     W = 440
     weather_data = weather_data or {}
 
-    # Gradient-like bg from palette (Satori can't do CSS gradients)
-    # Use a blend: light purple-pink
+    # Vivid palette-tinted bg (Satori can't do CSS gradients, so use solid)
+    # Less whitening (0.55) for a noticeable palette tint
     if len(palette) >= 2:
-        bg = _lighten(palette[0])
+        # Blend first two palette colors for richer background
+        try:
+            h1 = palette[0].lstrip("#")
+            h2 = palette[1].lstrip("#")
+            r = (int(h1[0:2], 16) + int(h2[0:2], 16)) // 2
+            g = (int(h1[2:4], 16) + int(h2[2:4], 16)) // 2
+            b = (int(h1[4:6], 16) + int(h2[4:6], 16)) // 2
+            blended = f"#{r:02x}{g:02x}{b:02x}"
+            bg = _lighten(blended, 0.55)
+        except Exception:
+            bg = _lighten(palette[0], 0.55)
     elif palette:
-        bg = _lighten(palette[0])
+        bg = _lighten(palette[0], 0.55)
     else:
         bg = "#E0D8F0"
 
@@ -800,15 +821,14 @@ def build_story(slots: list, header_text: str, footer_text: str,
     return root, W, h
 
 
-def _lighten(hex_color: str) -> str:
-    """Lighten a hex color for background use."""
+def _lighten(hex_color: str, amount: float = 0.75) -> str:
+    """Lighten a hex color for background use. amount=0.0 → original, 1.0 → white."""
     try:
         h = hex_color.lstrip("#")
         r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        # Mix with white (85%)
-        r = int(r + (255 - r) * 0.85)
-        g = int(g + (255 - g) * 0.85)
-        b = int(b + (255 - b) * 0.85)
+        r = int(r + (255 - r) * amount)
+        g = int(g + (255 - g) * amount)
+        b = int(b + (255 - b) * amount)
         return f"#{r:02x}{g:02x}{b:02x}"
     except Exception:
         return "#E8E0F0"
