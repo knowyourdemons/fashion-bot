@@ -115,7 +115,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 reply_markup=ReplyKeyboardRemove(),
             )
             from bot.handlers.menu import get_main_menu
-            await update.message.reply_text("Меню:", reply_markup=get_main_menu())
+            await update.message.reply_text("Меню:", reply_markup=get_main_menu(context.user_data.get("db_user") if hasattr(context, "user_data") else None, context))
             return
 
         if editing == "child_size":
@@ -314,7 +314,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         else:
             suffix = ""
 
-        await update.message.reply_text(f"{reply}{suffix}", reply_markup=get_main_menu())
+        await update.message.reply_text(f"{reply}{suffix}", reply_markup=get_main_menu(context.user_data.get("db_user") if hasattr(context, "user_data") else None, context))
 
         # Инкремент лимита чата
         if redis:

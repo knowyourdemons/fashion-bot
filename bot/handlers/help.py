@@ -16,4 +16,4 @@ async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         t("help.text")
         + f"\n\n(до {chat_limit} вопросов в день)"
     )
-    await update.message.reply_text(text, reply_markup=get_main_menu())
+    await update.message.reply_text(text, reply_markup=get_main_menu(user, context))

@@ -148,7 +148,7 @@ async def handle_edit_city_location(update: Update, context: ContextTypes.DEFAUL
     )
     # Показать основное меню
     from bot.handlers.menu import get_main_menu
-    await update.message.reply_text("Меню:", reply_markup=get_main_menu())
+    await update.message.reply_text("Меню:", reply_markup=get_main_menu(context.user_data.get("db_user") if hasattr(context, "user_data") else None, context))
 
 
 async def handle_edit_colortype(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

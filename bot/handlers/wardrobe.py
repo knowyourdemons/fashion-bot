@@ -101,10 +101,22 @@ async def _get_owner(user, context) -> tuple:
             if mode:
                 mode = mode if isinstance(mode, str) else mode.decode()
                 if mode == "user":
+                    context.user_data["active_owner_type"] = "user"
                     return (user.id, "user")
                 elif mode.startswith("child:"):
                     import uuid as _uuid
                     child_id = _uuid.UUID(mode[6:])
+                    # Store child gender for menu icon
+                    try:
+                        async with AsyncReadSession() as _s:
+                            from db.crud.children import get_children as _gc
+                            _ch = await _gc(_s, user.id)
+                            _c = next((c for c in _ch if c.id == child_id), None)
+                            if _c:
+                                context.user_data["active_owner_gender"] = _c.gender
+                    except Exception:
+                        pass
+                    context.user_data["active_owner_type"] = "child"
                     return (child_id, "child")
         except Exception:
             pass
@@ -114,7 +126,10 @@ async def _get_owner(user, context) -> tuple:
         children = await get_children(session, user.id)
 
     if user.segment in ("mom_girl", "mom_boy") and children:
+        context.user_data["active_owner_type"] = "child"
+        context.user_data["active_owner_gender"] = children[0].gender
         return (children[0].id, "child")
+    context.user_data["active_owner_type"] = "user"
     return (user.id, "user")
 
 
@@ -385,15 +400,15 @@ async def _rate_photos(
                     file_id=file_id[:20], size=len(photo_bytes))
                 photo_bytes_list.append(photo_bytes)
             result = await _call_rate_vision(photo_bytes_list, owner_id=owner_id, owner_type=owner_type)
-            await message.reply_text(result, reply_markup=get_main_menu(context.user_data.get("db_user")))
+            await message.reply_text(result, reply_markup=get_main_menu(context.user_data.get("db_user"), context))
         else:
             for i, file_id in enumerate(file_ids, 1):
                 tg_file = await bot.get_file(file_id)
                 photo_bytes = bytes(await tg_file.download_as_bytearray())
                 result = await _call_rate_vision([photo_bytes], owner_id=owner_id, owner_type=owner_type)
-                await message.reply_text(f"📷 Фото {i}:\n{result}", reply_markup=get_main_menu(context.user_data.get("db_user")))
+                await message.reply_text(f"📷 Фото {i}:\n{result}", reply_markup=get_main_menu(context.user_data.get("db_user"), context))
     except Exception as e:
-        await message.reply_text("Не удалось оценить образ. Попробуй ещё раз.", reply_markup=get_main_menu(context.user_data.get("db_user")))
+        await message.reply_text("Не удалось оценить образ. Попробуй ещё раз.", reply_markup=get_main_menu(context.user_data.get("db_user"), context))
         logger.error("rate_photos.error", error=str(e))
         sentry_sdk.capture_exception(e)
 
@@ -1173,7 +1188,7 @@ async def handle_add_items_hint(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
     await query.message.reply_text(
         "📸 Просто пришли фото вещей — добавлю в гардероб!",
-        reply_markup=get_main_menu(context.user_data.get("db_user")),
+        reply_markup=get_main_menu(context.user_data.get("db_user"), context),
     )
 
 
@@ -1223,7 +1238,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         if not children and not is_no_kids:
             await message.reply_text(
                 "Добавь ребёнка в профиле чтобы получать образы 👧",
-                reply_markup=get_main_menu(context.user_data.get("db_user")),
+                reply_markup=get_main_menu(context.user_data.get("db_user"), context),
             )
             return
 
@@ -1262,7 +1277,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         if not items:
             await message.reply_text(
                 "Гардероб пуст — добавь вещи через фото 📸",
-                reply_markup=get_main_menu(context.user_data.get("db_user")),
+                reply_markup=get_main_menu(context.user_data.get("db_user"), context),
             )
             return
 
@@ -1396,7 +1411,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         _sentry.capture_exception(e)
         await message.reply_text(
             "Не удалось собрать образ. Попробуй позже.",
-            reply_markup=get_main_menu(context.user_data.get("db_user")),
+            reply_markup=get_main_menu(context.user_data.get("db_user"), context),
         )
 
 
@@ -1427,7 +1442,7 @@ async def handle_ask_kassi(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await update.message.reply_text(
         "Напиши вопрос про стиль — помогу! 👗\n"
         f"(до {chat_limit} вопросов в день)",
-        reply_markup=get_main_menu(context.user_data.get("db_user")),
+        reply_markup=get_main_menu(context.user_data.get("db_user"), context),
     )
 
 
