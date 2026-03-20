@@ -40,7 +40,7 @@ async def handle_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         lines.append(f"🎨 Цветотип: {ct_label}")
     if user.segment:
         seg_label = _SEGMENT_LABELS.get(user.segment, user.segment)
-        lines.append(f"👗 Подбираю для: {seg_label}")
+        lines.append(f"👩 Подбираю для: {seg_label}")
 
     from core.permissions import get_effective_plan
     _effective_plan = get_effective_plan(user)
