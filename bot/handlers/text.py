@@ -121,7 +121,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         if editing == "child_size":
             import uuid as _uuid
             import sqlalchemy as _sa
-            from db.models.children import Child as _Child
+            from db.models.child import Child as _Child
             child_id_str = context.user_data.get("editing_child_id", "")
             parts_input = text_input.split()
             new_size: str | None = None

@@ -259,7 +259,7 @@ async def _finish_add_child(message, user, context) -> None:
     """Создать Child в БД и обновить segment если нужно."""
     import sqlalchemy as sa
     from db.models.user import User as UserModel
-    from db.models.children import Child
+    from db.models.child import Child
     from bot.handlers.onboarding import parse_birthdate
 
     adding = context.user_data.get("adding_child", {})
