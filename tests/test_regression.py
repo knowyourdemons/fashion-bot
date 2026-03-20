@@ -228,18 +228,19 @@ class TestPaletteLayout:
     """Palette dots must be in correct position in element tree."""
 
     def test_flat_lay_palette_in_header_row(self):
-        """Palette dots must be in same row as name (space-between)."""
+        """Palette dots must be in same row as name (centered with dots right)."""
         from services.collage_styles import build_flat_lay, collect_palette
         slots = [{"slot": "top", "has_item": False, "item_color": "розовый", "gender": "girl", "label": "Верх"}]
         palette = collect_palette(slots, colortype="Лето")
         el, _, _ = build_flat_lay(slots, "Test · +5° · Алиса", "", palette)
-        # First child of root should be header column
         header = el["props"]["children"][0]
-        # First child of header should be the name+palette row
         first = header["props"]["children"][0]
         style = first["props"]["style"]
-        assert style.get("justifyContent") == "space-between", \
-            "Name+palette row must use space-between"
+        assert style.get("justifyContent") == "center", \
+            "Name row must be centered"
+        # Should have 3 children: spacer + name + dots
+        children = first["props"]["children"]
+        assert len(children) == 3, "Header row: spacer + name + dots"
 
     def test_collect_palette_includes_placeholders(self):
         """Palette should include recommended colors from placeholders."""

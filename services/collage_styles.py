@@ -426,75 +426,96 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
 
     date_part, temp_part, name_part = _parse_header(header_text)
 
+    # ── Header: name centered + palette right ──
     header_children: list = []
-    if name_part:
-        if palette:
-            header_children.append({
-                "type": "div",
-                "props": {
-                    "style": {
-                        "display": "flex",
-                        "flexDirection": "row",
-                        "justifyContent": "space-between",
-                        "alignItems": "center",
-                        "width": "100%",
-                    },
-                    "children": [
-                        {"type": "div", "props": {
-                            "style": {"display": "flex", "fontFamily": "DejaVu", "fontSize": 15,
-                                       "fontWeight": 700, "color": "#333"},
-                            "children": name_part,
-                        }},
-                        {"type": "div", "props": {
-                            "style": {"display": "flex", "flexDirection": "row", "gap": 4},
-                            "children": _circles(palette[:3], 9),
-                        }},
-                    ],
-                },
-            })
-        else:
-            header_children.append(_text(name_part, 15, "#333", fontWeight="bold"))
+    # Name row with palette dots right-aligned
+    _name_text = {"type": "div", "props": {
+        "style": {"display": "flex", "fontFamily": "DejaVu", "fontSize": 16,
+                   "fontWeight": 700, "color": "#333", "textAlign": "center"},
+        "children": name_part or "Образ дня",
+    }}
+    _dots = {"type": "div", "props": {
+        "style": {"display": "flex", "flexDirection": "row", "gap": 5,
+                   "position": "absolute", "right": 24, "top": 22},
+        "children": _circles(palette[:2], 10) if palette else [],
+    }}
+    # Satori doesn't support position:absolute well, use space-between
+    header_children.append({
+        "type": "div", "props": {
+            "style": {"display": "flex", "flexDirection": "row",
+                       "justifyContent": "center", "alignItems": "center",
+                       "width": "100%"},
+            "children": [
+                {"type": "div", "props": {"style": {"display": "flex", "width": 40}}},  # spacer
+                _name_text,
+                {"type": "div", "props": {
+                    "style": {"display": "flex", "flexDirection": "row",
+                               "gap": 5, "marginLeft": "auto", "width": 40,
+                               "justifyContent": "flex-end"},
+                    "children": _circles(palette[:2], 10) if palette else [],
+                }},
+            ],
+        },
+    })
 
+    # Weather strip
     ws = _weather_strip_element(weather_data) if weather_data else None
     if ws:
         header_children.append(ws)
-    elif temp_part:
-        header_children.append(_text(temp_part, 13, "#888"))
 
-    header_el = _col(header_children, gap=3, padding="20px 24px 8px")
+    header_el = _col(header_children, gap=4, padding="18px 24px 6px")
 
-    body_rows: list = []
+    # ── Body: overlapping cards ──
+    body_children: list = []
 
-    # Hero: outerwear — centered, NOT full width (like reference)
+    # Hero: centered, largest
     if hero:
-        body_rows.append(
-            _row([_card(hero[0], "65%", "120px", radius=16, img_w="70%", img_h="60%")],
-                 justifyContent="center"),
-        )
+        body_children.append({
+            "type": "div", "props": {
+                "style": {"display": "flex", "justifyContent": "center", "width": "100%"},
+                "children": [_card(hero[0], "60%", "130px", radius=18, img_w="70%", img_h="60%")],
+            },
+        })
 
-    # Main: top + bottom — slightly different sizes for "free layout" feel
+    # Main: overlapping row (negative margin on second card)
     op = [s for s in main if s.get("slot") == "one_piece"]
     tops = [s for s in main if s.get("slot") in ("top", "removable_layer")]
     bots = [s for s in main if s.get("slot") == "bottom"]
     if op:
-        body_rows.append(_card(op[0], "100%", "140px", radius=14))
+        body_children.append(
+            _row([_card(op[0], "70%", "140px", radius=16)], justifyContent="center"),
+        )
     elif tops or bots:
-        cards = []
+        main_cards = []
         if tops:
-            cards.append(_card(tops[0], "44%", "140px", radius=14))
+            main_cards.append(_card(tops[0], "46%", "130px", radius=14))
         if bots:
-            cards.append(_card(bots[0], "52%", "155px", radius=14))
-        body_rows.append(_row(cards, justifyContent="space-between", alignItems="flex-end"))
+            # Negative margin to overlap with top card
+            bot_card = _card(bots[0], "50%", "145px", radius=14)
+            bot_card["props"]["style"]["marginLeft"] = -16
+            bot_card["props"]["style"]["marginTop"] = 10
+            main_cards.append(bot_card)
+        body_children.append(
+            _row(main_cards, alignItems="flex-start", marginTop=-8),
+        )
 
-    # Small: shifted right for asymmetry
+    # Small: 2-3 cards, shifted, slightly overlapping
     if small:
-        sm_cards = [_card(s, f"{85 // max(len(small), 1)}%", "100px",
-                          radius=12, label_size=11, img_w="75%", img_h="65%") for s in small]
-        body_rows.append(_row(sm_cards, gap=8, justifyContent="flex-end"))
+        n = len(small)
+        w_pct = f"{80 // max(n, 1)}%"
+        sm_cards = []
+        for i, s in enumerate(small):
+            c = _card(s, w_pct, "90px", radius=12, label_size=10, img_w="70%", img_h="58%")
+            if i > 0:
+                c["props"]["style"]["marginLeft"] = -8
+            sm_cards.append(c)
+        body_children.append(
+            _row(sm_cards, justifyContent="center", marginTop=-6),
+        )
 
-    body = _col(body_rows, gap=10, padding="0 20px")
+    body = _col(body_children, gap=6, padding="0 20px")
 
-    # Footer: advice in card + Касси
+    # ── Footer: advice in card ──
     footer_inner = []
     if footer_text:
         if "дожд" in footer_text.lower() or "зонт" in footer_text.lower():
@@ -503,20 +524,21 @@ def build_flat_lay(slots: list, header_text: str, footer_text: str,
             _e = "🧣"
         else:
             _e = "✨"
-        footer_inner.append(_text(f"{_e} {footer_text}", 12, "#666"))
+        footer_inner.append(_text(f"{_e} {footer_text}", 11, "#666"))
     footer_inner.append(_text("Касси", 10, "#B0A8B8"))
     footer_el = _col([
-        _white_card(footer_inner, backgroundColor="#FFF5EE", borderRadius=14, padding="10px 14px"),
-    ], gap=0, padding="4px 20px 14px")
+        _white_card(footer_inner, backgroundColor="#FFF5EE", borderRadius=12, padding="8px 12px"),
+    ], gap=0, padding="4px 20px 12px")
 
-    h = 60  # header
-    if ws: h += 65
-    if hero: h += 132
-    if op or tops or bots: h += 168
-    if small: h += 112
-    h += 55  # footer
-    _fl = max(1, (len(footer_text) // 35 + 1)) if footer_text else 0
-    h += _fl * 16
+    # Height
+    h = 55  # header
+    if ws: h += 60
+    if hero: h += 138
+    if op or tops or bots: h += 152
+    if small: h += 96
+    h += 50  # footer
+    _fl = max(1, (len(footer_text) // 38 + 1)) if footer_text else 0
+    h += _fl * 14
     h = max(h, 480)
 
     root = _col([header_el, body, footer_el], gap=0, backgroundColor=bg, height="100%")
