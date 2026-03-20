@@ -308,6 +308,11 @@ def _weather_icon_uri(name: str) -> Optional[str]:
 
 def _weather_strip_element(weather_data: dict) -> Optional[dict]:
     """Build weather strip with PNG icons: ☀+4° → 🌤+7° → 🌧+2°."""
+    temp_m = weather_data.get("temp_morning")
+    temp_e = weather_data.get("temp_evening")
+    is_evening_cold = (temp_m is not None and temp_e is not None and temp_m - temp_e >= 3)
+    is_evening_rain = weather_data.get("wmo_evening", 0) in (61, 63, 65, 80, 81, 82, 95, 96, 99)
+
     parts = []
     for key, label in [("temp_morning", "утро"), ("temp_day", "день"), ("temp_evening", "вечер")]:
         temp = weather_data.get(key)
@@ -319,6 +324,10 @@ def _weather_strip_element(weather_data: dict) -> Optional[dict]:
         icon_uri = _weather_icon_uri(icon_name)
         sign = "+" if temp >= 0 else ""
 
+        # Accent evening if cold drop or rain
+        is_accent = (key == "temp_evening" and (is_evening_cold or is_evening_rain))
+        temp_color = "#C05050" if is_accent else "#555"
+
         children: list = []
         if icon_uri:
             children.append({
@@ -329,7 +338,7 @@ def _weather_strip_element(weather_data: dict) -> Optional[dict]:
                     "style": {"objectFit": "contain"},
                 },
             })
-        children.append(_text(f"{sign}{temp:.0f}°", 14, "#555", fontWeight="bold"))
+        children.append(_text(f"{sign}{temp:.0f}°", 14, temp_color, fontWeight="bold"))
         children.append(_text(label, 10, "#999"))
 
         parts.append({
@@ -737,10 +746,12 @@ def build_brief_card(slots: list, header_text: str, footer_text: str,
 
     under_card = None
     if under_parts:
-        under_card = _white_card([
-            _section_label("ПОД ОДЕЖДУ"),
-            _text(", ".join(under_parts), 13, "#888"),
-        ], backgroundColor="#F8F6FA")
+        under_rows = [_section_label("ПОД ОДЕЖДУ")]
+        for up in under_parts:
+            under_rows.append(
+                _row([_color_dot("#C0B8C0"), _text(up, 13, "#888")], gap=0, alignItems="center")
+            )
+        under_card = _white_card(under_rows, backgroundColor="#F8F6FA")
 
     # ── ОДЕЖДА ──
     clothes_rows: list = []
@@ -796,10 +807,19 @@ def build_brief_card(slots: list, header_text: str, footer_text: str,
     # ── Footer: weather advice ──
     footer_children = []
     if footer_text:
-        footer_children.append(_text(f"💬 {footer_text}", 12, "#777", fontStyle="italic"))
+        # Pick emoji based on content
+        if "дожд" in footer_text.lower() or "зонт" in footer_text.lower():
+            _emoji = "🌧"
+        elif "холод" in footer_text.lower() or "теплее" in footer_text.lower():
+            _emoji = "🧣"
+        elif "прохлад" in footer_text.lower() or "куртк" in footer_text.lower():
+            _emoji = "🧥"
+        else:
+            _emoji = "✨"
+        footer_children.append(_text(f"{_emoji} {footer_text}", 12, "#777", fontStyle="italic"))
         footer_children.append(_text("— Касси", 10, "#B0A8B8"))
     else:
-        footer_children.append(_text("Касси", 10, "#B0A8B8"))
+        footer_children.append(_text("— Касси", 10, "#B0A8B8"))
     footer_el = _col(footer_children, gap=3, padding="8px 20px 16px", alignItems="flex-start")
 
     # ── Assemble (dressing order: under → clothes → shoes → exit) ──
@@ -814,14 +834,17 @@ def build_brief_card(slots: list, header_text: str, footer_text: str,
     body = _col(body_parts, gap=8, padding="0 16px")
 
     # Height calc
-    h = 56  # header
-    if weather_card: h += 70
+    h = 60  # header
+    if weather_card: h += 80
+    n_under = len(under_parts) if under_parts else 0
+    if under_card: h += n_under * 24 + 40
     n_items = len(clothes_rows) + len(foot_rows) + len(exit_rows)
     n_sections = (1 if clothes_rows else 0) + (1 if foot_rows else 0) + (1 if exit_rows else 0)
-    h += n_items * 28 + n_sections * 20 + 40  # items card
-    if under_card: h += 55
-    h += 50  # footer
-    h = max(h, 380)
+    h += n_items * 28 + n_sections * 22 + 44  # items card
+    # Footer: estimate lines (40 chars per line)
+    _footer_lines = max(1, (len(footer_text) // 35 + 1)) if footer_text else 0
+    h += _footer_lines * 18 + 40  # footer
+    h = max(h, 400)
 
     root = _col([header_el, body, footer_el], gap=6,
                 backgroundColor="#F7F0F4", borderRadius=20, height="100%")
