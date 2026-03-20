@@ -582,6 +582,160 @@ def _lighten(hex_color: str) -> str:
         return "#E8E0F0"
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# STYLE: BRIEF CARD — morning brief as dressing-order list with weather
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _color_dot(color_name: str) -> dict:
+    """Small color dot for item list."""
+    hex_c = _color_hex(color_name)
+    return {
+        "type": "div",
+        "props": {
+            "style": {
+                "display": "flex",
+                "width": 10, "height": 10,
+                "borderRadius": "50%",
+                "backgroundColor": hex_c,
+                "marginTop": 4,
+                "marginRight": 6,
+                "flexShrink": 0,
+            },
+        },
+    }
+
+
+def build_brief_card(slots: list, header_text: str, footer_text: str,
+                     palette: list[str], *, weather_data: dict = None,
+                     outfit: dict = None) -> tuple[dict, int, int]:
+    """Morning brief card: items in dressing order + weather."""
+    W = 420
+    weather_data = weather_data or {}
+    outfit = outfit or {}
+
+    date_part, temp_part, name_part = _parse_header(header_text)
+
+    # Header
+    header_children = []
+    if date_part:
+        header_children.append(_text(date_part.upper(), 11, "#B08060", letterSpacing=1))
+    if name_part:
+        header_children.append(_text(name_part, 18, "#333", fontWeight="bold"))
+
+    # Weather strip
+    ws = _weather_strip_element(weather_data)
+    if ws:
+        header_children.append(ws)
+
+    header_el = _col(header_children, gap=3, padding="20px 24px 12px")
+
+    # Items list in dressing order
+    item_rows: list = []
+
+    # ОДЕЖДА group (main visible items)
+    clothes_items: list = []
+    for s in slots:
+        slot_key = s.get("slot", "")
+        if slot_key in ("top", "removable_layer", "bottom", "one_piece"):
+            if s.get("has_item"):
+                color = s.get("item_color", "")
+                label = f"{s.get('item_type', '')} {color}".strip()
+                clothes_items.append(
+                    _row([_color_dot(color), _text(label, 14, "#333")], gap=0, alignItems="center")
+                )
+            else:
+                ph_label = s.get("label") or _get_placeholder_label(slot_key, s.get("gender", "girl"))
+                clothes_items.append(
+                    _row([
+                        _color_dot("серый"),
+                        _text(ph_label, 14, "#999"),
+                        _text("добавь", 11, "#CC8855", marginLeft="auto"),
+                    ], gap=0, alignItems="center")
+                )
+
+    # OUTERWEAR + accessories (НА ВЫХОД)
+    exit_items: list = []
+    for s in slots:
+        slot_key = s.get("slot", "")
+        if slot_key in ("outerwear", "hat", "scarf", "gloves"):
+            if s.get("has_item"):
+                color = s.get("item_color", "")
+                label = f"{s.get('item_type', '')} {color}".strip()
+                exit_items.append(
+                    _row([_color_dot(color), _text(label, 14, "#333")], gap=0, alignItems="center")
+                )
+            else:
+                ph_label = s.get("label") or _get_placeholder_label(slot_key, s.get("gender", "girl"))
+                exit_items.append(
+                    _row([
+                        _color_dot("серый"),
+                        _text(ph_label, 14, "#999"),
+                        _text("добавь", 11, "#CC8855", marginLeft="auto"),
+                    ], gap=0, alignItems="center")
+                )
+
+    # FOOTWEAR
+    foot_items: list = []
+    for s in slots:
+        if s.get("slot") == "footwear":
+            if s.get("has_item"):
+                color = s.get("item_color", "")
+                label = f"{s.get('item_type', '')} {color}".strip()
+                foot_items.append(
+                    _row([_color_dot(color), _text(label, 14, "#333")], gap=0, alignItems="center")
+                )
+            else:
+                foot_items.append(
+                    _row([
+                        _color_dot("серый"),
+                        _text("Обувь", 14, "#999"),
+                        _text("добавь", 11, "#CC8855", marginLeft="auto"),
+                    ], gap=0, alignItems="center")
+                )
+
+    # Build sections
+    all_list_items = clothes_items + foot_items + exit_items
+    if all_list_items:
+        list_section = _col(all_list_items, gap=6, padding="12px 20px",
+                           backgroundColor="#FFFFFF", borderRadius=12)
+        item_rows.append(list_section)
+
+    # ПОД ОДЕЖДУ
+    under_parts = []
+    if outfit.get("underwear_text"):
+        under_parts.append(outfit["underwear_text"])
+    for item in outfit.get("underwear_items", []):
+        name = (getattr(item, "type", "") or "").split()[0].lower()
+        if name:
+            under_parts.append(name)
+    leg = outfit.get("tights") or outfit.get("socks")
+    if leg and hasattr(leg, "type"):
+        under_parts.append(getattr(leg, "type", "колготки"))
+
+    if under_parts:
+        under_el = _col([
+            _text("ПОД ОДЕЖДУ", 10, "#AAA", letterSpacing=1),
+            _text(", ".join(under_parts), 13, "#888"),
+        ], gap=2, padding="10px 20px", backgroundColor="#F8F6FA", borderRadius=10)
+        item_rows.append(under_el)
+
+    body = _col(item_rows, gap=8, padding="0 16px")
+
+    # Footer: weather advice
+    footer_el = _footer_comment(footer_text, palette)
+
+    h = 70  # header
+    h += len(all_list_items) * 28 + 36  # items list
+    if under_parts: h += 50
+    h += 56  # footer
+    if ws: h += 60  # weather strip
+    h = max(h, 350)
+
+    root = _col([header_el, body, footer_el], gap=8,
+                backgroundColor="#FFF5F0", borderRadius=20, height="100%")
+    return root, W, h
+
+
 # ── Builder registry ─────────────────────────────────────────────────────────
 
 BUILDERS = {

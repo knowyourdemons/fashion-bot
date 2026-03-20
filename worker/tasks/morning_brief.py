@@ -707,7 +707,42 @@ async def generate_brief(payload: dict) -> dict:
     else:
         collage_photo_urls = []
 
-    # Push send task — утренний бриф = text only (без коллажа)
+    # Утренний бриф = brief_card (карточка в порядке одевания)
+    import base64 as _b64_brief
+    _brief_card_bytes = None
+    if all_outfit_slots:
+        try:
+            from services.image_builder import build_collage_satori
+            from services.collage_styles import build_brief_card, collect_palette
+
+            # Собрать outfit для передачи в brief_card (нужен underwear_text и т.д.)
+            _first_outfit = {}
+            for _ch in children:
+                async with AsyncReadSession() as _s_out:
+                    _ch_items = await get_owner_items(_s_out, _ch.id, "child")
+                if _ch_items:
+                    _first_outfit = _select_outfit(_ch_items, season, today, temp_m, temp_e, precip_e or 0)
+                    break
+
+            _palette = collect_palette(all_outfit_slots, colortype=getattr(children[0], "colortype", "") if children else "")
+            _weather_footer = ""
+            if temp_e is not None and temp_m is not None and temp_m - temp_e >= 5:
+                se = "+" if temp_e >= 0 else ""
+                _weather_footer = f"К вечеру {se}{temp_e:.0f}° — оденьте потеплее"
+            elif precip_e and precip_e > 50:
+                _weather_footer = "Возможен дождь — возьмите зонт"
+
+            _el, _w, _h = build_brief_card(
+                all_outfit_slots, collage_header, _weather_footer, _palette,
+                weather_data=weather, outfit=_first_outfit,
+            )
+            from services.image_builder import _render_satori
+            _brief_card_bytes = await _render_satori(_el, _w, _h)
+            if _brief_card_bytes:
+                logger.info("morning_brief.brief_card_ok", size=len(_brief_card_bytes))
+        except Exception as _bc_err:
+            logger.warning("morning_brief.brief_card_failed", error=str(_bc_err))
+
     redis_client = get_redis()
     try:
         queue = RedisQueue(redis_client)
@@ -715,9 +750,12 @@ async def generate_brief(payload: dict) -> dict:
             "telegram_id": user.telegram_id,
             "text": brief_text,
             "brief_id": brief_id,
-            "text_only": True,  # утренний бриф = текст, не картинка
-            "parse_mode": "HTML",
         }
+        if _brief_card_bytes:
+            _payload["brief_card_b64"] = _b64_brief.b64encode(_brief_card_bytes).decode()
+        else:
+            _payload["text_only"] = True
+            _payload["parse_mode"] = "HTML"
 
         await queue.push(
             "send_morning_brief",
@@ -759,6 +797,7 @@ async def send_morning_brief(payload: dict) -> dict:
     is_text_only = payload.get("text_only", False)
     parse_mode = payload.get("parse_mode")
 
+    is_brief_card = bool(payload.get("brief_card_b64"))
     is_weather_card = bool(payload.get("weather_card_b64"))
 
     if is_weather_card:
@@ -767,12 +806,14 @@ async def send_morning_brief(payload: dict) -> dict:
                 {"text": "📸 Добавить вещи", "callback_data": "add_items_hint"},
             ]]
         }
-    elif is_text_only:
-        # Утренний текстовый бриф — кнопки без переслать (нечего пересылать)
+    elif is_text_only or is_brief_card:
+        # Утренний бриф (карточка или текст)
         reply_markup = {
             "inline_keyboard": [[
                 {"text": "👍 Надели", "callback_data": f"brief_feedback:up:{brief_id}"},
                 {"text": "🔄 Переодень", "callback_data": f"reroll:{brief_id}"},
+            ], [
+                {"text": "📤 Переслать", "callback_data": f"share:{brief_id}"},
             ]]
         }
     else:
@@ -787,7 +828,22 @@ async def send_morning_brief(payload: dict) -> dict:
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            # Text-only mode (утренний бриф) — отправить текст без фото
+            # Brief card mode — morning brief as Satori card image
+            if is_brief_card:
+                _bc_bytes = _b64.b64decode(payload["brief_card_b64"])
+                resp = await client.post(
+                    f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendPhoto",
+                    data={
+                        "chat_id": telegram_id,
+                        "reply_markup": json.dumps(reply_markup),
+                    },
+                    files={"photo": ("brief.png", _bc_bytes, "image/png")},
+                )
+                resp.raise_for_status()
+                logger.info("morning_brief.sent_card", telegram_id=telegram_id, brief_id=brief_id)
+                return {"sent": True}
+
+            # Text-only fallback
             if is_text_only:
                 _send_data: dict = {
                     "chat_id": telegram_id,
