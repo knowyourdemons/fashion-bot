@@ -1024,26 +1024,34 @@ async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYP
         child = next((c for c in children if c.id == owner_id), None)
         owner_name = child.name if child else "Ребёнок"
 
+    # Owner-specific icons
+    if owner_type == "child":
+        child_obj = next((c for c in children if c.id == owner_id), None)
+        _owner_icon = "👧" if (child_obj and child_obj.gender == "girl") else "👦"
+    else:
+        _owner_icon = "👩"
+
     buttons = []
     if children:
         if owner_type == "child":
+            # Switch TO mama → show mama icon
             buttons.append([InlineKeyboardButton(
-                "👗 Мои вещи",
+                "👩 Мои вещи",
                 callback_data="switch_owner:user"
             )])
         else:
+            # Switch TO child → show child icon
             child = children[0]
+            _child_icon = "👧" if child.gender == "girl" else "👦"
             buttons.append([InlineKeyboardButton(
-                f"👧 Вещи {child.name}",
+                f"{_child_icon} Вещи {child.name}",
                 callback_data=f"switch_owner:child:{child.id}"
             )])
 
-    # Считаем вещи и средний скор для заголовка
     async with AsyncReadSession() as session:
         all_items = await get_owner_items(session, owner_id, owner_type)
     item_count = len(all_items)
 
-    # Кнопки: образ дня + список; gap analysis для premium; switch-кнопки ниже
     from core.permissions import get_effective_plan, can_gap_analysis
     _ep = get_effective_plan(user)
     top_row = [
@@ -1056,7 +1064,7 @@ async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     markup = InlineKeyboardMarkup([top_row] + extra_rows + buttons)
 
     await update.message.reply_text(
-        f"👗 Гардероб: *{owner_name}* · {item_count} вещей",
+        f"{_owner_icon} Гардероб: *{owner_name}* · {item_count} вещей",
         parse_mode="Markdown",
         reply_markup=markup,
     )

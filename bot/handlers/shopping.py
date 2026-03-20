@@ -26,19 +26,16 @@ async def handle_shopping(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     from db.base import AsyncReadSession
     from db.crud.wardrobe import get_owner_items
     from db.crud.children import get_children
+    from bot.handlers.wardrobe import _get_owner
 
-    if user.segment in ("mom_girl", "mom_boy"):
+    owner_id, owner_type = await _get_owner(user, context)
+    async with AsyncReadSession() as session:
+        items = await get_owner_items(session, owner_id, owner_type)
+
+    if owner_type == "child":
         async with AsyncReadSession() as session:
             children = await get_children(session, user.id)
-        if children:
-            child = children[0]
-            async with AsyncReadSession() as session:
-                items = await get_owner_items(session, child.id, "child")
-        else:
-            items = []
-    else:
-        async with AsyncReadSession() as session:
-            items = await get_owner_items(session, user.id, "user")
+        child = next((c for c in children if c.id == owner_id), None)
 
     if len(items) < 5:
         await update.message.reply_text(t("shopping.too_few_items"))
@@ -61,7 +58,8 @@ async def handle_shopping(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text(t("shopping.empty_result"))
     else:
         season = _get_current_season(user.timezone or "Europe/Vilnius")
-        ttl = await redis.ttl(f"gap_analysis:v5:{user.id}")
+        _oid = str(child.id) if child else str(user.id)
+        ttl = await redis.ttl(f"gap_analysis:v6:{_oid}")
         is_cached = ttl < 86000
         logger.info(
             "shopping.sent",

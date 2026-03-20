@@ -49,9 +49,10 @@ async def build_shopping_list(
         return None
 
     # Cache version — bump when prompt/logic changes to invalidate old cache
-    _CACHE_VER = "v5"
-    lock_key = f"gap_lock:{user.id}"
-    cache_key = f"gap_analysis:{_CACHE_VER}:{user.id}"
+    _CACHE_VER = "v6"
+    _owner_id = str(child.id) if child else str(user.id)
+    lock_key = f"gap_lock:{_owner_id}"
+    cache_key = f"gap_analysis:{_CACHE_VER}:{_owner_id}"
 
     # Проверить lock
     if await redis.get(lock_key):
@@ -206,20 +207,32 @@ async def build_shopping_list(
 
         system_prompt = (
             f"Ты помогаешь маме купить одежду для ребёнка {child_name} ({gender_word}, {age_years} лет). "
-            f"Отвечай ТОЛЬКО нумерованным списком. Без заголовков, без markdown, без пояснений."
+            f"Отвечай ТОЛЬКО нумерованным списком. Без заголовков, без markdown (** # и т.д.), без пояснений. "
+            f"Самое важное — первым в списке."
         )
-        # Few-shot example для правильного формата и детских вещей
+        _girl_example = (
+            "1. Ветровка детская розовая\n"
+            "2. Леггинсы детские серые\n"
+            "3. Водолазка детская белая\n"
+            "4. Кроссовки детские розовые\n"
+            "5. Шапка тонкая вязаная бежевая"
+        )
+        _boy_example = (
+            "1. Ветровка детская голубая\n"
+            "2. Джоггеры детские тёмно-синие\n"
+            "3. Толстовка с капюшоном серая\n"
+            "4. Кроссовки детские белые\n"
+            "5. Шапка тонкая серая"
+        )
+        _example = _girl_example if gender == "girl" else _boy_example
         user_prompt = (
-            f"Пример для мальчика 4 лет весной:\n"
-            f"1. Ветровка детская голубая\n"
-            f"2. Толстовка с капюшоном серая\n"
-            f"3. Джоггеры детские тёмно-синие\n"
-            f"4. Кроссовки детские белые\n"
-            f"5. Шапка тонкая серая\n\n"
+            f"Пример для {'девочки' if gender == 'girl' else 'мальчика'} {age_years + 1} лет {season}:\n"
+            f"{_example}\n\n"
             f"Теперь для {child_name} ({gender_word}, {age_years} лет).\n"
-            f"В гардеробе: {items_lines}\n"
+            f"В гардеробе:\n{items_lines}\n\n"
             f"Сезон: {season}.\n"
-            f"Напиши 5-7 ДЕТСКИХ вещей для {'девочки' if gender == 'girl' else 'мальчика'} {age_years} лет с цветом:"
+            f"Напиши 5-7 ДЕТСКИХ вещей с цветом, ранжируй по приоритету: "
+            f"первыми то, что максимально разнообразит образы и закроет пробелы в гардеробе."
         )
     else:
         system_prompt = "Ты стилист. Помогаешь составить список покупок. Отвечай нумерованным списком на русском."
