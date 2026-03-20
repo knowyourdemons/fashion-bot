@@ -48,8 +48,10 @@ async def build_shopping_list(
     if len(items) < 5:
         return None
 
+    # Cache version — bump when prompt/logic changes to invalidate old cache
+    _CACHE_VER = "v3"
     lock_key = f"gap_lock:{user.id}"
-    cache_key = f"gap_analysis:{user.id}"
+    cache_key = f"gap_analysis:{_CACHE_VER}:{user.id}"
 
     # Проверить lock
     if await redis.get(lock_key):

@@ -22,7 +22,6 @@ async def handle_shopping(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text(t("shopping.premium_only"))
         return
 
-    # Определить владельца гардероба
     child = None
     from db.base import AsyncReadSession
     from db.crud.wardrobe import get_owner_items
@@ -62,7 +61,7 @@ async def handle_shopping(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text(t("shopping.empty_result"))
     else:
         season = _get_current_season(user.timezone or "Europe/Vilnius")
-        ttl = await redis.ttl(f"gap_analysis:{user.id}")
+        ttl = await redis.ttl(f"gap_analysis:v3:{user.id}")
         is_cached = ttl < 86000
         logger.info(
             "shopping.sent",
