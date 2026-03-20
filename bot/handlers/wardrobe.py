@@ -1048,7 +1048,7 @@ async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     _ep = get_effective_plan(user)
     top_row = [
         InlineKeyboardButton("🌤 Образ дня", callback_data="outfit_request"),
-        InlineKeyboardButton("👀 Посмотреть вещи", callback_data="show_wardrobe_list"),
+        InlineKeyboardButton("👀 Посмотреть вещи", callback_data="w:ov"),
     ]
     extra_rows = []
     if can_gap_analysis(_ep):
@@ -1141,7 +1141,7 @@ async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE
     if count == 0:
         action_btn = InlineKeyboardButton("📸 Добавить вещи", callback_data="add_items_hint")
     else:
-        action_btn = InlineKeyboardButton("👀 Посмотреть вещи", callback_data="show_wardrobe_list")
+        action_btn = InlineKeyboardButton("👀 Посмотреть вещи", callback_data="w:ov")
 
     keyboard_rows = [[
         InlineKeyboardButton("🌤 Образ дня", callback_data="outfit_request"),

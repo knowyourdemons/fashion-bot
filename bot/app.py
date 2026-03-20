@@ -80,6 +80,18 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(wardrobe.handle_rate_mode, pattern="^rate_mode:"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_switch_owner, pattern="^switch_owner:"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_outfit_request, pattern="^outfit_request$"))
+    # Wardrobe browser (visual navigation)
+    from bot.handlers.wardrobe_browser import (
+        handle_overview, handle_season_filter, handle_category_grid,
+        handle_item_card, handle_delete_confirm, handle_delete_yes,
+    )
+    app.add_handler(CallbackQueryHandler(handle_overview, pattern="^w:ov"))
+    app.add_handler(CallbackQueryHandler(handle_season_filter, pattern="^w:sz:"))
+    app.add_handler(CallbackQueryHandler(handle_category_grid, pattern="^w:cat:"))
+    app.add_handler(CallbackQueryHandler(handle_item_card, pattern="^w:it:"))
+    app.add_handler(CallbackQueryHandler(handle_delete_confirm, pattern="^w:del:"))
+    app.add_handler(CallbackQueryHandler(handle_delete_yes, pattern="^w:dly:"))
+
     app.add_handler(CallbackQueryHandler(wardrobe.handle_list_callback, pattern="^show_wardrobe_list$"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_add_items_hint, pattern="^add_items_hint$"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_show_upgrade, pattern="^show_upgrade$"))
