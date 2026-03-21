@@ -12,17 +12,21 @@ BACKUP_SCRIPT = "/home/stas/fashion-bot/backup.sh"
 
 # These tests check host filesystem paths — skip when running inside Docker
 _IN_DOCKER = os.path.isfile("/.dockerenv")
-_skip_in_docker = pytest.mark.skipif(_IN_DOCKER, reason="backup.sh is on host, not in Docker container")
+_IN_CI = os.environ.get("ENVIRONMENT") == "test" or os.environ.get("CI") == "true"
+_skip_not_host = pytest.mark.skipif(
+    _IN_DOCKER or _IN_CI,
+    reason="backup.sh requires host filesystem (not in Docker/CI)",
+)
 
 
-@_skip_in_docker
+@_skip_not_host
 def test_backup_script_exists():
     assert os.path.isfile(BACKUP_SCRIPT), f"FAIL: backup.sh не найден: {BACKUP_SCRIPT}"
     assert os.access(BACKUP_SCRIPT, os.X_OK), f"FAIL: backup.sh не исполняемый"
     print("PASS: backup.sh существует и исполняемый")
 
 
-@_skip_in_docker
+@_skip_not_host
 def test_backup_runs():
     before = set(glob.glob(f"{BACKUP_DIR}/fashion_*.sql.gz"))
     result = subprocess.run(
@@ -51,7 +55,7 @@ def test_backup_runs():
     return True
 
 
-@_skip_in_docker
+@_skip_not_host
 def test_old_backups_cleanup():
     # Verify find -mtime +7 -delete line is present in script
     with open(BACKUP_SCRIPT) as f:

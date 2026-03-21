@@ -70,3 +70,14 @@ jobs:
         with:
           paths: test-results.xml
         if: always()
+
+      - name: Notify Telegram on failure
+        if: failure()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"chat_id\": \"${{ secrets.ADMIN_TELEGRAM_ID }}\",
+              \"text\": \"❌ CI Tests failed!\nCommit: ${{ github.event.head_commit.message }}\nBranch: ${{ github.ref_name }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\",
+              \"disable_web_page_preview\": true
+            }"

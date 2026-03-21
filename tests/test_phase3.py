@@ -1,5 +1,6 @@
 """Phase 3 tests — atomic rate limiter, cascade fix, worker concurrency, correlation ID, pool tuning."""
 import asyncio
+import os
 import pathlib
 import pytest
 from unittest.mock import AsyncMock, MagicMock
@@ -165,6 +166,10 @@ class TestConnectionPoolTuning:
 
 # ── Integration: cascade migration applied ──────────────────────────────────
 
+@pytest.mark.skipif(
+    os.environ.get("ENVIRONMENT") == "test" or os.environ.get("CI") == "true",
+    reason="requires seeded database (not available in CI)",
+)
 class TestCascadeLive:
     """Verify FK constraints changed in live DB."""
 

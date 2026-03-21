@@ -1,12 +1,18 @@
 """
-Integration тесты — с реальной БД.
+Integration тесты — с реальной БД (seeded).
 Read-only тесты используют AsyncReadSession.
 Write тесты используют AsyncWriteSession + rollback через savepoint.
+
+Skipped in CI: requires seeded database with test users.
 """
+import os
 import pytest
 import uuid
 from datetime import date
 from sqlalchemy import select
+
+_IN_CI = os.environ.get("ENVIRONMENT") == "test" or os.environ.get("CI") == "true"
+pytestmark = pytest.mark.skipif(_IN_CI, reason="requires seeded database (not available in CI)")
 
 
 # ── colortype в users ─────────────────────────────────────────────────────
