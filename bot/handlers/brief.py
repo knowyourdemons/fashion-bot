@@ -49,6 +49,11 @@ async def handle_brief_feedback(update: Update, context: ContextTypes.DEFAULT_TY
             brief_id=str(brief_id),
             vote=vote,
         )
+        user = context.user_data.get("db_user")
+        logger.info("metric.brief_feedback",
+            user_id=str(user.id) if user else "unknown",
+            feedback=vote,
+        )
     except Exception as e:
         await query.message.reply_text(t("error.generic"))
         logger.error("brief.feedback.error", error=str(e))

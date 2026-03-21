@@ -53,6 +53,11 @@ async def _activate_premium_after_payment(
         expires_at=expires_at.isoformat(),
         provider=provider,
     )
+    logger.info("metric.subscription_started",
+        user_id=str(user.id),
+        plan=plan,
+        provider=provider,
+    )
 
 
 @router.post("/stripe")

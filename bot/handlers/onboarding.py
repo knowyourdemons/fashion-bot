@@ -715,6 +715,10 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
             segment=segment,
             city=city,
         )
+        logger.info("metric.onboarding_done",
+            user_id=str(user.id),
+            segment=user.segment,
+        )
 
     except Exception as e:
         await update.effective_message.reply_text(t("error.generic"))

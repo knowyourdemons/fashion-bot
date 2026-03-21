@@ -293,6 +293,11 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
         plan_key=plan_key,
         expires_at=expires_at.isoformat(),
     )
+    logger.info("metric.subscription_started",
+        user_id=str(user.id),
+        plan=plan,
+        provider="stars",
+    )
 
 
 async def handle_pre_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

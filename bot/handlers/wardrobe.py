@@ -802,6 +802,12 @@ async def _handle_single_photo(
             added=len(added),
             duration_ms=duration_ms,
         )
+        if added:
+            logger.info("metric.photo_added",
+                user_id=str(user.id),
+                item_count=_total_now,
+                segment=user.segment,
+            )
 
     except (RateLimitError, FashionBotError) as e:
         await update.message.reply_text(str(e))
@@ -1101,6 +1107,18 @@ async def _process_media_group(
     await progress_msg.edit_text(
         f"✅ Добавила {total_added} вещей из {total} фото:\n\n{summary}"
     )
+
+    if total_added > 0:
+        try:
+            async with AsyncReadSession() as _cnt_sess2:
+                _all_now2 = await get_owner_items(_cnt_sess2, owner_id, owner_type)
+            logger.info("metric.photo_added",
+                user_id=str(user.id),
+                item_count=len(_all_now2),
+                segment=user.segment,
+            )
+        except Exception:
+            pass
 
     # ── Триггер первого брифа на 5-й вещи (для ВСЕХ юзеров) ────────────
     if total_added > 0 and user.onboarding_completed:

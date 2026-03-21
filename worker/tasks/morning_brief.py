@@ -1039,6 +1039,11 @@ async def send_morning_brief(payload: dict) -> dict:
                     logger.warning("morning_brief.save_file_id_failed", error=str(e))
 
         logger.info("morning_brief.sent", telegram_id=telegram_id, brief_id=brief_id, has_collage=bool(collage_bytes))
+        logger.info("metric.brief_sent",
+            user_id=str(payload.get("user_id", telegram_id)),
+            brief_type="morning",
+            photo_count=payload.get("real_photo_count", 0),
+        )
         return {"sent": True}
     except Exception as e:
         logger.error("morning_brief.send_failed", telegram_id=telegram_id, error=str(e))
