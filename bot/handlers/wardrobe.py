@@ -1145,6 +1145,7 @@ async def _handle_single_photo(
         matrix = await _get_scoring_matrix(redis, user, owner_id, owner_type)
 
         # Build vision context for better item identification
+        from datetime import date as _date_vc2
         _vc: dict = {"owner_type": owner_type, "city": getattr(user, "city", None)}
         if owner_type == "child":
             from db.crud.children import get_children as _gc_vision
@@ -1152,9 +1153,9 @@ async def _handle_single_photo(
                 _children_vc = await _gc_vision(_s_vc, user.id)
             if _children_vc:
                 _child_vc = _children_vc[0]
-                _age_vc = (date.today() - _child_vc.birthdate).days // 365 if _child_vc.birthdate else None
+                _age_vc = (_date_vc2.today() - _child_vc.birthdate).days // 365 if _child_vc.birthdate else None
                 _vc["age"] = _age_vc
-        _vc["season"] = SEASONS.get(date.today().month, "spring")
+        _vc["season"] = SEASONS.get(_date_vc2.today().month, "spring")
         # Get current temp if city is available
         try:
             if user.city:
@@ -1498,6 +1499,7 @@ async def _process_media_group(
     matrix = await _get_scoring_matrix(_redis, user, owner_id, owner_type)
 
     # Build vision context for better item identification
+    from datetime import date as _date_vc
     _vc_bulk: dict = {"owner_type": owner_type, "city": getattr(user, "city", None)}
     if owner_type == "child":
         from db.crud.children import get_children as _gc_vb
@@ -1505,9 +1507,9 @@ async def _process_media_group(
             _children_vb = await _gc_vb(_s_vb, user.id)
         if _children_vb:
             _child_vb = _children_vb[0]
-            _age_vb = (date.today() - _child_vb.birthdate).days // 365 if _child_vb.birthdate else None
+            _age_vb = (_date_vc.today() - _child_vb.birthdate).days // 365 if _child_vb.birthdate else None
             _vc_bulk["age"] = _age_vb
-    _vc_bulk["season"] = SEASONS.get(date.today().month, "spring")
+    _vc_bulk["season"] = SEASONS.get(_date_vc.today().month, "spring")
     try:
         if user.city:
             from services.brief_weather import _geocode_city, _get_weather
