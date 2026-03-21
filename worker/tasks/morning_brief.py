@@ -172,67 +172,137 @@ async def schedule_all() -> None:
 
     logger.info("morning_brief.schedule_all", count=count, teaser_count=teaser_count, hour=datetime.utcnow().hour)
 
-    # ── 19:00 onboarding reminder for users who installed before 17:00 ──
+    # ── 19:00 cold user reminders (day 1/2/3/5 after onboarding, 0 photos) ──
+    await _send_cold_reminders(redis_client)
+
+
+async def _send_cold_reminders(redis_client) -> None:
+    """Send 19:00 reminders to users who completed onboarding but added 0 photos.
+
+    Redis key: cold_reminder:{user_id} = JSON {onboarded_date, next_day, child_name}
+    Schedule: day 1 (same day), day 2, day 3, day 5. After day 5 → delete.
+    Any photo added → key deleted (in check_milestones / _analyze_and_save).
+    """
+    _REMINDER_DAYS = {1, 2, 3, 5}  # days after onboarding to send reminders
+
     try:
         from config import settings as _settings
         from telegram import Bot as _Bot
         from db.crud.wardrobe import get_owner_items
 
-        _reminder_keys = []
+        _keys = []
         _cursor = b"0"
         while True:
-            _cursor, _keys = await redis_client.scan(_cursor, match="onboard_reminder:*", count=100)
-            _reminder_keys.extend(_keys)
+            _cursor, _batch = await redis_client.scan(_cursor, match="cold_reminder:*", count=100)
+            _keys.extend(_batch)
             if _cursor == b"0":
                 break
 
-        if _reminder_keys:
-            _bot = _Bot(token=_settings.telegram_bot_token)
-            for _rkey in _reminder_keys:
-                try:
-                    _uid_str = (_rkey.decode() if isinstance(_rkey, bytes) else _rkey).split(":", 1)[1]
-                    _uid = uuid.UUID(_uid_str) if hasattr(uuid, "UUID") else None
-                    if not _uid:
-                        continue
+        if not _keys:
+            return
 
-                    # Check timezone: only send at 19:00 local
-                    async with AsyncReadSession() as _rs:
-                        from sqlalchemy import select as _sel_r
-                        _res_r = await _rs.execute(_sel_r(User).where(User.id == _uid))
-                        _user_r = _res_r.scalar_one_or_none()
-                    if not _user_r:
-                        await redis_client.delete(_rkey)
-                        continue
+        _bot = _Bot(token=_settings.telegram_bot_token)
 
-                    _tz_r = pytz.timezone(_user_r.timezone or "Europe/Vilnius")
-                    if datetime.now(_tz_r).hour != 19:
-                        continue
+        for _rkey in _keys:
+            try:
+                _raw = await redis_client.get(_rkey)
+                if not _raw:
+                    continue
+                import json as _json
+                _data = _json.loads(_raw.decode() if isinstance(_raw, bytes) else _raw)
+                _uid = uuid.UUID(_data["user_id"])
+                _onboarded = date.fromisoformat(_data["onboarded_date"])
+                _child_name = _data.get("child_name", "")
+                _days_since = (date.today() - _onboarded).days
 
-                    # Check: already has photos? Skip reminder.
-                    from db.crud.children import get_children as _gc_r
-                    async with AsyncReadSession() as _rs2:
-                        _children_r = await _gc_r(_rs2, _user_r.id)
-                    _owner_id_r = _children_r[0].id if _children_r else _user_r.id
-                    _owner_type_r = "child" if _children_r else "user"
-                    async with AsyncReadSession() as _rs3:
-                        _items_r = await get_owner_items(_rs3, _owner_id_r, _owner_type_r)
-                    if _items_r:
-                        await redis_client.delete(_rkey)
-                        continue  # has items → no reminder needed
+                # Past day 5 → stop reminding
+                if _days_since > 5:
+                    await redis_client.delete(_rkey)
+                    continue
 
-                    # Send reminder
-                    _child_name = _children_r[0].name if _children_r else ""
-                    _reminder_text = (
-                        f"Дома? Сфоткай 3 вещи{' ' + _child_name if _child_name else ''} — 2 минуты!\n"
+                # Not a reminder day
+                if _days_since not in _REMINDER_DAYS:
+                    continue
+
+                # Check timezone: only send at 19:00 local
+                async with AsyncReadSession() as _rs:
+                    from sqlalchemy import select as _sel_r
+                    _res_r = await _rs.execute(_sel_r(User).where(User.id == _uid))
+                    _user_r = _res_r.scalar_one_or_none()
+                if not _user_r:
+                    await redis_client.delete(_rkey)
+                    continue
+
+                _tz_r = pytz.timezone(_user_r.timezone or "Europe/Vilnius")
+                if datetime.now(_tz_r).hour != 19:
+                    continue
+
+                # Dedup: don't send twice on same day
+                _dedup_key = f"cold_sent:{_uid}:{_days_since}"
+                if not await redis_client.set(_dedup_key, "1", ex=86400, nx=True):
+                    continue
+
+                # Check: already has photos? Cancel all reminders.
+                from db.crud.children import get_children as _gc_r
+                async with AsyncReadSession() as _rs2:
+                    _children_r = await _gc_r(_rs2, _user_r.id)
+                _owner_id_r = _children_r[0].id if _children_r else _user_r.id
+                _owner_type_r = "child" if _children_r else "user"
+                async with AsyncReadSession() as _rs3:
+                    _items_r = await get_owner_items(_rs3, _owner_id_r, _owner_type_r)
+                if _items_r:
+                    await redis_client.delete(_rkey)
+                    continue
+
+                # Build day-specific message
+                _name = _child_name or getattr(_user_r, "name", "") or ""
+                if _days_since == 1:
+                    _text = (
+                        f"Дома? Сфоткай 3 вещи{' ' + _name if _name else ''} — 2 минуты!\n"
                         "Завтра утром в 07:00 покажу готовый образ 📸"
                     )
-                    await _bot.send_message(chat_id=_user_r.telegram_id, text=_reminder_text)
-                    await redis_client.delete(_rkey)  # one-time only
-                    logger.info("onboard_reminder.sent", user_id=_uid_str)
-                except Exception as _re:
-                    logger.warning("onboard_reminder.failed", error=str(_re))
+                elif _days_since == 2:
+                    _text = (
+                        f"Привет! Вчера мы познакомились 👋\n"
+                        f"Сфоткай 3 вещи{' ' + _name if _name else ''} — завтра утром покажу образ!"
+                    )
+                elif _days_since == 3:
+                    # Get weather for personalized message
+                    _temp_str = ""
+                    try:
+                        from services.brief_weather import _geocode_city, _get_weather
+                        if _user_r.city:
+                            _coords = await _geocode_city(_user_r.city)
+                            if _coords:
+                                _w = await _get_weather(_coords[0], _coords[1], _user_r.timezone or "Europe/Vilnius")
+                                _t = _w.get("temp_morning")
+                                if _t is not None:
+                                    _s = "+" if _t >= 0 else ""
+                                    _temp_str = f" при {_s}{_t:.0f}°"
+                    except Exception:
+                        pass
+                    _text = (
+                        f"{_name + ' з' if _name else 'З'}автра в садик{_temp_str}.\n"
+                        "Сфоткай кофту и штаны — подберу образ! 📸"
+                    )
+                else:  # day 5
+                    _text = (
+                        "Касси скучает! 😊\n"
+                        "Одна минута + 3 фото = образы каждый день.\n"
+                        "📸 Сфоткай вещь или отправь фото из галереи!"
+                    )
+
+                await _bot.send_message(chat_id=_user_r.telegram_id, text=_text)
+                logger.info("cold_reminder.sent", user_id=str(_uid), day=_days_since)
+
+                # Day 5 was last → delete
+                if _days_since >= 5:
+                    await redis_client.delete(_rkey)
+
+            except Exception as _re:
+                logger.warning("cold_reminder.failed", error=str(_re))
     except Exception as _re2:
-        logger.warning("onboard_reminder.schedule_error", error=str(_re2))
+        logger.warning("cold_reminder.schedule_error", error=str(_re2))
 
 
 # ── Evening brief comparison helper ────────────────────────────────────────

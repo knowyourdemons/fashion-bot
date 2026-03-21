@@ -773,20 +773,21 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
         _tz = _pytz.timezone(timezone)
         _hour = _dt.now(_tz).hour
 
+        _gallery_hint = "\n💡 Подойдёт фото с камеры или из галереи!"
         if 17 <= _hour < 23:
-            _cta = "Сфоткай 3 вещи прямо сейчас — через 5 мин покажу образ! 📸"
+            _cta = f"Сфоткай 3 вещи прямо сейчас — через 5 мин покажу образ! 📸{_gallery_hint}"
             _btn_text = "📸 Сфоткать сейчас"
             _later_text = "Потом"
         elif 6 <= _hour < 12:
-            _cta = "Одень так! А вечером сфоткай 3 вещи — завтра подберу из ваших 📸"
+            _cta = f"Одень так! А вечером сфоткай 3 вещи — завтра подберу из ваших 📸{_gallery_hint}"
             _btn_text = "📸 Сфоткать"
             _later_text = "Завтра вечером"
         elif 12 <= _hour < 17:
-            _cta = "Вечером дома сфоткай 3 вещи — завтра утром пришлю готовый образ! 📸"
+            _cta = f"Вечером дома сфоткай 3 вещи — завтра утром пришлю готовый образ! 📸{_gallery_hint}"
             _btn_text = "📸 Сфоткать"
             _later_text = "Завтра вечером"
         else:  # 23-06
-            _cta = "Завтра утром в 07:00 пришлю погоду! А когда будет минутка — сфоткай вещи 📸"
+            _cta = f"Завтра утром в 07:00 пришлю погоду! А когда будет минутка — сфоткай вещи 📸{_gallery_hint}"
             _btn_text = "📸 Сфоткать"
             _later_text = "Потом"
 
@@ -798,16 +799,23 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
             _cta, reply_markup=keyboard,
         )
 
-        # ── Schedule 19:00 reminder if installed before 17:00 ──
-        if _hour < 17:
-            try:
-                _redis_ob = context.bot_data.get("redis")
-                if _redis_ob:
-                    _reminder_key = f"onboard_reminder:{user.id}"
-                    await _redis_ob.set(_reminder_key, "1", ex=86400)
-                    logger.info("onboarding.reminder_scheduled", user_id=str(user.id), hour=_hour)
-            except Exception:
-                pass
+        # ── Schedule cold user reminders (day 1/2/3/5 at 19:00) ──
+        try:
+            _redis_ob = context.bot_data.get("redis")
+            if _redis_ob:
+                import json as _json_ob
+                from datetime import date as _date_ob
+                _child_name_ob = context.user_data.get("child_name", "")
+                _reminder_data = _json_ob.dumps({
+                    "user_id": str(user.id),
+                    "onboarded_date": _date_ob.today().isoformat(),
+                    "child_name": _child_name_ob,
+                })
+                # TTL 7 days (covers day 5 + buffer)
+                await _redis_ob.set(f"cold_reminder:{user.id}", _reminder_data, ex=604800)
+                logger.info("onboarding.cold_reminder_set", user_id=str(user.id))
+        except Exception:
+            pass
 
         logger.info(
             "onboarding.completed",
@@ -841,12 +849,12 @@ async def handle_done_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if choice == "photo":
         await query.message.reply_text(
-            "Сфоткай вещь на светлом фоне. Начни с кофты 👚",
+            "Сфоткай вещь или отправь фото из галереи 📸\nНачни с кофты 👚",
             reply_markup=get_main_menu(user, context),
         )
     else:
         await query.message.reply_text(
-            "Хорошо! Когда будешь готова — просто сфоткай вещь и отправь мне 📸",
+            "Хорошо! Когда будешь готова — сфоткай вещь или отправь из галереи 📸",
             reply_markup=get_main_menu(user, context),
         )
 

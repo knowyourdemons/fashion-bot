@@ -260,7 +260,7 @@ async def check_milestones(user, item_count: int, message, owner_id, owner_type,
                     priority=QueuePriority.HIGH,
                 )
                 # Clear onboarding reminder since user already engaged
-                await _redis.delete(f"onboard_reminder:{user.id}")
+                await _redis.delete(f"cold_reminder:{user.id}")
         except Exception as e:
             logger.warning("milestone.mini_outfit.failed", error=str(e))
 
@@ -890,6 +890,27 @@ async def _analyze_and_save(
     if added and redis:
         try:
             await redis.delete(f"wardrobe_summary:{owner_id}")
+            # Cancel cold reminders on first photo
+            from db.base import AsyncReadSession as _ARS_cr
+            async with _ARS_cr() as _s_cr:
+                from db.models.wardrobe import WardrobeItem as _WI_cr
+                from sqlalchemy import select as _sel_cr, func as _func_cr
+                _cnt = await _s_cr.scalar(
+                    _sel_cr(_func_cr.count(_WI_cr.id)).where(_WI_cr.owner_id == owner_id)
+                )
+            if _cnt and _cnt <= len(added) + 1:
+                # This is the first batch of photos → cancel reminders
+                # Find user_id from owner
+                if owner_type == "child":
+                    async with _ARS_cr() as _s_cr2:
+                        from db.models.child import Child as _Child_cr
+                        _ch = await _s_cr2.scalar(
+                            _sel_cr(_Child_cr.user_id).where(_Child_cr.id == owner_id)
+                        )
+                    if _ch:
+                        await redis.delete(f"cold_reminder:{_ch}")
+                else:
+                    await redis.delete(f"cold_reminder:{owner_id}")
         except Exception:
             pass
 
@@ -2001,8 +2022,49 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                 await status_msg.delete()
             except Exception:
                 pass
+
+            # For women: generate style formula advice even without wardrobe
+            is_no_kids = getattr(user, "segment", None) == "no_kids"
+            if is_no_kids and temp_m is not None:
+                try:
+                    from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
+                    from core.redis import get_redis as _gr_sf
+                    try:
+                        _pool_sf = get_anthropic_pool()
+                    except RuntimeError:
+                        init_anthropic_pool(_gr_sf())
+                        _pool_sf = get_anthropic_pool()
+
+                    _is_wknd = _date.today().weekday() >= 5
+                    _ctx_sf = "выходной, прогулка" if _is_wknd else "будний день"
+                    _resp_sf = await _pool_sf.create_message(
+                        model="claude-haiku-4-5-20251001",
+                        system=(
+                            "Ты стилист Касси. Дай формулу образа на день: "
+                            "3-4 слоя одежды + цветовая рекомендация. "
+                            "Конкретные типы вещей, не абстрактно. 2-3 предложения."
+                        ),
+                        messages=[{"role": "user", "content": (
+                            f"Температура {temp_m:+.0f}°C, {_ctx_sf}. "
+                            f"Дай формулу образа для женщины."
+                        )}],
+                        max_tokens=150,
+                    )
+                    _formula = _resp_sf.content[0].text.strip() if _resp_sf.content else ""
+                    if _formula:
+                        _sm_sf = "+" if temp_m >= 0 else ""
+                        await message.reply_text(
+                            f"🌡 {_sm_sf}{temp_m:.0f}°C\n\n"
+                            f"💡 Формула образа:\n{_formula}\n\n"
+                            "📸 Сфоткай вещи — подберу конкретный образ из твоего гардероба!",
+                            reply_markup=get_main_menu(context.user_data.get("db_user"), context),
+                        )
+                        return
+                except Exception:
+                    pass
+
             await message.reply_text(
-                "Гардероб пуст — добавь вещи через фото 📸",
+                "Гардероб пуст — сфоткай вещи или отправь из галереи 📸",
                 reply_markup=get_main_menu(context.user_data.get("db_user"), context),
             )
             return
@@ -2042,7 +2104,11 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
 
         today_date = _date.today()
         season = SEASONS[today_date.month]
-        _day_type = ("садик" if today_date.weekday() < 5 else "прогулка") if child else ""
+        _is_weekend = today_date.weekday() >= 5
+        if child:
+            _day_type = "прогулка" if _is_weekend else "садик"
+        else:
+            _day_type = "выходной" if _is_weekend else ""
 
         # ── Minimum wardrobe check ──
         from services.outfit_builder import has_minimum_wardrobe
