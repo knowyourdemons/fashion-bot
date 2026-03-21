@@ -517,7 +517,7 @@ class TestGetBriefButtons:
         btn = get_brief_buttons("mom", 3, "abc", first_missing_slot="Куртка")
         kb = btn["inline_keyboard"]
         assert any("Надели" in b["text"] for b in kb[0])
-        assert any("Куртка" in b["text"] for b in kb[0])
+        assert any("Другой" in b["text"] for b in kb[0])
 
     def test_full_mom(self):
         from services.brief_card import get_brief_buttons
@@ -536,7 +536,7 @@ class TestGetBriefButtons:
         from services.brief_card import get_brief_buttons
         btn = get_brief_buttons("woman", 3, "abc")
         kb = btn["inline_keyboard"]
-        assert any("Другой вариант" in b["text"] for b in kb[0])
+        assert any("Другой" in b["text"] for b in kb[0])
 
 
 # ── Playwright integration tests ─────────────────────────────────────────────
