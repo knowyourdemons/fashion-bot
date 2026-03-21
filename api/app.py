@@ -1,6 +1,9 @@
 """FastAPI application."""
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 
@@ -67,5 +70,16 @@ def create_app() -> FastAPI:
         status_code = 200 if checks["status"] == "ok" else 503
         from fastapi.responses import JSONResponse
         return JSONResponse(content=checks, status_code=status_code)
+
+    # Landing page at root
+    landing_dir = Path(__file__).resolve().parent.parent / "landing"
+    if landing_dir.is_dir():
+        from fastapi.responses import FileResponse
+
+        @app.get("/")
+        async def landing():
+            return FileResponse(landing_dir / "index.html")
+
+        app.mount("/static", StaticFiles(directory=str(landing_dir)), name="landing")
 
     return app
