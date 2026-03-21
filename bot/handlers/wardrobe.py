@@ -1259,6 +1259,9 @@ async def _handle_single_photo(
             _hint = _get_guided_hint(_total_now)
             if _hint:
                 lines.append(_hint)
+            # Hint about separate photos for better collage quality
+            if len(added) > 1:
+                lines.append("\n💡 Для лучшего качества коллажа — фоткай по одной вещи")
 
         await update.message.reply_text("\n".join(lines))
 
@@ -1931,6 +1934,21 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
     from datetime import date as _date, datetime as _datetime
     import random as _random
 
+    # ── Throttle: block concurrent requests from same user ──
+    _gen_lock = None
+    if redis:
+        _gen_lock = f"outfit_generating:{user.id}"
+        if not await redis.set(_gen_lock, "1", ex=45, nx=True):
+            # Already generating — silently ignore duplicate click
+            return
+
+    async def _release_lock():
+        if redis and _gen_lock:
+            try:
+                await redis.delete(_gen_lock)
+            except Exception:
+                pass
+
     today = _date.today().isoformat()
     limit_key = f"outfit_req:{user.id}:{today}"
     _ep_outfit = get_effective_plan(user)
@@ -1942,6 +1960,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         count = int(val) if val else 0
 
     if count >= day_limit and _ep_outfit != "admin":
+        await _release_lock()
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton("✨ Получить безлимит →", callback_data="show_upgrade")
         ]])
@@ -2326,6 +2345,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                 "Не удалось собрать образ. Попробуй позже.",
                 reply_markup=get_main_menu(context.user_data.get("db_user"), context),
             )
+    finally:
+        await _release_lock()
 
 
 async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
