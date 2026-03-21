@@ -36,9 +36,11 @@ if [ -f .env ]; then
     set +a
 fi
 
-# Export watchdog-specific vars (override defaults for host-level access)
-export HEALTH_URL="${HEALTH_URL:-http://localhost:8000/health}"
-export REDIS_URL="${REDIS_URL:-redis://localhost:6379/0}"
+# Override for host-level access (Docker internal names don't resolve on host)
+export HEALTH_URL="http://localhost:8000/health"
+# Get Redis container IP dynamically (not exposed on host)
+_REDIS_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' docker-redis-1 2>/dev/null || echo "")
+export REDIS_URL="redis://${_REDIS_IP:-localhost}:6379/0"
 
 # Start watchdog in background, log to file
 nohup python3 scripts/watchdog.py >> "$LOGFILE" 2>&1 &
