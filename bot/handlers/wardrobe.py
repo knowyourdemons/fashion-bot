@@ -253,8 +253,14 @@ async def _save_one(
     matrix=None,
     photo_url: str | None = None,
     show_in_collage: bool = True,
+    session=None,
 ) -> bool:
-    """Сохраняет WardrobeItem."""
+    """Сохраняет WardrobeItem.
+
+    If ``session`` is provided, the item is added to that session (no commit).
+    The caller is responsible for committing. If ``session`` is None, a new
+    session is created and committed immediately (legacy behaviour).
+    """
     category_group = data.get("category_group") or "top"
     if category_group not in _VALID_CATEGORY_GROUPS:
         category_group = "top"
@@ -272,36 +278,42 @@ async def _save_one(
     from services.scoring import classify_role as _classify_role
     item_role = _classify_role(data.get("type") or "", data.get("color") or "")
 
+    async def _do_create(s):
+        await create(
+            s,
+            owner_id=owner_id,
+            owner_type=owner_type,
+            photo_id=photo_id,
+            photo_url=photo_url,
+            category_group=category_group,
+            category_code=data.get("category_code") or category_group,
+            type=data.get("type") or "вещь",
+            color=data.get("color") or "неизвестный",
+            style=data.get("style") or "casual",
+            brand=data.get("brand"),
+            season=data.get("season") or ["spring", "summer", "autumn"],
+            occasion=data.get("occasion") or ["everyday"],
+            condition="новая",
+            wear_count=0,
+            keep=True,
+            wishlist=False,
+            quantity=1,
+            show_in_collage=show_in_collage,
+            is_base_layer=(category_group == "base_layer"),
+            role=item_role,
+            score_item=score_item,
+            score_breakdown=score_breakdown,
+            score_version=score_version,
+            score_notes="",
+        )
+
     try:
-        async with AsyncWriteSession() as session:
-            await create(
-                session,
-                owner_id=owner_id,
-                owner_type=owner_type,
-                photo_id=photo_id,
-                photo_url=photo_url,
-                category_group=category_group,
-                category_code=data.get("category_code") or category_group,
-                type=data.get("type") or "вещь",
-                color=data.get("color") or "неизвестный",
-                style=data.get("style") or "casual",
-                brand=data.get("brand"),
-                season=data.get("season") or ["spring", "summer", "autumn"],
-                occasion=data.get("occasion") or ["everyday"],
-                condition="новая",
-                wear_count=0,
-                keep=True,
-                wishlist=False,
-                quantity=1,
-                show_in_collage=show_in_collage,
-                is_base_layer=(category_group == "base_layer"),
-                role=item_role,
-                score_item=score_item,
-                score_breakdown=score_breakdown,
-                score_version=score_version,
-                score_notes="",
-            )
-            await session.commit()
+        if session is not None:
+            await _do_create(session)
+        else:
+            async with AsyncWriteSession() as s:
+                await _do_create(s)
+                await s.commit()
     except Exception as e:
         logger.error(
             "wardrobe.save_failed",
@@ -325,7 +337,12 @@ async def _analyze_and_save(
     matrix=None,
     redis=None,
 ) -> list[dict]:
-    """Скачать фото → Claude Vision → crop по bbox → R2 → сохранить WardrobeItem."""
+    """Скачать фото → Claude Vision → crop по bbox → R2 → сохранить WardrobeItem.
+
+    All DB inserts happen inside a single transaction. If any step fails
+    (crop, bg removal, R2 upload, or DB insert), the entire batch is
+    rolled back — no orphaned WardrobeItem records.
+    """
     tg_file = await bot.get_file(photo_id)
     photo_bytes = bytes(await tg_file.download_as_bytearray())
 
@@ -336,44 +353,51 @@ async def _analyze_and_save(
 
     added: list[dict] = []
 
-    for data in items_data:
-        cg = data.get("category_group") or "top"
-        if cg not in _VALID_CATEGORY_GROUPS:
-            cg = "top"
-        data["category_group"] = cg
+    async with AsyncWriteSession() as session:
+        for data in items_data:
+            cg = data.get("category_group") or "top"
+            if cg not in _VALID_CATEGORY_GROUPS:
+                cg = "top"
+            data["category_group"] = cg
 
-        key = _dedup_key(data)
-        if key in existing_set:
-            logger.info("wardrobe.dedup.skipped", type=data.get("type"), color=data.get("color"))
-            continue
+            key = _dedup_key(data)
+            if key in existing_set:
+                logger.info("wardrobe.dedup.skipped", type=data.get("type"), color=data.get("color"))
+                continue
 
-        _fix_bbox(data)
-        bbox = data.get("bbox") or {}
-        bw = float(bbox.get("w", 0.5))
-        bh = float(bbox.get("h", 0.5))
+            _fix_bbox(data)
+            bbox = data.get("bbox") or {}
+            bw = float(bbox.get("w", 0.5))
+            bh = float(bbox.get("h", 0.5))
 
-        # Переклассификация: маленькая "шапка" → носки
-        if (data.get("category_group") == "accessory" and
-                any(w in (data.get("type") or "").lower()
-                    for w in ["шапка", "шапочка", "hat"]) and
-                bw <= 0.2 and bh <= 0.2):
-            logger.info("wardrobe.reclassify",
-                from_type=data.get("type"), to_type="носки",
-                reason="small_bbox_accessory")
-            data["category_group"] = "base_layer"
-            data["type"] = "носки"
+            # Переклассификация: маленькая "шапка" → носки
+            if (data.get("category_group") == "accessory" and
+                    any(w in (data.get("type") or "").lower()
+                        for w in ["шапка", "шапочка", "hat"]) and
+                    bw <= 0.2 and bh <= 0.2):
+                logger.info("wardrobe.reclassify",
+                    from_type=data.get("type"), to_type="носки",
+                    reason="small_bbox_accessory")
+                data["category_group"] = "base_layer"
+                data["type"] = "носки"
 
-        photo_url, good_crop = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id, redis=redis)
-        await _save_one(owner_id, owner_type, photo_id, data, matrix,
-                        photo_url=photo_url, show_in_collage=good_crop)
-        existing_set.add(key)
-        added.append(data)
-        # Инвалидировать кеш wardrobe summary
-        if redis:
-            try:
-                await redis.delete(f"wardrobe_summary:{owner_id}")
-            except Exception:
-                pass
+            photo_url, good_crop = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id, redis=redis)
+            await _save_one(owner_id, owner_type, photo_id, data, matrix,
+                            photo_url=photo_url, show_in_collage=good_crop,
+                            session=session)
+            existing_set.add(key)
+            added.append(data)
+
+        # Commit all items in a single transaction
+        if added:
+            await session.commit()
+
+    # Инвалидировать кеш wardrobe summary (after successful commit)
+    if added and redis:
+        try:
+            await redis.delete(f"wardrobe_summary:{owner_id}")
+        except Exception:
+            pass
 
     return added
 
@@ -941,37 +965,43 @@ async def _process_media_group(
             existing_set = await _load_existing_set(owner_id, owner_type)
 
             added: list[dict] = []
-            for data in items_data:
-                cg = data.get("category_group") or "top"
-                if cg not in _VALID_CATEGORY_GROUPS:
-                    cg = "top"
-                data["category_group"] = cg
+            async with AsyncWriteSession() as _batch_session:
+                for data in items_data:
+                    cg = data.get("category_group") or "top"
+                    if cg not in _VALID_CATEGORY_GROUPS:
+                        cg = "top"
+                    data["category_group"] = cg
 
-                key = _dedup_key(data)
-                if key in existing_set:
-                    logger.info("wardrobe.dedup.skipped", index=i, type=data.get("type"), color=data.get("color"))
-                    continue
+                    key = _dedup_key(data)
+                    if key in existing_set:
+                        logger.info("wardrobe.dedup.skipped", index=i, type=data.get("type"), color=data.get("color"))
+                        continue
 
-                logger.info("wardrobe.save_start", index=i, item_type=data.get("type"))
-                _fix_bbox(data)
-                _bbox = data.get("bbox") or {}
-                _bw = float(_bbox.get("w", 0.5))
-                _bh = float(_bbox.get("h", 0.5))
-                if (data.get("category_group") == "accessory" and
-                        any(w in (data.get("type") or "").lower()
-                            for w in ["шапка", "шапочка", "hat"]) and
-                        _bw <= 0.2 and _bh <= 0.2):
-                    logger.info("wardrobe.reclassify",
-                        from_type=data.get("type"), to_type="носки",
-                        reason="small_bbox_accessory")
-                    data["category_group"] = "base_layer"
-                    data["type"] = "носки"
-                photo_url, good_crop = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id, redis=_redis)
-                await _save_one(owner_id, owner_type, file_id, data, matrix,
-                                photo_url=photo_url, show_in_collage=good_crop)
-                existing_set.add(key)
-                added.append(data)
-                logger.info("wardrobe.save_done", index=i)
+                    logger.info("wardrobe.save_start", index=i, item_type=data.get("type"))
+                    _fix_bbox(data)
+                    _bbox = data.get("bbox") or {}
+                    _bw = float(_bbox.get("w", 0.5))
+                    _bh = float(_bbox.get("h", 0.5))
+                    if (data.get("category_group") == "accessory" and
+                            any(w in (data.get("type") or "").lower()
+                                for w in ["шапка", "шапочка", "hat"]) and
+                            _bw <= 0.2 and _bh <= 0.2):
+                        logger.info("wardrobe.reclassify",
+                            from_type=data.get("type"), to_type="носки",
+                            reason="small_bbox_accessory")
+                        data["category_group"] = "base_layer"
+                        data["type"] = "носки"
+                    photo_url, good_crop = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id, redis=_redis)
+                    await _save_one(owner_id, owner_type, file_id, data, matrix,
+                                    photo_url=photo_url, show_in_collage=good_crop,
+                                    session=_batch_session)
+                    existing_set.add(key)
+                    added.append(data)
+                    logger.info("wardrobe.save_done", index=i)
+
+                # Commit all items from this photo in one transaction
+                if added:
+                    await _batch_session.commit()
 
             successful_photos += 1
             total_added += len(added)
@@ -1007,6 +1037,13 @@ async def _process_media_group(
                 await session.commit()
         except Exception as e:
             logger.error("media_group.counter_update_failed", error=str(e))
+
+    # Инвалидировать кеш wardrobe summary (after all commits)
+    if total_added > 0 and _redis:
+        try:
+            await _redis.delete(f"wardrobe_summary:{owner_id}")
+        except Exception:
+            pass
 
     summary = "\n".join(photo_lines)
     await progress_msg.edit_text(

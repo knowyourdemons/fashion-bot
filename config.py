@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     cloudflare_r2_endpoint: str = ""
     cloudflare_r2_cdn_url: str = ""
     removebg_api_key: str = ""
+    bg_removal_model: str = "silueta"  # "silueta" or "rmbg14"
 
 
 

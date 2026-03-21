@@ -17,10 +17,15 @@ from PIL import Image
 
 from exceptions import DuplicateItemError, ImageTooLargeError
 
-# ── Singleton ONNX session for background removal ──────────────────
+# ── Singleton ONNX sessions for background removal ─────────────────
 _SILUETA_PATH = "/root/.u2net/silueta.onnx"
+_RMBG14_PATH = "/root/.u2net/rmbg14_quantized.onnx"
+
 _ort_session: Optional[ort.InferenceSession] = None
 _ort_lock = threading.Lock()
+
+_rmbg_session: Optional[ort.InferenceSession] = None
+_rmbg_lock = threading.Lock()
 
 
 def _get_ort_session() -> ort.InferenceSession:
@@ -35,6 +40,21 @@ def _get_ort_session() -> ort.InferenceSession:
                     _SILUETA_PATH, opts, providers=["CPUExecutionProvider"]
                 )
     return _ort_session
+
+
+def _get_rmbg_session() -> ort.InferenceSession:
+    """Thread-safe singleton for RMBG-1.4 quantized ONNX model."""
+    global _rmbg_session
+    if _rmbg_session is None:
+        with _rmbg_lock:
+            if _rmbg_session is None:  # double-check after acquiring lock
+                opts = ort.SessionOptions()
+                opts.intra_op_num_threads = 1
+                opts.inter_op_num_threads = 1
+                _rmbg_session = ort.InferenceSession(
+                    _RMBG14_PATH, opts, providers=["CPUExecutionProvider"]
+                )
+    return _rmbg_session
 
 
 def _run_silueta(image_bytes: bytes) -> bytes:
@@ -53,6 +73,43 @@ def _run_silueta(image_bytes: bytes) -> bytes:
 
     # Normalize mask to 0-255
     mask = (mask - mask.min()) / (mask.max() - mask.min() + 1e-8)
+    mask = (mask * 255).astype(np.uint8)
+
+    # Resize mask back to original size
+    mask_img = Image.fromarray(mask).resize((orig_w, orig_h), Image.BILINEAR)
+
+    # Apply mask as alpha channel
+    img_rgba = img.copy().convert("RGBA")
+    img_rgba.putalpha(mask_img)
+
+    buf = io.BytesIO()
+    img_rgba.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _run_rmbg14(image_bytes: bytes) -> bytes:
+    """Run RMBG-1.4 quantized ONNX model: returns PNG bytes with transparent background.
+
+    RMBG-1.4 uses different preprocessing than silueta:
+    - Input: 1x3x1024x1024, normalized to [0,1] (no mean/std normalization for quantized)
+    - Output: 1x1x1024x1024 sigmoid mask
+    """
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    orig_w, orig_h = img.size
+
+    # Preprocess: resize to 1024×1024, normalize to [0,1], CHW layout
+    resized = img.resize((1024, 1024), Image.BILINEAR)
+    arr = np.array(resized, dtype=np.float32) / 255.0
+    arr = arr.transpose(2, 0, 1)[np.newaxis, ...]  # (1, 3, 1024, 1024)
+
+    sess = _get_rmbg_session()
+    input_name = sess.get_inputs()[0].name
+    output_name = sess.get_outputs()[0].name
+    mask = sess.run([output_name], {input_name: arr})[0]  # (1,1,1024,1024)
+    mask = mask.squeeze()  # (1024, 1024)
+
+    # Sigmoid mask is already in [0,1] range; clamp and scale to 0-255
+    mask = np.clip(mask, 0.0, 1.0)
     mask = (mask * 255).astype(np.uint8)
 
     # Resize mask back to original size
@@ -142,26 +199,55 @@ def to_base64(image_bytes: bytes) -> str:
     return base64.standard_b64encode(image_bytes).decode()
 
 
+def _get_bg_removal_model() -> str:
+    """Return configured background removal model name.
+
+    Uses BG_REMOVAL_MODEL env var via pydantic settings.
+    Valid values: "silueta" (default), "rmbg14".
+    """
+    from config import settings
+    return settings.bg_removal_model
+
+
 async def remove_background(image_bytes: bytes, redis=None) -> bytes:
     """
-    Удаляет фон: local ONNX (silueta) → remove.bg API fallback → оригинал.
+    Удаляет фон: local ONNX (rmbg14 or silueta) → remove.bg API fallback → оригинал.
+    Model selection: BG_REMOVAL_MODEL env var ("rmbg14" or "silueta", default: silueta).
     Возвращает PNG bytes с прозрачностью.
     """
     import structlog
 
     log = structlog.get_logger()
 
-    # 1. Try local ONNX inference
+    model = _get_bg_removal_model()
+
+    # 1. Try local ONNX inference (primary model)
     try:
-        result = _run_silueta(image_bytes)
+        if model == "rmbg14":
+            result = _run_rmbg14(image_bytes)
+        else:
+            result = _run_silueta(image_bytes)
         if redis is not None:
             try:
-                await redis.incr("rembg:local:ok")
+                await redis.incr(f"rembg:local:{model}:ok")
             except Exception:
                 pass
         return result
     except Exception as e:
-        log.warning("remove_background.local_failed", error=str(e))
+        log.warning("remove_background.local_failed", model=model, error=str(e))
+
+    # 1b. Fallback to silueta if rmbg14 was primary and failed
+    if model == "rmbg14":
+        try:
+            result = _run_silueta(image_bytes)
+            if redis is not None:
+                try:
+                    await redis.incr("rembg:local:silueta_fallback:ok")
+                except Exception:
+                    pass
+            return result
+        except Exception as e:
+            log.warning("remove_background.silueta_fallback_failed", error=str(e))
 
     # 2. Fallback: remove.bg API
     import httpx
