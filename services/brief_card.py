@@ -28,7 +28,6 @@ from services.brief_renderer import (
     prepare_date_context,
     prepare_layers,
     prepare_underwear_line,
-    collect_palette as _collect_palette_simple,
     render_template,
     render_html_to_png,
     TYPE_RU,
@@ -85,16 +84,6 @@ async def _cache_thumb(item_id: str, thumb_bytes: bytes) -> None:
         await redis.set(f"thumb:{item_id}", b64_str, ex=86400 * 7)
     except Exception:
         pass
-
-
-async def _make_thumb_inline(photo_bytes: bytes) -> bytes:
-    """Full thumbnail pipeline inline: EXIF → brightness → rembg → edges → pad → resize."""
-    try:
-        from services.image_processor import make_collage_thumbnail
-        return make_collage_thumbnail(photo_bytes, needs_bg_removal=True)
-    except Exception as e:
-        logger.warning("brief_card.inline_thumb_failed", error=str(e))
-        return photo_bytes
 
 
 async def _download_slot_photos(outfit_slots: list[dict]) -> None:

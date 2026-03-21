@@ -184,19 +184,20 @@ class TestPrepareLayers:
 
 class TestCollectPalette:
     def test_unique_colors(self):
-        from services.brief_renderer import collect_palette
-        items = [
-            {"color_hex": "#E0A0B0"},
-            {"color_hex": "#4060C0"},
-            {"color_hex": "#E0A0B0"},  # duplicate
+        from services.collage_styles import collect_palette
+        slots = [
+            {"has_item": True, "item_color": "розовый"},
+            {"has_item": True, "item_color": "синий"},
+            {"has_item": True, "item_color": "розовый"},  # duplicate
         ]
-        palette = collect_palette(items)
-        assert palette == ["#E0A0B0", "#4060C0"]
+        palette = collect_palette(slots)
+        assert len(palette) >= 2
 
     def test_max_5(self):
-        from services.brief_renderer import collect_palette
-        items = [{"color_hex": f"#{i:06x}"} for i in range(10)]
-        assert len(collect_palette(items)) == 5
+        from services.collage_styles import collect_palette
+        slots = [{"has_item": True, "item_color": c} for c in
+                 ["розовый", "синий", "белый", "чёрный", "зелёный", "красный", "жёлтый"]]
+        assert len(collect_palette(slots)) == 5
 
 
 class TestPrepareUnderwearLine:

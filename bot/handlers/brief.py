@@ -61,98 +61,6 @@ async def handle_brief_feedback(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def _reroll_adult_advice(message, user) -> None:
-    """Перегенерировать совет стилиста через Haiku для взрослого брифа."""
-    from worker.tasks.style_config import COLORTYPE_PALETTES
-    from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
-    from core.redis import get_redis
-
-    coords = None
-    weather: dict = {}
-    if user.city:
-        from services.brief_weather import _geocode_city, _get_weather
-        coords = await _geocode_city(user.city)
-        if coords:
-            weather = await _get_weather(coords[0], coords[1], user.timezone or "Europe/Vilnius")
-
-    temp_m = weather.get("temp_morning", 10)
-    from services.outfit_selector import _get_temp_regime
-    from worker.tasks.morning_brief import _REGIME_OUTER_ADVICE
-    regime = _get_temp_regime(temp_m)
-    outer_advice = _REGIME_OUTER_ADVICE.get(regime, "куртка")
-    sm = "+" if temp_m >= 0 else ""
-    colortype = getattr(user, "colortype", None) or "default"
-
-    # Проверить есть ли вещи в гардеробе
-    from db.base import AsyncReadSession
-    from db.crud.wardrobe import get_owner_items
-    async with AsyncReadSession() as session:
-        items = await get_owner_items(session, user.id, "user")
-
-    if items:
-        wardrobe_context = ", ".join(
-            f"{i.type} {i.color}" for i in
-            sorted(items, key=lambda x: float(x.score_item or 0), reverse=True)[:10]
-        )
-        body_type = getattr(user, "body_type", None)
-        body_hint = f" Тип фигуры: {body_type}." if body_type else ""
-        prompt = (
-            f"Погода: {sm}{temp_m:.0f}°C, {regime}. "
-            f"Цветотип: {colortype}.{body_hint} "
-            f"Гардероб: {wardrobe_context}. "
-            f"Дай короткий (2-3 предложения) совет по образу на день "
-            f"используя вещи из гардероба. Говори на русском, тон дружелюбный. "
-            f"Не используй markdown символы (# * _ и т.д.). Только обычный текст. "
-            f"Дай ДРУГОЙ совет, не повторяй предыдущий."
-        )
-    else:
-        palette = COLORTYPE_PALETTES.get(colortype, COLORTYPE_PALETTES.get("default", {}))
-        top_colors = palette.get("top", ["нейтральный"])
-        outer_colors = palette.get("outerwear", ["нейтральный"])
-        color_hint = f"{top_colors[0]} верх и {outer_colors[0]} {outer_advice}"
-        prompt = (
-            f"Погода: {sm}{temp_m:.0f}°C, {regime}. "
-            f"Цветотип: {colortype}. "
-            f"Дай короткий (2-3 предложения) совет по образу на день. "
-            f"Рекомендуй {color_hint}. Говори на русском, тон дружелюбный. "
-            f"Не используй markdown символы (# * _ и т.д.). Только обычный текст. "
-            f"Дай ДРУГОЙ совет, не повторяй предыдущий."
-        )
-
-    try:
-        pool = get_anthropic_pool()
-    except RuntimeError:
-        _redis = get_redis()
-        init_anthropic_pool(_redis)
-        pool = get_anthropic_pool()
-
-    try:
-        resp = await pool.create_message(
-            model="claude-haiku-4-5-20251001",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=256,
-        )
-        advice = resp.content[0].text.strip()
-    except Exception as e:
-        logger.warning("reroll.adult.haiku_failed", error=str(e))
-        advice = f"Сегодня {sm}{temp_m:.0f}°C — выбери {outer_advice} ✨"
-
-    text = f"💡 Идея на сегодня:\n{advice}"
-
-    if items:
-        keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("👍 Нравится", callback_data="brief_feedback:up:noop"),
-            InlineKeyboardButton("🔄 Другой вариант", callback_data="reroll_advice"),
-        ]])
-    else:
-        keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("👍 Спасибо", callback_data="brief_feedback:up:noop"),
-            InlineKeyboardButton("🔄 Ещё совет", callback_data="reroll_advice"),
-        ]])
-
-    await message.reply_text(text, reply_markup=keyboard)
-
-
-async def _reroll_adult_advice_edit(message, user) -> None:
     """Перегенерировать совет и отредактировать существующее сообщение."""
     from worker.tasks.style_config import COLORTYPE_PALETTES
     from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
@@ -300,7 +208,7 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             await query.edit_message_text("🔄 Генерирую новый совет...")
         except Exception:
             pass
-        await _reroll_adult_advice_edit(query.message, user)
+        await _reroll_adult_advice(query.message, user)
 
         if redis:
             await redis.incr(reroll_key)

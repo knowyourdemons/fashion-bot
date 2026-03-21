@@ -41,10 +41,10 @@ bot/handlers/
   subscription.py  — /subscribe, /test_subscribe, Stars/Stripe
   text.py          — Haiku чат стилиста (_get_text_system по сегменту)
   brief.py         — feedback на morning brief:
-                     Детский: "Надели"/"Переодень"
-                     Взрослый с коллажем: "Нравится"/"Другой вариант"
+                     Детский: "Надели"/"Другой"
+                     Взрослый с коллажем: "Нравится"/"Другой"
                      Взрослый без вещей: "Спасибо"/"Ещё совет"
-                     Реролл для взрослых перегенерирует совет через Haiku
+                     Реролл: outfit → delete old + send new; advice → edit in-place
   error.py         — PTB global error handler → Sentry
   menu.py          — get_main_menu(), кнопки
   help.py          — /help текст
@@ -63,6 +63,8 @@ core/
   permissions.py   — лимиты, планы, trial логика (ЦЕНТРАЛЬНЫЙ ФАЙЛ)
 worker/tasks/
   morning_brief.py       — бриф детский + взрослый, paginated schedule_all (batch 500)
+  rmbg_task.py           — async bg removal: EXIF rotate → crop bbox → rembg → edge softening
+                           → thumbnail 400×400 → Redis cache (7 дней)
   style_config.py        — COLORTYPE_PALETTES, WOW_PHRASES, _needs_tights
                            get_temp_regime() → lazy import из outfit_selector (избегая circular)
   subscription_expiry.py — уведомления об окончании trial
@@ -75,7 +77,13 @@ db/seeds/          — taxonomy_seed, scoring_matrix_seed, dev_seed
 services/
   image_processor.py — resize, EXIF, phash, bg removal (RMBG-1.4 + silueta fallback)
                        Thread-safe singleton (threading.Lock + double-check) для каждой модели
-  image_builder.py — Satori коллаж, PNG-иконки, фоны
+                       Smart thumbnail pipeline: exif_rotate → auto_brightness → rembg
+                       → soften_edges → pad_square_resize(400) → make_collage_thumbnail()
+  brief_card.py    — Точка входа коллажа: 3 состояния (0/1-7/8+ фото)
+                     Thumb cache: Redis thumb:{item_id} (7 дней)
+                     Inline fallback: make_collage_thumbnail() если кэша нет
+  brief_renderer.py — Jinja2 шаблоны → Playwright → PNG (440px)
+  image_builder.py — Satori коллаж (legacy), PNG-иконки, фоны
                      _shadow_cache с LRU (max 32 entries)
                      Sentry capture на критических ошибках
   collage_styles.py — 6 стилей, atomic round-robin через Redis INCR (next_style_async)
@@ -231,7 +239,7 @@ docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
 ## Тестирование
 ```bash
 docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
-# 882 теста, pytest-forked для изоляции (21 марта 2026)
+# 971 тест, pytest-forked для изоляции (21 марта 2026)
 # CI: GitHub Actions запускает тесты на каждый push/PR
 ```
 

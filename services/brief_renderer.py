@@ -239,7 +239,7 @@ def prepare_items_hybrid(outfit_slots: list[dict]) -> tuple[list[dict], list[dic
 
     Returns (items, missing).
     """
-    from services.image_builder import format_collage_label, _auto_trim, _img_to_data_uri
+    from services.image_builder import format_collage_label
 
     items = []
     missing = []
@@ -296,7 +296,7 @@ def prepare_items_hybrid(outfit_slots: list[dict]) -> tuple[list[dict], list[dic
 
 def prepare_items_full(outfit_slots: list[dict]) -> list[dict]:
     """Prepare items for full flat-lay template."""
-    from services.image_builder import format_collage_label, _auto_trim
+    from services.image_builder import format_collage_label
 
     items = []
     for s in outfit_slots:
@@ -356,18 +356,6 @@ def prepare_items_morning(outfit_slots: list[dict]) -> list[dict]:
         })
 
     return items
-
-
-def collect_palette(items: list[dict], max_colors: int = 5) -> list[str]:
-    """Collect unique palette hex colors from items."""
-    palette = []
-    seen: set[str] = set()
-    for item in items:
-        hx = item.get("color_hex", "#C0C0C0")
-        if hx not in seen and len(palette) < max_colors:
-            palette.append(hx)
-            seen.add(hx)
-    return palette
 
 
 def prepare_date_context(user, child) -> tuple[str, str]:

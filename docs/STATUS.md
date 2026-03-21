@@ -2,6 +2,10 @@
 
 ## Git: последние 20 коммитов
 ```
+(pending) chore: dead code cleanup, +19 tests, update docs
+c0ea34d feat: smart thumbnail pipeline for collage photos
+caa16ab fix: smart thumbnail pipeline — bg removal + contain for collage photos
+afa8910 docs: full project status report + fix 2 broken button tests
 20b281b fix: brief card UX — 7 fixes from user feedback
 1690ad3 fix: download photos before rendering collage, fix owner switch button
 3779304 feat: Jinja2 HTML templates for brief cards via Playwright
@@ -9,10 +13,6 @@ d435b9f fix: remove --single-process flag from Chromium (crashes after 1st rende
 f4b2af2 fix: renderer healthcheck (wget→node fetch), worker memory 512→768MB
 eeb159c fix: renderer integration tests skip when Playwright not deployed
 a3ee861 feat: migrate renderer from Satori to Playwright, improve outfit UX
-ffd2baa templates added
-938a29a fix: hybrid card layout matches design spec v3
-3d9c972 fix: pass db_user to _rate_photos to fix NameError on context
-6415422 Fix: register engagement task in slow_worker, clean .env duplicates
 1d5f78c Add pre-push hook: run tests before every push
 d30fe94 Fix wardrobe browser: add total count, align tests with new UI
 0debc11 Redesign wardrobe browser: 3 screens with thumbnails, season editing, owner tabs
@@ -25,9 +25,9 @@ b35ef66 Serve landing page at root via FastAPI
 ```
 
 ## Тесты
-- Всего: 957
-- Passed: 952
-- Skipped: 5 (renderer integration — require running Playwright)
+- Всего: 977
+- Passed: 971
+- Skipped: 6
 - Failed: 0
 
 ## Контейнеры
@@ -105,6 +105,16 @@ b35ef66 Serve landing page at root via FastAPI
 - **Только для placeholder** (после фикса 20b281b)
 - Формат: "Тип цвет" (max 28 символов), без emoji
 - На реальных фото подписей нет
+
+### Smart Thumbnail Pipeline (новый)
+Pipeline рендера фото для коллажа:
+```
+original → EXIF rotate → auto-brightness (dark <90) → rembg (RMBG-1.4)
+→ edge softening (blur alpha 1.5px) → auto-trim → pad square → resize 400×400
+```
+- **Worker path** (`rmbg_task.py`): при загрузке фото → кэш Redis `thumb:{item_id}` (7 дней)
+- **Inline fallback** (`brief_card.py`): при рендере если кэша нет → полный pipeline
+- **CSS**: `background-size: contain` (вместо cover) — вещь видна целиком
 
 ### Комментарий Касси
 - **Источник**: `warm_outfit_comment()` в `services/outfit_builder.py`
@@ -371,6 +381,7 @@ premium_yearly:    $72 / 5500 Stars
 
 ### Средние
 1. **backup.sh не в crontab** — бэкапы БД только вручную
+2. **Thumbnail cache cold start** — при первом запуске коллажа после деплоя inline rembg ~4с на фото
 
 ### Косметические (известные, не критичные)
 3. **SAWarning**: `Child.wardrobe_items` overlaps `User.wardrobe_items` — нужно `overlaps="wardrobe_items"`

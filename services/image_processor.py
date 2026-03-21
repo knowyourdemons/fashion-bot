@@ -331,11 +331,6 @@ def preprocess(
     return buf.getvalue(), phash
 
 
-def to_base64(image_bytes: bytes) -> str:
-    import base64
-    return base64.standard_b64encode(image_bytes).decode()
-
-
 def _get_bg_removal_model() -> str:
     """Return configured background removal model name.
 
