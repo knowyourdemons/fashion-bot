@@ -29,7 +29,7 @@ from urllib.request import Request, urlopen
 # ---------------------------------------------------------------------------
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-ADMIN_TELEGRAM_ID = os.environ.get("ADMIN_TELEGRAM_ID", "")
+ADMIN_TELEGRAM_ID = os.environ.get("ADMIN_TELEGRAM_ID", "") or os.environ.get("ADMIN_TELEGRAM_IDS", "").split(",")[0]
 HEALTH_URL = os.environ.get("HEALTH_URL", "http://localhost:8000/health")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", "30"))

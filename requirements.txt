@@ -28,3 +28,4 @@ ruff==0.7.0
 mypy==1.11.0
 boto3==1.42.69
 botocore==1.42.69
+pytest-forked>=1.6.0
