@@ -23,8 +23,6 @@ from services.image_builder import (
     _load_silhouette_bytes,
 )
 from services.collage_styles import (
-    _color_hex,
-    _weather_strip_element,
     collect_palette,
     format_collage_label,
     _get_placeholder_label,
@@ -385,13 +383,57 @@ def _build_weather_card(
 # HYBRID CARD (1-7 photos)
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _missing_icon(slot_name: str, emoji: str, theme: dict) -> dict:
+    """Small icon + label for missing item in 'ДОБАВЬ:' section."""
+    _SLOT_ICON_PASTELS = {
+        "outerwear": "#C8D8E8", "top": "#FFD0D8", "bottom": "#C8D0F0",
+        "one_piece": "#E0D0F0", "footwear": "#D0E0F0", "hat": "#D0E8D0",
+        "scarf": "#F0DCC8", "gloves": "#D0D8F0", "removable_layer": "#D8E0D0",
+    }
+    _SLOT_EMOJI = {
+        "outerwear": "Куртка", "top": "Верх", "bottom": "Низ",
+        "one_piece": "Платье", "footwear": "Обувь", "hat": "Шапка",
+        "scarf": "Шарф", "gloves": "Перчатки", "removable_layer": "Кардиган",
+    }
+    bg = _SLOT_ICON_PASTELS.get(slot_name, "#E0D8D0")
+    label = _SLOT_EMOJI.get(slot_name, slot_name)
+
+    sil = _load_silhouette_bytes(slot_name, "girl", False)
+    icon_children = []
+    if sil:
+        icon_children.append({
+            "type": "img",
+            "props": {
+                "src": _img_to_data_uri(sil),
+                "width": "60%", "height": "60%",
+                "style": {"objectFit": "contain", "opacity": "0.5"},
+            },
+        })
+
+    return _col(
+        [
+            _div(
+                icon_children,
+                width=52, height=44,
+                backgroundColor=bg,
+                borderRadius=8,
+                alignItems="center",
+                justifyContent="center",
+            ),
+            _text(label, 10, theme["muted"], textAlign="center",
+                  justifyContent="center", width=52),
+        ],
+        gap=3, alignItems="center",
+    )
+
+
 def _build_hybrid_card(
     user, child, outfit: dict, weather: dict,
     outfit_slots: list[dict], segment: str, theme: dict,
     advice_text: str = "",
     real_photo_count: int = 0,
 ) -> tuple[dict, int, int]:
-    """Hybrid card: weather strip + items grid + placeholders. 440x auto."""
+    """Hybrid card: real photos large + small icons for missing items. 440x auto."""
     W = 440
     from datetime import date as _date
 
@@ -404,7 +446,7 @@ def _build_hybrid_card(
     name = child_name or user_name or ""
     context = "садик" if child and today.weekday() < 5 else ("прогулка" if child else "")
 
-    # ── Header with compact weather ──
+    # ── Header: date + context + compact weather ──
     temp_m = weather.get("temp_morning")
     temp_d = weather.get("temp_day")
     temp_e = weather.get("temp_evening")
@@ -416,82 +458,71 @@ def _build_hybrid_card(
             weather_parts.append(f"{s}{t:.0f}°")
     weather_str = " / ".join(weather_parts) if weather_parts else ""
 
+    date_line = f"{day_name[:2].upper()}, {today.day} {_MONTH_NAMES.get(today.month, '')[:3].upper()}"
     header = _row(
         [
             _col(
                 [
-                    _text(f"{name}, {context}" if context else name,
-                          16, theme["text"], fontWeight=700),
-                    _text(f"{day_name}, {today.day} {month}",
-                          11, theme["muted"]),
+                    _text(date_line, 11, theme["muted"]),
+                    _text(name, 20, theme["text"], fontWeight=700),
                 ],
                 gap=2,
             ),
-            _text(weather_str, 12, theme["muted"], flexShrink=0) if weather_str else _div([]),
+            _text(weather_str, 13, theme["muted"], flexShrink=0) if weather_str else _div([]),
         ],
         justifyContent="space-between",
         alignItems="center",
         padding="18px 20px 8px",
     )
 
-    # ── Weather strip (compact) ──
-    ws = _weather_strip_element(weather)
-    weather_strip = None
-    if ws:
-        weather_strip = _div(
-            [ws],
-            flexDirection="column",
-            backgroundColor="rgba(255,255,255,0.5)",
-            borderRadius=10,
-            padding="8px 12px",
-            margin="0 16px",
-        )
-
-    # ── Items grid (2-column) ──
-    real_slots = [s for s in outfit_slots if s.get("has_item")]
+    # ── Real photo cards only (NO placeholders as cards) ──
+    real_slots = [s for s in outfit_slots if s.get("has_item") and s.get("_photo_bytes")]
     placeholder_slots = [s for s in outfit_slots
                          if not s.get("has_item")
                          and s.get("slot") not in ("underwear", "tights", "socks", "base_layer")]
 
-    # Build item cards
     card_rows = []
-    all_display_slots = real_slots + placeholder_slots[:4]  # Show up to 4 placeholders
-    for i in range(0, len(all_display_slots), 2):
-        pair = all_display_slots[i:i+2]
-        row_cards = []
-        for s in pair:
-            card_w = 190
-            card_h = 140 if s.get("has_item") else 100
-            row_cards.append(_photo_card(s, card_w, card_h, theme))
-        card_rows.append(_row(row_cards, gap=8, justifyContent="center"))
+    n_real = len(real_slots)
+    if n_real == 1:
+        # Single large card
+        card_rows.append(
+            _row([_photo_card(real_slots[0], 380, 160, theme)], justifyContent="center")
+        )
+    elif n_real == 2:
+        card_rows.append(
+            _row(
+                [_photo_card(s, 185, 140, theme) for s in real_slots],
+                gap=8, justifyContent="center",
+            )
+        )
+    else:
+        # 3+ photos: first row 2 large, rest smaller
+        for i in range(0, n_real, 2):
+            pair = real_slots[i:i+2]
+            h_card = 140 if i == 0 else 110
+            w_card = 185 if len(pair) == 2 else 380
+            row_cards = [_photo_card(s, w_card if len(pair) == 1 else 185, h_card, theme) for s in pair]
+            card_rows.append(_row(row_cards, gap=8, justifyContent="center"))
 
     items_section = _col(card_rows, gap=8, padding="0 16px") if card_rows else _div([])
 
-    # ── "Для полного образа:" (missing slots) ──
+    # ── "ДОБАВЬ:" section with small icons (no placeholder cards) ──
     missing_section = None
     if placeholder_slots:
-        missing_items = []
-        for ps in placeholder_slots[:4]:
-            slot_name = ps.get("label") or _get_placeholder_label(
-                ps.get("slot", "top"), ps.get("gender", "girl"))
-            dot_color = _color_hex(ps.get("item_color", "")) if ps.get("item_color") else theme["muted"]
-            missing_items.append(
-                _row(
-                    [_color_dot(dot_color, 8), _text(slot_name, 12, theme["muted"])],
-                    gap=6, alignItems="center",
-                )
-            )
-        missing_section = _div(
+        icons = []
+        for ps in placeholder_slots[:6]:
+            slot_key = ps.get("slot", "top")
+            icons.append(_missing_icon(slot_key, "", theme))
+
+        missing_section = _col(
             [
-                _text("Для полного образа:", 12, theme["muted"],
-                      fontWeight=600, marginBottom=4),
-                _row(missing_items, gap=12, flexWrap="wrap"),
+                _text("ДОБАВЬ:", 11, theme["muted"], fontWeight=600),
+                _row(icons, gap=10, justifyContent="center", flexWrap="wrap"),
             ],
-            flexDirection="column",
-            padding="8px 20px",
+            gap=6, padding="4px 20px",
         )
 
-    # ── Underwear line ──
+    # ── Underwear line (compact) ──
     underwear_line = None
     under_items = []
     if outfit:
@@ -531,7 +562,6 @@ def _build_hybrid_card(
     progress_section = None
     if real_photo_count > 0:
         remaining = max(0, threshold - real_photo_count)
-        # Find first missing slot for CTA
         first_missing = ""
         for ps in placeholder_slots[:1]:
             first_missing = ps.get("label") or _get_placeholder_label(
@@ -546,7 +576,7 @@ def _build_hybrid_card(
         progress_section = _col(
             [
                 _progress_bar(real_photo_count, threshold, theme["accent"], theme["muted"]),
-                _text(progress_label, 10, theme["muted"], textAlign="center",
+                _text(progress_label, 11, theme["muted"], textAlign="center",
                       justifyContent="center", width="100%"),
             ],
             gap=4, padding="4px 20px 12px",
@@ -554,8 +584,6 @@ def _build_hybrid_card(
 
     # ── Assemble ──
     parts = [header]
-    if weather_strip:
-        parts.append(weather_strip)
     parts.append(items_section)
     if missing_section:
         parts.append(missing_section)
@@ -566,28 +594,25 @@ def _build_hybrid_card(
     if progress_section:
         parts.append(progress_section)
 
-    # Footer
-    parts.append(
-        _text("Касси . твой личный стилист", 10, theme["muted"],
-              padding="0 20px 14px", opacity=0.5)
-    )
-
     # Height estimation
     h = 60  # header
-    if weather_strip:
-        h += 55
-    n_rows = (len(all_display_slots) + 1) // 2
-    h += n_rows * 152  # items
+    if n_real == 1:
+        h += 172
+    elif n_real == 2:
+        h += 152
+    else:
+        n_photo_rows = (n_real + 1) // 2
+        h += 152 + max(0, n_photo_rows - 1) * 122
     if missing_section:
-        h += 50
+        h += 75
     if underwear_line:
         h += 25
     if comment_section:
         h += max(40, len(comment) // 2)
     if progress_section:
         h += 40
-    h += 30  # footer
-    h = max(h, 400)
+    h += 20
+    h = max(h, 350)
 
     root = _col(
         parts, gap=8,

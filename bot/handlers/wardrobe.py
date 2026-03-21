@@ -2017,8 +2017,16 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         # Кнопки по сегменту и количеству фото
         real_photos = sum(1 for s in all_slots if s.get("has_item") and (s.get("photo_url") or s.get("photo_id")))
         _segment = "mom" if user.segment in ("mom_girl", "mom_boy") else "woman"
-        _missing = [s["slot"] for s in all_slots if not s.get("has_item")]
-        _first_missing = _missing[0] if _missing else ""
+        _missing = [s for s in all_slots
+                    if not s.get("has_item")
+                    and s.get("slot") not in ("underwear", "tights", "socks", "base_layer")]
+        if _missing:
+            _ms = _missing[0]
+            from services.collage_styles import _get_placeholder_label as _gpl
+            _first_missing = _ms.get("label") or _gpl(
+                _ms.get("slot", "top"), _ms.get("gender", "girl"))
+        else:
+            _first_missing = ""
 
         _btn_dict = get_brief_buttons(
             segment=_segment,
