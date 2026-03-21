@@ -2016,15 +2016,15 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
 
         today_date = _date.today()
         season = SEASONS[today_date.month]
-        outfit = select_outfit(items_shuffled, season, today_date, temp_m, temp_e)
+        _day_type = ("садик" if today_date.weekday() < 5 else "прогулка") if child else ""
 
-        # ── Minimum outfit check: need top+bottom or one_piece ──
-        if not has_minimum_outfit(outfit):
+        # ── Minimum wardrobe check ──
+        from services.outfit_builder import has_minimum_wardrobe
+        if not has_minimum_wardrobe(items):
             try:
                 await status_msg.delete()
             except Exception:
                 pass
-            # Determine what's missing for a helpful CTA
             _has_top = any(i.category_group == "top" for i in items)
             _has_bottom = any(i.category_group == "bottom" for i in items)
             if not _has_top and not _has_bottom:
@@ -2033,7 +2033,6 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                 _cta = "Сфоткай кофту или футболку — соберу образ! 📸"
             else:
                 _cta = "Сфоткай штаны или юбку — соберу образ! 📸"
-            # Show weather card + CTA instead of incomplete collage
             _weather_text = ""
             if temp_m is not None:
                 _sm = "+" if temp_m >= 0 else ""
@@ -2044,7 +2043,6 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             _msg_parts = []
             if _weather_text:
                 _msg_parts.append(_weather_text)
-            # Praise existing items
             _existing_desc = [f"{i.type} {i.color}".strip() for i in items[:3]]
             if _existing_desc:
                 _msg_parts.append(f"В гардеробе: {', '.join(_existing_desc)}")
@@ -2055,12 +2053,70 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             )
             return
 
+        # ── AI Outfit Engine v2 ──
+        from services.outfit_engine import select_outfit_ai
+        from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
+        from core.redis import get_redis as _get_redis_engine
+
+        try:
+            _pool_engine = get_anthropic_pool()
+        except RuntimeError:
+            _r_engine = _get_redis_engine()
+            init_anthropic_pool(_r_engine)
+            _pool_engine = get_anthropic_pool()
+
+        # Fetch rotation history
+        _recent_ids: list[list[str]] = []
+        try:
+            from db.crud.brief_log import get_recent_outfit_item_ids
+            async with AsyncReadSession() as _s_rot:
+                _recent_ids = await get_recent_outfit_item_ids(_s_rot, user.id, days=5)
+        except Exception:
+            pass
+
+        child_name_str = child.name if child else None
+        _child_age = None
+        if child and child.birthdate:
+            _child_age = (today_date - child.birthdate).days // 365
+
+        result = await select_outfit_ai(
+            pool=_pool_engine,
+            items=items_shuffled,
+            season=season,
+            today=today_date,
+            temp_morning=temp_m,
+            temp_evening=temp_e,
+            precip_evening=_weather_data.get("precip_max", 0),
+            segment=getattr(user, "segment", "mom_girl"),
+            child_name=child_name_str,
+            child_age=_child_age,
+            child_gender=getattr(child, "gender", None) if child else None,
+            colortype=colortype_for_outfit,
+            recent_outfit_ids=_recent_ids,
+            day_type=_day_type,
+            redis=redis,
+        )
+
+        outfit = result.outfit
+        comment = result.comment
+
+        # ── Minimum outfit check (AI might have fallback'd) ──
+        if not has_minimum_outfit(outfit):
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+            await message.reply_text(
+                f"Мало вещей для полного образа. {comment}\nСфоткай ещё вещей! 📸",
+                reply_markup=get_main_menu(context.user_data.get("db_user"), context),
+            )
+            return
+
         regime = get_temp_regime(temp_m)
         all_slots = build_outfit_slots(
             outfit, child=child, temp=temp_m, colortype=colortype_for_outfit, regime=regime
         )
 
-        _day_type = ("садик" if today_date.weekday() < 5 else "прогулка") if child else ""
         _collage_params = get_collage_params(
             child=child, user=user, temp=temp_m,
             temp_now=_weather_data.get("temp_now"),
@@ -2069,41 +2125,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             day_type=_day_type,
         )
 
-        # Тёплый комментарий Касси
-        scored = [float(i.score_item) for i in outfit.get("all_items", []) if i.score_item]
-        has_ow = any(s["slot"] == "outerwear" and s.get("has_item") for s in all_slots)
-        missing = [s["slot"] for s in all_slots if not s.get("has_item")]
-        child_name_str = child.name if child else None
-        # Count real photos & get first item description for single-item context
-        _real_count = sum(1 for s in all_slots if s.get("has_item") and (s.get("photo_url") or s.get("photo_id")))
-        _first_desc = ""
-        if _real_count <= 1:
-            for s in all_slots:
-                if s.get("has_item"):
-                    _first_desc = f"{s.get('item_type', '')} {s.get('item_color', '')}".strip().lower()
-                    break
-        # Get previous comment from Redis to avoid repetition
-        _prev_comment = ""
-        if redis:
-            _prev_key = f"last_kassi_comment:{user.id}"
-            try:
-                _prev_raw = await redis.get(_prev_key)
-                if _prev_raw:
-                    _prev_comment = _prev_raw.decode() if isinstance(_prev_raw, bytes) else _prev_raw
-            except Exception:
-                pass
-        if scored:
-            avg = sum(scored) / len(scored)
-            comment = _warm_outfit_comment(
-                avg, child_name_str, temp_m, has_ow, missing,
-                exclude_comment=_prev_comment, real_item_count=_real_count, first_item_desc=_first_desc,
-            )
-        else:
-            comment = _warm_outfit_comment(
-                6.0, child_name_str, temp_m, has_ow, missing,
-                exclude_comment=_prev_comment, real_item_count=_real_count, first_item_desc=_first_desc,
-            )
-        # Store current comment in Redis for next re-roll
+        # Store comment in Redis for re-roll dedup
         if redis:
             try:
                 await redis.set(f"last_kassi_comment:{user.id}", comment, ex=86400)
@@ -2137,7 +2159,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                     weather_summary=f"{temp_m}°C",
                     outfit_description=caption,
                     outfit_items=_outfit_ids,
-                    is_wow=bool(scored and sum(scored) / len(scored) >= 8.0),
+                    is_wow=result.is_wow,
                 )
                 await _s_outfit.commit()
                 _outfit_brief_id = str(_log.id)

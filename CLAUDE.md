@@ -239,7 +239,7 @@ docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
 ## Тестирование
 ```bash
 docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
-# 1016 тестов, pytest-forked для изоляции (21 марта 2026)
+# 1053 теста, pytest-forked для изоляции (21 марта 2026)
 # CI: GitHub Actions запускает тесты на каждый push/PR
 # Pre-push hook: .githooks/pre-push блокирует push если тесты не проходят
 ```
@@ -347,6 +347,18 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - `test_crud.py` (25) — CRUD operations
 - pytest-forked для изоляции тестов
 - CI/CD: GitHub Actions на каждый push/PR
+
+### Outfit Engine v2: AI-powered selection
+- **Новый модуль** `services/outfit_engine.py` — Haiku выбирает комбинацию из кандидатов
+- **Единый вызов**: AI возвращает И выбор вещей И комментарий Касси (вместо двух раздельных вызовов)
+- **Два промпта по сегменту**:
+  - Мама: удобно, тепло, практично, без платья в садик при <10°
+  - Женщина: стильно, цветовая гармония, неожиданные сочетания, цветотип
+- **Ротация**: не повторять вчерашний top+bottom, не повторять образ за 5 дней (BriefLog)
+- **Fallback**: если AI не ответил → rule-based `_select_outfit()` + template comment
+- **Post-validation**: шорты при <10° → замена на штаны
+- **Стоимость**: ~$0.00025/вызов (Haiku), дешевле прежних двух вызовов
+- **Тесты**: 37 тестов (`test_outfit_engine.py`)
 
 ### Outfit generation: 5 фундаментальных фиксов
 - **Фильтрация базового слоя**: носки, трусики, колготки, майки → НИКОГДА фото в коллаже. Только текст "🩲 трусики, носки". `_is_base_layer_item()` в `outfit_builder.py`, фильтр в `build_outfit_slots()`

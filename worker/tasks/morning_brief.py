@@ -710,39 +710,11 @@ async def generate_brief(payload: dict) -> dict:
             )
             continue
 
-        all_outfit_ids.extend(str(i.id) for i in outfit["all_items"])
-        scored = [float(i.score_item) for i in outfit["all_items"] if i.score_item]
-        internal_score = round(sum(scored) / len(scored), 1) if scored else 0.0
-
-        # WOW детектор
-        is_wow_outfit = bool(scored and sum(scored) / len(scored) >= 8.0)
-        if is_wow_outfit:
-            any_wow = True
-
+        # ── AI Outfit Engine v2 ──
         _temp = temp_m if temp_m is not None else 10.0
-        regime = get_temp_regime(_temp)
         colortype = getattr(child, "colortype", None) or "default"
 
-        # Получить матрицу для тона и wow-сообщений
-        from services.scoring import matrix_name_for_owner
-        from db.base import AsyncReadSession as _ARS
-        from db.models.scoring_matrix import ScoringMatrix as _SM
-        from sqlalchemy import select as _select
-        _matrix_name = matrix_name_for_owner(user, child)
-        _matrix = None
-        try:
-            async with _ARS() as _sess:
-                _res = await _sess.execute(
-                    _select(_SM).where(_SM.name == _matrix_name, _SM.is_active.is_(True))
-                )
-                _matrix = _res.scalar_one_or_none()
-        except Exception:
-            pass
-
-        _tone = (_matrix.criteria.get("_tone") or "") if _matrix else ""
-        _wow_msgs = (_matrix.criteria.get("_wow_messages") or []) if _matrix else []
-
-        # Сгенерировать текстовый комментарий через Haiku
+        from services.outfit_engine import select_outfit_ai
         from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
         from core.redis import get_redis as _get_redis
         try:
@@ -752,29 +724,43 @@ async def generate_brief(payload: dict) -> dict:
             init_anthropic_pool(_r)
             _pool = get_anthropic_pool()
 
-        from services.scoring_comment import generate_outfit_comment
+        # Fetch rotation history
+        _recent_ids_brief: list[list[str]] = []
+        try:
+            from db.crud.brief_log import get_recent_outfit_item_ids as _get_rot
+            async with AsyncReadSession() as _s_rot_b:
+                _recent_ids_brief = await _get_rot(_s_rot_b, user.id, days=5)
+        except Exception:
+            pass
+
         child_age = (date.today() - child.birthdate).days // 365
-        weather_str = f"{temp_m:.0f}°C" if temp_m is not None else ""
-        # Count real visual items (exclude base layer)
-        from services.outfit_builder import _is_base_layer_item
-        _visual_items = [i for i in outfit["all_items"] if not _is_base_layer_item(i)]
-        outfit_comment = await generate_outfit_comment(
+        _engine_result = await select_outfit_ai(
             pool=_pool,
-            outfit_items=[f"{i.type} {i.color}" for i in _visual_items],
-            weather=weather_str,
-            context=day_type,
-            score=internal_score,
-            is_wow=is_wow_outfit,
+            items=items,
+            season=season,
+            today=today,
+            temp_morning=_temp,
+            temp_evening=temp_e or _temp,
+            precip_evening=precip_e or 0,
+            segment=getattr(user, "segment", "mom_girl"),
             child_name=child.name,
-            gender=getattr(child, "gender", None),
-            age=child_age,
-            tone=_tone,
-            wow_messages=_wow_msgs,
-            colortype=getattr(child, "colortype", None) or getattr(user, "colortype", None),
-            segment=getattr(user, "segment", None),
+            child_age=child_age,
+            child_gender=getattr(child, "gender", None),
+            colortype=colortype,
+            recent_outfit_ids=_recent_ids_brief,
+            day_type=day_type,
             redis=redis_client,
-            item_count=len(_visual_items),
         )
+
+        outfit = _engine_result.outfit
+        outfit_comment = _engine_result.comment
+        is_wow_outfit = _engine_result.is_wow
+
+        all_outfit_ids.extend(str(i.id) for i in outfit["all_items"])
+        if is_wow_outfit:
+            any_wow = True
+
+        regime = get_temp_regime(_temp)
 
         child_briefs.append(_format_child_block(
             child.name, day_type, outfit, outfit_comment,
@@ -1561,7 +1547,35 @@ async def generate_evening_brief(payload: dict) -> dict:
             continue
 
         day_type = "садик" if tomorrow.weekday() < 5 else "прогулка"
-        outfit = _sel_outfit_eve(items, season, tomorrow, temp_m, temp_e, precip_e)
+
+        # ── AI Outfit Engine v2 for evening push ──
+        from services.outfit_engine import select_outfit_ai as _sel_ai_eve
+        from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
+        try:
+            _pool_ch = get_anthropic_pool()
+        except RuntimeError:
+            init_anthropic_pool(redis_client)
+            _pool_ch = get_anthropic_pool()
+
+        child_age = (date.today() - child.birthdate).days // 365 if child.birthdate else None
+        _eve_result = await _sel_ai_eve(
+            pool=_pool_ch,
+            items=items,
+            season=season,
+            today=tomorrow,
+            temp_morning=temp_m or 10.0,
+            temp_evening=temp_e or temp_m or 10.0,
+            precip_evening=precip_e or 0,
+            segment=getattr(user, "segment", "mom_girl"),
+            child_name=child.name,
+            child_age=child_age,
+            child_gender=getattr(child, "gender", None),
+            colortype=getattr(child, "colortype", None) or "default",
+            day_type=day_type,
+            redis=redis_client,
+        )
+
+        outfit = _eve_result.outfit
         if not outfit:
             continue
 
@@ -1573,45 +1587,8 @@ async def generate_evening_brief(payload: dict) -> dict:
         outfit_ids = [str(v.id) for v in outfit.get("all_items", []) if hasattr(v, "id")]
         all_outfit_ids.extend(outfit_ids)
 
-        # Generate Haiku comment for the outfit
-        from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
-        from services.scoring_comment import generate_outfit_comment
-        try:
-            _pool_ch = get_anthropic_pool()
-        except RuntimeError:
-            init_anthropic_pool(redis_client)
-            _pool_ch = get_anthropic_pool()
-
-        child_age = (date.today() - child.birthdate).days // 365 if child.birthdate else None
-        scored = [float(i.score_item) for i in outfit.get("all_items", []) if i.score_item]
-        _score = round(sum(scored) / len(scored), 1) if scored else 0.0
-
-        # Count visual items (exclude base layer)
-        from services.outfit_builder import _is_base_layer_item as _is_bl_eve
-        _visual_eve = [i for i in outfit.get("all_items", []) if not _is_bl_eve(i)]
-        try:
-            _comment = await generate_outfit_comment(
-                pool=_pool_ch,
-                outfit_items=[f"{i.type} {i.color}" for i in _visual_eve],
-                weather=f"{temp_m:.0f}°C" if temp_m else "",
-                context=day_type,
-                score=_score,
-                is_wow=False,
-                child_name=child.name,
-                gender=getattr(child, "gender", None),
-                age=child_age,
-                tone="",
-                wow_messages=[],
-                colortype=getattr(child, "colortype", None) or getattr(user, "colortype", None),
-                segment=getattr(user, "segment", None),
-                redis=redis_client,
-                item_count=len(_visual_eve),
-            )
-        except Exception:
-            _comment = ""
-
         child_brief = _format_child_block(
-            child.name, day_type, outfit, _comment, temp=temp_m,
+            child.name, day_type, outfit, _eve_result.comment, temp=temp_m,
         )
         child_briefs.append(child_brief)
 

@@ -42,6 +42,29 @@ async def count_user_briefs(session: AsyncSession, user_id: uuid.UUID) -> int:
     ) or 0
 
 
+async def get_recent_outfit_item_ids(
+    session: AsyncSession, user_id: uuid.UUID, days: int = 5,
+) -> list[list[str]]:
+    """Return outfit_items from last N days' briefs, newest first.
+
+    Used by outfit_engine for rotation constraint (don't repeat outfits).
+    """
+    from datetime import date as _date, timedelta as _td
+    cutoff = _date.today() - _td(days=days)
+    result = await session.execute(
+        select(BriefLog.outfit_items)
+        .where(
+            BriefLog.user_id == user_id,
+            BriefLog.date >= cutoff,
+            BriefLog.outfit_items.isnot(None),
+        )
+        .order_by(BriefLog.date.desc())
+        .limit(days * 3)  # allow multiple briefs per day
+    )
+    rows = result.scalars().all()
+    return [r for r in rows if isinstance(r, list) and r]
+
+
 async def count_liked_briefs(session: AsyncSession, user_id: uuid.UUID) -> int:
     from sqlalchemy import func as _func
     from sqlalchemy import select as _sel
