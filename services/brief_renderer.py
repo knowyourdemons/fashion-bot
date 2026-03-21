@@ -262,8 +262,7 @@ def prepare_items_hybrid(outfit_slots: list[dict]) -> tuple[list[dict], list[dic
             photo_b64 = ""
             if s.get("_photo_bytes"):
                 try:
-                    trimmed = _auto_trim(s["_photo_bytes"])
-                    photo_b64 = base64.b64encode(trimmed).decode()
+                    photo_b64 = base64.b64encode(s["_photo_bytes"]).decode()
                 except Exception:
                     photo_b64 = ""
 
@@ -313,8 +312,7 @@ def prepare_items_full(outfit_slots: list[dict]) -> list[dict]:
         photo_b64 = ""
         if s.get("_photo_bytes"):
             try:
-                trimmed = _auto_trim(s["_photo_bytes"])
-                photo_b64 = base64.b64encode(trimmed).decode()
+                photo_b64 = base64.b64encode(s["_photo_bytes"]).decode()
             except Exception:
                 photo_b64 = ""
 

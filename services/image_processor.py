@@ -123,6 +123,143 @@ def _run_rmbg14(image_bytes: bytes) -> bytes:
     img_rgba.save(buf, format="PNG")
     return buf.getvalue()
 
+
+# ── Collage thumbnail pipeline ─────────────────────────────────────
+
+THUMB_SIZE = 400  # retina for 200px card
+
+
+def exif_rotate(image_bytes: bytes) -> bytes:
+    """Apply EXIF orientation and strip EXIF. Must be first in pipeline."""
+    from PIL import ImageOps
+    img = Image.open(io.BytesIO(image_bytes))
+    img = ImageOps.exif_transpose(img)
+    buf = io.BytesIO()
+    fmt = "PNG" if img.mode == "RGBA" else "JPEG"
+    img.save(buf, format=fmt, quality=90)
+    return buf.getvalue()
+
+
+def auto_brightness(image_bytes: bytes) -> bytes:
+    """Gentle brightness/contrast correction for dark phone photos."""
+    from PIL import ImageOps, ImageStat
+    img = Image.open(io.BytesIO(image_bytes))
+    if img.mode == "RGBA":
+        # Only adjust RGB channels, preserve alpha
+        r, g, b, a = img.split()
+        rgb = Image.merge("RGB", (r, g, b))
+        stat = ImageStat.Stat(rgb)
+        mean_brightness = sum(stat.mean) / 3.0
+        # Only correct if genuinely dark (< 90 out of 255)
+        if mean_brightness < 90:
+            rgb = ImageOps.autocontrast(rgb, cutoff=1)
+        result = rgb.convert("RGBA")
+        result.putalpha(a)
+    else:
+        stat = ImageStat.Stat(img.convert("RGB"))
+        mean_brightness = sum(stat.mean) / 3.0
+        if mean_brightness < 90:
+            img = ImageOps.autocontrast(img.convert("RGB"), cutoff=1)
+        result = img
+    buf = io.BytesIO()
+    fmt = "PNG" if result.mode == "RGBA" else "JPEG"
+    result.save(buf, format=fmt, quality=90)
+    return buf.getvalue()
+
+
+def soften_edges(png_bytes: bytes, radius: float = 1.5) -> bytes:
+    """Gaussian blur on alpha channel to smooth rembg artifacts."""
+    from PIL import ImageFilter
+    img = Image.open(io.BytesIO(png_bytes))
+    if img.mode != "RGBA":
+        return png_bytes
+    r, g, b, a = img.split()
+    a = a.filter(ImageFilter.GaussianBlur(radius=radius))
+    img = Image.merge("RGBA", (r, g, b, a))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def pad_square_resize(png_bytes: bytes, size: int = THUMB_SIZE) -> bytes:
+    """Auto-trim transparent edges, pad to square, resize to size×size."""
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+
+    # Auto-trim: crop to non-transparent bounding box
+    alpha = img.split()[3]
+    bbox = alpha.getbbox()
+    if bbox:
+        # 5% padding
+        w, h = img.size
+        pad_x = int((bbox[2] - bbox[0]) * 0.05)
+        pad_y = int((bbox[3] - bbox[1]) * 0.05)
+        bbox = (
+            max(0, bbox[0] - pad_x), max(0, bbox[1] - pad_y),
+            min(w, bbox[2] + pad_x), min(h, bbox[3] + pad_y),
+        )
+        img = img.crop(bbox)
+
+    # Pad to square
+    w, h = img.size
+    side = max(w, h)
+    square = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    square.paste(img, ((side - w) // 2, (side - h) // 2))
+
+    # Resize to target
+    square = square.resize((size, size), Image.LANCZOS)
+
+    buf = io.BytesIO()
+    square.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
+
+def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) -> bytes:
+    """Full thumbnail pipeline for collage display.
+
+    Pipeline: EXIF rotate → auto-brightness → [bg removal] → edge softening
+              → auto-trim → pad square → resize 400×400
+
+    Args:
+        photo_bytes: raw image bytes (JPEG or PNG)
+        needs_bg_removal: if True, run RMBG-1.4 (skip if already bg-removed RGBA)
+    Returns:
+        PNG bytes 400×400 RGBA ready for collage
+    """
+    # 1. EXIF rotate
+    result = exif_rotate(photo_bytes)
+
+    # 2. Background removal (if needed)
+    if needs_bg_removal:
+        img_check = Image.open(io.BytesIO(result))
+        if img_check.mode not in ("RGBA", "LA", "PA"):
+            # Auto-brightness BEFORE bg removal (helps RMBG with dark photos)
+            result = auto_brightness(result)
+            model = _get_bg_removal_model()
+            try:
+                if model == "rmbg14":
+                    result = _run_rmbg14(result)
+                else:
+                    result = _run_silueta(result)
+            except Exception:
+                try:
+                    result = _run_silueta(result)
+                except Exception:
+                    pass  # keep original if all fail
+
+    # 3. Edge softening (only if has alpha)
+    img_check = Image.open(io.BytesIO(result))
+    if img_check.mode == "RGBA":
+        result = soften_edges(result, radius=1.5)
+    else:
+        # No alpha — apply brightness anyway
+        result = auto_brightness(result)
+
+    # 4. Auto-trim + pad to square + resize
+    result = pad_square_resize(result, THUMB_SIZE)
+
+    return result
+
+
 MAX_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB
 MAX_DIMENSION = 1024
 PHASH_THRESHOLD = 5  # порог схожести хешей (0=identical, 64=max diff; 5 = same photo with JPEG artifacts)

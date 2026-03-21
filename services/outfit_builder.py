@@ -183,6 +183,7 @@ def build_outfit_slots(
             seen.add(slot_key)
             slots.append({
                 "slot": slot_key,
+                "item_id": str(item.id) if hasattr(item, "id") else "",
                 "item_type": item.type,
                 "item_color": getattr(item, "color", "") or "",
                 "photo_id": item.photo_id,

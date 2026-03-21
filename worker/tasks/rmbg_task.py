@@ -45,6 +45,13 @@ async def process_rmbg(payload: dict) -> dict:
         logger.warning("rmbg_process.empty_photo", item_id=str(item_id))
         return {"status": "skip", "reason": "empty_photo"}
 
+    # 1b. EXIF rotate (phone photos may be sideways)
+    from services.image_processor import exif_rotate
+    try:
+        photo_bytes = exif_rotate(photo_bytes)
+    except Exception as e:
+        logger.warning("rmbg_process.exif_failed", error=str(e))
+
     # 2. Crop by bbox (if available)
     if bbox:
         from services.vision import _crop_bbox, _check_crop_quality
@@ -66,6 +73,13 @@ async def process_rmbg(payload: dict) -> dict:
         pass
 
     png_bytes = await remove_background(crop_bytes, redis=redis)
+
+    # 3b. Edge softening (smooth rembg artifacts)
+    from services.image_processor import soften_edges
+    try:
+        png_bytes = soften_edges(png_bytes, radius=1.5)
+    except Exception:
+        pass
 
     # 4. Check crop quality
     good_crop = True
@@ -111,7 +125,21 @@ async def process_rmbg(payload: dict) -> dict:
         good_crop=good_crop,
     )
 
-    # 7. Invalidate wardrobe summary cache
+    # 7. Generate and cache collage thumbnail (400×400 retina)
+    if redis:
+        try:
+            from services.image_processor import pad_square_resize, auto_brightness
+            import base64 as _b64
+            # png_bytes is already bg-removed + edge-softened
+            thumb_bytes = auto_brightness(png_bytes)
+            thumb_bytes = pad_square_resize(thumb_bytes, 400)
+            thumb_b64 = _b64.b64encode(thumb_bytes).decode()
+            await redis.set(f"thumb:{item_id}", thumb_b64, ex=86400 * 7)  # 7 day TTL
+            logger.info("rmbg_process.thumb_cached", item_id=str(item_id), size=len(thumb_bytes))
+        except Exception as e:
+            logger.warning("rmbg_process.thumb_failed", error=str(e))
+
+    # 8. Invalidate wardrobe summary cache
     if redis and owner_id:
         try:
             await redis.delete(f"wardrobe_summary:{owner_id}")

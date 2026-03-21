@@ -56,44 +56,54 @@ def _count_real_photos(outfit_slots: list[dict]) -> int:
 
 # ── Download photos ──────────────────────────────────────────────────────────
 
-def _has_alpha(photo_bytes: bytes) -> bool:
-    """Check if photo bytes represent an image with alpha channel (PNG RGBA)."""
+async def _get_cached_thumb(item_id: str) -> bytes | None:
+    """Check Redis for cached collage thumbnail."""
+    if not item_id:
+        return None
     try:
-        from PIL import Image
-        import io
-        img = Image.open(io.BytesIO(photo_bytes))
-        return img.mode in ("RGBA", "LA", "PA")
+        from core.redis import get_redis
+        import base64 as _b64
+        redis = get_redis()
+        raw = await redis.get(f"thumb:{item_id}")
+        if raw:
+            b64_str = raw.decode() if isinstance(raw, bytes) else raw
+            return _b64.b64decode(b64_str)
     except Exception:
-        return False
+        pass
+    return None
 
 
-async def _ensure_bg_removed(photo_bytes: bytes) -> bytes:
-    """If photo has no alpha (original JPEG), run bg removal inline.
-
-    Returns PNG with transparency. Falls back to original on error.
-    """
-    if _has_alpha(photo_bytes):
-        return photo_bytes
-
+async def _cache_thumb(item_id: str, thumb_bytes: bytes) -> None:
+    """Cache collage thumbnail in Redis (7 day TTL)."""
+    if not item_id:
+        return
     try:
-        import asyncio
-        from services.image_processor import remove_background
-        result = await remove_background(photo_bytes)
-        if result and _has_alpha(result):
-            logger.info("brief_card.inline_rmbg_ok", size=len(result))
-            return result
-        # rmbg returned original (no API key, all models failed)
-        return photo_bytes
+        from core.redis import get_redis
+        import base64 as _b64
+        redis = get_redis()
+        b64_str = _b64.b64encode(thumb_bytes).decode()
+        await redis.set(f"thumb:{item_id}", b64_str, ex=86400 * 7)
+    except Exception:
+        pass
+
+
+async def _make_thumb_inline(photo_bytes: bytes) -> bytes:
+    """Full thumbnail pipeline inline: EXIF → brightness → rembg → edges → pad → resize."""
+    try:
+        from services.image_processor import make_collage_thumbnail
+        return make_collage_thumbnail(photo_bytes, needs_bg_removal=True)
     except Exception as e:
-        logger.warning("brief_card.inline_rmbg_failed", error=str(e))
+        logger.warning("brief_card.inline_thumb_failed", error=str(e))
         return photo_bytes
 
 
 async def _download_slot_photos(outfit_slots: list[dict]) -> None:
-    """Download photos for slots that have photo_id/photo_url but no _photo_bytes.
+    """Download photos for slots, using cached thumbnails when available.
 
-    Prefers photo_url (R2, bg-removed). If only photo_id (Telegram original),
-    downloads and runs bg removal inline to ensure clean collage photos.
+    Priority:
+      1. Redis thumb cache (thumb:{item_id}) — instant, pre-processed
+      2. R2 photo_url (bg-removed) → thumbnail pipeline
+      3. Telegram photo_id (original) → full pipeline with bg removal
     """
     import httpx
     from services.image_builder import _download_photo
@@ -109,27 +119,46 @@ async def _download_slot_photos(outfit_slots: list[dict]) -> None:
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         for slot in need_download:
+            item_id = slot.get("item_id", "")
             try:
+                # 1. Check Redis thumbnail cache
+                cached = await _get_cached_thumb(item_id)
+                if cached:
+                    slot["_photo_bytes"] = cached
+                    logger.info("brief_card.thumb_cache_hit", slot=slot.get("slot"))
+                    continue
+
+                # 2. Download photo (prefers R2 bg-removed, falls back to Telegram)
                 photo_bytes = await _download_photo(
                     client,
                     slot.get("photo_id") or "",
                     slot.get("photo_url"),
                 )
-                if photo_bytes:
-                    # Ensure bg is removed (R2 photos already are, Telegram originals need it)
-                    photo_bytes = await _ensure_bg_removed(photo_bytes)
-                    slot["_photo_bytes"] = photo_bytes
-                    logger.info(
-                        "brief_card.photo_ok",
-                        slot=slot.get("slot"),
-                        size=len(photo_bytes),
-                        has_alpha=_has_alpha(photo_bytes),
-                    )
-                else:
-                    logger.warning(
-                        "brief_card.photo_empty",
-                        slot=slot.get("slot"),
-                    )
+                if not photo_bytes:
+                    logger.warning("brief_card.photo_empty", slot=slot.get("slot"))
+                    continue
+
+                # 3. Build thumbnail (EXIF → brightness → rembg → edges → pad → resize)
+                from services.image_processor import make_collage_thumbnail
+                from PIL import Image
+                import io as _io
+
+                # Check if already bg-removed (from R2)
+                img_check = Image.open(_io.BytesIO(photo_bytes))
+                needs_rembg = img_check.mode not in ("RGBA", "LA", "PA")
+
+                thumb = make_collage_thumbnail(photo_bytes, needs_bg_removal=needs_rembg)
+                slot["_photo_bytes"] = thumb
+
+                # Cache for next time
+                await _cache_thumb(item_id, thumb)
+
+                logger.info(
+                    "brief_card.thumb_built",
+                    slot=slot.get("slot"),
+                    size=len(thumb),
+                    rembg=needs_rembg,
+                )
             except Exception as e:
                 logger.warning(
                     "brief_card.photo_failed",

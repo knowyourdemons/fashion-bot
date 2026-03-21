@@ -209,7 +209,7 @@ async def _load_existing_set(owner_id: uuid.UUID, owner_type: str = "user") -> s
 # ── Guided first 5 minutes (hints after each photo) ───────────────────────
 
 _GUIDED_HINTS = {
-    1: "🎉 Первая! Ещё 2 — покажу мини-образ.",
+    1: "🎉 Первая! Ещё 2 — покажу мини-образ.\n\n💡 Совет: расправь вещь на светлом фоне — образы будут красивее!",
     2: "Супер! Штаны или юбку? 👖",
     # 3 handled by milestone (mini_outfit)
 }
