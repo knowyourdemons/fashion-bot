@@ -498,14 +498,16 @@ class TestCommentItemCount:
         assert "вещь" in low or "выбор" in low or "штаны" in low or "люблю" in low
 
     def test_warm_outfit_comment_multiple_items(self):
-        """warm_outfit_comment with many items can mention 'образ'."""
+        """warm_outfit_comment with many items should NOT use single-item templates."""
         from services.outfit_builder import warm_outfit_comment
         comment = warm_outfit_comment(
             score=8.5,
             child_name="Алиса",
             real_item_count=5,
         )
-        assert "образ" in comment.lower() or "сочетается" in comment.lower()
+        # With 5 items and no first_item_desc, should NOT use single-item templates
+        assert "добавь ещё пару" not in comment.lower()
+        assert "сфоткай ещё" not in comment.lower()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
