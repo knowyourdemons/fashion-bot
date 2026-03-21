@@ -31,36 +31,39 @@ logger = structlog.get_logger()
 
 WARMTH_REQUIREMENTS: dict[str, dict[str, tuple[int, int] | None]] = {
     "жара": {  # > 25°C
-        "top": (1, 2), "bottom": (1, 2), "one_piece": (1, 2),
+        "top": (1, 3), "bottom": (1, 2), "one_piece": (1, 2),
         "outerwear": None, "footwear": (1, 2),
-        "hat": (1, 1), "scarf": None, "gloves": None,
+        "hat": (1, 2), "scarf": None, "gloves": None,
     },
     "тепло": {  # 15-25°C
-        "top": (1, 3), "bottom": (1, 3), "one_piece": (1, 3),
-        "outerwear": (1, 2), "footwear": (1, 3),
+        "top": (1, 4), "bottom": (1, 3), "one_piece": (1, 3),
+        "outerwear": (1, 3), "footwear": (1, 3),
         "hat": None, "scarf": None, "gloves": None,
     },
     "прохладно": {  # 10-15°C
-        "top": (2, 4), "bottom": (2, 4), "one_piece": (2, 4),
-        "outerwear": (2, 3), "footwear": (2, 4),
+        "top": (1, 4), "bottom": (1, 4), "one_piece": (1, 4),
+        "outerwear": (2, 4), "footwear": (1, 4),
         "hat": None, "scarf": None, "gloves": None,
     },
     "холодно": {  # 5-10°C
-        "top": (3, 5), "bottom": (2, 4), "one_piece": (3, 5),
-        "outerwear": (3, 4), "footwear": (2, 4),
-        "hat": (3, 5), "scarf": None, "gloves": None,
+        "top": (2, 5), "bottom": (2, 5), "one_piece": (2, 5),
+        "outerwear": (2, 5), "footwear": (2, 5),
+        "hat": (2, 5), "scarf": None, "gloves": None,
     },
     "мороз": {  # 0-5°C
-        "top": (3, 5), "bottom": (3, 5), "one_piece": None,
-        "outerwear": (4, 5), "footwear": (3, 5),
-        "hat": (3, 5), "scarf": (3, 5), "gloves": None,
+        "top": (2, 5), "bottom": (2, 5), "one_piece": None,
+        "outerwear": (3, 5), "footwear": (2, 5),
+        "hat": (2, 5), "scarf": (2, 5), "gloves": None,
     },
     "сильный_мороз": {  # < 0°C
-        "top": (4, 5), "bottom": (3, 5), "one_piece": None,
-        "outerwear": (4, 5), "footwear": (4, 5),
-        "hat": (4, 5), "scarf": (4, 5), "gloves": (3, 5),
+        "top": (3, 5), "bottom": (3, 5), "one_piece": None,
+        "outerwear": (4, 5), "footwear": (3, 5),
+        "hat": (3, 5), "scarf": (3, 5), "gloves": (3, 5),
     },
 }
+# Note: ranges are intentionally wide. AI picks the BEST option from candidates.
+# Warmth filter only removes clearly absurd items (t-shirt at -10°C).
+# AI prompt handles nuance (prefer warmer items when cold).
 
 # Style clashes (only enforced for women segments)
 _STYLE_CLASHES = [
@@ -74,6 +77,8 @@ def _filter_by_warmth(items: list, regime: str) -> list:
     """Filter items by warmth requirements for temperature regime.
 
     Items without warmth_level are kept (graceful degradation).
+    If filtering would remove too many items (< 2 per needed slot),
+    returns original list (better to show something than nothing).
     """
     reqs = WARMTH_REQUIREMENTS.get(regime, {})
     if not reqs:
@@ -93,12 +98,15 @@ def _filter_by_warmth(items: list, regime: str) -> list:
         min_w, max_w = req
         if min_w <= wl <= max_w:
             filtered.append(item)
-        else:
-            logger.debug(
-                "outfit_engine.warmth_filtered",
-                type=getattr(item, "type", ""),
-                warmth=wl, required=(min_w, max_w), regime=regime,
-            )
+
+    # Graceful degradation: if filtering removed too much, skip it
+    if len(filtered) < max(2, len(items) // 3):
+        logger.info(
+            "outfit_engine.warmth_filter_too_aggressive",
+            original=len(items), filtered=len(filtered), regime=regime,
+        )
+        return items
+
     return filtered
 
 
@@ -192,10 +200,12 @@ _SYSTEM_MOM = """Ты стилист Касси. Подбираешь одежд
   "is_wow": false
 }
 
-- Включай ТОЛЬКО слоты для которых выбрал вещь.
-- UUID бери из списка кандидатов.
+- Включай ТОЛЬКО слоты для которых выбрал вещь из списка.
+- UUID бери ТОЛЬКО из списка кандидатов. НИКОГДА не пиши текст вместо UUID.
+- Если для слота нет подходящей вещи — ПРОПУСТИ этот слот, не включай его.
 - comment = комментарий Касси к образу. НЕ упоминай числовой скор.
-- is_wow = true если образ особенно удачный (цвета + стиль + сезон)."""
+- is_wow = true если образ особенно удачный (цвета + стиль + сезон).
+- При холодной погоде: предпочитай более тёплые вещи (warmth 3-4)."""
 
 _SYSTEM_WOMAN = """Ты стилист Касси. Подбираешь образ для женщины.
 
@@ -216,10 +226,12 @@ _SYSTEM_WOMAN = """Ты стилист Касси. Подбираешь обра
   "is_wow": false
 }
 
-- Включай ТОЛЬКО слоты для которых выбрал вещь.
-- UUID бери из списка кандидатов.
+- Включай ТОЛЬКО слоты для которых выбрал вещь из списка.
+- UUID бери ТОЛЬКО из списка кандидатов. НИКОГДА не пиши текст вместо UUID.
+- Если для слота нет подходящей вещи — ПРОПУСТИ этот слот, не включай его.
 - comment = стилистический разбор. НЕ упоминай числовой скор.
-- is_wow = true если образ особенно стильный."""
+- is_wow = true если образ особенно стильный.
+- При холодной погоде: предпочитай более тёплые вещи (warmth 3-4)."""
 
 # ── Item serialization ───────────────────────────────────────────────────────
 
@@ -258,6 +270,7 @@ def _build_candidates(items: list, season: str, today: date, regime: str = "") -
         i for i in items
         if (not i.season or season in i.season)
         and not _is_base_layer_item(i)
+        and getattr(i, "style_tag", "") != "home"  # exclude pajamas/home clothes
     ]
 
     # Warmth pre-filter: remove items clearly wrong for temperature
@@ -458,7 +471,11 @@ def _parse_ai_response(raw: str, items_by_id: dict) -> tuple[dict, str, bool] | 
     # Map UUIDs back to items (match by prefix)
     slot_items: dict[str, object] = {}
     for slot, uid_str in items_dict.items():
-        if not uid_str:
+        if not uid_str or not isinstance(uid_str, str):
+            continue
+        # Skip text values (AI sometimes writes "нет подходящих" instead of UUID)
+        if len(uid_str) < 8 or not any(c in uid_str for c in "0123456789abcdef-"):
+            logger.debug("outfit_engine.skipping_text_value", slot=slot, value=uid_str[:20])
             continue
         # Try exact match first, then prefix match
         item = items_by_id.get(uid_str)
@@ -471,7 +488,7 @@ def _parse_ai_response(raw: str, items_by_id: dict) -> tuple[dict, str, bool] | 
         if item:
             slot_items[slot] = item
         else:
-            logger.warning("outfit_engine.uuid_not_found", slot=slot, uuid=uid_str[:12])
+            logger.debug("outfit_engine.uuid_not_found", slot=slot, uuid=uid_str[:12])
 
     if not slot_items:
         return None

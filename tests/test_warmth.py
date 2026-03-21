@@ -46,7 +46,7 @@ class TestWarmthRequirements:
         from services.outfit_engine import WARMTH_REQUIREMENTS
         req = WARMTH_REQUIREMENTS["мороз"]["outerwear"]
         assert req is not None
-        assert req[0] >= 4  # minimum warmth 4
+        assert req[0] >= 3  # minimum warmth 3
 
     def test_hot_no_outerwear_needed(self):
         from services.outfit_engine import WARMTH_REQUIREMENTS
@@ -56,7 +56,7 @@ class TestWarmthRequirements:
         from services.outfit_engine import WARMTH_REQUIREMENTS
         req = WARMTH_REQUIREMENTS["сильный_мороз"]["hat"]
         assert req is not None
-        assert req[0] >= 4
+        assert req[0] >= 3
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -64,13 +64,15 @@ class TestWarmthRequirements:
 # ══════════════════════════════════════════════════════════════════════════════
 
 class TestWarmthFiltering:
-    def test_tshirt_filtered_at_frost(self):
+    def test_tshirt_filtered_at_severe_frost(self):
+        """T-shirt (warmth=1) filtered at сильный_мороз (top requires 3+)."""
         from services.outfit_engine import _filter_by_warmth
         items = [
             _item("top", "футболка", warmth=1),
             _item("top", "свитер", warmth=4),
+            _item("top", "кофта", warmth=3),
         ]
-        result = _filter_by_warmth(items, "мороз")
+        result = _filter_by_warmth(items, "сильный_мороз")
         types = [i.type for i in result]
         assert "футболка" not in types
         assert "свитер" in types
@@ -100,24 +102,28 @@ class TestWarmthFiltering:
         result = _filter_by_warmth(items, "прохладно")
         assert len(result) == 1
 
-    def test_shorts_filtered_at_cold(self):
+    def test_shorts_filtered_at_freezing(self):
+        """Shorts (warmth=1) filtered at сильный_мороз (requires 3+)."""
         from services.outfit_engine import _filter_by_warmth
         items = [
             _item("bottom", "шорты", warmth=1),
             _item("bottom", "джинсы", warmth=3),
+            _item("bottom", "тёплые штаны", warmth=4),
         ]
-        result = _filter_by_warmth(items, "холодно")
+        result = _filter_by_warmth(items, "сильный_мороз")
         types = [i.type for i in result]
         assert "шорты" not in types
         assert "джинсы" in types
 
-    def test_sandals_filtered_at_cold(self):
+    def test_sandals_filtered_at_freezing(self):
+        """Sandals (warmth=1) filtered at сильный_мороз (requires 3+)."""
         from services.outfit_engine import _filter_by_warmth
         items = [
             _item("footwear", "сандалии", warmth=1),
             _item("footwear", "ботинки", warmth=3),
+            _item("footwear", "зимние ботинки", warmth=4),
         ]
-        result = _filter_by_warmth(items, "холодно")
+        result = _filter_by_warmth(items, "сильный_мороз")
         types = [i.type for i in result]
         assert "сандалии" not in types
         assert "ботинки" in types
@@ -236,16 +242,20 @@ class TestMissingWarmthCTA:
 
 class TestCandidatesWithWarmth:
     def test_candidates_filtered_by_regime(self):
+        """At сильный_мороз, warmth=1 items are filtered (requires 3+)."""
         from services.outfit_engine import _build_candidates
         items = [
             _item("top", "футболка", warmth=1),
             _item("top", "свитер", warmth=4),
+            _item("top", "кофта", warmth=3),
             _item("bottom", "шорты", warmth=1),
             _item("bottom", "джинсы", warmth=3),
+            _item("bottom", "тёплые штаны", warmth=4),
             _item("footwear", "сандалии", warmth=1),
             _item("footwear", "ботинки", warmth=3),
+            _item("footwear", "зимние ботинки", warmth=4),
         ]
-        candidates = _build_candidates(items, "spring", date.today(), regime="холодно")
+        candidates = _build_candidates(items, "spring", date.today(), regime="сильный_мороз")
         top_types = [c["type"] for c in candidates.get("top", [])]
         bottom_types = [c["type"] for c in candidates.get("bottom", [])]
         assert "футболка" not in top_types
@@ -253,17 +263,18 @@ class TestCandidatesWithWarmth:
         assert "шорты" not in bottom_types
         assert "джинсы" in bottom_types
 
-    def test_all_summer_at_winter_empty(self):
-        """All summer items at cold temp → no candidates."""
+    def test_all_summer_at_freezing_graceful(self):
+        """All summer items at freezing → graceful degradation keeps them."""
         from services.outfit_engine import _build_candidates
         items = [
             _item("top", "футболка", warmth=1),
             _item("bottom", "шорты", warmth=1),
             _item("footwear", "сандалии", warmth=1),
         ]
-        candidates = _build_candidates(items, "winter", date.today(), regime="мороз")
+        # Warmth filter would remove all 3, but graceful degradation keeps them
+        candidates = _build_candidates(items, "winter", date.today(), regime="сильный_мороз")
         total = sum(len(v) for v in candidates.values())
-        assert total == 0
+        assert total == 3  # all kept due to graceful degradation
 
     def test_serialization_includes_warmth(self):
         from services.outfit_engine import _serialize_item
@@ -284,16 +295,19 @@ class TestCandidatesWithWarmth:
 # ══════════════════════════════════════════════════════════════════════════════
 
 class TestImpossibleOutfits:
-    def test_tshirt_plus_leggings_at_2c_not_shown(self):
-        """T-shirt (warmth=1) + leggings at +2° → warmth filter removes tshirt."""
+    def test_tshirt_filtered_at_severe_frost(self):
+        """T-shirt (warmth=1) at severe frost (requires 3+) → filtered."""
         from services.outfit_engine import _filter_by_warmth
         items = [
             _item("top", "футболка", warmth=1),
-            _item("bottom", "леггинсы", warmth=2),
+            _item("top", "свитер", warmth=4),
+            _item("bottom", "тёплые штаны", warmth=4),
         ]
-        filtered = _filter_by_warmth(items, "мороз")  # 0-5°C
+        filtered = _filter_by_warmth(items, "сильный_мороз")  # < 0°C
         top_items = [i for i in filtered if i.category_group == "top"]
-        assert len(top_items) == 0  # tshirt too light
+        types = [i.type for i in top_items]
+        assert "футболка" not in types
+        assert "свитер" in types
 
     def test_puffer_plus_shorts_impossible(self):
         """Puffer (warmth=5) + shorts (warmth=1) → consistency check fails."""
