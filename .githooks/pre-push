@@ -1,0 +1,22 @@
+#!/bin/bash
+# Pre-push hook: run tests before allowing push
+# If tests fail, push is blocked.
+
+echo "🧪 Running tests before push..."
+
+# Run tests inside Docker container (where all deps are)
+result=$(docker exec docker-app-1 python3 -m pytest /app/tests/ -q --forked --tb=line 2>&1)
+exit_code=$?
+
+# Show summary
+echo "$result" | tail -3
+
+if [ $exit_code -ne 0 ]; then
+    echo ""
+    echo "❌ Tests failed — push blocked."
+    echo "Fix the failures and try again."
+    exit 1
+fi
+
+echo "✅ Tests passed — pushing."
+exit 0
