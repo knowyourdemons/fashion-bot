@@ -1752,6 +1752,10 @@ async def _process_media_group(
             if _cta:
                 _final += f"\n{_cta}"
 
+            # Multi-item hint
+            if total_added > 1:
+                _final += "\n\n💡 Для лучшего качества — фоткай по одной вещи"
+
             await _safe_edit_text(progress_msg, _final)
         elif total_added == 0:
             await _safe_edit_text(
@@ -1769,6 +1773,10 @@ async def _process_media_group(
             _hint = _get_guided_hint(_current_count)
             if _hint:
                 _final_multi += _hint
+        # Multi-item per photo hint
+        _any_multi = any("и ещё" in line for line in photo_lines)
+        if _any_multi or total_added > total:
+            _final_multi += "\n\n💡 Для лучшего качества — фоткай по одной вещи"
         await _safe_edit_text(progress_msg, _final_multi)
 
     if total_added > 0:
@@ -1928,7 +1936,7 @@ async def handle_add_items_hint(update: Update, context: ContextTypes.DEFAULT_TY
 
 # ── handle_outfit_request (кнопка Образ дня из Гардероба) ───────────────────
 
-async def _generate_outfit_for_user(message, user, context, exclude_ids: set | None = None) -> None:
+async def _generate_outfit_for_user(message, user, context, exclude_ids: set | None = None, silent_status: bool = False) -> None:
     """Общая логика генерации образа. Вызывается из меню и из inline-кнопки гардероба."""
     redis = context.bot_data.get("redis")
     from datetime import date as _date, datetime as _datetime
@@ -1972,7 +1980,9 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         return
 
     await context.bot.send_chat_action(message.chat_id, "typing")
-    status_msg = await message.reply_text("✨ Подбираю образ...")
+    status_msg = None
+    if not silent_status:
+        status_msg = await message.reply_text("✨ Подбираю образ...")
 
     try:
         from services.weather import WeatherService
@@ -1986,7 +1996,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
 
         if not children and not is_no_kids:
             try:
-                await status_msg.delete()
+                await status_msg.delete() if status_msg else None
             except Exception:
                 pass
             await message.reply_text(
@@ -2029,7 +2039,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
 
         if not items:
             try:
-                await status_msg.delete()
+                await status_msg.delete() if status_msg else None
             except Exception:
                 pass
 
@@ -2130,7 +2140,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         from services.outfit_builder import has_minimum_wardrobe
         if not has_minimum_wardrobe(items):
             try:
-                await status_msg.delete()
+                await status_msg.delete() if status_msg else None
             except Exception:
                 pass
             _has_top = any(i.category_group == "top" for i in items)
@@ -2215,7 +2225,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         # ── Minimum outfit check (AI might have fallback'd) ──
         if not has_minimum_outfit(outfit):
             try:
-                await status_msg.delete()
+                await status_msg.delete() if status_msg else None
             except Exception:
                 pass
             await message.reply_text(
@@ -2320,7 +2330,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
 
         # Delete status message before sending result
         try:
-            await status_msg.delete()
+            await status_msg.delete() if status_msg else None
         except Exception:
             pass
 
@@ -2339,7 +2349,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         import sentry_sdk as _sentry
         _sentry.capture_exception(e)
         try:
-            await status_msg.edit_text("😔 Не получилось собрать образ. Попробуй ещё раз!")
+            await status_msg.edit_text("😔 Не получилось собрать образ. Попробуй ещё раз!") if status_msg else None
         except Exception:
             await message.reply_text(
                 "Не удалось собрать образ. Попробуй позже.",

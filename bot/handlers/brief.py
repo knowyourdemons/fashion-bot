@@ -183,7 +183,10 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         4. Send as new photo message, remove buttons from old message
     """
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass  # Query may be too old — continue anyway
 
     user = context.user_data.get("db_user")
     if not user:
@@ -280,7 +283,7 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         pass
 
     from bot.handlers.wardrobe import _generate_outfit_for_user
-    await _generate_outfit_for_user(old_message, user, context, exclude_ids=exclude_ids)
+    await _generate_outfit_for_user(old_message, user, context, exclude_ids=exclude_ids, silent_status=True)
 
     if redis:
         await redis.incr(reroll_key)
