@@ -2,8 +2,9 @@
 
 ## Инфраструктура
 - VPS: agent-farm-01, user=stas, ~/fashion-bot
-- Containers: docker-app-1 (FastAPI+PTB), docker-worker-1, docker-postgres-1, docker-redis-1
+- Containers: docker-app-1 (FastAPI+PTB), docker-worker-1, docker-postgres-1, docker-redis-1, docker-renderer-1 (Satori)
 - GitHub: knowyourdemons/fashion-bot
+- CI/CD: GitHub Actions (`.github/workflows/test.yml`) — тесты на каждый push/PR
 - Tunnel: bot.fashioncastle.app (именованный Cloudflare tunnel)
 - Webhook: https://bot.fashioncastle.app/api/v1/webhooks/telegram
 - Тест-пользователи: Стас telegram_id=195169 (plan=admin), жена telegram_id=263775083 (plan=free, тестирует как обычный юзер)
@@ -15,33 +16,47 @@
 - **БД**: PostgreSQL 16 (asyncpg + SQLAlchemy 2.0 async), pool_pre_ping + recycle 10 мин
 - **Кэш/Очередь**: Redis 7 через singleton `core/redis.py` (max_connections=32)
 - **AI**: Anthropic API через `AnthropicPool` (`core/anthropic_client.py`)
-- Два API ключа в пуле с atomic round-robin (asyncio.Lock) + circuit breaker
+  - Два API ключа в пуле с atomic round-robin (asyncio.Lock) + circuit breaker
+  - Таймауты: 30s стандартные вызовы, 60s vision вызовы
+- **Мониторинг**: Sentry (app + worker), watchdog (`scripts/watchdog.py`) с алертами в Telegram
+- **Rate limiting**: API middleware 60 req/min per IP (`api/middleware/rate_limit.py`)
 
 ## Стек
 - Python 3.12, PTB 22.x, SQLAlchemy 2.0, asyncpg
 - Vision: claude-sonnet-4-6 (НЕ haiku — плохое качество!)
 - Чат/бриф/текст: claude-haiku-4-5-20251001
-- Удаление фона: **local ONNX silueta** (1.3 сек), fallback: remove.bg API ($0.002), fallback: RGB
+- Удаление фона: **RMBG-1.4 quantized** (44MB, ~4 сек), fallback: silueta → remove.bg API → RGB
+  - Модель: `/root/.u2net/rmbg14_quantized.onnx` (env: `BG_REMOVAL_MODEL=rmbg14`)
+  - Fallback: `/root/.u2net/silueta.onnx` (43MB, ~1.3 сек, менее качественная)
 - Prompt caching: ephemeral везде
-- onnxruntime 1.24.4, numpy 1.26.4 (модель: /root/.u2net/silueta.onnx, 43MB)
+- onnxruntime 1.24.4, numpy 1.26.4
 
 ## Структура проекта
 ```
 bot/handlers/
   wardrobe.py      — Vision, коллаж, owner switching, генерация образа
                      _track_task() для tracked background tasks
+                     Транзакционные границы: photo upload в единой сессии
   onboarding.py    — ConversationHandler онбординга
   subscription.py  — /subscribe, /test_subscribe, Stars/Stripe
   text.py          — Haiku чат стилиста (_get_text_system по сегменту)
-  brief.py         — feedback "Надели"/"Другое" на morning brief
+  brief.py         — feedback на morning brief:
+                     Детский: "Надели"/"Переодень"
+                     Взрослый с коллажем: "Нравится"/"Другой вариант"
+                     Взрослый без вещей: "Спасибо"/"Ещё совет"
+                     Реролл для взрослых перегенерирует совет через Haiku
+  error.py         — PTB global error handler → Sentry
   menu.py          — get_main_menu(), кнопки
   help.py          — /help текст
   start.py         — /start handler
 bot/middleware/    — auth.py (загрузка user из БД), typing.py
+api/middleware/
+  rate_limit.py    — Redis-based 60 req/min per IP, skip health+webhooks
+  request_id.py    — X-Request-ID correlation
 core/
   redis.py         — singleton Redis client (init_redis/get_redis/close_redis)
   queue.py         — RedisQueue с at-least-once delivery (RPOPLPUSH + ack)
-  anthropic_client.py — AnthropicPool: atomic round-robin, circuit breaker
+  anthropic_client.py — AnthropicPool: atomic round-robin, circuit breaker, таймауты
   rate_limiter.py  — atomic Lua script rate limiter (no race conditions)
   scheduler.py     — APScheduler (cron задачи)
   circuit_breaker.py
@@ -49,17 +64,27 @@ core/
 worker/tasks/
   morning_brief.py       — бриф детский + взрослый, paginated schedule_all (batch 500)
   style_config.py        — COLORTYPE_PALETTES, WOW_PHRASES, _needs_tights
+                           get_temp_regime() → lazy import из outfit_selector (избегая circular)
   subscription_expiry.py — уведомления об окончании trial
   evening_push.py        — вечерний push в 20:00
 worker/consumer.py — FastWorker (HIGH, 4 concurrent) + SlowWorker (LOW, 2 concurrent)
+                     Sentry init при старте worker
 db/models/         — SQLAlchemy модели
 db/crud/           — CRUD операции
 db/seeds/          — taxonomy_seed, scoring_matrix_seed, dev_seed
 services/
-  image_processor.py — resize, EXIF, phash, ONNX silueta bg removal (thread-safe singleton)
-  image_builder.py — 3-зонный коллаж, PNG-иконки, фоны
+  image_processor.py — resize, EXIF, phash, bg removal (RMBG-1.4 + silueta fallback)
+                       Thread-safe singleton (threading.Lock + double-check) для каждой модели
+  image_builder.py — Satori коллаж, PNG-иконки, фоны
+                     _shadow_cache с LRU (max 32 entries)
+                     Sentry capture на критических ошибках
+  collage_styles.py — 6 стилей, atomic round-robin через Redis INCR (next_style_async)
+  outfit_selector.py — КАНОНИЧЕСКАЯ _get_temp_regime() (единственный источник)
   scoring.py, weather.py, usage.py, i18n/
-billing/           — stripe_provider.py, yukassa_provider.py (stub), paddle_provider.py (stub)
+billing/           — stripe_provider.py (таймаут 30s), yukassa_provider.py (stub), paddle_provider.py (stub)
+scripts/
+  watchdog.py      — health check + worker heartbeat мониторинг, Telegram алерты
+  watchdog.sh      — crontab wrapper, auto-restart, логи в logs/watchdog.log
 assets/
   silhouettes/     — 23 PNG-иконки (300×300 RGBA, outline style)
   backgrounds/     — 4 PNG-фона (1024×1536 RGB: girl/boy/adult/winter)
@@ -71,11 +96,24 @@ assets/
 - Дедупликация: ОТКЛЮЧЕНА (мешала больше чем помогала, вернём в v1.2)
 - PIL НЕ рендерит unicode emoji — все тексты на коллаже БЕЗ эмодзи
 - Скор цифрой НЕ показывать юзеру — только текстовый комментарий Haiku или шаблон
-- Удаление фона: silueta.onnx (43MB) local, ~1.3 сек. НЕ u2net.onnx (176MB, не хватает RAM)
-- App контейнер 1024MB (inference peak ~480MB + app ~110MB), worker 512MB
+- Удаление фона: RMBG-1.4 quantized (44MB, лучше качество, ~4 сек). Silueta (43MB, ~1.3 сек) как fallback
+- App контейнер 1536MB (RMBG inference peak ~600MB + app ~110MB), worker 512MB
 - ssl=disable в DATABASE_URL: postgres не настроен на SSL
 - listen_addresses='*' в postgres.conf: иначе контейнеры не коннектятся
 - Иконки и фоны в git assets/ (не R2) — мгновенный доступ, нет HTTP
+- `_get_temp_regime()` каноническая в `services/outfit_selector.py`, `style_config.py` делегирует через lazy import (избегая circular import с `_needs_tights`)
+
+## Мониторинг и алерты
+- **Sentry**: app (FastAPI middleware) + worker (init в consumer.py) + PTB error handler
+  - Все unhandled exceptions → Sentry с user/chat context
+  - image_builder критические ошибки → Sentry capture
+- **Watchdog** (`scripts/watchdog.py`): cron каждую минуту
+  - Пингует `/health` каждые 30 сек
+  - Проверяет worker heartbeats в Redis
+  - 2 consecutive failures → алерт в Telegram (admin chat_id)
+  - Recovery notification при восстановлении
+- **PG slow queries**: `log_min_duration_statement=500` (>500ms логируются)
+- **Health check** (`/health`): Redis ping + DB SELECT 1, 503 при сбое
 
 ## Коллаж (`services/image_builder.py`)
 - **Primary: Satori renderer** (http://172.18.0.1:3100) — magazine layout, ~0.1 сек
@@ -87,15 +125,23 @@ assets/
 - auto-trim: обрезка прозрачных краёв фото (5% padding)
 - Подписи: "Тип цвет" без эмодзи, max 28 символов
 - Satori constraints: display:'flex' обязателен, нет CSS grid/position:absolute/emoji
+- Style rotation: atomic Redis INCR (`next_style_async()`), local fallback
 
-## Меню (целевая структура)
+## Взрослый бриф
 ```
-✨ Что надеть              ← full-width, генерация образа
-👗 Гардероб  | 💬 Спросить Касси
-👤 Профиль   | ❓ Помощь
-```
+🌅 Доброе утро, {name}!
+{weather_line}
 
-## Текстовый бриф (целевой формат)
+💡 Идея на сегодня:
+{haiku_advice}
+
+[Нравится] [Другой вариант] [Переслать]   ← с коллажем
+[Спасибо] [Ещё совет]                      ← без вещей
+```
+- Реролл для взрослых: перегенерация совета через Haiku (не outfit)
+- Callback: `reroll_advice` (без brief_id) или `reroll:{brief_id}` (детский)
+
+## Детский бриф (целевой формат)
 ```
 👧 Алиса (садик):
 🩲 Под одежду: трусики, майка, носки
@@ -103,9 +149,16 @@ assets/
 💬 [Haiku-комментарий Касси с советом]
 
 Как тебе образ?
-[Надели] [Другое]
+[Надели] [Переодень]
 ```
 Видимые вещи — на коллаже. Текст — только невидимые + комментарий.
+
+## Меню (целевая структура)
+```
+✨ Что надеть              ← full-width, генерация образа
+👗 Гардероб  | 💬 Спросить Касси
+👤 Профиль   | ❓ Помощь
+```
 
 ## Скоринг
 - 15 матриц: 8 boy/girl (по возрастам) + 4 взрослых + 3 беременных
@@ -135,7 +188,7 @@ premium_yearly:    usd=72, stars=5500
 
 ### Trial
 - 14 дней полный premium с первого фото
-- Дни 12-14: постепенно отключаем re-roll → вечерний → чат (TODO)
+- Дни 12-14: постепенно отключаем re-roll → вечерний → чат
 
 ## Модели БД
 ```python
@@ -178,13 +231,13 @@ docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
 ## Тестирование
 ```bash
 docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
-# 595 тестов (март 2026)
+# 882 теста, pytest-forked для изоляции (21 марта 2026)
+# CI: GitHub Actions запускает тесты на каждый push/PR
 ```
 
 ## Известные баги / TODO (v1.0)
 - "Что надеть" в меню вызывает handle_rate_menu вместо генерации образа → фикс маппинга
 - Помощь: старый текст с "Оценить образ" → обновить
-- Температура с десятыми "+5.6°C" → round до целых
 - Подписи на коллаже не центрированы для реальных фото (placeholder — ок)
 - Иконки/фото не заполняют ячейку (80% вместо текущих ~60%)
 - Онбординг: размер обуви только int → нужен float (26.5)
@@ -192,6 +245,7 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - photo_url пустой — фото только в Telegram file_id
 - SAWarning про Child.wardrobe_items overlaps — косметика
 - PTBUserWarning про per_message — косметика
+- RMBG-1.4 inference ~4 сек (1024x1024 input) — можно попробовать 512x512 для ~1.5 сек
 
 ## Что сделано (19 марта 2026)
 
@@ -207,81 +261,76 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 ### Инфраструктура: Фаза 1 (критические фиксы)
 - **Redis singleton** (`core/redis.py`): заменены 17 отдельных `from_url()` на один пул (32 conn)
 - **DB индексы** (миграция c3d4e5f6a7b8): 6 индексов
-  - `ix_wardrobe_items_owner` (owner_id, owner_type) WHERE deleted_at IS NULL
-  - `ix_children_user_id` WHERE deleted_at IS NULL
-  - `ix_brief_log_user_date`, `ix_outfit_log_user_date`, `ix_events_user_id`
-  - `ix_users_active_onboarded` для schedule_all()
 - **Health check** (`/health`): проверяет Redis ping + DB SELECT 1, 503 при сбое
 - **ONNX thread safety**: threading.Lock + double-check pattern
 
 ### Инфраструктура: Фаза 2 (надёжность)
 - **Queue at-least-once** (`core/queue.py`): RPOPLPUSH → processing list → LREM on ack
-  - `recover_processing()` на старте worker'а — восстанавливает orphaned задачи
-- **Exponential backoff**: retry задержки 1s → 4s → 16s вместо мгновенного retry
+- **Exponential backoff**: retry задержки 1s → 4s → 16s
 - **Background task tracking** (`wardrobe.py`): `_track_task()` вместо fire-and-forget
-  - Graceful shutdown: ждёт до 10 сек завершения in-flight задач
 - **Pagination schedule_all()**: batch по 500 пользователей (LIMIT/OFFSET)
-- **Atomic Anthropic pool**: asyncio.Lock + counter вместо itertools.cycle
+- **Atomic Anthropic pool**: asyncio.Lock + counter
 
 ### Инфраструктура: Фаза 3 (масштабирование)
 - **Atomic rate limiter** (`core/rate_limiter.py`): Lua script (нет GET→INCR race)
 - **CASCADE → SET NULL** (миграция d4e5f6a7b8c9): brief_log, outfit_log, events
-  - Soft-delete user больше не удаляет логи
-- **Worker concurrency**: asyncio.Semaphore (fast=4, slow=2 параллельных задач)
-  - Drain in-flight задач при shutdown (30 сек)
-- **Correlation ID**: ContextVar + structlog.contextvars, все логи включают request_id
-- **Pool tuning**: pool_pre_ping=True, pool_recycle=600 (detect stale connections)
+- **Worker concurrency**: asyncio.Semaphore (fast=4, slow=2)
+- **Correlation ID**: ContextVar + structlog.contextvars
+- **Pool tuning**: pool_pre_ping=True, pool_recycle=600
 
 ### Satori Collage Renderer — 6 стилей с ротацией
-- `build_collage_satori()` с round-robin по 6 стилям (`services/collage_styles.py`)
-- **magazine**: тёмный header, цветные карточки, палитра footer
-- **editorial**: белый фон, minimal, hero крупно, strip мелких
-- **story_card**: градиент из цветов образа, translucent карточки
-- **polaroid**: тёплый бежевый фон, белые рамки с тенью
-- **palette_first**: крупные цветовые блоки + вещи под ними
-- **pro_stylist**: flat lay стиль, минимум декора, offset layout
-- Каждый стиль: ~0.08-0.23 сек, auto-trim, pastel bg, silhouette placeholder
+- `build_collage_satori()` с atomic round-robin (Redis INCR, local fallback)
+- 6 стилей: magazine, editorial, story_card, polaroid, palette_first, pro_stylist
 - PIL fallback если Satori недоступен
 
 ### Цветотип через селфи (онбординг)
-- Новый шаг SELFIE_COLORTYPE в ConversationHandler после города
-- Claude Vision (sonnet-4-6) анализирует селфи → определяет Весна/Лето/Осень/Зима
-- Кнопка "Пропустить" → ручной выбор (ASK_COLORTYPE)
-- Fallback при ошибке Vision → ручной выбор
-- Resume поддержка (selfie_colortype step)
-- Prompt: анализ тона кожи, цвета волос и глаз → одно слово
+- Claude Vision (sonnet-4-6) анализирует селфи → Весна/Лето/Осень/Зима
+- Кнопка "Пропустить" → ручной выбор
 
 ### Умный бриф: два режима + погодная карточка + палитра
-- **Mode A** (полный гардероб): стандартный коллаж (Satori/PIL), если real_photos >= 3 и placeholder <= 50%
-- **Mode B** (мало вещей): погодная карточка 440x520 PNG вместо коллажа-с-плейсхолдерами
-  - Погода утро/день/вечер + осадки
-  - Сезонная палитра цветов (4 блока по температуре)
-  - Совет Касси через Haiku (3-4 предложения)
-  - CTA "Добавь ещё N вещей" с inline-кнопкой
-- `services/weather_card.py`: `build_weather_card()` (PIL), `generate_weather_advice()` (Haiku), `season_palette()`
-- `services/brief_weather.py`: добавлен `temp_day` (14:00) и `precip_max`
-- Заголовок коллажа: утро/день/вечер температура ("+4 / +8 / +3°C")
-- Кнопка "Переслать бабушке" → "Переслать" (нейтрально)
-- "AI-стилист" → "твой личный стилист" (onboarding, i18n, brief share)
-- Mode B: кнопки Надели/Переодень заменены на "Добавить вещи"
+- **Mode A** (полный гардероб): Satori коллаж
+- **Mode B** (мало вещей): погодная карточка 440x520 PNG
 
-### Roadmap фичи (v1.0 + v1.1)
-- **Текст брифа**: уже компактный (5-7 строк), fix температуры round() (убрал `.0`)
-- **Меню**: уже в целевой структуре (Что надеть full-width, Спросить Касси, Гардероб, Профиль, Помощь)
-- **Контекстный чат**: wardrobe summary уже в system prompt Haiku (get_wardrobe_summary_cached)
-- **Вечерний образ 20:00**: schedule_evening уже работает (cron :30, premium users)
-- **Trial degradation дни 12-14**: get_effective_limits() подключён к handlers
-  - День 12: reroll = 0 (brief.py)
-  - День 13: evening_brief = False (schedule_evening)
-  - День 14: chat = 1, outfit = 1 (text.py, help.py)
+## Что сделано (21 марта 2026)
 
-### Тесты: 425 → 595 (+170)
-- `test_infra.py` (12) — Redis singleton, health check, ONNX safety, DB indexes
-- `test_phase2.py` (17) — queue ack/recovery, backoff, task tracking, pagination, atomic pool
-- `test_phase3.py` (22) — Lua rate limiter, cascade, concurrency, correlation ID, pool tuning
-- `test_satori.py` (32) — 6 styles, round-robin, palette, zones, auto-trim, fallback, integration
-- `test_trial_wiring.py` (5) — trial degradation wired into brief, text, help, evening schedule
-- `test_selfie_colortype.py` (10) — selfie colortype onboarding step, transitions, resume, vision prompt
+### Технический аудит и фиксы
+- **API таймауты**: asyncio.timeout 30/60s на Anthropic, httpx timeout на Stripe/weather/Telegram
+- **Sentry полная интеграция**: PTB error handler, worker init, image_builder capture
+- **Watchdog**: health check + worker heartbeat мониторинг, Telegram алерты, crontab
+- **PG slow queries**: log_min_duration_statement=500 в docker-compose
+- **API rate limiting**: 60 req/min per IP, Redis-based, skip health+webhooks
+- **Loki/Grafana**: шаблон в docker-compose (закомментирован, готов к раскомментированию)
+
+### RMBG-1.4 (удаление фона)
+- Замена silueta на RMBG-1.4 quantized (44MB, значительно лучше качество на одежде)
+- Fallback chain: RMBG-1.4 → silueta → remove.bg API → оригинал
+- App контейнер 1024→1536MB (RMBG peak ~600MB)
+- `BG_REMOVAL_MODEL=rmbg14` в .env
+
+### Взрослый бриф: новый UX
+- "Совет дня" → "Идея на сегодня"
+- Кнопки: "Нравится"/"Другой вариант" (с коллажем), "Спасибо"/"Ещё совет" (без вещей)
+- Реролл перегенерирует совет через Haiku (не outfit)
+
+### Code quality
+- Дедупликация `_get_temp_regime()`: единый источник в `outfit_selector.py`
+- LRU cache для `_shadow_cache` (max 32)
+- Atomic style counter через Redis INCR (`next_style_async`)
+- User cache invalidation после оплаты/debug commands
+- Transaction boundaries: photo upload в единой сессии
+
+### Тесты: 595 → 882 (+287)
+- `test_error_paths.py` (37) — API таймауты, Redis/DB failures, handler edge cases
+- `test_worker_tasks.py` (40) — engagement, growth alerts, reminders, daily reset
+- `test_vision.py` (34) — vision API parsing, crop quality
+- `test_share_service.py` (14) — share voting, TTL
+- `test_storage.py` (21) — R2/Telegram storage providers
+- `test_notifications.py` (15) — notification service
+- `test_brief_formatter.py` (29) — brief text formatting
+- `test_brief_weather2.py` (26) — weather cards
+- `test_crud.py` (25) — CRUD operations
+- pytest-forked для изоляции тестов
+- CI/CD: GitHub Actions на каждый push/PR
 
 ## Документация
 - **WORKFLOW.md** — методология защитного проектирования (7 линз, 5 итераций, Three-Pass)
@@ -291,28 +340,30 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 
 ### v1.0 remaining (до запуска жене)
 - Онбординг UX (Касси, fuzzy дата, "Для обоих", прогресс-бар)
-- ~~Меню: "Что надеть" full-width + "Спросить Касси"~~ — ГОТОВО
-- ~~Текст брифа 15→5 строк~~ — ГОТОВО (уже компактный + round temp fix)
 - Visual polish: центрирование, иконки, контекст
-- Умный бриф: два режима (коллаж vs погодная карточка), см. `claude_code_smart_brief.md`
-- Текстовые фиксы: "AI-стилист" → "твой личный стилист", "переслать бабушке" → "переслать"
+- ~~Умный бриф~~ — ГОТОВО
+- ~~Текстовые фиксы~~ — ГОТОВО
+- ~~Sentry, CI/CD~~ — ГОТОВО
+- ~~Удаление фона: RMBG-1.4~~ — ГОТОВО
 
 ### v1.1 (апрель)
-- ~~Контекстный чат (wardrobe summary в system prompt)~~ — ГОТОВО
-- Re-roll "переодень" (кнопка + exclude + Redis counter)
-- ~~Вечерний образ 20:00 (scheduler по timezone)~~ — ГОТОВО
-- ~~Trial отключение дни 12-14~~ — ГОТОВО (get_effective_limits в handlers)
+- ~~Контекстный чат~~ — ГОТОВО
+- ~~Re-roll~~ — ГОТОВО (детский + взрослый)
+- ~~Вечерний образ 20:00~~ — ГОТОВО
+- ~~Trial отключение дни 12-14~~ — ГОТОВО
+- ~~rembg~~ — ГОТОВО (RMBG-1.4 quantized)
+- ~~Sentry, CI/CD~~ — ГОТОВО
 - /profile + /add_child
 - Оценка образа по фото (вещь vs outfit detection)
 - Gap analysis + growth alert WHO
-- Тизеры, engagement push, кнопка "переслать" (inline или нативный forward)
-- ~~rembg u2net~~ — ГОТОВО (silueta.onnx local)
-- Sentry, CI/CD
+- Тизеры, engagement push
 
 ### v1.2 (май)
 - Шоппинг-лист + affiliate (Admitad/Skimlinks, H&M, Lamoda)
 - ЮKassa (после ИП), Paddle
 - Антибот, реферальная программа
+- Prometheus + Grafana dashboards
+- Loki log aggregation (шаблон готов в docker-compose)
 
 ### v2.0 (июль)
 - Ultra план, семейный аккаунт, EN, маркетинг
