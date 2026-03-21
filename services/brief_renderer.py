@@ -266,12 +266,19 @@ def prepare_items_hybrid(outfit_slots: list[dict]) -> tuple[list[dict], list[dic
                 except Exception:
                     photo_b64 = ""
 
+            # Detect solid vs patterned: if color has pattern words → not solid
+            _color_lower = (color or "").lower()
+            _type_lower = (s.get("item_type", "") or "").lower()
+            _pattern_words = ["принт", "узор", "полоск", "клетк", "цветоч", "горох", "камуфляж", "леопард"]
+            is_solid = not any(pw in _color_lower or pw in _type_lower for pw in _pattern_words)
+
             items.append({
                 "label": label,
                 "bg_class": get_color_bg(color),
                 "emoji": TYPE_EMOJI.get(slot, "👕"),
                 "color_hex": get_color_hex(color),
                 "photo_base64": photo_b64,
+                "is_solid": is_solid,
                 "size_class": "",  # filled below
             })
         else:
@@ -316,6 +323,12 @@ def prepare_items_full(outfit_slots: list[dict]) -> list[dict]:
             except Exception:
                 photo_b64 = ""
 
+        # Detect solid vs patterned
+        _color_lower = (color or "").lower()
+        _type_lower = (s.get("item_type", "") or "").lower()
+        _pattern_words = ["принт", "узор", "полоск", "клетк", "цветоч", "горох", "камуфляж", "леопард"]
+        is_solid = not any(pw in _color_lower or pw in _type_lower for pw in _pattern_words)
+
         items.append({
             "label": label,
             "bg_class": get_color_bg(color),
@@ -325,6 +338,7 @@ def prepare_items_full(outfit_slots: list[dict]) -> list[dict]:
             "photo_base64": photo_b64,
             "extra_style": "",
             "color_hex": get_color_hex(color),
+            "is_solid": is_solid,
         })
 
     return items

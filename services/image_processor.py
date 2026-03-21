@@ -213,11 +213,61 @@ def pad_square_resize(png_bytes: bytes, size: int = THUMB_SIZE) -> bytes:
     return buf.getvalue()
 
 
+def _check_rembg_quality(png_bytes: bytes) -> bool:
+    """Check if bg removal produced a usable result.
+
+    Returns False if:
+    - >85% pixels transparent (removed too much — probably dark bg)
+    - <15% pixels transparent (removed too little — rembg failed)
+    """
+    try:
+        img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+        pixels = list(img.getdata())
+        total = len(pixels)
+        opaque = sum(1 for p in pixels if p[3] > 30)
+        ratio = opaque / total if total > 0 else 0
+        return 0.15 <= ratio <= 0.85
+    except Exception:
+        return True  # fallback — don't block
+
+
+def sharpen_thumbnail(png_bytes: bytes, factor: float = 1.3) -> bytes:
+    """Apply gentle sharpening to improve readability at small sizes."""
+    from PIL import ImageEnhance
+    img = Image.open(io.BytesIO(png_bytes))
+    enhancer = ImageEnhance.Sharpness(img)
+    img = enhancer.enhance(factor)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
+
+def boost_contrast(png_bytes: bytes, factor: float = 1.15) -> bytes:
+    """Slightly boost contrast for wrinkled/matte fabrics."""
+    from PIL import ImageEnhance
+    img = Image.open(io.BytesIO(png_bytes))
+    if img.mode == "RGBA":
+        # Enhance RGB only, preserve alpha
+        r, g, b, a = img.split()
+        rgb = Image.merge("RGB", (r, g, b))
+        enhancer = ImageEnhance.Contrast(rgb)
+        rgb = enhancer.enhance(factor)
+        r2, g2, b2 = rgb.split()
+        img = Image.merge("RGBA", (r2, g2, b2, a))
+    else:
+        enhancer = ImageEnhance.Contrast(img)
+        img = enhancer.enhance(factor)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
+
 def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) -> bytes:
     """Full thumbnail pipeline for collage display.
 
-    Pipeline: EXIF rotate → auto-brightness → [bg removal] → edge softening
-              → auto-trim → pad square → resize 400×400
+    Pipeline: EXIF rotate → auto-brightness → [bg removal + quality check]
+              → edge softening → contrast boost → auto-trim → pad square
+              → resize 400×400 → sharpen
 
     Args:
         photo_bytes: raw image bytes (JPEG or PNG)
@@ -235,27 +285,38 @@ def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) ->
             # Auto-brightness BEFORE bg removal (helps RMBG with dark photos)
             result = auto_brightness(result)
             model = _get_bg_removal_model()
+            rembg_result = None
             try:
                 if model == "rmbg14":
-                    result = _run_rmbg14(result)
+                    rembg_result = _run_rmbg14(result)
                 else:
-                    result = _run_silueta(result)
+                    rembg_result = _run_silueta(result)
             except Exception:
                 try:
-                    result = _run_silueta(result)
+                    rembg_result = _run_silueta(result)
                 except Exception:
-                    pass  # keep original if all fail
+                    pass
+
+            # Quality check: if rembg failed (too much/too little removed), use original
+            if rembg_result and _check_rembg_quality(rembg_result):
+                result = rembg_result
+            # else: keep brightness-corrected original (no bg removal)
 
     # 3. Edge softening (only if has alpha)
     img_check = Image.open(io.BytesIO(result))
     if img_check.mode == "RGBA":
         result = soften_edges(result, radius=1.5)
     else:
-        # No alpha — apply brightness anyway
         result = auto_brightness(result)
 
-    # 4. Auto-trim + pad to square + resize
+    # 4. Contrast boost (helps wrinkled fabrics read better at small sizes)
+    result = boost_contrast(result, factor=1.15)
+
+    # 5. Auto-trim + pad to square + resize
     result = pad_square_resize(result, THUMB_SIZE)
+
+    # 6. Sharpen (after resize — improves detail at 200px display size)
+    result = sharpen_thumbnail(result, factor=1.3)
 
     return result
 
