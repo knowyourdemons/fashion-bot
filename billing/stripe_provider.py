@@ -62,7 +62,7 @@ class StripeProvider(PaymentProvider):
 
         interval, interval_count = _PERIOD_TO_INTERVAL.get(period, ("month", 1))
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{STRIPE_API}/checkout/sessions",
                 auth=(self._secret, ""),
@@ -104,7 +104,7 @@ class StripeProvider(PaymentProvider):
             return False
 
     async def cancel_subscription(self, subscription_id: str) -> bool:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.delete(
                 f"{STRIPE_API}/subscriptions/{subscription_id}",
                 auth=(self._secret, ""),
@@ -112,7 +112,7 @@ class StripeProvider(PaymentProvider):
             return resp.status_code == 200
 
     async def pause_subscription(self, subscription_id: str) -> bool:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{STRIPE_API}/subscriptions/{subscription_id}",
                 auth=(self._secret, ""),
@@ -121,7 +121,7 @@ class StripeProvider(PaymentProvider):
             return resp.status_code == 200
 
     async def resume_subscription(self, subscription_id: str) -> bool:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{STRIPE_API}/subscriptions/{subscription_id}",
                 auth=(self._secret, ""),

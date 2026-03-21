@@ -62,6 +62,14 @@ class AnthropicPool:
 
         last_error: Exception | None = None
 
+        # Vision calls process images and need more time
+        has_vision = any(
+            isinstance(m.get("content"), list)
+            and any(c.get("type") == "image" for c in m["content"] if isinstance(c, dict))
+            for m in messages
+        )
+        timeout_seconds = 60 if has_vision else 30
+
         for attempt in range(MAX_RETRIES):
             client, key_id = await self._next_client()
             cb = self._circuit_breakers[key_id]
@@ -73,13 +81,14 @@ class AnthropicPool:
                 if system is not None:
                     call_kwargs["system"] = system
 
-                response = await cb.call(
-                    client.messages.create,
-                    model=model,
-                    max_tokens=max_tokens,
-                    messages=messages,
-                    **call_kwargs,
-                )
+                async with asyncio.timeout(timeout_seconds):
+                    response = await cb.call(
+                        client.messages.create,
+                        model=model,
+                        max_tokens=max_tokens,
+                        messages=messages,
+                        **call_kwargs,
+                    )
                 cache_read = getattr(response.usage, "cache_read_input_tokens", 0)
                 cache_write = getattr(response.usage, "cache_creation_input_tokens", 0)
                 logger.info(
@@ -93,6 +102,16 @@ class AnthropicPool:
                 if cache_read or cache_write:
                     logger.info("anthropic.cache", cache_read=cache_read, cache_write=cache_write)
                 return response
+
+            except TimeoutError:
+                logger.warning(
+                    "anthropic.request.timeout",
+                    key_id=key_id,
+                    attempt=attempt,
+                    timeout=timeout_seconds,
+                )
+                last_error = TimeoutError(f"Anthropic API timeout ({timeout_seconds}s)")
+                continue
 
             except RateLimitError:
                 logger.warning("anthropic.key.rate_limited", key_id=key_id)
