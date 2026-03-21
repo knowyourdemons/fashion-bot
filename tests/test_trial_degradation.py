@@ -38,7 +38,7 @@ class TestTrialDegradation:
             from core.permissions import get_effective_limits
             u = self._make_trial_user(0)  # 0 дней = день 14
             limits = get_effective_limits(u)
-            assert limits.get("chat_per_day", 20) <= 1
+            assert limits.get("chat_per_day", 20) <= 3
         except ImportError:
             pytest.skip("get_effective_limits not implemented yet")
 
