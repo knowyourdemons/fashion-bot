@@ -279,7 +279,7 @@ async def _save_one(
     item_role = _classify_role(data.get("type") or "", data.get("color") or "")
 
     async def _do_create(s):
-        await create(
+        return await create(
             s,
             owner_id=owner_id,
             owner_type=owner_type,
@@ -308,12 +308,14 @@ async def _save_one(
         )
 
     try:
+        item = None
         if session is not None:
-            await _do_create(session)
+            item = await _do_create(session)
         else:
             async with AsyncWriteSession() as s:
-                await _do_create(s)
+                item = await _do_create(s)
                 await s.commit()
+        return item.id if item else None
     except Exception as e:
         logger.error(
             "wardrobe.save_failed",
@@ -324,7 +326,6 @@ async def _save_one(
             category_group=category_group,
         )
         raise
-    return True
 
 
 # ── Ядро: анализ + сохранение одного фото ──────────────────────────────────
@@ -337,11 +338,11 @@ async def _analyze_and_save(
     matrix=None,
     redis=None,
 ) -> list[dict]:
-    """Скачать фото → Claude Vision → crop по bbox → R2 → сохранить WardrobeItem.
+    """Скачать фото → Claude Vision → сохранить WardrobeItem → enqueue bg removal.
 
-    All DB inserts happen inside a single transaction. If any step fails
-    (crop, bg removal, R2 upload, or DB insert), the entire batch is
-    rolled back — no orphaned WardrobeItem records.
+    Background removal (crop + rembg + R2 upload) is deferred to the worker
+    via rmbg_process task so the user gets an immediate response after Vision.
+    All DB inserts happen inside a single transaction.
     """
     tg_file = await bot.get_file(photo_id)
     photo_bytes = bytes(await tg_file.download_as_bytearray())
@@ -352,6 +353,8 @@ async def _analyze_and_save(
     existing_set = await _load_existing_set(owner_id, owner_type)
 
     added: list[dict] = []
+    # Collect (item_id, bbox) pairs for deferred bg removal
+    rmbg_queue: list[tuple[uuid.UUID, dict | None]] = []
 
     async with AsyncWriteSession() as session:
         for data in items_data:
@@ -381,12 +384,16 @@ async def _analyze_and_save(
                 data["category_group"] = "base_layer"
                 data["type"] = "носки"
 
-            photo_url, good_crop = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id, redis=redis)
-            await _save_one(owner_id, owner_type, photo_id, data, matrix,
-                            photo_url=photo_url, show_in_collage=good_crop,
-                            session=session)
+            # Save with original photo_id, no crop/rembg yet
+            item_id = await _save_one(
+                owner_id, owner_type, photo_id, data, matrix,
+                photo_url=None, show_in_collage=True,
+                session=session,
+            )
             existing_set.add(key)
             added.append(data)
+            if item_id:
+                rmbg_queue.append((item_id, data.get("bbox")))
 
         # Commit all items in a single transaction
         if added:
@@ -398,6 +405,26 @@ async def _analyze_and_save(
             await redis.delete(f"wardrobe_summary:{owner_id}")
         except Exception:
             pass
+
+    # Enqueue background removal tasks (after commit, so items exist)
+    if rmbg_queue and redis:
+        try:
+            from core.queue import RedisQueue, QueuePriority
+            queue = RedisQueue(redis)
+            for item_id, bbox in rmbg_queue:
+                await queue.push(
+                    "rmbg_process",
+                    {
+                        "item_id": str(item_id),
+                        "file_id": photo_id,
+                        "owner_id": str(owner_id),
+                        "bbox": bbox,
+                    },
+                    priority=QueuePriority.HIGH,
+                )
+            logger.info("wardrobe.rmbg_enqueued", count=len(rmbg_queue))
+        except Exception as e:
+            logger.warning("wardrobe.rmbg_enqueue_failed", error=str(e))
 
     return added
 
@@ -965,6 +992,7 @@ async def _process_media_group(
             existing_set = await _load_existing_set(owner_id, owner_type)
 
             added: list[dict] = []
+            rmbg_queue: list[tuple[uuid.UUID, dict | None]] = []
             async with AsyncWriteSession() as _batch_session:
                 for data in items_data:
                     cg = data.get("category_group") or "top"
@@ -991,17 +1019,41 @@ async def _process_media_group(
                             reason="small_bbox_accessory")
                         data["category_group"] = "base_layer"
                         data["type"] = "носки"
-                    photo_url, good_crop = await _upload_crop(photo_bytes, data.get("bbox"), owner_id=owner_id, redis=_redis)
-                    await _save_one(owner_id, owner_type, file_id, data, matrix,
-                                    photo_url=photo_url, show_in_collage=good_crop,
-                                    session=_batch_session)
+                    # Save with original photo_id, defer crop+rembg to worker
+                    item_id = await _save_one(
+                        owner_id, owner_type, file_id, data, matrix,
+                        photo_url=None, show_in_collage=True,
+                        session=_batch_session,
+                    )
                     existing_set.add(key)
                     added.append(data)
+                    if item_id:
+                        rmbg_queue.append((item_id, data.get("bbox")))
                     logger.info("wardrobe.save_done", index=i)
 
                 # Commit all items from this photo in one transaction
                 if added:
                     await _batch_session.commit()
+
+            # Enqueue bg removal for items from this photo
+            if rmbg_queue and _redis:
+                try:
+                    from core.queue import RedisQueue, QueuePriority
+                    _q = RedisQueue(_redis)
+                    for _item_id, _bbox_data in rmbg_queue:
+                        await _q.push(
+                            "rmbg_process",
+                            {
+                                "item_id": str(_item_id),
+                                "file_id": file_id,
+                                "owner_id": str(owner_id),
+                                "bbox": _bbox_data,
+                            },
+                            priority=QueuePriority.HIGH,
+                        )
+                    logger.info("wardrobe.rmbg_enqueued", index=i, count=len(rmbg_queue))
+                except Exception as _eq:
+                    logger.warning("wardrobe.rmbg_enqueue_failed", index=i, error=str(_eq))
 
             successful_photos += 1
             total_added += len(added)

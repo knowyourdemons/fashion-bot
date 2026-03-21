@@ -42,6 +42,7 @@ class FastWorker:
 
         # Ленивый импорт обработчиков
         from worker.tasks import morning_brief, wardrobe_analysis  # noqa: F401
+        from worker.tasks import rmbg_task  # noqa: F401
 
     async def run(self, shutdown: asyncio.Event) -> None:
         logger.info("fast_worker.started", max_concurrent=self.MAX_CONCURRENT)

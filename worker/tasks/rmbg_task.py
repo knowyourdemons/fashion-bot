@@ -1,0 +1,121 @@
+"""
+Background removal task: crop + rembg + R2 upload.
+
+Deferred from the photo upload flow so the user gets an immediate response.
+Runs in the fast worker (HIGH priority queue).
+"""
+import uuid
+
+import httpx
+import structlog
+
+from config import settings
+from worker.fast_worker import register
+
+logger = structlog.get_logger()
+
+
+@register("rmbg_process")
+async def process_rmbg(payload: dict) -> dict:
+    """Download photo from Telegram, crop bbox, remove background, upload to R2, update DB."""
+    item_id = uuid.UUID(payload["item_id"])
+    file_id = payload["file_id"]
+    owner_id = payload.get("owner_id", "")
+    bbox = payload.get("bbox")
+
+    logger.info("rmbg_process.start", item_id=str(item_id), file_id=file_id[:20])
+
+    # 1. Download original photo from Telegram
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        r = await client.get(
+            f"https://api.telegram.org/bot{settings.telegram_bot_token}/getFile",
+            params={"file_id": file_id},
+        )
+        r.raise_for_status()
+        file_path = r.json()["result"]["file_path"]
+
+        r2_resp = await client.get(
+            f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_path}",
+            timeout=15.0,
+        )
+        r2_resp.raise_for_status()
+        photo_bytes = r2_resp.content
+
+    if not photo_bytes:
+        logger.warning("rmbg_process.empty_photo", item_id=str(item_id))
+        return {"status": "skip", "reason": "empty_photo"}
+
+    # 2. Crop by bbox (if available)
+    if bbox:
+        from services.vision import _crop_bbox, _check_crop_quality
+        try:
+            crop_bytes = _crop_bbox(photo_bytes, bbox)
+        except Exception as e:
+            logger.warning("rmbg_process.crop_failed", item_id=str(item_id), error=str(e))
+            crop_bytes = photo_bytes
+    else:
+        crop_bytes = photo_bytes
+
+    # 3. Remove background
+    from services.image_processor import remove_background
+    from core.redis import get_redis
+    redis = None
+    try:
+        redis = get_redis()
+    except Exception:
+        pass
+
+    png_bytes = await remove_background(crop_bytes, redis=redis)
+
+    # 4. Check crop quality
+    good_crop = True
+    if bbox:
+        from services.vision import _check_crop_quality
+        good_crop = _check_crop_quality(png_bytes)
+
+    # 5. Upload to R2
+    is_png = png_bytes[:4] == b'\x89PNG'
+    ext = "png" if is_png else "jpg"
+    content_type = "image/png" if is_png else "image/jpeg"
+
+    from services.storage.r2_storage import get_r2_storage
+    r2 = get_r2_storage()
+    filename = f"{uuid.uuid4()}.{ext}"
+    key = await r2.upload_photo(
+        png_bytes, filename,
+        owner_id=owner_id,
+        content_type=content_type,
+    )
+    photo_url = r2.get_public_url(key) if settings.cloudflare_r2_cdn_url else key
+
+    # 6. Update WardrobeItem in DB
+    import sqlalchemy as sa
+    from db.base import AsyncWriteSession
+    from db.models.wardrobe import WardrobeItem
+
+    async with AsyncWriteSession() as session:
+        await session.execute(
+            sa.update(WardrobeItem)
+            .where(WardrobeItem.id == item_id)
+            .values(
+                photo_url=photo_url,
+                show_in_collage=good_crop,
+            )
+        )
+        await session.commit()
+
+    logger.info(
+        "rmbg_process.done",
+        item_id=str(item_id),
+        photo_url=photo_url[:60] if photo_url else None,
+        good_crop=good_crop,
+    )
+
+    # 7. Invalidate wardrobe summary cache
+    if redis and owner_id:
+        try:
+            await redis.delete(f"wardrobe_summary:{owner_id}")
+        except Exception:
+            pass
+
+    return {"status": "ok", "item_id": str(item_id), "photo_url": photo_url}
