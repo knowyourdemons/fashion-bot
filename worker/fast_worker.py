@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 import redis.asyncio as aioredis
+import sentry_sdk
 import structlog
 
 from core.queue import QueuePriority, RedisQueue, TaskMessage
@@ -63,6 +64,7 @@ class FastWorker:
                 await self._heartbeat()
             except Exception as e:
                 self._sem.release()
+                sentry_sdk.capture_exception(e)
                 logger.error("fast_worker.loop_error", error=str(e))
 
         # Drain in-flight tasks on shutdown
@@ -90,6 +92,7 @@ class FastWorker:
             await self._queue.store_result(msg.task_id, result or {})
             logger.info("fast_worker.task_done", task_id=msg.task_id, task_type=msg.task_type)
         except Exception as e:
+            sentry_sdk.capture_exception(e)
             logger.error(
                 "fast_worker.task_error",
                 task_id=msg.task_id,

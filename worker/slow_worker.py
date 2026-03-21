@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 import redis.asyncio as aioredis
+import sentry_sdk
 import structlog
 
 from core.queue import QueuePriority, RedisQueue, TaskMessage
@@ -61,6 +62,7 @@ class SlowWorker:
                 await self._heartbeat()
             except Exception as e:
                 self._sem.release()
+                sentry_sdk.capture_exception(e)
                 logger.error("slow_worker.loop_error", error=str(e))
 
         if self._tasks:
@@ -87,6 +89,7 @@ class SlowWorker:
             await self._queue.store_result(msg.task_id, result or {})
             logger.info("slow_worker.task_done", task_id=msg.task_id, task_type=msg.task_type)
         except Exception as e:
+            sentry_sdk.capture_exception(e)
             logger.error(
                 "slow_worker.task_error",
                 task_id=msg.task_id,

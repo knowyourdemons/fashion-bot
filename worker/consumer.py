@@ -5,7 +5,9 @@ Redis queue consumer — точка входа воркера.
 import asyncio
 import signal
 import structlog
+import sentry_sdk
 
+from config import settings
 from core.queue import RedisQueue
 from core.anthropic_client import init_anthropic_pool
 from core.redis import init_redis, close_redis
@@ -23,6 +25,12 @@ def _handle_signal(sig: signal.Signals) -> None:
 
 
 async def main() -> None:
+    if settings.sentry_dsn:
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            environment=settings.environment,
+        )
+
     redis_client = await init_redis()
     queue = RedisQueue(redis_client)
 

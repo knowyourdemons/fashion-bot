@@ -126,4 +126,8 @@ def create_application() -> Application:
         group=2,
     )
 
+    # Global error handler — reports unhandled exceptions to Sentry
+    from bot.handlers.error import handle_error
+    app.add_error_handler(handle_error)
+
     return app

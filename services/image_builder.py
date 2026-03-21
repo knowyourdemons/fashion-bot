@@ -9,6 +9,7 @@ import os
 from typing import Optional
 
 import httpx
+import sentry_sdk
 import structlog
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from pilmoji import Pilmoji
@@ -132,13 +133,17 @@ def format_collage_label(slot: str, item_type: str, item_color: str = "") -> str
     return label
 
 
-# ── Кэш теней ────────────────────────────────────────────────────────────────
+# ── Кэш теней (bounded LRU, max 32 entries) ──────────────────────────────────
 _shadow_cache: dict = {}
+_SHADOW_CACHE_MAX = 32
 
 
 def _get_shadow_template(w: int, h: int) -> Image.Image:
     key = (w, h)
     if key not in _shadow_cache:
+        if len(_shadow_cache) >= _SHADOW_CACHE_MAX:
+            # evict oldest entry
+            _shadow_cache.pop(next(iter(_shadow_cache)))
         pad = SHADOW_BLUR * 3
         shadow = Image.new("RGBA", (w + pad * 2, h + pad * 2), (0, 0, 0, 0))
         draw = ImageDraw.Draw(shadow)
@@ -917,7 +922,8 @@ async def _render_satori(element: dict, width: int, height: int) -> Optional[byt
             logger.warning("satori.not_png", content_type=r.headers.get("content-type"))
             return None
     except Exception as e:
-        logger.warning("satori.render_failed", error=str(e))
+        logger.warning("satori.render_failed", error=str(e), exc_info=True)
+        sentry_sdk.capture_exception(e)
         return None
 
 
@@ -952,7 +958,8 @@ async def build_collage_satori(
             weather_data=weather_data or {},
         )
     except Exception as e:
-        logger.warning("satori.build_element_failed", style=chosen, error=str(e))
+        logger.warning("satori.build_element_failed", style=chosen, error=str(e), exc_info=True)
+        sentry_sdk.capture_exception(e)
         return None
 
     result = await _render_satori(element, width, height)
@@ -1052,5 +1059,6 @@ async def build_collage(
         return None
 
     except Exception as e:
-        logger.error("image_builder.build_failed", error=str(e))
+        logger.error("image_builder.build_failed", error=str(e), exc_info=True)
+        sentry_sdk.capture_exception(e)
         return None
