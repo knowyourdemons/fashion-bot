@@ -250,11 +250,17 @@ async def check_milestones(user, item_count: int, message, owner_id, owner_type,
         except Exception as e:
             logger.warning("milestone.mini_outfit.failed", error=str(e))
 
-    # 5 items: colortype prompt
-    if item_count >= 5 and "colortype_prompt" not in reached:
+    # 5 items: colortype prompt (only if colortype not already set)
+    _has_colortype = getattr(user, "colortype", None)
+    if item_count >= 5 and "colortype_prompt" not in reached and not _has_colortype:
         new_milestones.append("colortype_prompt")
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📸 Отправить селфи", callback_data="selfie_colortype_start")],
+            [InlineKeyboardButton("Потом", callback_data="selfie_colortype_later")],
+        ])
         await message.reply_text(
-            "🎉 Пришли селфи — определю твой цветотип!"
+            "🎉 5 вещей! Хочешь точнее подбирать цвета? Пришли селфи!",
+            reply_markup=keyboard,
         )
 
     # 8 items (mom): first full outfit
@@ -300,6 +306,304 @@ async def check_milestones(user, item_count: int, message, owner_id, owner_type,
             )
         except Exception as e:
             logger.error("milestones.save_failed", error=str(e))
+
+
+# ── Selfie colortype detection ────────────────────────────────────────────
+
+# Hex palettes for colortype card rendering
+_COLORTYPE_CARD_HEX = {
+    "spring": ["#FFD1A9", "#FF9966", "#FFCC66", "#99CC66", "#FFE0B2", "#FFAB91"],
+    "summer": ["#B2A4D4", "#E8B4C8", "#A0C4D8", "#C8E0D8", "#D8C0D8", "#B0D0E0"],
+    "autumn": ["#CC9933", "#CC6633", "#8B8B00", "#996633", "#CC9966", "#8B6914"],
+    "winter": ["#FFFFFF", "#000000", "#3366CC", "#CC0066", "#C0C0C0", "#003366"],
+}
+
+_COLORTYPE_NAMES_RU = {
+    "spring": "Весна 🌸",
+    "summer": "Лето ☀️",
+    "autumn": "Осень 🍂",
+    "winter": "Зима ❄️",
+}
+
+
+async def handle_selfie_colortype_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: user tapped 'Отправить селфи' button."""
+    query = update.callback_query
+    await query.answer()
+    context.user_data["awaiting_selfie"] = True
+    await query.message.reply_text(
+        "📸 Отправь селфи при дневном свете — я определю твой цветотип!\n"
+        "Лучше без фильтров и макияжа."
+    )
+
+
+async def handle_selfie_colortype_later(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: user tapped 'Потом' on colortype prompt."""
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("Хорошо! Когда будешь готова — зайди в Профиль → Цветотип 🎨")
+
+
+async def handle_selfie_colortype_manual(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: user picks colortype manually after low-confidence detection."""
+    query = update.callback_query
+    await query.answer()
+    choice = query.data.split(":")[1]  # spring/summer/autumn/winter
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    # Determine target: child for mom segments, user otherwise
+    segment = getattr(user, "segment", "no_kids") or "no_kids"
+    if segment in ("mom_girl", "mom_boy"):
+        from db.crud.children import get_children
+        async with AsyncReadSession() as session:
+            children = await get_children(session, user.id)
+        if children:
+            child = children[0]
+            from db.models.child import Child
+            async with AsyncWriteSession() as session:
+                await session.execute(
+                    sa.update(Child).where(Child.id == child.id)
+                    .values(colortype=choice)
+                )
+                await session.commit()
+            target_name = child.name
+        else:
+            await _save_colortype_to_user(user, choice)
+            target_name = user.name
+    else:
+        await _save_colortype_to_user(user, choice)
+        target_name = user.name
+
+    ct_label = _COLORTYPE_NAMES_RU.get(choice, choice)
+    # Render colortype card
+    card_bytes = await _build_colortype_card(target_name, choice)
+    if card_bytes:
+        from io import BytesIO
+        await query.message.reply_photo(
+            photo=BytesIO(card_bytes),
+            caption=f"✨ {target_name} — {ct_label}\nТеперь буду подбирать цвета под твой цветотип!",
+        )
+    else:
+        await query.message.reply_text(
+            f"✨ {target_name} — {ct_label}\nТеперь буду подбирать цвета под твой цветотип!"
+        )
+
+
+async def _save_colortype_to_user(user, colortype: str) -> None:
+    """Save colortype to user record."""
+    async with AsyncWriteSession() as session:
+        await session.execute(
+            sa.update(User).where(User.id == user.id)
+            .values(colortype=colortype)
+        )
+        await session.commit()
+    user.colortype = colortype
+
+
+async def _analyze_selfie_colortype(photo_bytes: bytes) -> dict:
+    """Call Vision (Sonnet) to determine colortype from selfie. Returns {colortype, confidence}."""
+    pool = get_anthropic_pool()
+    prompt = (
+        "Определи цветотип человека на фото. Анализируй тон кожи, цвет волос, контраст между ними.\n"
+        'Ответь JSON: {"colortype": "spring"|"summer"|"autumn"|"winter", "confidence": 0.0-1.0}\n'
+        "Только JSON, без пояснений."
+    )
+    try:
+        response = await pool.create_message(
+            model="claude-sonnet-4-6",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": base64.standard_b64encode(photo_bytes).decode(),
+                        },
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            }],
+            system="Ты эксперт по цветотипированию. Отвечай только JSON.",
+            max_tokens=100,
+        )
+        text = response.content[0].text.strip()
+        # Parse JSON from response
+        import re as _re
+        json_match = _re.search(r'\{[^}]+\}', text)
+        if json_match:
+            result = json.loads(json_match.group())
+            return {
+                "colortype": result.get("colortype", "summer"),
+                "confidence": float(result.get("confidence", 0.5)),
+            }
+        return {"colortype": "summer", "confidence": 0.0}
+    except Exception as e:
+        logger.warning("selfie_colortype.vision_failed", error=str(e))
+        sentry_sdk.capture_exception(e)
+        return {"colortype": "summer", "confidence": 0.0}
+
+
+async def _build_colortype_card(name: str, colortype: str) -> bytes | None:
+    """Render a colortype card via Satori: 440x300 with gradient, name, and 6 swatches."""
+    from services.image_builder import _render_satori
+    from services.brief_card import _div, _text, _row, _col
+
+    hex_colors = _COLORTYPE_CARD_HEX.get(colortype, _COLORTYPE_CARD_HEX["summer"])
+    ct_label = _COLORTYPE_NAMES_RU.get(colortype, colortype)
+
+    # Gradient backgrounds per colortype
+    _GRADIENTS = {
+        "spring": ("linear-gradient(135deg, #FFF8E7, #FFE8D0)", "#8B6B4A"),
+        "summer": ("linear-gradient(135deg, #F0E8F8, #E0F0F8)", "#5B4A6B"),
+        "autumn": ("linear-gradient(135deg, #FFF0E0, #F0E0C8)", "#6B4A2A"),
+        "winter": ("linear-gradient(135deg, #E8EDF8, #D8E0F0)", "#2A3A5B"),
+    }
+    gradient, text_color = _GRADIENTS.get(colortype, _GRADIENTS["summer"])
+
+    # Build swatches
+    swatches = []
+    for hx in hex_colors[:6]:
+        swatches.append(
+            _div([], width=48, height=48, borderRadius=8,
+                 backgroundColor=hx,
+                 border="1px solid rgba(0,0,0,0.08)")
+        )
+
+    root = _div(
+        [
+            _col(
+                [
+                    _text(name, 24, text_color, fontWeight=700,
+                          textAlign="center", justifyContent="center", width="100%"),
+                    _text(ct_label, 18, text_color,
+                          textAlign="center", justifyContent="center", width="100%",
+                          marginTop=4),
+                ],
+                gap=4,
+                alignItems="center",
+                padding="24px 20px 8px",
+            ),
+            _text("Твоя палитра:", 13, text_color,
+                  textAlign="center", justifyContent="center", width="100%",
+                  opacity=0.7),
+            _row(swatches, gap=10, justifyContent="center", padding="8px 20px"),
+            _text("Буду учитывать при подборе образов", 12, text_color,
+                  textAlign="center", justifyContent="center", width="100%",
+                  opacity=0.5, padding="0 20px 16px"),
+        ],
+        flexDirection="column",
+        width="100%",
+        height="100%",
+        backgroundImage=gradient,
+        borderRadius=20,
+        alignItems="center",
+    )
+
+    return await _render_satori(root, 440, 300)
+
+
+async def _handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Process selfie photo for colortype detection. Returns True if handled."""
+    if not context.user_data.get("awaiting_selfie"):
+        return False
+
+    context.user_data.pop("awaiting_selfie", None)
+    user = context.user_data.get("db_user")
+    if not user:
+        return True
+
+    await update.message.reply_text("🔍 Анализирую цветотип...")
+
+    # Download photo
+    if update.message.photo:
+        file_id = update.message.photo[-1].file_id
+    elif update.message.document:
+        file_id = update.message.document.file_id
+    else:
+        await update.message.reply_text("Отправь фото, а не файл 📸")
+        context.user_data["awaiting_selfie"] = True
+        return True
+
+    try:
+        photo_file = await context.bot.get_file(file_id)
+        photo_ba = bytearray()
+        await photo_file.download_as_bytearray(photo_ba)
+        photo_bytes = bytes(photo_ba)
+    except Exception as e:
+        logger.warning("selfie.download_failed", error=str(e))
+        await update.message.reply_text("Не удалось загрузить фото. Попробуй ещё раз 📸")
+        context.user_data["awaiting_selfie"] = True
+        return True
+
+    # Analyze
+    result = await _analyze_selfie_colortype(photo_bytes)
+    colortype = result["colortype"]
+    confidence = result["confidence"]
+
+    logger.info("selfie_colortype.result",
+        user_id=str(user.id),
+        colortype=colortype,
+        confidence=confidence,
+    )
+
+    # Determine target
+    segment = getattr(user, "segment", "no_kids") or "no_kids"
+    children = []
+    if segment in ("mom_girl", "mom_boy"):
+        from db.crud.children import get_children
+        async with AsyncReadSession() as session:
+            children = await get_children(session, user.id)
+        target_name = children[0].name if children else user.name
+    else:
+        target_name = user.name
+
+    if confidence >= 0.6:
+        # High confidence — save directly
+        if segment in ("mom_girl", "mom_boy") and children:
+            from db.models.child import Child
+            async with AsyncWriteSession() as session:
+                await session.execute(
+                    sa.update(Child).where(Child.id == children[0].id)
+                    .values(colortype=colortype)
+                )
+                await session.commit()
+        else:
+            await _save_colortype_to_user(user, colortype)
+
+        ct_label = _COLORTYPE_NAMES_RU.get(colortype, colortype)
+        card_bytes = await _build_colortype_card(target_name, colortype)
+        if card_bytes:
+            from io import BytesIO
+            await update.message.reply_photo(
+                photo=BytesIO(card_bytes),
+                caption=f"✨ {target_name} — {ct_label}\nТеперь буду подбирать цвета под твой цветотип!",
+            )
+        else:
+            await update.message.reply_text(
+                f"✨ {target_name} — {ct_label}\nТеперь буду подбирать цвета под твой цветотип!"
+            )
+    else:
+        # Low confidence — offer manual choice
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("Весна 🌸", callback_data="manual_colortype:spring"),
+                InlineKeyboardButton("Лето ☀️", callback_data="manual_colortype:summer"),
+            ],
+            [
+                InlineKeyboardButton("Осень 🍂", callback_data="manual_colortype:autumn"),
+                InlineKeyboardButton("Зима ❄️", callback_data="manual_colortype:winter"),
+            ],
+        ])
+        await update.message.reply_text(
+            "🤔 Сложно определить точно по фото. Выбери свой цветотип:",
+            reply_markup=keyboard,
+        )
+
+    return True
 
 
 # ── Brief trigger ──────────────────────────────────────────────────────────
@@ -638,6 +942,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not user.onboarding_completed:
         await update.message.reply_text("Сначала пройди настройку: /start")
         return
+
+    # Selfie colortype detection mode
+    if context.user_data.get("awaiting_selfie"):
+        handled = await _handle_selfie_photo(update, context)
+        if handled:
+            return
 
     # Режим оценки образа (из кнопки меню)
     if context.user_data.get("awaiting_rate_photo"):

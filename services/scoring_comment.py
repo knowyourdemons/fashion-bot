@@ -1,10 +1,106 @@
 """
 Текстовые комментарии от стилиста Касси (через Haiku).
 Заменяют числовой скор в интерфейсе — юзер никогда не видит цифру.
+
+Variable reward: 20+ fallback templates per segment, rotated with Redis dedup.
 """
+import hashlib
+import random
 import structlog
 
 logger = structlog.get_logger()
+
+# ── Fallback templates by segment ─────────────────────────────────────────
+
+_TEMPLATES_MOM = [
+    "Классная пара! Тепло и удобно 👌",
+    "Отличный выбор — и красиво, и практично!",
+    "Удобно, стильно, мама одобряет ✨",
+    "Гармоничное сочетание! Мягкие цвета — то что надо 🌸",
+    "Этот образ точно понравится — комфорт и стиль!",
+    "Нежные тона — идеально для прогулки!",
+    "Практично и со вкусом — редкое сочетание 👏",
+    "Уютный образ на каждый день!",
+    "Хорошее сочетание! Мягкие цвета отлично смотрятся вместе 🎨",
+    "Готово к садику и прогулке! Тепло и красиво.",
+    "Образ дня — удобство на первом месте, стиль на втором!",
+    "Функциональный и стильный — мечта мамы!",
+    "Цвета подобраны с душой — гармония! 💕",
+    "Просто и со вкусом. Лучший стиль — незаметный стиль.",
+    "Тёплый и уютный образ — то что нужно!",
+    "Практичная классика — всегда выручает!",
+    "Отличная комбинация! Комфорт и красота в одном 🌟",
+    "Мягкие цвета создают настроение — образ удался!",
+    "Каждая вещь на своём месте — образ собран!",
+    "Стильно и по погоде — два в одном! 👍",
+    "Удачное сочетание текстур и цветов!",
+    "Образ, в котором хочется гулять весь день 🌿",
+]
+
+_TEMPLATES_NO_KIDS = [
+    "Изысканное сочетание для весны ✨",
+    "Стильная комбинация — чувствуется вкус!",
+    "Модный и актуальный образ! 🔥",
+    "Цвета играют — отличная палитра!",
+    "Элегантно и современно — люблю!",
+    "Образ с характером — ты точно выделишься! ✨",
+    "Трендовое сочетание — всё в точку!",
+    "Минимализм и стиль — идеальный баланс.",
+    "Этот образ говорит: я знаю что ношу 👑",
+    "Текстуры и цвета — красивая игра!",
+    "Свежий и актуальный look!",
+    "Утончённое сочетание — браво! 🎨",
+    "Лёгкий шик — то что модно сейчас.",
+    "Образ для уверенных — стильно и точно.",
+    "Классика с изюминкой — так и надо!",
+    "Цветовая гармония на высоте! 💫",
+    "Продуманный образ — каждая деталь работает.",
+    "Современная элегантность — вне трендов.",
+    "Стиль с характером! Нравится подход ✨",
+    "Актуальное сочетание — модные журналы одобряют!",
+    "Лаконично и со вкусом — лучший комплимент.",
+    "Образ, который запомнят 🌟",
+]
+
+
+def _get_templates(segment: str) -> list[str]:
+    """Return template list for segment."""
+    if segment in ("mom_girl", "mom_boy"):
+        return _TEMPLATES_MOM
+    return _TEMPLATES_NO_KIDS
+
+
+async def _pick_unique_template(
+    redis, user_id: str, segment: str,
+) -> str:
+    """Pick a template that wasn't used in the last 48h (Redis dedup)."""
+    templates = _get_templates(segment)
+    redis_key = f"last_comment_hash:{user_id}"
+
+    last_hash = None
+    if redis:
+        try:
+            last_hash = await redis.get(redis_key)
+            if isinstance(last_hash, bytes):
+                last_hash = last_hash.decode()
+        except Exception:
+            pass
+
+    # Try to pick a template different from last
+    random.shuffle(templates)
+    for tmpl in templates:
+        h = hashlib.md5(tmpl.encode()).hexdigest()[:8]
+        if h != last_hash:
+            # Store hash with 48h TTL
+            if redis:
+                try:
+                    await redis.set(redis_key, h, ex=172800)
+                except Exception:
+                    pass
+            return tmpl
+
+    # All same hash (impossible but safe)
+    return templates[0]
 
 
 async def generate_item_comment(
@@ -69,8 +165,19 @@ async def generate_outfit_comment(
     age: int | None,
     tone: str,
     wow_messages: list[str],
+    colortype: str | None = None,
+    segment: str | None = None,
+    redis=None,
 ) -> str:
-    """Генерирует текстовый комментарий об образе для брифа (Haiku, ~$0.003)."""
+    """Генерирует текстовый комментарий об образе для брифа (Haiku, ~$0.003).
+
+    Now includes colortype awareness and variable reward templates.
+    """
+    # Build colortype instruction
+    colortype_line = ""
+    if colortype:
+        colortype_line = f"\n- Цветотип: {colortype}. Упоминай подходящие цвета из палитры цветотипа."
+
     system = (
         "Ты стилист Касси. Напиши короткий комментарий (2-3 предложения) об образе на день.\n\n"
         "Правила:\n"
@@ -79,6 +186,7 @@ async def generate_outfit_comment(
         f"- Если wow — добавь эмоцию! Используй один из wow-шаблонов: {wow_messages}\n"
         f"- Учти контекст: {context}\n"
         f"- Тон: {tone or 'дружелюбный стилист'}"
+        f"{colortype_line}"
     )
 
     items_text = ", ".join(outfit_items) if outfit_items else "вещи подобраны"
@@ -88,6 +196,8 @@ async def generate_outfit_comment(
     if child_name:
         gender_label = "девочки" if gender == "girl" else "мальчика"
         prompt += f" Для {gender_label} {child_name}, {age} лет."
+    if colortype:
+        prompt += f" Цветотип: {colortype}."
     if is_wow:
         prompt += " Это WOW-образ!"
 
@@ -103,4 +213,9 @@ async def generate_outfit_comment(
         logger.warning("scoring_comment.outfit_failed", error=str(e))
         if is_wow and wow_messages:
             return wow_messages[0]
-        return f"Образ подобран под погоду {weather}. Хорошего дня! ✨"
+        # Variable reward: use segment-specific template with dedup
+        _seg = segment or "no_kids"
+        try:
+            return await _pick_unique_template(redis, "fallback", _seg)
+        except Exception:
+            return f"Образ подобран под погоду {weather}. Хорошего дня! ✨"

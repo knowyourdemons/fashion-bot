@@ -725,6 +725,9 @@ async def generate_brief(payload: dict) -> dict:
             age=child_age,
             tone=_tone,
             wow_messages=_wow_msgs,
+            colortype=getattr(child, "colortype", None) or getattr(user, "colortype", None),
+            segment=getattr(user, "segment", None),
+            redis=redis_client,
         )
 
         child_briefs.append(_format_child_block(
@@ -1545,6 +1548,11 @@ async def generate_evening_brief(payload: dict) -> dict:
                 child_name=child.name,
                 gender=getattr(child, "gender", None),
                 age=child_age,
+                tone="",
+                wow_messages=[],
+                colortype=getattr(child, "colortype", None) or getattr(user, "colortype", None),
+                segment=getattr(user, "segment", None),
+                redis=redis_client,
             )
         except Exception:
             _comment = ""

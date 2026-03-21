@@ -116,6 +116,11 @@ def create_application() -> Application:
     # Gap analysis
     app.add_handler(CallbackQueryHandler(wardrobe.handle_gap_analysis, pattern="^gap_analysis$"))
 
+    # Selfie colortype
+    app.add_handler(CallbackQueryHandler(wardrobe.handle_selfie_colortype_start, pattern="^selfie_colortype_start$"))
+    app.add_handler(CallbackQueryHandler(wardrobe.handle_selfie_colortype_later, pattern="^selfie_colortype_later$"))
+    app.add_handler(CallbackQueryHandler(wardrobe.handle_selfie_colortype_manual, pattern="^manual_colortype:"))
+
     # Геолокация для смены города в профиле
     app.add_handler(MessageHandler(filters.LOCATION, handle_edit_city_location))
 

@@ -40,7 +40,7 @@ def _get_text_system(user, weather_line: str = "") -> str:
     profile_parts = [f"Имя: {name}" if name else None,
                      f"сегмент: {segment_text}",
                      f"город: {city}" if city else None,
-                     f"цветотип: {colortype}" if colortype else "цветотип: не определён",
+                     f"цветотип: {colortype} (упоминай подходящие цвета при советах)" if colortype else "цветотип: не определён",
                      f"тип фигуры: {body_type}" if body_type else None]
     profile_line = ", ".join(p for p in profile_parts if p)
 
@@ -66,7 +66,7 @@ def _get_text_system(user, weather_line: str = "") -> str:
         f"\"Я стилист, могу помочь только с вопросами про одежду и стиль 👗\"\n"
         f"- Используй эмодзи умеренно\n"
         f"- Говори на русском\n"
-        f"- Тон: как подруга, не официально"
+        f"- Тон: {'тёплый, про комфорт и практичность' if segment in ('mom_girl', 'mom_boy') else 'стильный, про сочетания и тренды'}"
     )
 
 
