@@ -1,0 +1,126 @@
+<!-- TEMPLATE: full flat lay (8+ фото)
+     Jinja2: {{ name }}, {{ context }}, {{ date_str }}, {{ theme }},
+             {{ weather }}, {{ items }}, {{ base_layer }},
+             {{ kassi_comment }}, {{ palette }}
+     Нет прогресса, нет missing. Шеринг: Переслать (мама) / Stories (женщина)
+     Превью: открыть в Chrome, width=440px -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face{font-family:'N';src:url('/usr/share/fonts/custom/Nunito-Regular.ttf');font-weight:400}
+@font-face{font-family:'N';src:url('/usr/share/fonts/custom/Nunito-Bold.ttf');font-weight:700}
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:440px;font-family:'N',sans-serif;padding:16px}
+.mom{background:linear-gradient(180deg,#F5EDE8,#F0E8E4);--c:#5B3A4A;--cm:#B09888}
+.woman{background:linear-gradient(180deg,#E8EDF5,#E4E8F0);--c:#3A4A5B;--cm:#8898A8}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.hdr-d{font-size:9px;color:var(--cm);letter-spacing:.5px}
+.hdr-n{font-size:18px;font-weight:700;color:var(--c)}
+.wx{display:flex;gap:4px;align-items:center}
+.wx-i{font-size:16px}
+.wx-t{font-size:15px;font-weight:700;color:var(--c)}
+.wx-t.w{color:#C05050}
+.wx-a{color:#D0C0B0;font-size:9px}
+
+/* Flat lay area */
+.flat{position:relative;height:260px;margin:6px 0}
+.fi{position:absolute;border-radius:12px;overflow:hidden;background-size:cover;background-position:center}
+.fi-lbl{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.2));padding:3px 8px}
+.fi-lbl span{font-size:9px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.3)}
+.fi-emoji{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;opacity:.5}
+
+/* Positions: outerwear top-center, top+bottom mid, shoes+acc bottom */
+.fi-outer{left:50%;top:0;transform:translateX(-50%);width:160px;height:110px}
+.fi-top{left:4px;top:84px;width:130px;height:100px}
+.fi-bottom{right:4px;top:88px;width:126px;height:100px}
+.fi-shoe{left:20px;bottom:4px;width:90px;height:68px}
+.fi-hat{right:20px;bottom:8px;width:76px;height:60px;border-radius:10px}
+.fi-scarf{left:50%;bottom:0;transform:translateX(-50%);width:66px;height:52px;border-radius:10px}
+
+/* Pastel bg */
+.bg-pink{background:linear-gradient(145deg,#F0C0C8,#E0A0B0)}
+.bg-blue{background:linear-gradient(145deg,#B0C0D8,#90A0C0)}
+.bg-beige{background:linear-gradient(145deg,#E0D0C0,#D0C0A8)}
+.bg-grey{background:linear-gradient(145deg,#D0D0D0,#B8B8B8)}
+.bg-green{background:linear-gradient(145deg,#C0D8C0,#A0C0A0)}
+.bg-navy{background:linear-gradient(145deg,#A0B0C8,#8090B0)}
+.bg-brown{background:linear-gradient(145deg,#C8B8A0,#B0A088)}
+.bg-white{background:linear-gradient(145deg,#F0F0F0,#E0E0E0)}
+.bg-black{background:linear-gradient(145deg,#505050,#383838)}
+.bg-purple{background:linear-gradient(145deg,#D0C0E0,#B8A8D0)}
+.bg-red{background:linear-gradient(145deg,#E0B0B0,#D09090)}
+.bg-lavender{background:linear-gradient(145deg,#E0D8E8,#C8C0D8)}
+
+/* Palette */
+.palette{position:absolute;right:4px;top:4px;display:flex;flex-direction:column;gap:3px}
+.dot{width:10px;height:10px;border-radius:50%;border:1.5px solid #fff}
+
+.base{font-size:9px;color:var(--cm);text-align:center;margin:4px 0}
+.kassi{background:rgba(255,255,255,.5);border-radius:10px;padding:8px 10px;margin-top:8px}
+.kassi-t{font-size:10px;color:var(--c);line-height:1.4}
+.kassi-a{font-size:8px;color:var(--cm);margin-top:3px}
+</style>
+</head>
+<body class="mom">
+
+<div class="hdr">
+  <div>
+    <div class="hdr-d">ЗАВТРА, ПТ 21 МАР · САДИК</div>
+    <div class="hdr-n">Алиса</div>
+  </div>
+  <div class="wx">
+    <span class="wx-i">☀️</span>
+    <span class="wx-t">+4°</span>
+    <span class="wx-a">→</span>
+    <span class="wx-t w">+2°</span>
+    <span class="wx-i">🌧️</span>
+  </div>
+</div>
+
+<div class="flat">
+  <!-- Куртка — top center -->
+  <div class="fi fi-outer bg-navy">
+    <div class="fi-emoji">🧥</div>
+    <div class="fi-lbl"><span>Куртка синяя</span></div>
+  </div>
+  <!-- Кофта — left -->
+  <div class="fi fi-top bg-pink">
+    <div class="fi-emoji">👚</div>
+    <div class="fi-lbl"><span>Кофта розовая</span></div>
+  </div>
+  <!-- Штаны — right -->
+  <div class="fi fi-bottom bg-blue">
+    <div class="fi-emoji">👖</div>
+    <div class="fi-lbl"><span>Джинсы синие</span></div>
+  </div>
+  <!-- Обувь — bottom left -->
+  <div class="fi fi-shoe bg-beige">
+    <div class="fi-emoji" style="font-size:20px">👟</div>
+  </div>
+  <!-- Шапка — bottom right -->
+  <div class="fi fi-hat bg-pink" style="opacity:.9">
+    <div class="fi-emoji" style="font-size:16px">🧢</div>
+  </div>
+  <!-- Шарф — bottom center -->
+  <div class="fi fi-scarf bg-green" style="opacity:.9">
+    <div class="fi-emoji" style="font-size:14px">🧣</div>
+  </div>
+
+  <div class="palette">
+    <div class="dot" style="background:#4070B0"></div>
+    <div class="dot" style="background:#E0A0B0"></div>
+    <div class="dot" style="background:#C8B8A0"></div>
+  </div>
+</div>
+
+<div class="base">🩲 колготки · майка</div>
+
+<div class="kassi">
+  <div class="kassi-t">Сегодня зелёная кофта — давно не надевали! С синими джинсами свежо 🌿 Зонт на забирание.</div>
+  <div class="kassi-a">— Касси</div>
+</div>
+
+</body>
+</html>

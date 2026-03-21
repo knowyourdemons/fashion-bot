@@ -1,0 +1,99 @@
+<!-- TEMPLATE: morning_update (утренний апдейт вечернего)
+     Два варианта: погода изменилась / не изменилась
+     Jinja2: {{ name }}, {{ context }}, {{ date_str }}, {{ theme }},
+             {{ weather_now }}, {{ changed }}, {{ change_text }},
+             {{ items }} (из вчерашнего brief_log), {{ kassi_comment }}
+     Превью: открыть в Chrome, width=440px -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face{font-family:'N';src:url('/usr/share/fonts/custom/Nunito-Regular.ttf');font-weight:400}
+@font-face{font-family:'N';src:url('/usr/share/fonts/custom/Nunito-Bold.ttf');font-weight:700}
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:440px;font-family:'N',sans-serif;padding:16px}
+.mom{background:linear-gradient(180deg,#F5EDE8,#F0E8E4);--c:#5B3A4A;--cm:#B09888}
+.woman{background:linear-gradient(180deg,#E8EDF5,#E4E8F0);--c:#3A4A5B;--cm:#8898A8}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
+.hdr-d{font-size:9px;color:var(--cm);letter-spacing:.5px}
+.hdr-n{font-size:18px;font-weight:700;color:var(--c)}
+.wx{display:flex;gap:4px;align-items:center}
+.wx-i{font-size:16px}
+.wx-t{font-size:15px;font-weight:700;color:var(--c)}
+.wx-t.good{color:#2A8A4A}
+
+/* Alert banners */
+.alert{border-radius:10px;padding:8px 12px;margin:8px 0}
+.alert-warn{background:#FFF8E8;border:1px solid #F0E0B0}
+.alert-warn .alert-h{font-size:11px;font-weight:700;color:#A08020}
+.alert-warn .alert-t{font-size:10px;color:#806020;line-height:1.4;margin-top:3px}
+.alert-ok{background:#F0FAF5;border:1px solid #C0E0D0}
+.alert-ok .alert-h{font-size:11px;color:#2A6A4A}
+
+/* Mini collage (same as evening, smaller) */
+.mini{position:relative;height:160px;margin:8px 0;opacity:.85}
+.fi{position:absolute;border-radius:10px;overflow:hidden;background-size:cover;background-position:center}
+.fi-emoji{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:20px;opacity:.5}
+.fi-outer{left:50%;top:0;transform:translateX(-50%);width:120px;height:80px}
+.fi-top{left:4px;top:58px;width:100px;height:78px}
+.fi-bottom{right:4px;top:62px;width:96px;height:78px}
+
+.bg-pink{background:linear-gradient(145deg,#F0C0C8,#E0A0B0)}
+.bg-blue{background:linear-gradient(145deg,#B0C0D8,#90A0C0)}
+.bg-navy{background:linear-gradient(145deg,#A0B0C8,#8090B0)}
+.bg-green{background:linear-gradient(145deg,#C0D8C0,#A0C0A0)}
+.bg-beige{background:linear-gradient(145deg,#E0D0C0,#D0C0A8)}
+
+.kassi{background:rgba(255,255,255,.5);border-radius:10px;padding:8px 10px;margin-top:6px}
+.kassi-t{font-size:10px;color:var(--c);line-height:1.4}
+.kassi-a{font-size:8px;color:var(--cm);margin-top:3px}
+</style>
+</head>
+<body class="mom">
+
+<div class="hdr">
+  <div>
+    <div class="hdr-d">ПТ, 21 МАР · САДИК</div>
+    <div class="hdr-n">Алиса</div>
+  </div>
+  <div class="wx">
+    <span class="wx-i">🌤️</span>
+    <!-- Если погода изменилась к лучшему: .good -->
+    <span class="wx-t good">+8°</span>
+  </div>
+</div>
+
+<!-- ВАРИАНТ A: Погода изменилась -->
+<div class="alert alert-warn">
+  <div class="alert-h">⚠️ Потеплело до +8°!</div>
+  <div class="alert-t">Куртку замени на ветровку. Шапка не нужна.</div>
+</div>
+
+<!-- ВАРИАНТ B: Погода не изменилась (раскомментировать вместо A)
+<div class="alert alert-ok">
+  <div class="alert-h">✅ Всё как вчера планировали</div>
+</div>
+-->
+
+<!-- Мини-коллаж из вчерашнего вечернего -->
+<div class="mini">
+  <div class="fi fi-outer bg-green">
+    <!-- При изменении: заменённая вещь (ветровка вместо куртки) -->
+    <div class="fi-emoji">🧥</div>
+  </div>
+  <div class="fi fi-top bg-pink">
+    <div class="fi-emoji">👚</div>
+  </div>
+  <div class="fi fi-bottom bg-blue">
+    <div class="fi-emoji">👖</div>
+  </div>
+</div>
+
+<div class="kassi">
+  <div class="kassi-t">Остальное как вчера. Хорошего дня! ☀️</div>
+  <div class="kassi-a">— Касси</div>
+</div>
+
+</body>
+</html>

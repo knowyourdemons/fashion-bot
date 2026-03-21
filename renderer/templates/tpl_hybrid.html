@@ -1,0 +1,139 @@
+<!-- TEMPLATE: hybrid (1-7 фото в образе)
+     Jinja2: {{ name }}, {{ context }}, {{ date_str }}, {{ theme }},
+             {{ weather }}, {{ items }}, {{ missing }}, {{ base_layer }},
+             {{ kassi_comment }}, {{ progress_pct }}, {{ progress_text }}, {{ palette }}
+     Превью: открыть в Chrome, width=440px -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face{font-family:'N';src:url('/usr/share/fonts/custom/Nunito-Regular.ttf');font-weight:400}
+@font-face{font-family:'N';src:url('/usr/share/fonts/custom/Nunito-Bold.ttf');font-weight:700}
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:440px;font-family:'N',sans-serif;padding:16px}
+.mom{background:linear-gradient(180deg,#F5EDE8,#F0E8E4);--c:#5B3A4A;--cm:#B09888;--acc:#D080A0;--pbg:#F0E8EC}
+.woman{background:linear-gradient(180deg,#E8EDF5,#E4E8F0);--c:#3A4A5B;--cm:#8898A8;--acc:#7090C0;--pbg:#E8ECF0}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.hdr-d{font-size:9px;color:var(--cm);letter-spacing:.5px}
+.hdr-n{font-size:18px;font-weight:700;color:var(--c)}
+.wx{display:flex;gap:4px;align-items:center}
+.wx-i{font-size:16px}
+.wx-t{font-size:15px;font-weight:700;color:var(--c)}
+.wx-t.w{color:#C05050}
+.wx-a{color:#D0C0B0;font-size:9px}
+
+/* Photo cards */
+.photos{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0;position:relative}
+.ph{border-radius:12px;overflow:hidden;position:relative;background-size:cover;background-position:center}
+.ph.w100{width:100%;height:140px}
+.ph.w50{width:calc(50% - 2px);height:110px}
+.ph.w33{width:calc(33.3% - 3px);height:90px}
+.ph-lbl{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.25));padding:4px 10px}
+.ph-lbl span{font-size:10px;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.3)}
+.ph-emoji{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:36px;opacity:.5}
+
+/* Pastel bg by color */
+.bg-pink{background:linear-gradient(145deg,#F0C0C8,#E0A0B0)}
+.bg-blue{background:linear-gradient(145deg,#B0C0D8,#90A0C0)}
+.bg-beige{background:linear-gradient(145deg,#E0D0C0,#D0C0A8)}
+.bg-grey{background:linear-gradient(145deg,#D0D0D0,#B8B8B8)}
+.bg-green{background:linear-gradient(145deg,#C0D8C0,#A0C0A0)}
+.bg-red{background:linear-gradient(145deg,#E0B0B0,#D09090)}
+.bg-navy{background:linear-gradient(145deg,#A0B0C8,#8090B0)}
+.bg-brown{background:linear-gradient(145deg,#C8B8A0,#B0A088)}
+.bg-white{background:linear-gradient(145deg,#F0F0F0,#E0E0E0)}
+.bg-black{background:linear-gradient(145deg,#505050,#383838)}
+.bg-purple{background:linear-gradient(145deg,#D0C0E0,#B8A8D0)}
+
+/* Palette dots */
+.palette{position:absolute;right:6px;top:6px;display:flex;flex-direction:column;gap:3px}
+.dot{width:10px;height:10px;border-radius:50%;border:1.5px solid #fff}
+
+/* Missing */
+.miss{margin:6px 0}
+.miss-h{font-size:9px;color:var(--cm);margin-bottom:4px}
+.miss-row{display:flex;gap:4px}
+.miss-i{flex:1;border-radius:8px;padding:5px 4px;text-align:center}
+.miss-i .icon{font-size:16px}
+.miss-i .name{font-size:8px;font-weight:600;color:var(--c);margin-top:2px;opacity:.7}
+.miss-outer{background:#E0E8F0}
+.miss-foot{background:#F0EDE0}
+.miss-acc{background:#E0F0E8}
+.miss-top{background:#F0E8EC}
+
+/* Base layer */
+.base{font-size:9px;color:var(--cm);text-align:center;margin:4px 0}
+
+/* Kassi */
+.kassi{background:rgba(255,255,255,.5);border-radius:10px;padding:8px 10px;margin-top:8px}
+.kassi-t{font-size:10px;color:var(--c);line-height:1.4}
+.kassi-a{font-size:8px;color:var(--cm);margin-top:3px}
+
+/* Progress */
+.prog{background:#fff;border-radius:8px;padding:6px 10px;margin-top:6px;text-align:center}
+.prog-bar{background:var(--pbg);height:4px;border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;border-radius:2px;background:var(--acc)}
+.prog-txt{font-size:8px;color:var(--cm);margin-top:3px}
+</style>
+</head>
+<body class="mom">
+
+<div class="hdr">
+  <div>
+    <div class="hdr-d">ПТ, 21 МАРТА · САДИК</div>
+    <div class="hdr-n">Алиса</div>
+  </div>
+  <div class="wx">
+    <span class="wx-i">☀️</span>
+    <span class="wx-t">+4°</span>
+    <span class="wx-a">→</span>
+    <span class="wx-t w">+2°</span>
+    <span class="wx-i">🌧️</span>
+  </div>
+</div>
+
+<!-- REAL PHOTOS -->
+<div class="photos">
+  <!-- 2 фото: w50+w50. 1 фото: w100. 3+: w50+w50 top, w33 bottom -->
+  <div class="ph w50 bg-pink">
+    <!-- Реальное фото: style="background-image:url(data:image/jpeg;base64,...)" -->
+    <div class="ph-emoji">👚</div>
+    <div class="ph-lbl"><span>Кофта розовая</span></div>
+  </div>
+  <div class="ph w50 bg-blue">
+    <div class="ph-emoji">👖</div>
+    <div class="ph-lbl"><span>Джинсы синие</span></div>
+  </div>
+
+  <div class="palette">
+    <div class="dot" style="background:#E0A0B0"></div>
+    <div class="dot" style="background:#4060C0"></div>
+  </div>
+</div>
+
+<!-- MISSING -->
+<div class="miss">
+  <div class="miss-h">Для полного образа:</div>
+  <div class="miss-row">
+    <div class="miss-i miss-outer"><div class="icon">🧥</div><div class="name">Куртка</div></div>
+    <div class="miss-i miss-foot"><div class="icon">👟</div><div class="name">Обувь</div></div>
+    <div class="miss-i miss-acc"><div class="icon">🧢</div><div class="name">Шапка</div></div>
+    <div class="miss-i miss-acc"><div class="icon">🧣</div><div class="name">Шарф</div></div>
+  </div>
+</div>
+
+<div class="base">🩲 колготки · майка</div>
+
+<div class="kassi">
+  <div class="kassi-t">Розовая кофта + синие джинсы — классная пара! 🌧️ Зонт на забирание.</div>
+  <div class="kassi-a">— Касси</div>
+</div>
+
+<div class="prog">
+  <div class="prog-bar"><div class="prog-fill" style="width:25%"></div></div>
+  <div class="prog-txt">2/8 · 📸 Сфоткай куртку!</div>
+</div>
+
+</body>
+</html>
