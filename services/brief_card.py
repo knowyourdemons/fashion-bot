@@ -56,8 +56,45 @@ def _count_real_photos(outfit_slots: list[dict]) -> int:
 
 # ── Download photos ──────────────────────────────────────────────────────────
 
+def _has_alpha(photo_bytes: bytes) -> bool:
+    """Check if photo bytes represent an image with alpha channel (PNG RGBA)."""
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(photo_bytes))
+        return img.mode in ("RGBA", "LA", "PA")
+    except Exception:
+        return False
+
+
+async def _ensure_bg_removed(photo_bytes: bytes) -> bytes:
+    """If photo has no alpha (original JPEG), run bg removal inline.
+
+    Returns PNG with transparency. Falls back to original on error.
+    """
+    if _has_alpha(photo_bytes):
+        return photo_bytes
+
+    try:
+        import asyncio
+        from services.image_processor import remove_background
+        result = await remove_background(photo_bytes)
+        if result and _has_alpha(result):
+            logger.info("brief_card.inline_rmbg_ok", size=len(result))
+            return result
+        # rmbg returned original (no API key, all models failed)
+        return photo_bytes
+    except Exception as e:
+        logger.warning("brief_card.inline_rmbg_failed", error=str(e))
+        return photo_bytes
+
+
 async def _download_slot_photos(outfit_slots: list[dict]) -> None:
-    """Download photos for slots that have photo_id/photo_url but no _photo_bytes."""
+    """Download photos for slots that have photo_id/photo_url but no _photo_bytes.
+
+    Prefers photo_url (R2, bg-removed). If only photo_id (Telegram original),
+    downloads and runs bg removal inline to ensure clean collage photos.
+    """
     import httpx
     from services.image_builder import _download_photo
 
@@ -79,11 +116,14 @@ async def _download_slot_photos(outfit_slots: list[dict]) -> None:
                     slot.get("photo_url"),
                 )
                 if photo_bytes:
+                    # Ensure bg is removed (R2 photos already are, Telegram originals need it)
+                    photo_bytes = await _ensure_bg_removed(photo_bytes)
                     slot["_photo_bytes"] = photo_bytes
                     logger.info(
                         "brief_card.photo_ok",
                         slot=slot.get("slot"),
                         size=len(photo_bytes),
+                        has_alpha=_has_alpha(photo_bytes),
                     )
                 else:
                     logger.warning(
