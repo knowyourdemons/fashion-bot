@@ -181,6 +181,60 @@ def soften_edges(png_bytes: bytes, radius: float = 1.5) -> bytes:
     return buf.getvalue()
 
 
+def _bbox_crop_rgba(png_bytes: bytes, bbox: dict, size: int = THUMB_SIZE) -> bytes:
+    """Crop an already-processed RGBA thumbnail by Vision bbox, then re-pad and resize.
+
+    Used AFTER rembg: the full photo has bg removed, now we isolate one item
+    by its bbox coordinates. The result is cleaner because rembg had full context.
+    """
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+    iw, ih = img.size
+
+    x = max(0.0, min(1.0, float(bbox.get("x", 0.0))))
+    y = max(0.0, min(1.0, float(bbox.get("y", 0.0))))
+    w = max(0.05, min(1.0 - x, float(bbox.get("w", 1.0))))
+    h = max(0.05, min(1.0 - y, float(bbox.get("h", 1.0))))
+
+    # Add 10% padding around bbox for context
+    pad_x = w * 0.10
+    pad_y = h * 0.10
+    x = max(0.0, x - pad_x)
+    y = max(0.0, y - pad_y)
+    w = min(1.0 - x, w + 2 * pad_x)
+    h = min(1.0 - y, h + 2 * pad_y)
+
+    left = int(x * iw)
+    top = int(y * ih)
+    right = int((x + w) * iw)
+    bottom = int((y + h) * ih)
+
+    cropped = img.crop((left, top, right, bottom))
+
+    # Auto-trim transparent edges
+    alpha = cropped.split()[3]
+    trim_bbox = alpha.getbbox()
+    if trim_bbox:
+        pad_px = int(min(cropped.size) * 0.05)
+        trim_bbox = (
+            max(0, trim_bbox[0] - pad_px),
+            max(0, trim_bbox[1] - pad_px),
+            min(cropped.width, trim_bbox[2] + pad_px),
+            min(cropped.height, trim_bbox[3] + pad_px),
+        )
+        cropped = cropped.crop(trim_bbox)
+
+    # Pad to square + resize
+    cw, ch = cropped.size
+    side = max(cw, ch)
+    square = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    square.paste(cropped, ((side - cw) // 2, (side - ch) // 2))
+    square = square.resize((size, size), Image.LANCZOS)
+
+    buf = io.BytesIO()
+    square.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
+
 def pad_square_resize(png_bytes: bytes, size: int = THUMB_SIZE) -> bytes:
     """Auto-trim transparent edges, pad to square, resize to size×size."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")

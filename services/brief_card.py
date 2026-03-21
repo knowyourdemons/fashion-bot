@@ -127,21 +127,9 @@ async def _download_slot_photos(outfit_slots: list[dict]) -> None:
                     logger.warning("brief_card.photo_empty", slot=slot.get("slot"))
                     continue
 
-                # 2.5. Bbox crop: if item has bbox, crop individual item BEFORE processing
-                _bbox = slot.get("bbox")
-                if _bbox and isinstance(_bbox, dict) and _bbox.get("w", 1.0) < 0.95:
-                    try:
-                        from services.vision import _crop_bbox
-                        photo_bytes = _crop_bbox(photo_bytes, _bbox)
-                        logger.info(
-                            "brief_card.bbox_crop",
-                            slot=slot.get("slot"),
-                            bbox=_bbox,
-                        )
-                    except Exception as _crop_err:
-                        logger.warning("brief_card.bbox_crop_failed", error=str(_crop_err))
-
-                # 3. Build thumbnail (EXIF → brightness → rembg → edges → pad → resize)
+                # 3. Build thumbnail
+                # Pipeline: rembg on FULL photo → bbox crop on RGBA → pad → resize
+                # Why rembg first: model sees full scene context, better separation
                 from services.image_processor import make_collage_thumbnail
                 from PIL import Image
                 import io as _io
@@ -151,6 +139,16 @@ async def _download_slot_photos(outfit_slots: list[dict]) -> None:
                 needs_rembg = img_check.mode not in ("RGBA", "LA", "PA")
 
                 thumb = make_collage_thumbnail(photo_bytes, needs_bg_removal=needs_rembg)
+
+                # 3.5. Bbox crop AFTER bg removal: isolate this item from multi-item photo
+                _bbox = slot.get("bbox")
+                if _bbox and isinstance(_bbox, dict) and _bbox.get("w", 1.0) < 0.95:
+                    try:
+                        from services.image_processor import _bbox_crop_rgba
+                        thumb = _bbox_crop_rgba(thumb, _bbox)
+                        logger.info("brief_card.bbox_crop", slot=slot.get("slot"))
+                    except Exception as _crop_err:
+                        logger.warning("brief_card.bbox_crop_failed", error=str(_crop_err))
                 slot["_photo_bytes"] = thumb
 
                 # Cache for next time
