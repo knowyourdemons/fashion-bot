@@ -1,9 +1,8 @@
-<!-- TEMPLATE: morning_update (утренний апдейт вечернего)
-     Два варианта: погода изменилась / не изменилась
-     Jinja2: {{ name }}, {{ context }}, {{ date_str }}, {{ theme }},
-             {{ weather_now }}, {{ changed }}, {{ change_text }},
-             {{ items }} (из вчерашнего brief_log), {{ kassi_comment }}
-     Превью: открыть в Chrome, width=440px -->
+{# TEMPLATE: morning_update (утренний апдейт вечернего)
+   Два варианта: погода изменилась / не изменилась
+   Vars: name, context, date_str, css_class, weather_now, changed,
+         change_text, items, kassi_comment
+   Превью: открыть в Chrome, width=440px #}
 <!DOCTYPE html>
 <html>
 <head>
@@ -44,56 +43,64 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
 .bg-navy{background:linear-gradient(145deg,#A0B0C8,#8090B0)}
 .bg-green{background:linear-gradient(145deg,#C0D8C0,#A0C0A0)}
 .bg-beige{background:linear-gradient(145deg,#E0D0C0,#D0C0A8)}
+.bg-grey{background:linear-gradient(145deg,#D0D0D0,#B8B8B8)}
+.bg-red{background:linear-gradient(145deg,#E0B0B0,#D09090)}
+.bg-brown{background:linear-gradient(145deg,#C8B8A0,#B0A088)}
+.bg-white{background:linear-gradient(145deg,#F0F0F0,#E0E0E0)}
+.bg-black{background:linear-gradient(145deg,#505050,#383838)}
+.bg-purple{background:linear-gradient(145deg,#D0C0E0,#B8A8D0)}
 
 .kassi{background:rgba(255,255,255,.5);border-radius:10px;padding:8px 10px;margin-top:6px}
 .kassi-t{font-size:10px;color:var(--c);line-height:1.4}
 .kassi-a{font-size:8px;color:var(--cm);margin-top:3px}
 </style>
 </head>
-<body class="mom">
+<body class="{{ css_class }}">
 
 <div class="hdr">
   <div>
-    <div class="hdr-d">ПТ, 21 МАР · САДИК</div>
-    <div class="hdr-n">Алиса</div>
+    <div class="hdr-d">{{ date_str }}{% if context %} · {{ context }}{% endif %}</div>
+    <div class="hdr-n">{{ name }}</div>
   </div>
+  {% if weather_now %}
   <div class="wx">
-    <span class="wx-i">🌤️</span>
-    <!-- Если погода изменилась к лучшему: .good -->
-    <span class="wx-t good">+8°</span>
+    {% if weather_now.icon %}<span class="wx-i">{{ weather_now.icon }}</span>{% endif %}
+    <span class="wx-t{{ ' good' if weather_now.is_good else '' }}">{{ weather_now.temp_str }}</span>
   </div>
+  {% endif %}
 </div>
 
-<!-- ВАРИАНТ A: Погода изменилась -->
+{% if changed %}
 <div class="alert alert-warn">
-  <div class="alert-h">⚠️ Потеплело до +8°!</div>
-  <div class="alert-t">Куртку замени на ветровку. Шапка не нужна.</div>
+  <div class="alert-h">⚠️ {{ change_text.split('.')[0] }}!</div>
+  {% if change_text.split('.')|length > 1 %}
+  <div class="alert-t">{{ change_text.split('.')[1:] | join('.') | trim }}</div>
+  {% endif %}
 </div>
-
-<!-- ВАРИАНТ B: Погода не изменилась (раскомментировать вместо A)
+{% else %}
 <div class="alert alert-ok">
   <div class="alert-h">✅ Всё как вчера планировали</div>
 </div>
--->
+{% endif %}
 
 <!-- Мини-коллаж из вчерашнего вечернего -->
+{% if items %}
 <div class="mini">
-  <div class="fi fi-outer bg-green">
-    <!-- При изменении: заменённая вещь (ветровка вместо куртки) -->
-    <div class="fi-emoji">🧥</div>
+  {% for item in items %}
+  <div class="fi fi-{{ item.fi_class }} {{ item.bg_class }}"
+       {% if item.photo_base64 %}style="background-image:url(data:image/png;base64,{{ item.photo_base64 }})"{% endif %}>
+    {% if not item.photo_base64 %}<div class="fi-emoji">{{ item.emoji }}</div>{% endif %}
   </div>
-  <div class="fi fi-top bg-pink">
-    <div class="fi-emoji">👚</div>
-  </div>
-  <div class="fi fi-bottom bg-blue">
-    <div class="fi-emoji">👖</div>
-  </div>
+  {% endfor %}
 </div>
+{% endif %}
 
+{% if kassi_comment %}
 <div class="kassi">
-  <div class="kassi-t">Остальное как вчера. Хорошего дня! ☀️</div>
+  <div class="kassi-t">{{ kassi_comment }}</div>
   <div class="kassi-a">— Касси</div>
 </div>
+{% endif %}
 
 </body>
 </html>

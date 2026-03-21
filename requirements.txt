@@ -17,6 +17,7 @@ imagehash==4.3.1
 onnxruntime==1.24.4
 numpy==1.26.4
 uvicorn[standard]==0.32.1
+jinja2==3.1.4
 python-jose[cryptography]==3.3.0
 python-multipart==0.0.12
 timezonefinder==6.5.2

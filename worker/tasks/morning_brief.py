@@ -300,7 +300,6 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
     from db.crud.brief_log import create_log
     from core.queue import RedisQueue, QueuePriority
     from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
-    from services.image_builder import build_collage
     from worker.tasks.style_config import (
         get_placeholder_label, get_temp_regime, COLORTYPE_PALETTES, _needs_tights,
     )
@@ -423,10 +422,9 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
     _collage_params = get_collage_params(user=user, temp=temp_m, temp_now=temp_now_adult, temp_day=temp_d_adult, temp_evening=temp_e, precip=precip_e_adult or 0)
     collage_header = _collage_params["header_text"]
 
-    # ── PRIMARY: brief_card (Satori card with theme) ──
+    # ── Brief card (Jinja2 + Playwright) ──
     import base64 as _b64_adult
     brief_card_bytes = None
-    collage_bytes_val = None
 
     if outfit_slots or not items:
         try:
@@ -440,17 +438,6 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
             )
         except Exception as e:
             logger.warning("brief.adult.brief_card_failed", error=str(e))
-
-    # ── FALLBACK: old collage if brief_card failed ──
-    if not brief_card_bytes and outfit_slots:
-        try:
-            collage_bytes_val = await build_collage(
-                outfit_slots=outfit_slots,
-                theme=_collage_params["theme"],
-                header_text=collage_header,
-            )
-        except Exception as e:
-            logger.warning("brief.adult.collage_failed", error=str(e))
 
     # Сохранить BriefLog
     async with AsyncWriteSession() as session:
@@ -484,11 +471,8 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
         }
         if brief_card_bytes:
             _send_payload["brief_card_b64"] = _b64_adult.b64encode(brief_card_bytes).decode()
-        elif collage_bytes_val:
-            _send_payload["adult_has_outfit"] = True
-            _send_payload["collage_bytes_b64"] = _b64_adult.b64encode(collage_bytes_val).decode()
         else:
-            _send_payload["adult_has_outfit"] = False
+            _send_payload["adult_has_outfit"] = bool(outfit_slots)
 
         await queue.push(
             "send_morning_brief",

@@ -1,8 +1,7 @@
-<!-- TEMPLATE: hybrid (1-7 фото в образе)
-     Jinja2: {{ name }}, {{ context }}, {{ date_str }}, {{ theme }},
-             {{ weather }}, {{ items }}, {{ missing }}, {{ base_layer }},
-             {{ kassi_comment }}, {{ progress_pct }}, {{ progress_text }}, {{ palette }}
-     Превью: открыть в Chrome, width=440px -->
+{# TEMPLATE: hybrid (1-7 фото в образе)
+   Vars: name, context, date_str, css_class, weather, items, missing,
+         base_layer, kassi_comment, progress_pct, progress_text, palette
+   Превью: открыть в Chrome, width=440px #}
 <!DOCTYPE html>
 <html>
 <head>
@@ -45,6 +44,7 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
 .bg-white{background:linear-gradient(145deg,#F0F0F0,#E0E0E0)}
 .bg-black{background:linear-gradient(145deg,#505050,#383838)}
 .bg-purple{background:linear-gradient(145deg,#D0C0E0,#B8A8D0)}
+.bg-lavender{background:linear-gradient(145deg,#E0D8E8,#C8C0D8)}
 
 /* Palette dots */
 .palette{position:absolute;right:6px;top:6px;display:flex;flex-direction:column;gap:3px}
@@ -77,63 +77,74 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
 .prog-txt{font-size:8px;color:var(--cm);margin-top:3px}
 </style>
 </head>
-<body class="mom">
+<body class="{{ css_class }}">
 
 <div class="hdr">
   <div>
-    <div class="hdr-d">ПТ, 21 МАРТА · САДИК</div>
-    <div class="hdr-n">Алиса</div>
+    <div class="hdr-d">{{ date_str }}{% if context %} · {{ context }}{% endif %}</div>
+    <div class="hdr-n">{{ name }}</div>
   </div>
+  {% if weather %}
   <div class="wx">
-    <span class="wx-i">☀️</span>
-    <span class="wx-t">+4°</span>
+    {% if weather.icon_morning %}<span class="wx-i">{{ weather.icon_morning }}</span>{% endif %}
+    {% if weather.temp_morning_str %}<span class="wx-t">{{ weather.temp_morning_str }}</span>{% endif %}
+    {% if weather.temp_evening_str %}
     <span class="wx-a">→</span>
-    <span class="wx-t w">+2°</span>
-    <span class="wx-i">🌧️</span>
+    <span class="wx-t{{ ' w' if weather.evening_warn else '' }}">{{ weather.temp_evening_str }}</span>
+    {% endif %}
+    {% if weather.icon_evening %}<span class="wx-i">{{ weather.icon_evening }}</span>{% endif %}
   </div>
+  {% endif %}
 </div>
 
 <!-- REAL PHOTOS -->
 <div class="photos">
-  <!-- 2 фото: w50+w50. 1 фото: w100. 3+: w50+w50 top, w33 bottom -->
-  <div class="ph w50 bg-pink">
-    <!-- Реальное фото: style="background-image:url(data:image/jpeg;base64,...)" -->
-    <div class="ph-emoji">👚</div>
-    <div class="ph-lbl"><span>Кофта розовая</span></div>
+  {% for item in items %}
+  <div class="ph {{ item.size_class }} {{ item.bg_class }}"
+       {% if item.photo_base64 %}style="background-image:url(data:image/png;base64,{{ item.photo_base64 }})"{% endif %}>
+    {% if not item.photo_base64 %}<div class="ph-emoji">{{ item.emoji }}</div>{% endif %}
+    <div class="ph-lbl"><span>{{ item.label }}</span></div>
   </div>
-  <div class="ph w50 bg-blue">
-    <div class="ph-emoji">👖</div>
-    <div class="ph-lbl"><span>Джинсы синие</span></div>
-  </div>
+  {% endfor %}
 
+  {% if palette %}
   <div class="palette">
-    <div class="dot" style="background:#E0A0B0"></div>
-    <div class="dot" style="background:#4060C0"></div>
+    {% for color_hex in palette %}
+    <div class="dot" style="background:{{ color_hex }}"></div>
+    {% endfor %}
   </div>
+  {% endif %}
 </div>
 
 <!-- MISSING -->
+{% if missing %}
 <div class="miss">
   <div class="miss-h">Для полного образа:</div>
   <div class="miss-row">
-    <div class="miss-i miss-outer"><div class="icon">🧥</div><div class="name">Куртка</div></div>
-    <div class="miss-i miss-foot"><div class="icon">👟</div><div class="name">Обувь</div></div>
-    <div class="miss-i miss-acc"><div class="icon">🧢</div><div class="name">Шапка</div></div>
-    <div class="miss-i miss-acc"><div class="icon">🧣</div><div class="name">Шарф</div></div>
+    {% for item in missing %}
+    <div class="miss-i {{ item.miss_css }}"><div class="icon">{{ item.emoji }}</div><div class="name">{{ item.name_ru }}</div></div>
+    {% endfor %}
   </div>
 </div>
+{% endif %}
 
-<div class="base">🩲 колготки · майка</div>
+{% if base_layer %}
+<div class="base">{{ base_layer }}</div>
+{% endif %}
 
+{% if kassi_comment %}
 <div class="kassi">
-  <div class="kassi-t">Розовая кофта + синие джинсы — классная пара! 🌧️ Зонт на забирание.</div>
+  <div class="kassi-t">{{ kassi_comment }}</div>
   <div class="kassi-a">— Касси</div>
 </div>
+{% endif %}
 
+{% if progress_pct is defined %}
 <div class="prog">
-  <div class="prog-bar"><div class="prog-fill" style="width:25%"></div></div>
-  <div class="prog-txt">2/8 · 📸 Сфоткай куртку!</div>
+  <div class="prog-bar"><div class="prog-fill" style="width:{{ progress_pct }}%"></div></div>
+  <div class="prog-txt">{{ progress_text }}</div>
 </div>
+{% endif %}
 
 </body>
 </html>

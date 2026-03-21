@@ -1,7 +1,6 @@
-<!-- TEMPLATE: weather_card (0 фото в образе)
-     Jinja2: {{ name }}, {{ context }}, {{ date_str }}, {{ theme }},
-             {{ weather }}, {{ layers }}, {{ kassi_comment }}
-     Превью: открыть в Chrome, width=440px -->
+{# TEMPLATE: weather_card (0 фото в образе)
+   Vars: name, context, date_str, css_class, weather, layers, kassi_comment
+   Превью: открыть в Chrome, width=440px #}
 <!DOCTYPE html>
 <html>
 <head>
@@ -42,41 +41,52 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
 .cta-s{font-size:8px;color:var(--cm);margin-top:2px}
 </style>
 </head>
-<body class="mom">
+<body class="{{ css_class }}">
 
 <div style="text-align:center;margin-bottom:6px">
-  <div class="hdr-d">ПТ, 21 МАРТА · САДИК</div>
-  <div class="hdr-n">Алиса</div>
+  <div class="hdr-d">{{ date_str }}{% if context %} · {{ context }}{% endif %}</div>
+  <div class="hdr-n">{{ name }}</div>
 </div>
 
 <div class="wx">
-  <div class="wx-icon">☀️</div>
+  <div class="wx-icon">{{ weather.icon_day|default('☀️') }}</div>
   <div class="wx-row">
-    <div class="wx-item"><div class="wx-temp">+4°</div><div class="wx-lbl">утро</div></div>
-    <div class="wx-item"><div class="wx-temp">+7°</div><div class="wx-lbl">день</div></div>
-    <div class="wx-item"><div class="wx-temp warn">+2°</div><div class="wx-lbl">вечер 🌧️</div></div>
+    {% if weather.temp_morning is defined and weather.temp_morning is not none %}
+    <div class="wx-item"><div class="wx-temp">{{ weather.temp_morning_str }}</div><div class="wx-lbl">утро</div></div>
+    {% endif %}
+    {% if weather.temp_day is defined and weather.temp_day is not none %}
+    <div class="wx-item"><div class="wx-temp">{{ weather.temp_day_str }}</div><div class="wx-lbl">день</div></div>
+    {% endif %}
+    {% if weather.temp_evening is defined and weather.temp_evening is not none %}
+    <div class="wx-item"><div class="wx-temp{{ ' warn' if weather.evening_warn else '' }}">{{ weather.temp_evening_str }}</div><div class="wx-lbl">вечер{% if weather.icon_evening %} {{ weather.icon_evening }}{% endif %}</div></div>
+    {% endif %}
   </div>
 </div>
 
+{% if layers %}
 <div class="layers">
   <div class="layers-h">ОДЕВАЕМ</div>
   <div class="layers-grid">
-    <div class="layer layer-base"><div class="icon">🩲</div><div class="name">базовый</div></div>
-    <div class="layer layer-base"><div class="icon">👚</div><div class="name">кофта</div></div>
-    <div class="layer layer-base"><div class="icon">👖</div><div class="name">штаны</div></div>
-    <div class="layer layer-accent"><div class="icon">🧥</div><div class="name">куртка!</div></div>
+    {% for layer in layers[:4] %}
+    <div class="layer layer-{{ layer.css_class|default('base') }}"><div class="icon">{{ layer.emoji }}</div><div class="name">{{ layer.name }}</div></div>
+    {% endfor %}
   </div>
+  {% if layers|length > 4 %}
   <div class="layers-grid" style="margin-top:4px">
-    <div class="layer layer-base"><div class="icon">👟</div><div class="name">обувь</div></div>
-    <div class="layer layer-base"><div class="icon">🧢</div><div class="name">шапка</div></div>
-    <div class="layer layer-warn"><div class="icon">🌂</div><div class="name">зонт!</div></div>
+    {% for layer in layers[4:] %}
+    <div class="layer layer-{{ layer.css_class|default('base') }}"><div class="icon">{{ layer.emoji }}</div><div class="name">{{ layer.name }}</div></div>
+    {% endfor %}
   </div>
+  {% endif %}
 </div>
+{% endif %}
 
+{% if kassi_comment %}
 <div class="kassi">
-  <div class="kassi-t">🌧️ К вечеру дождь +2° — зонт на забирание!</div>
+  <div class="kassi-t">{{ kassi_comment }}</div>
   <div class="kassi-a">— Касси</div>
 </div>
+{% endif %}
 
 <div class="cta">
   <div class="cta-t">📸 Сфоткай вещи — соберу образ!</div>

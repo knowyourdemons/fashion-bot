@@ -17,5 +17,5 @@ RUN fc-cache -fv
 
 EXPOSE 3100
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD wget -q --spider http://localhost:3100/health || exit 1
+  CMD node -e "fetch('http://localhost:3100/health').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))"
 CMD ["node", "server.mjs"]

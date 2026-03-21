@@ -1,9 +1,8 @@
-<!-- TEMPLATE: full flat lay (8+ фото)
-     Jinja2: {{ name }}, {{ context }}, {{ date_str }}, {{ theme }},
-             {{ weather }}, {{ items }}, {{ base_layer }},
-             {{ kassi_comment }}, {{ palette }}
-     Нет прогресса, нет missing. Шеринг: Переслать (мама) / Stories (женщина)
-     Превью: открыть в Chrome, width=440px -->
+{# TEMPLATE: full flat lay (8+ фото)
+   Vars: name, context, date_str, css_class, weather, items, base_layer,
+         kassi_comment, palette
+   Нет прогресса, нет missing.
+   Превью: открыть в Chrome, width=440px #}
 <!DOCTYPE html>
 <html>
 <head>
@@ -63,64 +62,59 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
 .kassi-a{font-size:8px;color:var(--cm);margin-top:3px}
 </style>
 </head>
-<body class="mom">
+<body class="{{ css_class }}">
 
 <div class="hdr">
   <div>
-    <div class="hdr-d">ЗАВТРА, ПТ 21 МАР · САДИК</div>
-    <div class="hdr-n">Алиса</div>
+    <div class="hdr-d">{{ date_str }}{% if context %} · {{ context }}{% endif %}</div>
+    <div class="hdr-n">{{ name }}</div>
   </div>
+  {% if weather %}
   <div class="wx">
-    <span class="wx-i">☀️</span>
-    <span class="wx-t">+4°</span>
+    {% if weather.icon_morning %}<span class="wx-i">{{ weather.icon_morning }}</span>{% endif %}
+    {% if weather.temp_morning_str %}<span class="wx-t">{{ weather.temp_morning_str }}</span>{% endif %}
+    {% if weather.temp_evening_str %}
     <span class="wx-a">→</span>
-    <span class="wx-t w">+2°</span>
-    <span class="wx-i">🌧️</span>
+    <span class="wx-t{{ ' w' if weather.evening_warn else '' }}">{{ weather.temp_evening_str }}</span>
+    {% endif %}
+    {% if weather.icon_evening %}<span class="wx-i">{{ weather.icon_evening }}</span>{% endif %}
   </div>
+  {% endif %}
 </div>
 
 <div class="flat">
-  <!-- Куртка — top center -->
-  <div class="fi fi-outer bg-navy">
-    <div class="fi-emoji">🧥</div>
-    <div class="fi-lbl"><span>Куртка синяя</span></div>
+  {% for item in items %}
+  <div class="fi fi-{{ item.fi_class }} {{ item.bg_class }}"
+       {% if item.photo_base64 %}style="background-image:url(data:image/png;base64,{{ item.photo_base64 }})"{% endif %}
+       {% if item.extra_style %}style="{{ item.extra_style }}"{% endif %}>
+    {% if not item.photo_base64 %}
+    <div class="fi-emoji"{% if item.emoji_size %} style="font-size:{{ item.emoji_size }}px"{% endif %}>{{ item.emoji }}</div>
+    {% endif %}
+    {% if item.label %}
+    <div class="fi-lbl"><span>{{ item.label }}</span></div>
+    {% endif %}
   </div>
-  <!-- Кофта — left -->
-  <div class="fi fi-top bg-pink">
-    <div class="fi-emoji">👚</div>
-    <div class="fi-lbl"><span>Кофта розовая</span></div>
-  </div>
-  <!-- Штаны — right -->
-  <div class="fi fi-bottom bg-blue">
-    <div class="fi-emoji">👖</div>
-    <div class="fi-lbl"><span>Джинсы синие</span></div>
-  </div>
-  <!-- Обувь — bottom left -->
-  <div class="fi fi-shoe bg-beige">
-    <div class="fi-emoji" style="font-size:20px">👟</div>
-  </div>
-  <!-- Шапка — bottom right -->
-  <div class="fi fi-hat bg-pink" style="opacity:.9">
-    <div class="fi-emoji" style="font-size:16px">🧢</div>
-  </div>
-  <!-- Шарф — bottom center -->
-  <div class="fi fi-scarf bg-green" style="opacity:.9">
-    <div class="fi-emoji" style="font-size:14px">🧣</div>
-  </div>
+  {% endfor %}
 
+  {% if palette %}
   <div class="palette">
-    <div class="dot" style="background:#4070B0"></div>
-    <div class="dot" style="background:#E0A0B0"></div>
-    <div class="dot" style="background:#C8B8A0"></div>
+    {% for color_hex in palette %}
+    <div class="dot" style="background:{{ color_hex }}"></div>
+    {% endfor %}
   </div>
+  {% endif %}
 </div>
 
-<div class="base">🩲 колготки · майка</div>
+{% if base_layer %}
+<div class="base">{{ base_layer }}</div>
+{% endif %}
 
+{% if kassi_comment %}
 <div class="kassi">
-  <div class="kassi-t">Сегодня зелёная кофта — давно не надевали! С синими джинсами свежо 🌿 Зонт на забирание.</div>
+  <div class="kassi-t">{{ kassi_comment }}</div>
   <div class="kassi-a">— Касси</div>
 </div>
+{% endif %}
 
 </body>
 </html>
