@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Optional, TYPE_CHECKING
 
 from sqlalchemy import BigInteger, Boolean, Date, DateTime, Enum, Integer, String, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.base import Base
@@ -67,6 +67,7 @@ class User(Base):
     onboarding_step: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
     colortype: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    milestones_reached: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True, default=list)
 
     # Soft delete
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

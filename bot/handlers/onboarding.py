@@ -1,22 +1,32 @@
 """
 Онбординг флоу — ConversationHandler.
 
-Шаги (упрощённый 3-step flow):
-  0. Welcome screen (progress bar)
-  1. WHO_FOR: для кого (ребёнок / себя / оба / беременна)
-  2. CHILD_GENDER: девочка / мальчик (child/both paths)
-  3. CHILD_NAME: имя ребёнка (child/both paths)
-  4. CHILD_BIRTHDATE: дата рождения (child/both paths)
-  5. CITY: город (геолокация / текст + Nominatim)
-  6. CITY_SUGGEST: уточнение города
-  7. RESUME_CONFIRM: продолжить / начать заново
-  8. PREGNANT_TRIMESTER: триместр (pregnant path)
-  Финал → создать Child (если нужно), onboarding_completed=True → главное меню
+3-step flow:
+  Step 1 — Segment: Для кого? (ребёнок → пол + имя + возраст / себя → имя)
+  Step 2 — City: В каком городе?
+  Step 3 — Done! Завтра пришлю образ.
+
+States:
+  0. WELCOME — Касси приветствие
+  1. WHO_FOR — для кого (ребёнок / себя)
+  2. CHILD_GENDER — девочка / мальчик
+  3. CHILD_NAME — имя ребёнка
+  4. CHILD_AGE — сколько лет (fuzzy: "3", "3 года", "3г")
+  5. SELF_NAME — как тебя зовут (no_kids path)
+  6. CITY — город (геолокация / текст + Nominatim)
+  7. CITY_SUGGEST — уточнение города
+  8. RESUME_CONFIRM — продолжить / начать заново
+  9. DONE_BUTTONS — финальные кнопки
+
+  (Legacy states kept for DB compatibility but not used in new flow:)
+  10. CHILD_BIRTHDATE — legacy (mapped to CHILD_AGE)
+  11. PREGNANT_TRIMESTER — legacy
 """
+import re
 import structlog
 import sentry_sdk
 import httpx
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from config import settings
 
 import sqlalchemy as sa
@@ -50,12 +60,15 @@ logger = structlog.get_logger()
     WHO_FOR,
     CHILD_GENDER,
     CHILD_NAME,
-    CHILD_BIRTHDATE,
+    CHILD_AGE,
+    SELF_NAME,
     CITY,
     CITY_SUGGEST,
     RESUME_CONFIRM,
-    PREGNANT_TRIMESTER,
-) = range(9)
+    DONE_BUTTONS,
+    CHILD_BIRTHDATE,      # legacy alias → CHILD_AGE
+    PREGNANT_TRIMESTER,    # legacy, not used in new flow
+) = range(12)
 
 # Backward compat aliases
 SEGMENT = WHO_FOR
@@ -65,9 +78,11 @@ _STEP_TO_STATE: dict[str, int] = {
     "segment":              WHO_FOR,
     "child_gender":         CHILD_GENDER,
     "child_name":           CHILD_NAME,
-    "child_birthdate":      CHILD_BIRTHDATE,
+    "child_age":            CHILD_AGE,
+    "child_birthdate":      CHILD_AGE,  # legacy mapping
+    "self_name":            SELF_NAME,
     "city":                 CITY,
-    "pregnant_trimester":   PREGNANT_TRIMESTER,
+    "pregnant_trimester":   CITY,  # legacy: skip trimester, go to city
 }
 
 # Тексты кнопок клавиатуры — не должны сохраняться как город
@@ -87,16 +102,31 @@ def progress_bar(step: int, total: int = 3) -> str:
     return filled + empty
 
 
-# ── Fuzzy парсинг даты рождения ─────────────────────────────────────────────
+# ── Fuzzy парсинг возраста ─────────────────────────────────────────────────
 
-def parse_birthdate(text: str):
-    """Парсит дату рождения из разных форматов. Returns date or None."""
-    import re
-    from datetime import date as _date, timedelta
+def parse_age(text: str):
+    """Парсит возраст из разных форматов. Returns int age or None."""
     text = text.strip().lower()
 
     # "3" или "3 года" / "3 лет" / "3 г" → возраст
-    age_match = re.match(r"^(\d{1,2})\s*(год|лет|года|г\.?)?$", text)
+    age_match = re.match(r"^(\d{1,2})\s*(год|лет|года|годик|годика|г\.?)?$", text)
+    if age_match:
+        age = int(age_match.group(1))
+        if 0 <= age <= 18:
+            return age
+
+    return None
+
+
+def parse_birthdate(text: str):
+    """Парсит дату рождения из разных форматов. Returns date or None.
+    Kept for backward compatibility.
+    """
+    from datetime import date as _date
+    text = text.strip().lower()
+
+    # "3" или "3 года" / "3 лет" / "3 г" → возраст
+    age_match = re.match(r"^(\d{1,2})\s*(год|лет|года|годик|годика|г\.?)?$", text)
     if age_match:
         age = int(age_match.group(1))
         if 0 <= age <= 18:
@@ -128,7 +158,8 @@ async def _save_user_fields(user: User, **fields) -> None:
         setattr(user, k, v)
 
 
-async def _ask_city(update: Update) -> None:
+async def _ask_city(update: Update, step_num: int = 2) -> None:
+    pb = progress_bar(step_num)
     keyboard = ReplyKeyboardMarkup(
         [
             [KeyboardButton("📍 Определить автоматически", request_location=True)],
@@ -137,7 +168,10 @@ async def _ask_city(update: Update) -> None:
         resize_keyboard=True,
         one_time_keyboard=True,
     )
-    await update.effective_message.reply_text(t("onboarding.city"), reply_markup=keyboard)
+    await update.effective_message.reply_text(
+        f"{pb}\n\nВ каком городе живёшь? 🏙",
+        reply_markup=keyboard,
+    )
 
 
 async def _reverse_geocode(lat: float, lon: float) -> tuple[str, str]:
@@ -249,38 +283,39 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             InlineKeyboardButton("🔄 Начать заново", callback_data="resume:no"),
         ]])
         await update.effective_message.reply_text(
-            "Продолжить с места где остановился?",
+            "Продолжить с места где остановилась?",
             reply_markup=keyboard,
         )
         return RESUME_CONFIRM
 
-    # Новый пользователь → приветствие
+    # Новый пользователь → приветствие Касси
     pb = progress_bar(0)
     welcome_text = (
         f"{pb}\n\n"
-        "Привет! Помогу собирать образы по погоде из вещей, которые уже есть. "
-        "2 вопроса и начнём 👋"
+        "Привет! Я Касси — твой стилист 👗\n"
+        "Для кого подбираем?"
     )
-    keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🚀 Давай!", callback_data="welcome:start"),
-    ]])
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👶 Для ребёнка", callback_data="who_for:child")],
+        [InlineKeyboardButton("👩 Для себя", callback_data="who_for:self")],
+    ])
     await update.effective_message.reply_text(welcome_text, reply_markup=keyboard)
-    return WELCOME
+    return WHO_FOR
 
 
-# ── Welcome callback ────────────────────────────────────────────────────────
+# ── Welcome callback (legacy, redirects to WHO_FOR) ──────────────────────
 
 async def handle_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
     pb = progress_bar(1)
     await query.message.reply_text(
-        f"{pb}\n\nДля кого подбираем образы?",
+        f"{pb}\n\n"
+        "Привет! Я Касси — твой стилист 👗\n"
+        "Для кого подбираем?",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("👶 Для ребёнка", callback_data="who_for:child")],
             [InlineKeyboardButton("👩 Для себя", callback_data="who_for:self")],
-            [InlineKeyboardButton("👩‍👧 Для ребёнка и для себя", callback_data="who_for:both")],
-            [InlineKeyboardButton("🤰 Беременна", callback_data="who_for:pregnant")],
         ]),
     )
     return WHO_FOR
@@ -294,34 +329,17 @@ async def handle_who_for(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user = context.user_data.get("db_user")
     choice = query.data.split(":")[1]  # child / self / both / pregnant
 
-    if choice == "self":
-        segment = "no_kids"
+    if choice == "self" or choice == "pregnant":
+        segment = "no_kids" if choice == "self" else "pregnant"
         context.user_data["segment"] = segment
         context.user_data["also_self"] = False
-        await _save_user_fields(user, segment=segment, onboarding_step="city")
-        pb = progress_bar(2)
-        await query.message.reply_text(
-            f"{pb}\n\n" + t("onboarding.city"),
-            reply_markup=ReplyKeyboardMarkup(
-                [[KeyboardButton("📍 Определить автоматически", request_location=True)],
-                 [KeyboardButton("✏️ Ввести вручную")]],
-                resize_keyboard=True, one_time_keyboard=True,
-            )
-        )
-        return CITY
-
-    elif choice == "pregnant":
-        segment = "pregnant"
-        context.user_data["segment"] = segment
-        context.user_data["also_self"] = False
-        await _save_user_fields(user, segment=segment, onboarding_step="child_name")
+        await _save_user_fields(user, segment=segment, onboarding_step="self_name")
         pb = progress_bar(1)
         await query.message.reply_text(
             f"{pb}\n\nКак тебя зовут?",
             reply_markup=ReplyKeyboardRemove(),
         )
-        # Reuse CHILD_NAME state for pregnant name input
-        return CHILD_NAME
+        return SELF_NAME
 
     else:
         # child or both
@@ -329,10 +347,10 @@ async def handle_who_for(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await _save_user_fields(user, onboarding_step="child_gender")
         pb = progress_bar(1)
         await query.message.reply_text(
-            f"{pb}\n\nДевочка или мальчик?",
+            f"{pb}\n\n",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("👧 Девочка", callback_data="child_gender:girl"),
-                 InlineKeyboardButton("👦 Мальчик", callback_data="child_gender:boy")],
+                [InlineKeyboardButton("Девочка 👧", callback_data="child_gender:girl"),
+                 InlineKeyboardButton("Мальчик 👦", callback_data="child_gender:boy")],
             ]),
         )
         return CHILD_GENDER
@@ -343,7 +361,7 @@ async def handle_segment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     return await handle_who_for(update, context)
 
 
-# ── Шаг 2: Пол ребёнка ─────────────────────────────────────────────────────
+# ── Шаг 1b: Пол ребёнка ─────────────────────────────────────────────────────
 
 async def handle_child_gender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
@@ -355,7 +373,10 @@ async def handle_child_gender(update: Update, context: ContextTypes.DEFAULT_TYPE
     user = context.user_data.get("db_user")
     await _save_user_fields(user, segment=segment, onboarding_step="child_name")
     pb = progress_bar(1)
-    await query.message.reply_text(f"{pb}\n\nКак зовут?", reply_markup=ReplyKeyboardRemove())
+    await query.message.reply_text(
+        f"{pb}\n\nКак зовут?",
+        reply_markup=ReplyKeyboardRemove(),
+    )
     return CHILD_NAME
 
 
@@ -364,7 +385,7 @@ async def handle_also_self(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     return await handle_child_gender(update, context)
 
 
-# ── Шаг 3: Имя ребёнка / Имя беременной ─────────────────────────────────
+# ── Шаг 1c: Имя ребёнка ─────────────────────────────────────────────────
 
 async def handle_child_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     name = update.message.text.strip()
@@ -373,87 +394,97 @@ async def handle_child_name(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return CHILD_NAME
 
     user = context.user_data.get("db_user")
-    segment = context.user_data.get("segment", "")
-
-    # Pregnant path: save name → ask trimester
-    if segment == "pregnant":
-        context.user_data["pregnant_name"] = name
-        await _save_user_fields(user, name=name, onboarding_step="pregnant_trimester")
-        pb = progress_bar(2)
-        await update.message.reply_text(
-            f"{pb}\n\nКакой триместр?",
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("1-й", callback_data="trimester:1"),
-                    InlineKeyboardButton("2-й", callback_data="trimester:2"),
-                    InlineKeyboardButton("3-й", callback_data="trimester:3"),
-                ],
-            ]),
-        )
-        return PREGNANT_TRIMESTER
-
-    # Child path: save name → ask birthdate
     context.user_data["child_name"] = name
-    await _save_user_fields(user, onboarding_step="child_birthdate")
-    gender = context.user_data.get("child_gender", "girl")
-    pb = progress_bar(2)
-    if gender == "boy":
-        date_q = f"Когда родился {name}?\n\nНапиши дату (15.03.2023) или возраст (3 года)"
-    else:
-        date_q = f"Когда родилась {name}?\n\nНапиши дату (15.03.2023) или возраст (3 года)"
-    await update.message.reply_text(f"{pb}\n\n{date_q}")
-    return CHILD_BIRTHDATE
+    await _save_user_fields(user, onboarding_step="child_age")
+    pb = progress_bar(1)
+    await update.message.reply_text(f"{pb}\n\nСколько лет?")
+    return CHILD_AGE
 
 
-# ── Шаг: Триместр (pregnant path) ────────────────────────────────────────
+# ── Шаг 1d: Возраст ребёнка (fuzzy) ──────────────────────────────────────
+
+async def handle_child_age(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text.strip()
+    age = parse_age(text)
+    if age is None:
+        await update.message.reply_text(
+            "Не поняла 🤔 Напиши возраст цифрой (например, 3)"
+        )
+        return CHILD_AGE
+
+    # Convert age to approximate birthdate
+    birthdate = date.today() - timedelta(days=age * 365)
+    context.user_data["child_birthdate"] = birthdate
+    context.user_data["child_age"] = age
+    user = context.user_data.get("db_user")
+    await _save_user_fields(user, onboarding_step="city")
+    await _ask_city(update, step_num=2)
+    return CITY
+
+
+# ── Шаг 1e: Имя (для себя / no_kids) ────────────────────────────────────
+
+async def handle_self_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    name = update.message.text.strip()
+    if not name:
+        await update.message.reply_text("Введи имя:")
+        return SELF_NAME
+
+    user = context.user_data.get("db_user")
+    await _save_user_fields(user, name=name, onboarding_step="city")
+    await _ask_city(update, step_num=2)
+    return CITY
+
+
+# ── Legacy: handle_child_birthdate (old format, kept for resume compat) ──
+
+async def handle_child_birthdate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Legacy handler: accepts both age and date format for backward compat."""
+    text = update.message.text.strip()
+
+    # Try age first (new flow)
+    age = parse_age(text)
+    if age is not None:
+        birthdate = date.today() - timedelta(days=age * 365)
+        context.user_data["child_birthdate"] = birthdate
+        context.user_data["child_age"] = age
+        user = context.user_data.get("db_user")
+        await _save_user_fields(user, onboarding_step="city")
+        await _ask_city(update, step_num=2)
+        return CITY
+
+    # Try date format (legacy)
+    birthdate = parse_birthdate(text)
+    if birthdate is not None:
+        context.user_data["child_birthdate"] = birthdate
+        age_years = (date.today() - birthdate).days // 365
+        context.user_data["child_age"] = age_years
+        user = context.user_data.get("db_user")
+        await _save_user_fields(user, onboarding_step="city")
+        await _ask_city(update, step_num=2)
+        return CITY
+
+    await update.message.reply_text(
+        "Не поняла 🤔 Напиши возраст цифрой (например, 3)"
+    )
+    return CHILD_AGE
+
+
+# ── Legacy: handle_pregnant_trimester ──────────────────────────────────────
 
 async def handle_pregnant_trimester(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Legacy handler: skip trimester, go straight to city."""
     query = update.callback_query
     await query.answer()
     trimester = int(query.data.split(":")[1])
     context.user_data["trimester"] = trimester
     user = context.user_data.get("db_user")
     await _save_user_fields(user, trimester=trimester, onboarding_step="city")
-    pb = progress_bar(2)
-    await query.message.reply_text(
-        f"{pb}\n\n" + t("onboarding.city"),
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton("📍 Определить автоматически", request_location=True)],
-             [KeyboardButton("✏️ Ввести вручную")]],
-            resize_keyboard=True, one_time_keyboard=True,
-        )
-    )
+    await _ask_city(update, step_num=2)
     return CITY
 
 
-# ── Шаг 4: Дата рождения ──────────────────────────────────────────────────
-
-async def handle_child_birthdate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.message.text.strip()
-    birthdate = parse_birthdate(text)
-    if birthdate is None:
-        await update.message.reply_text(
-            "Не поняла 🤔 Напиши дату (15.03.2023) или просто возраст цифрой (3)"
-        )
-        return CHILD_BIRTHDATE
-    context.user_data["child_birthdate"] = birthdate
-    age_years = (date.today() - birthdate).days // 365
-    context.user_data["child_age"] = age_years
-    user = context.user_data.get("db_user")
-    await _save_user_fields(user, onboarding_step="city")
-    pb = progress_bar(2)
-    await update.message.reply_text(
-        f"{pb}\n\n" + t("onboarding.city"),
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton("📍 Определить автоматически", request_location=True)],
-             [KeyboardButton("✏️ Ввести вручную")]],
-            resize_keyboard=True, one_time_keyboard=True,
-        )
-    )
-    return CITY
-
-
-# ── Шаг 5: Город ──────────────────────────────────────────────────────────
+# ── Шаг 2: Город ──────────────────────────────────────────────────────────
 
 async def handle_city_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     loc = update.message.location
@@ -529,22 +560,23 @@ async def handle_resume_confirm(update: Update, context: ContextTypes.DEFAULT_TY
 
     # Начать заново — сбросить step в БД и в контексте
     for key in ("segment", "child_gender", "child_name", "child_birthdate",
-                "city", "timezone", "city_candidates",
-                "also_self", "child_age", "pregnant_name", "trimester"):
+                "child_age", "city", "timezone", "city_candidates",
+                "also_self", "pregnant_name", "trimester"):
         context.user_data.pop(key, None)
     await _save_user_fields(user, onboarding_step=None, segment=None)
-    # Show welcome again
+    # Show welcome again — new Касси format
     pb = progress_bar(0)
     welcome_text = (
         f"{pb}\n\n"
-        "Привет! Помогу собирать образы по погоде из вещей, которые уже есть. "
-        "2 вопроса и начнём 👋"
+        "Привет! Я Касси — твой стилист 👗\n"
+        "Для кого подбираем?"
     )
-    keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🚀 Давай!", callback_data="welcome:start"),
-    ]])
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👶 Для ребёнка", callback_data="who_for:child")],
+        [InlineKeyboardButton("👩 Для себя", callback_data="who_for:self")],
+    ])
     await query.message.reply_text(welcome_text, reply_markup=keyboard)
-    return WELCOME
+    return WHO_FOR
 
 
 async def _resume_step(update: Update, context: ContextTypes.DEFAULT_TYPE, user: User) -> int:
@@ -554,68 +586,59 @@ async def _resume_step(update: Update, context: ContextTypes.DEFAULT_TYPE, user:
     if step == "segment":
         pb = progress_bar(1)
         await update.effective_message.reply_text(
-            f"{pb}\n\nДля кого подбираем образы?",
+            f"{pb}\n\n"
+            "Привет! Я Касси — твой стилист 👗\n"
+            "Для кого подбираем?",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("👶 Для ребёнка", callback_data="who_for:child")],
                 [InlineKeyboardButton("👩 Для себя", callback_data="who_for:self")],
-                [InlineKeyboardButton("👩‍👧 Для ребёнка и для себя", callback_data="who_for:both")],
-                [InlineKeyboardButton("🤰 Беременна", callback_data="who_for:pregnant")],
             ]),
         )
         return WHO_FOR
     if step == "child_gender":
         pb = progress_bar(1)
         await update.effective_message.reply_text(
-            f"{pb}\n\nДевочка или мальчик?",
+            f"{pb}\n\n",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("👧 Девочка", callback_data="child_gender:girl"),
-                 InlineKeyboardButton("👦 Мальчик", callback_data="child_gender:boy")],
+                [InlineKeyboardButton("Девочка 👧", callback_data="child_gender:girl"),
+                 InlineKeyboardButton("Мальчик 👦", callback_data="child_gender:boy")],
             ]),
         )
         return CHILD_GENDER
     if step == "child_name":
         pb = progress_bar(1)
-        if segment == "pregnant":
+        if segment in ("pregnant", "no_kids"):
             await update.effective_message.reply_text(
                 f"{pb}\n\nКак тебя зовут?", reply_markup=ReplyKeyboardRemove()
             )
+            return SELF_NAME
         else:
             await update.effective_message.reply_text(
                 f"{pb}\n\nКак зовут?", reply_markup=ReplyKeyboardRemove()
             )
-        return CHILD_NAME
-    if step == "child_birthdate":
-        child_name = context.user_data.get("child_name", "")
-        gender = context.user_data.get("child_gender", "girl")
-        pb = progress_bar(2)
-        if child_name:
-            if gender == "boy":
-                date_q = f"Когда родился {child_name}?\n\nНапиши дату (15.03.2023) или возраст (3 года)"
-            else:
-                date_q = f"Когда родилась {child_name}?\n\nНапиши дату (15.03.2023) или возраст (3 года)"
-        else:
-            date_q = t("onboarding.child_birthdate")
-        await update.effective_message.reply_text(f"{pb}\n\n{date_q}")
-        return CHILD_BIRTHDATE
-    if step == "pregnant_trimester":
-        pb = progress_bar(2)
+            return CHILD_NAME
+    if step == "self_name":
+        pb = progress_bar(1)
         await update.effective_message.reply_text(
-            f"{pb}\n\nКакой триместр?",
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("1-й", callback_data="trimester:1"),
-                    InlineKeyboardButton("2-й", callback_data="trimester:2"),
-                    InlineKeyboardButton("3-й", callback_data="trimester:3"),
-                ],
-            ]),
+            f"{pb}\n\nКак тебя зовут?", reply_markup=ReplyKeyboardRemove()
         )
-        return PREGNANT_TRIMESTER
+        return SELF_NAME
+    if step in ("child_age", "child_birthdate"):
+        pb = progress_bar(1)
+        await update.effective_message.reply_text(
+            f"{pb}\n\nСколько лет?", reply_markup=ReplyKeyboardRemove()
+        )
+        return CHILD_AGE
+    if step == "pregnant_trimester":
+        # Legacy: skip trimester, go to city
+        await _ask_city(update, step_num=2)
+        return CITY
     # step == "city"
-    await _ask_city(update)
+    await _ask_city(update, step_num=2)
     return CITY
 
 
-# ── Финал ─────────────────────────────────────────────────────────────────
+# ── Шаг 3: Финал ─────────────────────────────────────────────────────────
 
 async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     from bot.handlers.menu import get_main_menu
@@ -626,7 +649,6 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
     segment = context.user_data.get("segment") or (user.segment or "no_kids")
     city = context.user_data.get("city", "")
     timezone = context.user_data.get("timezone", "Europe/Vilnius")
-    also_self = context.user_data.get("also_self", False)
 
     # Проверка обязательных полей для ребёнка
     if segment in ("mom_girl", "mom_boy"):
@@ -640,6 +662,12 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return ConversationHandler.END
 
     try:
+        # Determine display name
+        if segment in ("mom_girl", "mom_boy"):
+            display_name = context.user_data.get("child_name", "")
+        else:
+            display_name = user.name or ""
+
         update_values = dict(
             city=city,
             timezone=timezone,
@@ -647,7 +675,7 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
             onboarding_completed=True,
         )
 
-        # Save trimester for pregnant
+        # Save trimester for pregnant (legacy)
         if segment == "pregnant":
             trimester = context.user_data.get("trimester")
             if trimester:
@@ -698,17 +726,22 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # Флаг для text handler: не вызывать Касси для этого же сообщения
         context.user_data["onboarding_just_completed"] = True
 
-        # Build finish message
-        welcome = (
-            "Отлично! Сфоткай 3-5 вещей из шкафа — я соберу первый образ.\n\n"
-            "📸 Фотографируй по одной вещи на светлом фоне"
+        # Step 3: Done message
+        pb = progress_bar(3)
+        done_text = (
+            f"{pb}\n\n"
+            f"🎉 Отлично, {display_name}! Познакомились!\n\n"
+            "Завтра в 07:00 пришлю погоду + совет по образу.\n"
+            "А пока — сфоткай вещи, чтобы я начала подбирать!"
         )
-        if also_self and segment in ("mom_girl", "mom_boy"):
-            welcome += "\n\nПозже добавим и твой гардероб тоже."
-
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📸 Сфоткать первую вещь", callback_data="onboard_done:photo")],
+            [InlineKeyboardButton("Потом", callback_data="onboard_done:later")],
+        ])
         await update.effective_message.reply_text(
-            welcome, reply_markup=get_main_menu()
+            done_text, reply_markup=keyboard,
         )
+
         logger.info(
             "onboarding.completed",
             user_id=str(user.id),
@@ -720,6 +753,8 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
             segment=user.segment,
         )
 
+        return DONE_BUTTONS
+
     except Exception as e:
         await update.effective_message.reply_text(t("error.generic"))
         logger.error("onboarding.finish.failed", error=str(e), user_id=str(user.id))
@@ -728,12 +763,35 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return ConversationHandler.END
 
 
+# ── Done buttons handler ──────────────────────────────────────────────────
+
+async def handle_done_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    from bot.handlers.menu import get_main_menu
+    query = update.callback_query
+    await query.answer()
+    user = context.user_data.get("db_user")
+    choice = query.data.split(":")[1]  # photo / later
+
+    if choice == "photo":
+        await query.message.reply_text(
+            "Сфоткай вещь на светлом фоне. Начни с кофты 👚",
+            reply_markup=get_main_menu(user, context),
+        )
+    else:
+        await query.message.reply_text(
+            "Хорошо! Когда будешь готова — просто сфоткай вещь и отправь мне 📸",
+            reply_markup=get_main_menu(user, context),
+        )
+
+    return ConversationHandler.END
+
+
 # ── /cancel fallback ───────────────────────────────────────────────────────
 
 async def handle_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     for key in ("segment", "child_gender", "child_name", "child_birthdate",
-                "city", "timezone", "city_candidates",
-                "also_self", "child_age", "pregnant_name", "trimester"):
+                "child_age", "city", "timezone", "city_candidates",
+                "also_self", "pregnant_name", "trimester"):
         context.user_data.pop(key, None)
     await update.message.reply_text(
         "Отменено. /start чтобы начать заново",
@@ -767,6 +825,13 @@ def build_conversation_handler() -> ConversationHandler:
             CHILD_NAME: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_child_name),
             ],
+            CHILD_AGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_child_age),
+            ],
+            SELF_NAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_self_name),
+            ],
+            # Legacy state: CHILD_BIRTHDATE mapped to same handler as CHILD_AGE
             CHILD_BIRTHDATE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_child_birthdate),
             ],
@@ -776,6 +841,9 @@ def build_conversation_handler() -> ConversationHandler:
             ],
             CITY_SUGGEST: [
                 CallbackQueryHandler(handle_city_suggest, pattern="^city_pick:"),
+            ],
+            DONE_BUTTONS: [
+                CallbackQueryHandler(handle_done_buttons, pattern="^onboard_done:"),
             ],
             PREGNANT_TRIMESTER: [
                 CallbackQueryHandler(handle_pregnant_trimester, pattern="^trimester:"),

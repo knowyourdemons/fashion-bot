@@ -22,14 +22,16 @@ class TestOnboardingStates:
     def test_step_to_state_mapping(self):
         from bot.handlers.onboarding import (
             _STEP_TO_STATE, WHO_FOR, CHILD_GENDER, CHILD_NAME,
-            CHILD_BIRTHDATE, CITY, PREGNANT_TRIMESTER,
+            CHILD_AGE, SELF_NAME, CITY,
         )
         assert _STEP_TO_STATE["segment"] == WHO_FOR
         assert _STEP_TO_STATE["child_gender"] == CHILD_GENDER
         assert _STEP_TO_STATE["child_name"] == CHILD_NAME
-        assert _STEP_TO_STATE["child_birthdate"] == CHILD_BIRTHDATE
+        assert _STEP_TO_STATE["child_age"] == CHILD_AGE
+        assert _STEP_TO_STATE["child_birthdate"] == CHILD_AGE  # legacy mapping
+        assert _STEP_TO_STATE["self_name"] == SELF_NAME
         assert _STEP_TO_STATE["city"] == CITY
-        assert _STEP_TO_STATE["pregnant_trimester"] == PREGNANT_TRIMESTER
+        assert _STEP_TO_STATE["pregnant_trimester"] == CITY  # legacy: skip to city
 
     def test_no_old_states(self):
         """Old states (size, shoe, colortype, selfie) must not exist."""
@@ -79,10 +81,10 @@ class TestOnboardingStates:
         assert "PREGNANT_TRIMESTER:" in content
         assert 'pattern="^trimester:"' in content
 
-    def test_who_for_has_pregnant_option(self):
-        """WHO_FOR step must include pregnant button."""
+    def test_who_for_handles_pregnant(self):
+        """WHO_FOR handler must handle pregnant choice (backward compat)."""
         content = pathlib.Path("bot/handlers/onboarding.py").read_text()
-        assert "who_for:pregnant" in content
+        assert '"pregnant"' in content  # handler still processes pregnant choice
 
     def test_city_transitions_to_finish(self):
         """City handlers should go to _finish_onboarding, not selfie/colortype."""

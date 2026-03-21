@@ -89,6 +89,45 @@ PAGE_SIZE = 20
 OUTFIT_DAY_LIMIT_FREE = 2
 OUTFIT_DAY_LIMIT_PREMIUM = 5
 
+# ── Next item suggestion based on missing wardrobe slots ──────────────────
+_CORE_SLOTS = ["outerwear", "top", "bottom", "footwear"]
+_SLOT_SUGGEST_NAMES = {
+    "outerwear": "куртку",
+    "top": "кофту или рубашку",
+    "bottom": "штаны или юбку",
+    "footwear": "обувь",
+    "one_piece": "платье",
+}
+
+
+def _suggest_next_item(items: list, total_count: int) -> str:
+    """Suggest next item to photograph based on missing wardrobe slots."""
+    existing_groups = {getattr(i, "category_group", "") for i in items}
+
+    if total_count == 1:
+        return "🎉 Первая вещь! Ещё 2 — и покажу мини-образ."
+    if total_count == 3:
+        return "🎉 Уже можно собрать мини-образ!"
+    if total_count == 8:
+        return "🎉 Полный гардероб! Образы будут разнообразнее."
+
+    for slot in _CORE_SLOTS:
+        if slot not in existing_groups:
+            name = _SLOT_SUGGEST_NAMES.get(slot, "вещь")
+            return f"📸 Сфоткай {name}!"
+    return ""
+
+
+async def _safe_edit_text(message, text: str, **kwargs) -> None:
+    """Edit message text with try/except, fallback to reply_text."""
+    try:
+        await message.edit_text(text, **kwargs)
+    except Exception:
+        try:
+            await message.reply_text(text, **kwargs)
+        except Exception:
+            pass
+
 
 # ── Owner helpers ──────────────────────────────────────────────────────────
 
@@ -165,6 +204,102 @@ async def _load_existing_set(owner_id: uuid.UUID, owner_type: str = "user") -> s
         )
         for i in items
     }
+
+
+# ── Guided first 5 minutes (hints after each photo) ───────────────────────
+
+_GUIDED_HINTS = {
+    1: "🎉 Первая! Ещё 2 — покажу мини-образ.",
+    2: "Супер! Штаны или юбку? 👖",
+    # 3 handled by milestone (mini_outfit)
+}
+
+
+async def _send_guided_hint(item_count: int, message) -> None:
+    """Send appropriate hint based on item count (guided first 5 minutes)."""
+    hint = _GUIDED_HINTS.get(item_count)
+    if hint:
+        try:
+            await message.reply_text(hint)
+        except Exception:
+            pass
+
+
+# ── Milestone rewards ─────────────────────────────────────────────────────
+
+async def check_milestones(user, item_count: int, message, owner_id, owner_type, context) -> None:
+    """Check and fire milestone rewards after adding items to wardrobe."""
+    reached = list(user.milestones_reached or [])
+    new_milestones = []
+
+    # 3 items: mini outfit unlocked
+    if item_count >= 3 and "mini_outfit" not in reached:
+        new_milestones.append("mini_outfit")
+        await message.reply_text("🎉 Мини-образ разблокирован!")
+        # Generate mini card
+        try:
+            _redis = context.bot_data.get("redis") if context else None
+            if _redis:
+                from core.queue import RedisQueue, QueuePriority
+                queue = RedisQueue(_redis)
+                await queue.push(
+                    "generate_brief",
+                    {"user_id": str(user.id)},
+                    priority=QueuePriority.HIGH,
+                )
+        except Exception as e:
+            logger.warning("milestone.mini_outfit.failed", error=str(e))
+
+    # 5 items: colortype prompt
+    if item_count >= 5 and "colortype_prompt" not in reached:
+        new_milestones.append("colortype_prompt")
+        await message.reply_text(
+            "🎉 Пришли селфи — определю твой цветотип!"
+        )
+
+    # 8 items (mom): first full outfit
+    segment = getattr(user, "segment", "no_kids") or "no_kids"
+    if item_count >= 8 and segment in ("mom_girl", "mom_boy") and "full_outfit" not in reached:
+        new_milestones.append("full_outfit")
+        await message.reply_text("🎉 Первый полный образ!")
+        try:
+            _redis = context.bot_data.get("redis") if context else None
+            if _redis:
+                from core.queue import RedisQueue, QueuePriority
+                queue = RedisQueue(_redis)
+                await queue.push(
+                    "generate_brief",
+                    {"user_id": str(user.id)},
+                    priority=QueuePriority.HIGH,
+                )
+        except Exception as e:
+            logger.warning("milestone.full_outfit.failed", error=str(e))
+
+    # 10 items (woman/no_kids): wardrobe collected
+    if item_count >= 10 and segment in ("no_kids", "pregnant") and "wardrobe_collected" not in reached:
+        new_milestones.append("wardrobe_collected")
+        await message.reply_text(
+            "🎉 Гардероб собран! Завтра утром — первый образ."
+        )
+
+    # Save new milestones
+    if new_milestones:
+        reached.extend(new_milestones)
+        try:
+            async with AsyncWriteSession() as session:
+                await session.execute(
+                    sa.update(User).where(User.id == user.id)
+                    .values(milestones_reached=reached)
+                )
+                await session.commit()
+            user.milestones_reached = reached
+            logger.info("milestones.updated",
+                user_id=str(user.id),
+                new=new_milestones,
+                total=reached,
+            )
+        except Exception as e:
+            logger.error("milestones.save_failed", error=str(e))
 
 
 # ── Brief trigger ──────────────────────────────────────────────────────────
@@ -773,6 +908,14 @@ async def _handle_single_photo(
             except Exception as _e:
                 logger.warning("wardrobe.item_comment_failed", error=str(_e))
 
+        # ── Guided hints for first items ──────────────────────────────────
+        if added:
+            await _send_guided_hint(_total_now, update.message)
+
+        # ── Milestone rewards ──────────────────────────────────────────────
+        if added and user.onboarding_completed:
+            await check_milestones(user, _total_now, update.message, owner_id, owner_type, context)
+
         # ── Balance insight при milestone (каждые 10 вещей) ────────────────
         if added:
             try:
@@ -848,7 +991,8 @@ async def handle_photo_action(update: Update, context: ContextTypes.DEFAULT_TYPE
         if limit != 9999 and user.daily_requests_used >= limit:
             await query.edit_message_text(get_limit_exceeded_msg(user))
             return
-        await query.edit_message_text("📥 Добавляю в гардероб...")
+        # Progressive: immediately show "Анализирую" before Vision starts
+        await query.edit_message_text("✨ Анализирую фото...")
         _track_task(
             _process_media_group(
                 file_ids=file_ids,
@@ -929,9 +1073,27 @@ async def _process_media_group(
     bot,
     context,
 ) -> None:
+    """Process photo(s) for wardrobe with progressive status messages.
+
+    Single photo flow:
+      1. "✨ Анализирую фото..." (already shown by caller)
+      2. "👚 Кофта розовая! Сохраняю..."
+      3. "✅ Кофта розовая добавлена! (3/8)" + CTA
+
+    Multi-photo flow:
+      ONE status message updated per photo with running results.
+
+    Vision failure: "🤔 Не могу разобрать. Сфоткай ближе на светлом фоне?"
+    """
     total_received = len(file_ids)
     if not total_received:
         return
+
+    is_single = total_received == 1
+    # For single photo, `message` is the already-sent "✨ Анализирую фото..." msg
+    # that we will progressively edit.
+    # For multi-photo, we need to create a new progress message.
+    progress_msg = message if is_single else None
 
     # Загрузить актуального пользователя из БД
     try:
@@ -954,7 +1116,10 @@ async def _process_media_group(
     if limit != 9999:
         remaining = limit - user.daily_requests_used
         if remaining <= 0:
-            await message.reply_text(get_limit_exceeded_msg(user))
+            if is_single:
+                await _safe_edit_text(message, get_limit_exceeded_msg(user))
+            else:
+                await message.reply_text(get_limit_exceeded_msg(user))
             return
     else:
         remaining = total_received  # unlimited
@@ -963,36 +1128,68 @@ async def _process_media_group(
     total = len(to_process)
     skipped_limit = max(0, min(total_received, 10) - total)
 
-    if total_received > 10:
-        await message.reply_text(
-            f"📸 Получила {total_received} фото — обработаю первые {total}."
-        )
-    else:
-        await message.reply_text(f"📸 Получила {total_received} фото. Начинаю анализ...")
-
-    progress_text = f"🔍 Анализирую фото 1 из {total}..."
-    progress_msg = await message.reply_text(progress_text)
+    if not is_single:
+        if total_received > 10:
+            await _safe_edit_text(
+                message,
+                f"✨ Получила {total_received} фото — обработаю первые {total}. Анализирую...",
+            )
+            progress_msg = message
+        else:
+            await _safe_edit_text(
+                message,
+                f"✨ Получила {total_received} фото. Анализирую...",
+            )
+            progress_msg = message
 
     _redis = context.bot_data.get("redis") if context else None
     matrix = await _get_scoring_matrix(_redis, user, owner_id, owner_type)
 
     photo_lines: list[str] = []
+    all_added_items: list[dict] = []  # track all added items for final message
     total_added = 0
     successful_photos = 0
 
     for i, file_id in enumerate(to_process):
         try:
             logger.info("wardrobe.processing", index=i, file_id=file_id[:20])
-            new_progress = f"🔍 Анализирую фото {i + 1} из {total}..."
-            if new_progress != progress_text:
-                await progress_msg.edit_text(new_progress)
-                progress_text = new_progress
+
+            # Multi-photo: update progress per photo
+            if not is_single and total > 1:
+                await _safe_edit_text(
+                    progress_msg,
+                    f"✨ Анализирую фото {i + 1} из {total}...",
+                )
 
             logger.info("wardrobe.vision_start", index=i)
             tg_file = await bot.get_file(file_id)
             photo_bytes = bytes(await tg_file.download_as_bytearray())
             items_data = await _call_vision(photo_bytes)
             logger.info("wardrobe.vision_done", index=i, items_count=len(items_data))
+
+            if not items_data:
+                # Vision returned nothing
+                if is_single:
+                    await _safe_edit_text(
+                        progress_msg,
+                        "🤔 Не могу разобрать. Сфоткай ближе на светлом фоне?",
+                    )
+                    return
+                else:
+                    photo_lines.append(f"📷 Фото {i + 1}: одежды не найдено")
+                    continue
+
+            # Single photo: show what Vision found
+            if is_single:
+                first_label = _item_label(items_data[0])
+                if len(items_data) > 1:
+                    extra = f" и ещё {len(items_data) - 1}"
+                else:
+                    extra = ""
+                await _safe_edit_text(
+                    progress_msg,
+                    f"👚 {first_label.capitalize()}{extra}! Сохраняю...",
+                )
 
             # Дедупликация: загружаем актуальный набор вещей
             existing_set = await _load_existing_set(owner_id, owner_type)
@@ -1063,6 +1260,7 @@ async def _process_media_group(
 
             successful_photos += 1
             total_added += len(added)
+            all_added_items.extend(added)
 
             if added:
                 names = ", ".join(_item_label(d) for d in added)
@@ -1079,6 +1277,13 @@ async def _process_media_group(
                 bulk=True,
             )
         except Exception as e:
+            if is_single:
+                await _safe_edit_text(
+                    progress_msg,
+                    "🤔 Не могу разобрать. Сфоткай ближе на светлом фоне?",
+                )
+                logger.error("media_group.item_failed", index=i, error=str(e), exc_info=True)
+                return
             photo_lines.append(f"📷 Фото {i + 1}: ❌ не удалось распознать")
             logger.error("media_group.item_failed", index=i, error=str(e), exc_info=True)
 
@@ -1103,22 +1308,59 @@ async def _process_media_group(
         except Exception:
             pass
 
-    summary = "\n".join(photo_lines)
-    await progress_msg.edit_text(
-        f"✅ Добавила {total_added} вещей из {total} фото:\n\n{summary}"
-    )
-
+    # ── Final progress message ─────────────────────────────────────────
+    _current_count = 0
+    _all_items_now: list = []
     if total_added > 0:
         try:
             async with AsyncReadSession() as _cnt_sess2:
-                _all_now2 = await get_owner_items(_cnt_sess2, owner_id, owner_type)
-            logger.info("metric.photo_added",
-                user_id=str(user.id),
-                item_count=len(_all_now2),
-                segment=user.segment,
-            )
+                _all_items_now = await get_owner_items(_cnt_sess2, owner_id, owner_type)
+            _current_count = len(_all_items_now)
         except Exception:
             pass
+
+    if is_single:
+        # Single photo: final edit with result + count + CTA
+        if total_added > 0 and all_added_items:
+            _added_names = ", ".join(_item_label(d) for d in all_added_items)
+            _final = f"✅ {_added_names.capitalize()} добавлена! ({_current_count}/8)"
+
+            # CTA: suggest next item
+            _cta = _suggest_next_item(_all_items_now, _current_count)
+            if _cta:
+                _final += f"\n{_cta}"
+
+            await _safe_edit_text(progress_msg, _final)
+        elif total_added == 0:
+            await _safe_edit_text(
+                progress_msg,
+                "🤔 Не могу разобрать. Сфоткай ближе на светлом фоне?",
+            )
+    else:
+        # Multi-photo: final summary
+        summary = "\n".join(photo_lines)
+        _final_multi = f"✅ Добавила {total_added} вещей из {total} фото:\n\n{summary}"
+        if _current_count > 0:
+            _cta = _suggest_next_item(_all_items_now, _current_count)
+            if _cta:
+                _final_multi += f"\n\n{_cta}"
+        await _safe_edit_text(progress_msg, _final_multi)
+
+    if total_added > 0:
+        if _current_count > 0:
+            logger.info("metric.photo_added",
+                user_id=str(user.id),
+                item_count=_current_count,
+                segment=user.segment,
+            )
+
+        # Guided hints for first items (skip for single — CTA already shown)
+        if not is_single and _current_count > 0:
+            await _send_guided_hint(_current_count, message)
+
+        # Milestone rewards
+        if _current_count > 0 and user.onboarding_completed:
+            await check_milestones(user, _current_count, message, owner_id, owner_type, context)
 
     # ── Триггер первого брифа на 5-й вещи (для ВСЕХ юзеров) ────────────
     if total_added > 0 and user.onboarding_completed:
