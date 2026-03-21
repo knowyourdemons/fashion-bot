@@ -84,13 +84,17 @@ def create_application() -> Application:
     from bot.handlers.wardrobe_browser import (
         handle_overview, handle_season_filter, handle_category_grid,
         handle_item_card, handle_delete_confirm, handle_delete_yes,
+        handle_owner_switch, handle_season_edit, handle_noop,
     )
-    app.add_handler(CallbackQueryHandler(handle_overview, pattern="^w:ov"))
+    app.add_handler(CallbackQueryHandler(handle_overview, pattern="^w:ov$"))
+    app.add_handler(CallbackQueryHandler(handle_owner_switch, pattern="^w:ow:"))
     app.add_handler(CallbackQueryHandler(handle_season_filter, pattern="^w:sz:"))
     app.add_handler(CallbackQueryHandler(handle_category_grid, pattern="^w:cat:"))
     app.add_handler(CallbackQueryHandler(handle_item_card, pattern="^w:it:"))
     app.add_handler(CallbackQueryHandler(handle_delete_confirm, pattern="^w:del:"))
     app.add_handler(CallbackQueryHandler(handle_delete_yes, pattern="^w:dly:"))
+    app.add_handler(CallbackQueryHandler(handle_season_edit, pattern="^w:szed:"))
+    app.add_handler(CallbackQueryHandler(handle_noop, pattern="^w:noop$"))
 
     # Noop callback (page counter, active tab)
     async def _noop_callback(update, context):
