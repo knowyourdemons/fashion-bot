@@ -239,9 +239,12 @@ docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
 ## Тестирование
 ```bash
 docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
-# 971 тест, pytest-forked для изоляции (21 марта 2026)
+# 1016 тестов, pytest-forked для изоляции (21 марта 2026)
 # CI: GitHub Actions запускает тесты на каждый push/PR
+# Pre-push hook: .githooks/pre-push блокирует push если тесты не проходят
 ```
+
+> **Правило**: после добавления тестов или значительных изменений — обновить CLAUDE.md (секция "Что сделано") и docs/STATUS.md.
 
 ## Известные баги / TODO (v1.0)
 - "Что надеть" в меню вызывает handle_rate_menu вместо генерации образа → фикс маппинга
