@@ -58,6 +58,7 @@ class TestBriefFeedback:
 
         await handle_brief_feedback(update, context)
 
-        call_args = update.callback_query.message.reply_text.call_args
+        # Now uses edit_message_caption with reply_markup
+        call_args = update.callback_query.edit_message_caption.call_args
         assert call_args is not None
-        assert "reply_markup" in call_args.kwargs or len(call_args.args) > 1
+        assert "reply_markup" in call_args.kwargs

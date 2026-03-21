@@ -1582,17 +1582,7 @@ async def _process_media_group(
                     photo_lines.append(f"📷 Фото {i + 1}: одежды не найдено")
                     continue
 
-            # Single photo: show what Vision found
-            if is_single:
-                first_label = _item_label(items_data[0])
-                if len(items_data) > 1:
-                    extra = f" и ещё {len(items_data) - 1}"
-                else:
-                    extra = ""
-                await _safe_edit_text(
-                    progress_msg,
-                    f"👚 {first_label.capitalize()}{extra}! Сохраняю...",
-                )
+            # Single photo: skip intermediate "saving..." step — wait for final result
 
             # Дедупликация: загружаем актуальный набор вещей
             existing_set = await _load_existing_set(owner_id, owner_type)

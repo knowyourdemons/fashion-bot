@@ -18,9 +18,13 @@ async def handle_brief_feedback(update: Update, context: ContextTypes.DEFAULT_TY
         vote = parts[1]           # "up" or "down"
         brief_id_str = parts[2]
         if brief_id_str == "noop":
-            await query.edit_message_reply_markup(reply_markup=None)
             if vote == "up":
-                await query.message.reply_text("👍 Рада что понравилось!")
+                try:
+                    await query.edit_message_caption(caption="✅ Надели!")
+                except Exception:
+                    await query.edit_message_reply_markup(reply_markup=None)
+            else:
+                await query.edit_message_reply_markup(reply_markup=None)
             return
         brief_id = uuid.UUID(brief_id_str)
         async with AsyncWriteSession() as session:
@@ -33,17 +37,30 @@ async def handle_brief_feedback(update: Update, context: ContextTypes.DEFAULT_TY
                 item_ids = [uuid.UUID(i) for i in (log.outfit_items or [])]
                 await update_wear_count(session, item_ids)
             await session.commit()
-        await query.edit_message_reply_markup(reply_markup=None)
+        # Clean UX: edit caption on collage, not new message
         if vote == "up":
-            await query.message.reply_text("👍 Отлично! Записала что надели.")
+            try:
+                await query.edit_message_caption(caption="✅ Надели!")
+            except Exception:
+                try:
+                    await query.edit_message_reply_markup(reply_markup=None)
+                except Exception:
+                    pass
         else:
             keyboard = InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔄 Другой образ", callback_data="outfit_request"),
             ]])
-            await query.message.reply_text(
-                "Понятно! Напиши что не подошло — подберу лучше 👗",
-                reply_markup=keyboard,
-            )
+            try:
+                await query.edit_message_caption(
+                    caption="Подберу другой 👗",
+                    reply_markup=keyboard,
+                )
+            except Exception:
+                await query.edit_message_reply_markup(reply_markup=None)
+                await query.message.reply_text(
+                    "Понятно! Напиши что не подошло — подберу лучше 👗",
+                    reply_markup=keyboard,
+                )
         logger.info(
             "brief.feedback",
             brief_id=str(brief_id),
@@ -255,8 +272,12 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         except Exception:
             pass
 
-    # Store reference to old message for cleanup
+    # Show loading state on existing collage
     old_message = query.message
+    try:
+        await query.edit_message_caption(caption="🔄 Подбираю другой вариант...")
+    except Exception:
+        pass
 
     from bot.handlers.wardrobe import _generate_outfit_for_user
     await _generate_outfit_for_user(old_message, user, context, exclude_ids=exclude_ids)
@@ -265,11 +286,10 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await redis.incr(reroll_key)
         await redis.expire(reroll_key, 86400)
 
-    # Delete old collage message to avoid chat clutter
+    # Delete old collage (new one already sent by _generate_outfit_for_user)
     try:
         await old_message.delete()
     except Exception:
-        # Fallback: just remove buttons if delete fails
         try:
             await query.edit_message_reply_markup(reply_markup=None)
         except Exception:

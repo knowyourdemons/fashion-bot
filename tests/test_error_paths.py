@@ -817,12 +817,13 @@ class TestHandleRerollNoUser:
         query.message = MagicMock()
         query.message.reply_text = AsyncMock()
         query.edit_message_reply_markup = AsyncMock()
+        query.edit_message_caption = AsyncMock()
         update.callback_query = query
 
         context = MagicMock()
 
         await handle_brief_feedback(update, context)
 
-        query.edit_message_reply_markup.assert_called()
-        query.message.reply_text.assert_called_once()
-        assert "Рада" in query.message.reply_text.call_args[0][0]
+        # Now uses edit_message_caption instead of reply_text
+        query.edit_message_caption.assert_called_once()
+        assert "Надели" in query.edit_message_caption.call_args.kwargs.get("caption", "")
