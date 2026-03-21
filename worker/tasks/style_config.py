@@ -3,8 +3,6 @@
 """
 import random
 
-from services.outfit_selector import _get_temp_regime as get_temp_regime  # canonical source
-
 SLOT_EMOJI = {
     "outerwear": "🧥",
     "top":       "👕",
@@ -148,7 +146,10 @@ SEASON_SLOT_TYPES = {
 }
 
 
-# get_temp_regime is now imported from services.outfit_selector (canonical source)
+def get_temp_regime(temp: float) -> str:
+    """Delegates to canonical _get_temp_regime in outfit_selector (lazy import to avoid circular)."""
+    from services.outfit_selector import _get_temp_regime
+    return _get_temp_regime(temp)
 
 
 def get_placeholder_label(slot: str, colortype: str, regime: str) -> str | None:
