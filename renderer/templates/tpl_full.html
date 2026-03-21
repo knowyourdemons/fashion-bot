@@ -89,9 +89,9 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
        {% if item.extra_style %}style="{{ item.extra_style }}"{% endif %}>
     {% if not item.photo_base64 %}
     <div class="fi-emoji"{% if item.emoji_size %} style="font-size:{{ item.emoji_size }}px"{% endif %}>{{ item.emoji }}</div>
-    {% endif %}
     {% if item.label %}
     <div class="fi-lbl"><span>{{ item.label }}</span></div>
+    {% endif %}
     {% endif %}
   </div>
   {% endfor %}

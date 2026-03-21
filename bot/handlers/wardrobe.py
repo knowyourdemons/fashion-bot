@@ -1813,11 +1813,7 @@ async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def handle_add_items_hint(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Callback: подсказка как добавить вещи (при пустом гардеробе)."""
     query = update.callback_query
-    await query.answer()
-    await query.message.reply_text(
-        "📸 Просто пришли фото вещей — добавлю в гардероб!",
-        reply_markup=get_main_menu(context.user_data.get("db_user"), context),
-    )
+    await query.answer("📸 Пришли фото — добавлю в гардероб!", show_alert=False)
 
 
 
@@ -1973,11 +1969,41 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         has_ow = any(s["slot"] == "outerwear" and s.get("has_item") for s in all_slots)
         missing = [s["slot"] for s in all_slots if not s.get("has_item")]
         child_name_str = child.name if child else None
+        # Count real photos & get first item description for single-item context
+        _real_count = sum(1 for s in all_slots if s.get("has_item") and (s.get("photo_url") or s.get("photo_id")))
+        _first_desc = ""
+        if _real_count <= 1:
+            for s in all_slots:
+                if s.get("has_item"):
+                    _first_desc = f"{s.get('item_type', '')} {s.get('item_color', '')}".strip().lower()
+                    break
+        # Get previous comment from Redis to avoid repetition
+        _prev_comment = ""
+        if redis:
+            _prev_key = f"last_kassi_comment:{user.id}"
+            try:
+                _prev_raw = await redis.get(_prev_key)
+                if _prev_raw:
+                    _prev_comment = _prev_raw.decode() if isinstance(_prev_raw, bytes) else _prev_raw
+            except Exception:
+                pass
         if scored:
             avg = sum(scored) / len(scored)
-            comment = _warm_outfit_comment(avg, child_name_str, temp_m, has_ow, missing)
+            comment = _warm_outfit_comment(
+                avg, child_name_str, temp_m, has_ow, missing,
+                exclude_comment=_prev_comment, real_item_count=_real_count, first_item_desc=_first_desc,
+            )
         else:
-            comment = _warm_outfit_comment(6.0, child_name_str, temp_m, has_ow, missing)
+            comment = _warm_outfit_comment(
+                6.0, child_name_str, temp_m, has_ow, missing,
+                exclude_comment=_prev_comment, real_item_count=_real_count, first_item_desc=_first_desc,
+            )
+        # Store current comment in Redis for next re-roll
+        if redis:
+            try:
+                await redis.set(f"last_kassi_comment:{user.id}", comment, ex=86400)
+            except Exception:
+                pass
 
         caption = ""  # всё на карточке
 
@@ -1990,6 +2016,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             weather=_weather_data,
             outfit_slots=all_slots,
             advice_text=comment,
+            colortype=colortype_for_outfit,
         )
 
         # Сохранить BriefLog для кнопок feedback

@@ -28,13 +28,14 @@ from services.brief_renderer import (
     prepare_date_context,
     prepare_layers,
     prepare_underwear_line,
-    collect_palette,
+    collect_palette as _collect_palette_simple,
     render_template,
     render_html_to_png,
     TYPE_RU,
 )
 from services.collage_styles import (
     _get_placeholder_label,
+    collect_palette as _collect_palette_rich,
 )
 
 logger = structlog.get_logger()
@@ -108,6 +109,7 @@ async def build_brief_card(
     weather: dict,
     outfit_slots: list[dict],
     advice_text: str = "",
+    colortype: str = "",
 ) -> bytes | None:
     """
     Build morning brief card as PNG bytes.
@@ -152,12 +154,13 @@ async def build_brief_card(
             html = _build_hybrid_html(
                 name, context_str, date_str, theme, segment,
                 weather_tpl, outfit_slots, outfit, advice_text,
-                real_photos,
+                real_photos, colortype,
             )
         else:
             html = _build_full_html(
                 name, context_str, date_str, theme,
                 weather_tpl, outfit_slots, outfit, advice_text,
+                colortype,
             )
 
         png_bytes = await render_html_to_png(html)
@@ -205,9 +208,10 @@ def _build_hybrid_html(
     name: str, context_str: str, date_str: str, theme: dict,
     segment: str, weather_tpl: dict, outfit_slots: list[dict],
     outfit: dict, advice_text: str, real_photo_count: int,
+    colortype: str = "",
 ) -> str:
     items, missing = prepare_items_hybrid(outfit_slots)
-    palette = collect_palette(items)
+    palette = _collect_palette_rich(outfit_slots, colortype=colortype)
     base_layer = prepare_underwear_line(outfit)
 
     # Progress
@@ -238,10 +242,10 @@ def _build_hybrid_html(
 def _build_full_html(
     name: str, context_str: str, date_str: str, theme: dict,
     weather_tpl: dict, outfit_slots: list[dict], outfit: dict,
-    advice_text: str,
+    advice_text: str, colortype: str = "",
 ) -> str:
     items = prepare_items_full(outfit_slots)
-    palette = collect_palette(items)
+    palette = _collect_palette_rich(outfit_slots, colortype=colortype)
     base_layer = prepare_underwear_line(outfit)
 
     return render_template(
@@ -353,44 +357,34 @@ def get_brief_buttons(
                 "inline_keyboard": [
                     [
                         {"text": "👍 Надели", "callback_data": f"brief_feedback:up:{brief_id}"},
-                        {"text": "🔄 Переодень", "callback_data": f"reroll:{brief_id}"},
-                    ],
-                    [
+                        {"text": "🔄 Другой", "callback_data": f"reroll:{brief_id}"},
                         {"text": "📤 Переслать", "callback_data": f"share:{brief_id}"},
                     ],
                 ]
             }
         else:
-            # 1-7 photos mom
-            rows = [[
-                {"text": "👍 Надели", "callback_data": f"brief_feedback:up:{brief_id}"},
-                {"text": "🔄 Переодень", "callback_data": f"reroll:{brief_id}"},
-            ]]
-            if first_missing_slot:
-                rows[0].append(
-                    {"text": f"📸 {first_missing_slot}",
-                     "callback_data": "add_items_hint"},
-                )
-            return {"inline_keyboard": rows}
+            # 1-7 photos mom — no 3rd button, CTA is in progress bar
+            return {
+                "inline_keyboard": [[
+                    {"text": "👍 Надели", "callback_data": f"brief_feedback:up:{brief_id}"},
+                    {"text": "🔄 Другой", "callback_data": f"reroll:{brief_id}"},
+                ]]
+            }
 
     # segment == "woman"
     if real_photo_count >= 8:
         return {
-            "inline_keyboard": [
-                [
-                    {"text": "👍 Нравится", "callback_data": f"brief_feedback:up:{brief_id}"},
-                    {"text": "🔄 Другой вариант", "callback_data": f"reroll:{brief_id}"},
-                ],
-                [
-                    {"text": "📤 Stories", "callback_data": f"share:{brief_id}"},
-                ],
-            ]
+            "inline_keyboard": [[
+                {"text": "👍 Нравится", "callback_data": f"brief_feedback:up:{brief_id}"},
+                {"text": "🔄 Другой", "callback_data": f"reroll:{brief_id}"},
+                {"text": "📤 Stories", "callback_data": f"share:{brief_id}"},
+            ]]
         }
     elif real_photo_count > 0:
         return {
             "inline_keyboard": [[
                 {"text": "👍 Нравится", "callback_data": f"brief_feedback:up:{brief_id}"},
-                {"text": "🔄 Другой вариант", "callback_data": f"reroll:{brief_id}"},
+                {"text": "🔄 Другой", "callback_data": f"reroll:{brief_id}"},
             ]]
         }
     else:

@@ -435,6 +435,7 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
                 weather=weather,
                 outfit_slots=outfit_slots,
                 advice_text=stylist_advice,
+                colortype=getattr(user, "colortype", "") or "",
             )
         except Exception as e:
             logger.warning("brief.adult.brief_card_failed", error=str(e))
@@ -898,6 +899,7 @@ async def generate_brief(payload: dict) -> dict:
             pass
 
     try:
+        _ct = getattr(_first_child, "colortype", "") if _first_child else getattr(user, "colortype", "")
         _brief_card_bytes = await build_brief_card(
             user=user,
             child=_first_child,
@@ -905,6 +907,7 @@ async def generate_brief(payload: dict) -> dict:
             weather=weather,
             outfit_slots=all_outfit_slots,
             advice_text=_advice_for_card,
+            colortype=_ct or "",
         )
         if _brief_card_bytes:
             logger.info("morning_brief.brief_card_ok", size=len(_brief_card_bytes))
@@ -1412,6 +1415,7 @@ async def generate_evening_brief(payload: dict) -> dict:
                 weather=weather,
                 outfit_slots=outfit_slots,
                 advice_text=advice,
+                colortype=getattr(user, "colortype", "") or "",
             )
         except Exception as e:
             logger.warning("evening_brief.adult.brief_card_failed", error=str(e))
@@ -1572,6 +1576,7 @@ async def generate_evening_brief(payload: dict) -> dict:
 
     brief_card_bytes = None
     try:
+        _ct_eve = getattr(first_child, "colortype", "") if first_child else getattr(user, "colortype", "")
         brief_card_bytes = await build_brief_card(
             user=user,
             child=first_child,
@@ -1579,6 +1584,7 @@ async def generate_evening_brief(payload: dict) -> dict:
             weather=weather,
             outfit_slots=all_outfit_slots,
             advice_text=_advice_eve or "Образ на завтра готов!",
+            colortype=_ct_eve or "",
         )
     except Exception as e:
         logger.warning("evening_brief.child.brief_card_failed", error=str(e))

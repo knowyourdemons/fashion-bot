@@ -11,8 +11,8 @@
 @font-face{font-family:'N';src:url('/usr/share/fonts/custom/Nunito-Bold.ttf');font-weight:700}
 *{margin:0;padding:0;box-sizing:border-box}
 body{width:440px;font-family:'N',sans-serif;padding:16px}
-.mom{background:linear-gradient(180deg,#F5EDE8,#F0E8E4);--c:#5B3A4A;--cm:#B09888;--acc:#D080A0;--pbg:#F0E8EC}
-.woman{background:linear-gradient(180deg,#E8EDF5,#E4E8F0);--c:#3A4A5B;--cm:#8898A8;--acc:#7090C0;--pbg:#E8ECF0}
+.mom{background:linear-gradient(180deg,#F5EDE8,#F0E8E4);--c:#5B3A4A;--cm:#B09888;--acc:#C0607A;--pbg:#E8D8DE}
+.woman{background:linear-gradient(180deg,#E8EDF5,#E4E8F0);--c:#3A4A5B;--cm:#8898A8;--acc:#5070B0;--pbg:#D8DEE8}
 .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
 .hdr-d{font-size:9px;color:var(--cm);letter-spacing:.5px}
 .hdr-n{font-size:18px;font-weight:700;color:var(--c)}
@@ -71,10 +71,10 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
 .kassi-a{font-size:8px;color:var(--cm);margin-top:3px}
 
 /* Progress */
-.prog{background:#fff;border-radius:8px;padding:6px 10px;margin-top:6px;text-align:center}
-.prog-bar{background:var(--pbg);height:4px;border-radius:2px;overflow:hidden}
-.prog-fill{height:100%;border-radius:2px;background:var(--acc)}
-.prog-txt{font-size:8px;color:var(--cm);margin-top:3px}
+.prog{background:#fff;border-radius:8px;padding:8px 12px;margin-top:6px;text-align:center}
+.prog-bar{background:var(--pbg);height:10px;border-radius:5px;overflow:hidden}
+.prog-fill{height:100%;border-radius:5px;background:var(--acc)}
+.prog-txt{font-size:11px;color:var(--c);margin-top:5px;font-weight:600}
 </style>
 </head>
 <body class="{{ css_class }}">
@@ -102,8 +102,9 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
   {% for item in items %}
   <div class="ph {{ item.size_class }} {{ item.bg_class }}"
        {% if item.photo_base64 %}style="background-image:url(data:image/png;base64,{{ item.photo_base64 }})"{% endif %}>
-    {% if not item.photo_base64 %}<div class="ph-emoji">{{ item.emoji }}</div>{% endif %}
+    {% if not item.photo_base64 %}<div class="ph-emoji">{{ item.emoji }}</div>
     <div class="ph-lbl"><span>{{ item.label }}</span></div>
+    {% endif %}
   </div>
   {% endfor %}
 

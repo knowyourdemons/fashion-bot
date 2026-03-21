@@ -344,31 +344,59 @@ def warm_outfit_comment(
     temp: float = None,
     has_outerwear: bool = True,
     missing_slots: list = None,
+    exclude_comment: str = "",
+    real_item_count: int = 0,
+    first_item_desc: str = "",
 ) -> str:
-    """Тёплый развёрнутый комментарий Касси к образу с советом."""
+    """Тёплый развёрнутый комментарий Касси к образу с советом.
+
+    Args:
+        exclude_comment: previous comment to avoid repeating
+        real_item_count: number of real wardrobe items in outfit
+        first_item_desc: e.g. "лосины пыльно-розовые" for single-item praise
+    """
     name = child_name or "ты"
 
-    if score >= 8.5:
+    # Single item → praise the specific item, not "образ"
+    if real_item_count == 1 and first_item_desc:
+        options = [
+            f"Отличная вещь — {first_item_desc}! Добавь ещё пару — соберу полный образ",
+            f"Классный выбор, {name}! {first_item_desc.capitalize()} — хорошая основа. Загрузи ещё вещей!",
+            f"Люблю {first_item_desc}! Сфоткай ещё пару вещей — покажу как их сочетать",
+            f"Красивая вещь, {name}! Добавь верх и обувь — соберу стильный образ",
+        ]
+    elif score >= 8.5:
         options = [
             f"Отличный образ, {name}! Тепло, стильно и всё сочетается ✨",
             f"Собрала классный образ для {name}! Будет выглядеть замечательно",
             f"Образ на все сто, {name}! Цвета отлично играют вместе",
+            f"Супер, {name}! Гармоничное сочетание — тепло и со вкусом",
         ]
     elif score >= 7.0:
         options = [
             f"Хороший образ, {name} — и тепло, и красиво! Добавь яркий аксессуар — будет ещё лучше",
             f"Отличный образ для {name}! Всё по погоде. Попробуй добавить шарф для настроения",
             f"Симпатичный образ, {name}! Комфортно весь день",
+            f"Удачный образ, {name}! Цвета хорошо дружат между собой",
+            f"Тепло и стильно, {name}! Отличное сочетание на сегодня",
         ]
     elif score >= 5.0:
         options = [
             f"Удобный образ, {name}! Добавь пару ярких вещей — комбинаций станет больше",
             f"Удобный образ для {name}! Загрузи ещё вещей — смогу собирать интереснее",
+            f"Хорошая база, {name}! Ещё несколько вещей — и образы заиграют",
         ]
     else:
         options = [
             f"Собрала из того что есть, {name}. Добавь ещё вещей — образы станут разнообразнее!",
+            f"Начало положено, {name}! Загрузи побольше вещей — подберу классный образ",
         ]
+
+    # Exclude previous comment to avoid repetition on re-roll
+    if exclude_comment:
+        filtered = [o for o in options if o != exclude_comment]
+        if filtered:
+            options = filtered
 
     comment = random.choice(options)
 
