@@ -24,29 +24,30 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
 
 /* Photo cards */
 .photos{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0;position:relative}
-.ph{border-radius:12px;overflow:hidden;position:relative;background-size:contain;background-position:center;background-repeat:no-repeat}
+.ph{border-radius:12px;overflow:hidden;position:relative}
 .ph.w100{width:100%;height:140px}
 .ph.w50{width:calc(50% - 2px);height:110px}
 .ph.w33{width:calc(33.3% - 3px);height:90px}
+.ph-img{width:100%;height:100%;object-fit:contain}
 .ph-lbl{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.25));padding:4px 10px}
 .ph-lbl span{font-size:10px;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.3)}
 .ph-emoji{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:36px;opacity:.5}
 /* Color border for real photos — adds catalog feel */
 .ph-bordered{border:2px solid rgba(0,0,0,.08)}
 
-/* Pastel bg by color */
-.bg-pink{background:linear-gradient(145deg,#F0C0C8,#E0A0B0)}
-.bg-blue{background:linear-gradient(145deg,#B0C0D8,#90A0C0)}
-.bg-beige{background:linear-gradient(145deg,#E0D0C0,#D0C0A8)}
-.bg-grey{background:linear-gradient(145deg,#D0D0D0,#B8B8B8)}
-.bg-green{background:linear-gradient(145deg,#C0D8C0,#A0C0A0)}
-.bg-red{background:linear-gradient(145deg,#E0B0B0,#D09090)}
-.bg-navy{background:linear-gradient(145deg,#A0B0C8,#8090B0)}
-.bg-brown{background:linear-gradient(145deg,#C8B8A0,#B0A088)}
-.bg-white{background:linear-gradient(145deg,#F0F0F0,#E0E0E0)}
-.bg-black{background:linear-gradient(145deg,#505050,#383838)}
-.bg-purple{background:linear-gradient(145deg,#D0C0E0,#B8A8D0)}
-.bg-lavender{background:linear-gradient(145deg,#E0D8E8,#C8C0D8)}
+/* Pastel bg by color — use background-color so it works WITH background-image */
+.bg-pink{background-color:#F0C0C8;background-image:linear-gradient(145deg,#F0C0C8,#E0A0B0)}
+.bg-blue{background-color:#B0C0D8;background-image:linear-gradient(145deg,#B0C0D8,#90A0C0)}
+.bg-beige{background-color:#E0D0C0;background-image:linear-gradient(145deg,#E0D0C0,#D0C0A8)}
+.bg-grey{background-color:#D0D0D0;background-image:linear-gradient(145deg,#D0D0D0,#B8B8B8)}
+.bg-green{background-color:#C0D8C0;background-image:linear-gradient(145deg,#C0D8C0,#A0C0A0)}
+.bg-red{background-color:#E0B0B0;background-image:linear-gradient(145deg,#E0B0B0,#D09090)}
+.bg-navy{background-color:#A0B0C8;background-image:linear-gradient(145deg,#A0B0C8,#8090B0)}
+.bg-brown{background-color:#C8B8A0;background-image:linear-gradient(145deg,#C8B8A0,#B0A088)}
+.bg-white{background-color:#F0F0F0;background-image:linear-gradient(145deg,#F0F0F0,#E0E0E0)}
+.bg-black{background-color:#505050;background-image:linear-gradient(145deg,#505050,#383838)}
+.bg-purple{background-color:#D0C0E0;background-image:linear-gradient(145deg,#D0C0E0,#B8A8D0)}
+.bg-lavender{background-color:#E0D8E8;background-image:linear-gradient(145deg,#E0D8E8,#C8C0D8)}
 
 /* Palette dots */
 .palette{position:absolute;right:6px;top:6px;display:flex;flex-direction:column;gap:3px}
@@ -103,11 +104,12 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
 <div class="photos">
   {% for item in items %}
   <div class="ph {{ item.size_class }} {{ item.bg_class }}{% if item.photo_base64 %} ph-bordered{% endif %}"
-       style="{% if item.photo_base64 %}background-image:url(data:image/png;base64,{{ item.photo_base64 }});{% endif %}{% if item.photo_base64 and item.color_hex %}border-color:{{ item.color_hex }}30;{% endif %}">
-    {% if not item.photo_base64 %}
+       {% if item.photo_base64 and item.color_hex %}style="border-color:{{ item.color_hex }}30"{% endif %}>
+    {% if item.photo_base64 %}
+    <img class="ph-img" src="data:image/png;base64,{{ item.photo_base64 }}">
+    {% if item.is_solid %}<div class="ph-lbl"><span>{{ item.label }}</span></div>{% endif %}
+    {% else %}
     <div class="ph-emoji">{{ item.emoji }}</div>
-    <div class="ph-lbl"><span>{{ item.label }}</span></div>
-    {% elif item.is_solid %}
     <div class="ph-lbl"><span>{{ item.label }}</span></div>
     {% endif %}
   </div>
