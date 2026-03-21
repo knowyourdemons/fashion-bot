@@ -524,10 +524,22 @@ class TestRendererIntegration:
     """Live Playwright renderer integration."""
 
     def _renderer_available(self) -> bool:
+        """Check that Playwright renderer is up and accepts html payloads."""
         try:
             import urllib.request
+            import json
+            # Health check
             r = urllib.request.urlopen("http://renderer:3100/health", timeout=2)
-            return r.status == 200
+            if r.status != 200:
+                return False
+            # Smoke test: send minimal html to verify Playwright mode
+            req = urllib.request.Request(
+                "http://renderer:3100/render",
+                data=json.dumps({"html": "<b>ok</b>", "width": 100}).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+            r2 = urllib.request.urlopen(req, timeout=5)
+            return r2.status == 200 and r2.read(4) == b"\x89PNG"
         except Exception:
             return False
 
