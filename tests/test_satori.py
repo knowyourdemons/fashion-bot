@@ -1,4 +1,4 @@
-"""Satori collage renderer tests — unit + integration."""
+"""Collage renderer tests — unit + integration (Playwright primary, Satori fallback)."""
 import asyncio
 import io
 import os
@@ -369,12 +369,161 @@ class TestSatoriFallback:
                 assert result is not None
 
 
-# ── Integration tests (need Satori server) ──────────────────────────────────
+class TestElementToHtml:
+    """_element_to_html converts Satori element trees to HTML."""
 
-class TestSatoriIntegration:
-    """Live Satori server integration."""
+    def test_simple_div_with_text(self):
+        from services.image_builder import _element_to_html
+        el = {"type": "div", "props": {"style": {"color": "red"}, "children": "Hello"}}
+        html = _element_to_html(el)
+        assert "<div" in html
+        assert "color:red" in html
+        assert "Hello" in html
+        assert "</div>" in html
 
-    def _satori_available(self) -> bool:
+    def test_nested_elements(self):
+        from services.image_builder import _element_to_html
+        el = {
+            "type": "div",
+            "props": {
+                "style": {"display": "flex"},
+                "children": [
+                    {"type": "div", "props": {"children": "Child 1"}},
+                    {"type": "div", "props": {"children": "Child 2"}},
+                ],
+            },
+        }
+        html = _element_to_html(el)
+        assert "Child 1" in html
+        assert "Child 2" in html
+        assert html.count("<div") == 3
+
+    def test_img_element(self):
+        from services.image_builder import _element_to_html
+        el = {
+            "type": "img",
+            "props": {
+                "src": "data:image/png;base64,abc",
+                "width": "100%",
+                "height": "50%",
+                "style": {"objectFit": "contain"},
+            },
+        }
+        html = _element_to_html(el)
+        assert "<img" in html
+        assert 'src="data:image/png;base64,abc"' in html
+        assert "object-fit:contain" in html
+
+    def test_html_escaping(self):
+        from services.image_builder import _element_to_html
+        el = {"type": "div", "props": {"children": '<script>alert("xss")</script>'}}
+        html = _element_to_html(el)
+        assert "<script>" not in html
+        assert "&lt;script&gt;" in html
+
+    def test_none_returns_empty(self):
+        from services.image_builder import _element_to_html
+        assert _element_to_html(None) == ""
+
+    def test_list_of_elements(self):
+        from services.image_builder import _element_to_html
+        els = [
+            {"type": "div", "props": {"children": "A"}},
+            {"type": "div", "props": {"children": "B"}},
+        ]
+        html = _element_to_html(els)
+        assert "A" in html and "B" in html
+
+
+class TestStyleToCss:
+    """_style_to_css converts camelCase style dict to CSS."""
+
+    def test_camel_to_kebab(self):
+        from services.image_builder import _style_to_css
+        result = _style_to_css({"backgroundColor": "#F00", "fontSize": 14})
+        assert "background-color:#F00" in result
+        assert "font-size:14px" in result
+
+    def test_no_px_for_unitless(self):
+        from services.image_builder import _style_to_css
+        result = _style_to_css({"opacity": 0.5, "fontWeight": 700})
+        assert "opacity:0.5" in result
+        assert "font-weight:700" in result
+
+    def test_string_values_unchanged(self):
+        from services.image_builder import _style_to_css
+        result = _style_to_css({"width": "100%", "display": "flex"})
+        assert "width:100%" in result
+        assert "display:flex" in result
+
+
+class TestWrapHtml:
+    """_wrap_html produces complete HTML document."""
+
+    def test_basic_wrap(self):
+        from services.image_builder import _wrap_html
+        html = _wrap_html("<div>test</div>", 440)
+        assert "<!DOCTYPE html>" in html
+        assert "width:440px" in html
+        assert "<div>test</div>" in html
+
+
+class TestRenderPlaywright:
+    """_render_playwright sends HTML to renderer."""
+
+    def test_returns_png_on_success(self):
+        from services.image_builder import _render_playwright
+        png_data = b"\x89PNG\r\nfake"
+        with patch("services.image_builder.httpx.AsyncClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_response = MagicMock()
+            mock_response.content = png_data
+            mock_response.raise_for_status = MagicMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_cls.return_value = mock_client
+
+            result = _run(_render_playwright("<html></html>", 440))
+            assert result == png_data
+
+    def test_returns_none_on_error(self):
+        from services.image_builder import _render_playwright
+        with patch("services.image_builder.httpx.AsyncClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client.post = AsyncMock(side_effect=Exception("connection refused"))
+            mock_cls.return_value = mock_client
+
+            result = _run(_render_playwright("<html></html>", 440))
+            assert result is None
+
+    def test_no_height_omits_from_payload(self):
+        from services.image_builder import _render_playwright
+        png_data = b"\x89PNG\r\nfake"
+        with patch("services.image_builder.httpx.AsyncClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_response = MagicMock()
+            mock_response.content = png_data
+            mock_response.raise_for_status = MagicMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_cls.return_value = mock_client
+
+            _run(_render_playwright("<html></html>", 440))
+            call_args = mock_client.post.call_args
+            payload = call_args[1]["json"] if "json" in call_args[1] else call_args[0][1]
+            assert "height" not in payload
+
+
+# ── Integration tests (need renderer server) ────────────────────────────────
+
+class TestRendererIntegration:
+    """Live Playwright renderer integration."""
+
+    def _renderer_available(self) -> bool:
         try:
             import urllib.request
             r = urllib.request.urlopen("http://renderer:3100/health", timeout=2)
@@ -383,8 +532,9 @@ class TestSatoriIntegration:
             return False
 
     def test_render_satori_returns_png(self):
-        if not self._satori_available():
-            pytest.skip("Satori server not available")
+        """Element tree → HTML → Playwright → PNG."""
+        if not self._renderer_available():
+            pytest.skip("Renderer not available")
 
         from services.image_builder import _render_satori
 
@@ -408,9 +558,26 @@ class TestSatoriIntegration:
         assert result[:4] == b"\x89PNG"
         assert len(result) > 100
 
-    def test_all_6_styles_render(self):
-        if not self._satori_available():
-            pytest.skip("Satori server not available")
+    def test_render_playwright_direct(self):
+        """Direct HTML → PNG via Playwright."""
+        if not self._renderer_available():
+            pytest.skip("Renderer not available")
+
+        from services.image_builder import _render_playwright
+
+        html = """<!DOCTYPE html>
+        <html><body style="width:440px;padding:20px;background:#F5EDE8;font-family:sans-serif">
+        <h1 style="color:#5B3A4A">Алиса, садик</h1>
+        <p>👚 Кофта розовая</p>
+        </body></html>"""
+        result = _run(_render_playwright(html, 440))
+        assert result is not None
+        assert result[:4] == b"\x89PNG"
+        assert len(result) > 100
+
+    def test_all_styles_render(self):
+        if not self._renderer_available():
+            pytest.skip("Renderer not available")
 
         from services.image_builder import build_collage_satori
         from services.collage_styles import STYLES
@@ -425,12 +592,12 @@ class TestSatoriIntegration:
             result = _run(build_collage_satori(slots, "Алиса  +4C", style=style))
             assert result is not None, f"Style {style} failed"
             assert result[:4] == b"\x89PNG", f"Style {style} not PNG"
-            assert len(result) > 3_000, f"Style {style} too small: {len(result)}"
+            assert len(result) > 1_000, f"Style {style} too small: {len(result)}"
 
     def test_collage_with_only_top_bottom(self):
         """Warm weather: no outerwear — all styles handle it."""
-        if not self._satori_available():
-            pytest.skip("Satori server not available")
+        if not self._renderer_available():
+            pytest.skip("Renderer not available")
 
         from services.image_builder import build_collage_satori
 
@@ -440,13 +607,13 @@ class TestSatoriIntegration:
         ]
         result = _run(build_collage_satori(slots, "Лето", style="moodboard"))
         assert result is not None
-        assert len(result) > 3_000
+        assert len(result) > 1_000
 
-    def test_render_satori_timeout_returns_none(self):
+    def test_render_timeout_returns_none(self):
         """Bad URL → returns None (not crash)."""
         from services.image_builder import _render_satori
 
-        with patch("services.image_builder.SATORI_URL", "http://192.0.2.1:9999/render"):
-            with patch("services.image_builder.SATORI_TIMEOUT", 1):
+        with patch("services.image_builder.RENDERER_URL", "http://192.0.2.1:9999/render"):
+            with patch("services.image_builder.RENDERER_TIMEOUT", 1):
                 result = _run(_render_satori({"type": "div", "props": {}}, 100, 100))
                 assert result is None

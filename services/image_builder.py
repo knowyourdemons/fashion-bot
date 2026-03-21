@@ -737,11 +737,105 @@ def _build_grid(images: list, labels: list, theme: str = "girl",
     return final
 
 
-# ── Satori renderer ──────────────────────────────────────────────────────────
+# ── Renderer (Playwright primary, Satori fallback) ──────────────────────────
 
-SATORI_URL = "http://renderer:3100/render"
-SATORI_TIMEOUT = 15
+RENDERER_URL = "http://renderer:3100/render"
+RENDERER_TIMEOUT = 15
+SATORI_URL = RENDERER_URL   # backward compat alias
+SATORI_TIMEOUT = RENDERER_TIMEOUT
 SATORI_W = 800
+
+
+# ── Element tree → HTML converter ────────────────────────────────────────────
+
+def _style_to_css(style: dict) -> str:
+    """Convert a Satori-style dict to inline CSS string."""
+    _CAMEL_RE = None
+
+    def _camel_to_kebab(name: str) -> str:
+        nonlocal _CAMEL_RE
+        if _CAMEL_RE is None:
+            import re
+            _CAMEL_RE = re.compile(r"(?<=[a-z0-9])([A-Z])")
+        return _CAMEL_RE.sub(r"-\1", name).lower()
+
+    parts = []
+    for key, val in style.items():
+        css_key = _camel_to_kebab(key)
+        if isinstance(val, (int, float)) and css_key not in (
+            "opacity", "flex", "flex-grow", "flex-shrink", "order", "z-index",
+            "font-weight", "line-height",
+        ):
+            val = f"{val}px"
+        parts.append(f"{css_key}:{val}")
+    return ";".join(parts)
+
+
+def _element_to_html(element) -> str:
+    """Recursively convert Satori element tree → HTML string.
+
+    Element format: {"type": "div", "props": {"style": {...}, "children": ...}}
+    Handles: div, img, span, and plain text children.
+    """
+    if element is None:
+        return ""
+    if isinstance(element, str):
+        import html as _html
+        return _html.escape(element)
+    if isinstance(element, (int, float)):
+        return str(element)
+    if isinstance(element, list):
+        return "".join(_element_to_html(c) for c in element)
+
+    if not isinstance(element, dict):
+        return str(element)
+
+    tag = element.get("type", "div")
+    props = element.get("props", {})
+    style = props.get("style", {})
+    children = props.get("children", "")
+
+    style_str = _style_to_css(style) if style else ""
+
+    # img tag — self-closing
+    if tag == "img":
+        src = props.get("src", "")
+        width = props.get("width", "")
+        height = props.get("height", "")
+        attrs = f'style="{style_str}"' if style_str else ""
+        if src:
+            attrs += f' src="{src}"'
+        if width:
+            attrs += f' width="{width}"'
+        if height:
+            attrs += f' height="{height}"'
+        return f"<img {attrs}/>"
+
+    # Regular element
+    inner = ""
+    if isinstance(children, list):
+        inner = "".join(_element_to_html(c) for c in children)
+    elif isinstance(children, dict):
+        inner = _element_to_html(children)
+    elif isinstance(children, str):
+        import html as _html
+        inner = _html.escape(children)
+    else:
+        inner = str(children) if children else ""
+
+    attrs = f' style="{style_str}"' if style_str else ""
+    return f"<{tag}{attrs}>{inner}</{tag}>"
+
+
+def _wrap_html(body_html: str, width: int = 440) -> str:
+    """Wrap element HTML in a full HTML document with base styles."""
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{width:{width}px;font-family:'Nunito',sans-serif;overflow:hidden}}
+img{{display:block}}
+</style></head><body>{body_html}</body></html>"""
 
 _PASTEL_MAP = {
     "белый": "#F8F8F6", "чёрный": "#EAEAEA", "серый": "#F0F0EE",
@@ -910,21 +1004,38 @@ def _satori_row(cards: list, gap: int = 12) -> dict:
     }
 
 
-async def _render_satori(element: dict, width: int, height: int) -> Optional[bytes]:
-    """POST to Satori server, return PNG bytes or None."""
-    payload = {"width": width, "height": height, "element": element}
+async def _render_playwright(html: str, width: int, height: int | None = None) -> Optional[bytes]:
+    """POST HTML to Playwright renderer, return PNG bytes or None."""
+    payload: dict = {"html": html, "width": width}
+    if height:
+        payload["height"] = height
     try:
-        async with httpx.AsyncClient(timeout=SATORI_TIMEOUT) as client:
-            r = await client.post(SATORI_URL, json=payload)
+        async with httpx.AsyncClient(timeout=RENDERER_TIMEOUT) as client:
+            r = await client.post(RENDERER_URL, json=payload)
             r.raise_for_status()
             if r.content[:4] == b"\x89PNG":
                 return r.content
-            logger.warning("satori.not_png", content_type=r.headers.get("content-type"))
+            logger.warning("playwright.not_png", content_type=r.headers.get("content-type"))
             return None
     except Exception as e:
-        logger.warning("satori.render_failed", error=str(e), exc_info=True)
+        logger.warning("playwright.render_failed", error=str(e), exc_info=True)
         sentry_sdk.capture_exception(e)
         return None
+
+
+async def _render_satori(element: dict, width: int, height: int) -> Optional[bytes]:
+    """Convert element tree to HTML and render via Playwright.
+
+    Backward-compatible wrapper: callers still pass Satori element trees,
+    but rendering happens via Playwright (full Chrome).
+    """
+    try:
+        body_html = _element_to_html(element)
+        html = _wrap_html(body_html, width)
+    except Exception as e:
+        logger.warning("element_to_html.failed", error=str(e), exc_info=True)
+        return None
+    return await _render_playwright(html, width, height)
 
 
 async def build_collage_satori(

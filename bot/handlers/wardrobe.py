@@ -1850,7 +1850,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         )
         return
 
-    await message.reply_text("🌤 Собираю образ...")
+    await context.bot.send_chat_action(message.chat_id, "typing")
+    status_msg = await message.reply_text("✨ Подбираю образ...")
 
     try:
         from services.weather import WeatherService
@@ -1863,6 +1864,10 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         is_no_kids = getattr(user, "segment", None) == "no_kids"
 
         if not children and not is_no_kids:
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
             await message.reply_text(
                 "Добавь ребёнка в профиле чтобы получать образы 👧",
                 reply_markup=get_main_menu(context.user_data.get("db_user"), context),
@@ -1902,6 +1907,10 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             items = await get_owner_items(session, owner_id_for_outfit, owner_type_for_outfit)
 
         if not items:
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
             await message.reply_text(
                 "Гардероб пуст — добавь вещи через фото 📸",
                 reply_markup=get_main_menu(context.user_data.get("db_user"), context),
@@ -2043,6 +2052,12 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             ])
         _outfit_markup = InlineKeyboardMarkup(_kbd_rows)
 
+        # Delete status message before sending result
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+
         if collage_bytes:
             await message.reply_photo(
                 photo=collage_bytes, caption=caption, reply_markup=_outfit_markup
@@ -2057,10 +2072,13 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         logger.error("outfit_request.failed", error=str(e))
         import sentry_sdk as _sentry
         _sentry.capture_exception(e)
-        await message.reply_text(
-            "Не удалось собрать образ. Попробуй позже.",
-            reply_markup=get_main_menu(context.user_data.get("db_user"), context),
-        )
+        try:
+            await status_msg.edit_text("😔 Не получилось собрать образ. Попробуй ещё раз!")
+        except Exception:
+            await message.reply_text(
+                "Не удалось собрать образ. Попробуй позже.",
+                reply_markup=get_main_menu(context.user_data.get("db_user"), context),
+            )
 
 
 async def handle_outfit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
