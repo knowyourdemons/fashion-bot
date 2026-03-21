@@ -16,6 +16,7 @@ def create_app() -> FastAPI:
             dsn=settings.sentry_dsn,
             integrations=[FastApiIntegration()],
             environment=settings.environment,
+            send_default_pii=True,
         )
 
     app = FastAPI(

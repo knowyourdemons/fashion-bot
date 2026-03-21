@@ -29,6 +29,7 @@ async def main() -> None:
         sentry_sdk.init(
             dsn=settings.sentry_dsn,
             environment=settings.environment,
+            send_default_pii=True,
         )
 
     redis_client = await init_redis()
