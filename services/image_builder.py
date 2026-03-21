@@ -942,13 +942,13 @@ async def build_collage_satori(
     Returns PNG bytes or None on error.
     """
     import time as _time
-    from services.collage_styles import BUILDERS, next_style, collect_palette
+    from services.collage_styles import BUILDERS, next_style_async, collect_palette
 
     if not slots:
         return None
 
     t0 = _time.monotonic()
-    chosen = style or next_style()
+    chosen = style or await next_style_async()
     builder = BUILDERS.get(chosen, BUILDERS["flat_lay"])
     palette = collect_palette(slots, colortype=colortype)
 

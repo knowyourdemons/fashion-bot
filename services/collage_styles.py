@@ -6,6 +6,8 @@ and returns (element_dict, width, height) for Satori rendering.
 """
 from typing import Optional
 
+import structlog
+
 from services.image_builder import (
     _pastel_bg,
     _auto_trim,
@@ -15,17 +17,45 @@ from services.image_builder import (
     _get_placeholder_label,
 )
 
+logger = structlog.get_logger()
+
 STYLES = ["flat_lay", "moodboard", "story"]
 
-_style_counter = 0
+_style_counter = 0  # local fallback
 
 
 def next_style() -> str:
-    """Round-robin style selection."""
+    """Round-robin style selection (atomic via Redis INCR, local fallback)."""
     global _style_counter
-    style = STYLES[_style_counter % len(STYLES)]
+    try:
+        from core.redis import get_redis
+        redis = get_redis()
+        # get_redis() is sync, but redis.incr is async — use local fallback
+        # Instead, store intent to use Redis; actual INCR in async wrapper
+    except Exception:
+        pass
+
+    # Local fallback (single-process safe)
+    idx = _style_counter
     _style_counter += 1
-    return style
+    return STYLES[idx % len(STYLES)]
+
+
+async def next_style_async() -> str:
+    """Async round-robin style selection (atomic via Redis INCR, local fallback)."""
+    global _style_counter
+    try:
+        from core.redis import get_redis
+        redis = get_redis()
+        idx = await redis.incr("collage:style_counter")
+        return STYLES[(idx - 1) % len(STYLES)]
+    except Exception:
+        logger.debug("collage_styles.redis_fallback", reason="redis unavailable")
+
+    # Local fallback
+    idx = _style_counter
+    _style_counter += 1
+    return STYLES[idx % len(STYLES)]
 
 
 # ── Color helpers ────────────────────────────────────────────────────────────

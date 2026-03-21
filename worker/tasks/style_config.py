@@ -3,6 +3,8 @@
 """
 import random
 
+from services.outfit_selector import _get_temp_regime as get_temp_regime  # canonical source
+
 SLOT_EMOJI = {
     "outerwear": "🧥",
     "top":       "👕",
@@ -146,20 +148,7 @@ SEASON_SLOT_TYPES = {
 }
 
 
-def get_temp_regime(temp: float) -> str:
-    """Определяет погодный режим по температуре."""
-    if temp < -10:
-        return "сильный_мороз"
-    elif temp < 0:
-        return "мороз"
-    elif temp < 8:
-        return "холодно"
-    elif temp < 15:
-        return "прохладно"
-    elif temp < 22:
-        return "тепло"
-    else:
-        return "жара"
+# get_temp_regime is now imported from services.outfit_selector (canonical source)
 
 
 def get_placeholder_label(slot: str, colortype: str, regime: str) -> str | None:

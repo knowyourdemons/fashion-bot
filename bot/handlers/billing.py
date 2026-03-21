@@ -261,8 +261,8 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
         return
 
     from datetime import datetime, timedelta, timezone
-    from db.base import AsyncWriteSession
-    from db.crud.users import update_user_plan
+    from db.base import AsyncWriteSession, AsyncReadSession
+    from db.crud.users import update_user_plan, get_by_id
 
     expires_at = datetime.now(timezone.utc) + timedelta(days=30 * months)
     async with AsyncWriteSession() as session:
@@ -275,8 +275,11 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
             payment_provider="stars",
         )
 
-    user.plan = plan
-    user.plan_expires_at = expires_at
+    # Reload user from DB to ensure context has fresh data
+    async with AsyncReadSession() as session:
+        refreshed = await get_by_id(session, user.id)
+        if refreshed:
+            user = refreshed
     context.user_data["db_user"] = user
 
     await update.message.reply_text(

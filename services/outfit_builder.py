@@ -8,7 +8,7 @@ from datetime import date
 
 from services.outfit_selector import _select_outfit, _get_temp_regime
 from services.brief_weather import _SEASONS
-from worker.tasks.style_config import get_placeholder_label, _needs_tights, get_temp_regime as _style_get_temp_regime
+from worker.tasks.style_config import get_placeholder_label, _needs_tights
 
 # ── Public API (реэкспорт с публичными именами) ───────────────────────────
 
@@ -25,6 +25,7 @@ def select_outfit(
 
 
 def get_temp_regime(temp: float) -> str:
+    """Public API — delegates to canonical _get_temp_regime."""
     return _get_temp_regime(temp)
 
 
@@ -150,7 +151,7 @@ def build_outfit_slots(
     _temp = temp if temp is not None else 15.0
 
     if regime is None:
-        regime = _style_get_temp_regime(_temp)
+        regime = _get_temp_regime(_temp)
 
     has_one_piece = bool(outfit.get("one_piece"))
     has_top_bottom = bool(outfit.get("top") or outfit.get("bottom"))

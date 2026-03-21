@@ -49,13 +49,14 @@ async def handle_debug_reset(update: Update, context: ContextTypes.DEFAULT_TYPE)
     cache_key = f"owner:{user.id}"
     context.application.bot_data.pop(cache_key, None)
 
-    user.onboarding_completed = False
-    user.onboarding_step = None
-    user.segment = None
-    user.city = None
-    user.timezone = "Europe/Vilnius"
-    user.plan = "premium"
-    user.daily_requests_used = 0
+    # Reload user from DB to ensure context has fresh data
+    from db.base import AsyncReadSession
+    from db.crud.users import get_by_id
+    async with AsyncReadSession() as rsession:
+        refreshed = await get_by_id(rsession, user.id)
+        if refreshed:
+            user = refreshed
+    context.user_data["db_user"] = user
 
     logger.info("debug.reset", user_id=str(user.id))
     await update.message.reply_text("✅ Сброшено. План → premium. Лимиты обнулены. /start")
@@ -85,8 +86,14 @@ async def handle_debug_free(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
         await session.commit()
 
-    user.plan = "free"
-    user.daily_requests_used = 0
+    # Reload user from DB to ensure context has fresh data
+    from db.base import AsyncReadSession
+    from db.crud.users import get_by_id
+    async with AsyncReadSession() as rsession:
+        refreshed = await get_by_id(rsession, user.id)
+        if refreshed:
+            user = refreshed
+    context.user_data["db_user"] = user
 
     logger.info("debug.free", user_id=str(user.id))
     await update.message.reply_text("✅ План → free. Подписки и trial сброшены.")
