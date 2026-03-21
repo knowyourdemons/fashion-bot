@@ -1319,7 +1319,6 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
 
     try:
         from services.weather import WeatherService
-        from services.image_builder import build_collage
 
         # Найти детей
         async with AsyncReadSession() as session:
@@ -1436,18 +1435,17 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         else:
             comment = _warm_outfit_comment(6.0, child_name_str, temp_m, has_ow, missing)
 
-        # Comment goes ON the collage (footer), not in caption
-        _weather_footer = _collage_params.get("footer_text", "")
-        _collage_footer = _weather_footer if _weather_footer else comment
-        caption = ""  # no separate text — everything on the collage
+        caption = ""  # всё на карточке
 
-        collage_bytes = await build_collage(
+        # Новый brief card (Satori) — единственный путь рендеринга
+        from services.brief_card import build_brief_card, get_brief_buttons
+        collage_bytes = await build_brief_card(
+            user=user,
+            child=child,
+            outfit=outfit,
+            weather=_weather_data,
             outfit_slots=all_slots,
-            theme=_collage_params["theme"],
-            header_text=_collage_params["header_text"],
-            footer_text=_collage_footer,
-            weather_data=_weather_data,
-            colortype=colortype_for_outfit,
+            advice_text=comment,
         )
 
         # Сохранить BriefLog для кнопок feedback
@@ -1481,22 +1479,36 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             except Exception:
                 pass
 
-        _outfit_buttons = [[
-            InlineKeyboardButton("👍 Надели", callback_data=f"brief_feedback:up:{_outfit_brief_id}"),
-            InlineKeyboardButton("🔄 Переодень", callback_data="outfit_request"),
-        ]]
-        if collage_bytes and _outfit_brief_id:
-            _outfit_buttons.append([
-                InlineKeyboardButton("📤 Переслать", callback_data=f"share:{_outfit_brief_id}"),
+        # Кнопки по сегменту и количеству фото
+        real_photos = sum(1 for s in all_slots if s.get("has_item") and (s.get("photo_url") or s.get("photo_id")))
+        _segment = "mom" if user.segment in ("mom_girl", "mom_boy") else "woman"
+        _missing = [s["slot"] for s in all_slots if not s.get("has_item")]
+        _first_missing = _missing[0] if _missing else ""
+
+        _btn_dict = get_brief_buttons(
+            segment=_segment,
+            real_photo_count=real_photos,
+            brief_id=_outfit_brief_id,
+            first_missing_slot=_first_missing,
+        )
+        # Convert dict to InlineKeyboardMarkup
+        _kbd_rows = []
+        for row in _btn_dict.get("inline_keyboard", []):
+            _kbd_rows.append([
+                InlineKeyboardButton(text=b["text"], callback_data=b["callback_data"])
+                for b in row
             ])
-        _outfit_markup = InlineKeyboardMarkup(_outfit_buttons)
+        _outfit_markup = InlineKeyboardMarkup(_kbd_rows)
 
         if collage_bytes:
             await message.reply_photo(
                 photo=collage_bytes, caption=caption, reply_markup=_outfit_markup
             )
         else:
-            await message.reply_text(caption, reply_markup=_outfit_markup)
+            await message.reply_text(
+                f"💡 {comment}" if comment else "Не удалось собрать коллаж. Попробуй позже.",
+                reply_markup=_outfit_markup,
+            )
 
     except Exception as e:
         logger.error("outfit_request.failed", error=str(e))
