@@ -300,6 +300,7 @@ def _build_overview_buttons(
     child_id: str = "",
     child_gender: str = "girl",
     current_owner_id: str = "",
+    user_id: str = "",
 ) -> InlineKeyboardMarkup:
     """Build category + season filter + owner buttons."""
     filtered = _filter_items(items, season=season)
@@ -346,7 +347,7 @@ def _build_overview_buttons(
         if owner_type == "child":
             rows.append([InlineKeyboardButton(
                 f"👩 Показать свои",
-                callback_data=f"w:ow:{str(current_owner_id)[:8]}",
+                callback_data=f"w:ow:{str(user_id)[:8]}",
             )])
         else:
             rows.append([InlineKeyboardButton(
@@ -379,6 +380,7 @@ async def _send_overview(query_or_message, user, context, season: str = None, is
         child_id=child_id,
         child_gender=child_gender,
         current_owner_id=str(user.id) if owner_type == "user" else child_id,
+        user_id=str(user.id),
     )
 
     if is_callback:
@@ -1256,6 +1258,7 @@ async def handle_delete_yes(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         child_id=child_id,
         child_gender=child_gender,
         current_owner_id=str(user.id) if owner_type == "user" else child_id,
+        user_id=str(user.id),
     )
 
     try:

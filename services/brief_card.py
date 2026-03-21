@@ -53,6 +53,50 @@ def _count_real_photos(outfit_slots: list[dict]) -> int:
     return count
 
 
+# ── Download photos ──────────────────────────────────────────────────────────
+
+async def _download_slot_photos(outfit_slots: list[dict]) -> None:
+    """Download photos for slots that have photo_id/photo_url but no _photo_bytes."""
+    import httpx
+    from services.image_builder import _download_photo
+
+    need_download = [
+        s for s in outfit_slots
+        if s.get("has_item")
+        and not s.get("_photo_bytes")
+        and (s.get("photo_id") or s.get("photo_url"))
+    ]
+    if not need_download:
+        return
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for slot in need_download:
+            try:
+                photo_bytes = await _download_photo(
+                    client,
+                    slot.get("photo_id") or "",
+                    slot.get("photo_url"),
+                )
+                if photo_bytes:
+                    slot["_photo_bytes"] = photo_bytes
+                    logger.info(
+                        "brief_card.photo_ok",
+                        slot=slot.get("slot"),
+                        size=len(photo_bytes),
+                    )
+                else:
+                    logger.warning(
+                        "brief_card.photo_empty",
+                        slot=slot.get("slot"),
+                    )
+            except Exception as e:
+                logger.warning(
+                    "brief_card.photo_failed",
+                    slot=slot.get("slot"),
+                    error=str(e),
+                )
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN ENTRY POINT
 # ══════════════════════════════════════════════════════════════════════════════
@@ -87,6 +131,11 @@ async def build_brief_card(
     )
 
     try:
+        # Download photos for items that have them but no _photo_bytes yet
+        await _download_slot_photos(outfit_slots)
+        # Recount after download (some may have failed)
+        real_photos = _count_real_photos(outfit_slots)
+
         # Common data
         date_str, context_str = prepare_date_context(user, child)
         weather_tpl = prepare_weather_data(weather)
