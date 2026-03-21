@@ -139,3 +139,59 @@ async def _get_weather(lat: float, lon: float, tz: str) -> dict:
     except Exception as e:
         logger.warning("brief.weather.failed", error=str(e))
         return dict(_EMPTY_WEATHER)
+
+
+async def _get_weather_tomorrow(lat: float, lon: float, tz: str) -> dict:
+    """Fetch TOMORROW's weather from Open-Meteo (forecast_days=2, take day index 1)."""
+    import json as _json
+    _cache_key = f"weather_om_tmrw:{lat:.2f}:{lon:.2f}"
+    try:
+        from core.redis import get_redis
+        _r = get_redis()
+        _cached = await _r.get(_cache_key)
+        if _cached:
+            return _json.loads(_cached)
+    except Exception:
+        pass
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "hourly": "temperature_2m,precipitation_probability,weather_code",
+                    "timezone": tz,
+                    "forecast_days": 2,
+                },
+            )
+            data = resp.json()
+            hourly = data.get("hourly", {})
+            temps = hourly.get("temperature_2m", [])
+            precip = hourly.get("precipitation_probability", [])
+            wmo_codes = hourly.get("weather_code", [])
+            # Tomorrow's data starts at index 24 (hour 0 of day 2)
+            off = 24
+            result = {
+                "temp_now": None,
+                "temp_morning": round(temps[off + 7], 1) if len(temps) > off + 7 else None,
+                "temp_day": round(temps[off + 14], 1) if len(temps) > off + 14 else None,
+                "temp_evening": round(temps[off + 18], 1) if len(temps) > off + 18 else None,
+                "precip_evening": precip[off + 18] if len(precip) > off + 18 else 0,
+                "precip_max": max(precip[off:off + 18]) if len(precip) > off + 18 else 0,
+                "wmo_morning": wmo_codes[off + 7] if len(wmo_codes) > off + 7 else 0,
+                "wmo_day": wmo_codes[off + 14] if len(wmo_codes) > off + 14 else 0,
+                "wmo_evening": wmo_codes[off + 18] if len(wmo_codes) > off + 18 else 0,
+            }
+            # Cache 30 min (evening brief, less stale tolerance)
+            try:
+                from core.redis import get_redis
+                _r = get_redis()
+                await _r.set(_cache_key, _json.dumps(result), ex=1800)
+            except Exception:
+                pass
+            return result
+    except Exception as e:
+        logger.warning("brief.weather_tomorrow.failed", error=str(e))
+        return dict(_EMPTY_WEATHER)
