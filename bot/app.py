@@ -92,6 +92,11 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(handle_delete_confirm, pattern="^w:del:"))
     app.add_handler(CallbackQueryHandler(handle_delete_yes, pattern="^w:dly:"))
 
+    # Noop callback (page counter, active tab)
+    async def _noop_callback(update, context):
+        await update.callback_query.answer()
+    app.add_handler(CallbackQueryHandler(_noop_callback, pattern="^noop$"))
+
     app.add_handler(CallbackQueryHandler(wardrobe.handle_list_callback, pattern="^show_wardrobe_list$"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_add_items_hint, pattern="^add_items_hint$"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_show_upgrade, pattern="^show_upgrade$"))

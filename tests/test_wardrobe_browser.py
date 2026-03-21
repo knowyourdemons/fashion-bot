@@ -9,6 +9,8 @@ from bot.handlers.wardrobe_browser import (
     _short_color,
     _short_id,
     _CAT_ORDER,
+    _format_season,
+    _format_date,
 )
 
 
@@ -22,6 +24,7 @@ class FakeItem:
         self.photo_id = kw.get("photo_id", "photo123")
         self.photo_url = kw.get("photo_url", None)
         self.created_at = None
+        self.added_at = None
         self.wear_count = 0
 
 
@@ -59,8 +62,15 @@ class TestOverviewText:
 
     def test_season_filter_hides_empty_cats(self):
         text = _build_overview_text(_items(), "Алиса", season="winter")
-        # one_piece has no winter items
-        assert "Платья" not in text
+        # one_piece has no winter items — only non-zero shown in compact format
+        # Verify the winter items are there
+        assert "Верхняя" in text
+        assert "Обувь" in text
+
+    def test_empty_wardrobe(self):
+        text = _build_overview_text([], "Алиса")
+        assert "0 вещей" in text
+        assert "Алиса" in text
 
 
 class TestOverviewButtons:
@@ -84,6 +94,34 @@ class TestOverviewButtons:
         all_cb = [btn.callback_data for row in markup.inline_keyboard for btn in row]
         assert "w:ov" in all_cb
 
+    def test_has_all_button(self):
+        markup = _build_overview_buttons(_items())
+        all_labels = [btn.text for row in markup.inline_keyboard for btn in row]
+        assert any("Все" in label for label in all_labels)
+
+    def test_has_add_button(self):
+        markup = _build_overview_buttons(_items())
+        all_cb = [btn.callback_data for row in markup.inline_keyboard for btn in row]
+        assert "add_items_hint" in all_cb
+
+    def test_owner_tabs_shown(self):
+        markup = _build_overview_buttons(
+            _items(),
+            has_children=True,
+            owner_type="child",
+            child_name="Алиса",
+            child_id="abc123",
+            child_gender="girl",
+        )
+        all_labels = [btn.text for row in markup.inline_keyboard for btn in row]
+        assert any("Алиса" in label for label in all_labels)
+        assert any("Мои" in label for label in all_labels)
+
+    def test_no_owner_tabs_without_children(self):
+        markup = _build_overview_buttons(_items(), has_children=False)
+        all_cb = [btn.callback_data for row in markup.inline_keyboard for btn in row]
+        assert not any("switch_owner" in cb for cb in all_cb)
+
 
 class TestFilterItems:
     def test_filter_by_season(self):
@@ -101,6 +139,11 @@ class TestFilterItems:
         result = _filter_items(items, season="summer", category="top")
         assert len(result) == 1
 
+    def test_no_filter(self):
+        items = _items()
+        result = _filter_items(items)
+        assert len(result) == 6
+
 
 class TestHelpers:
     def test_short_color_no_truncation(self):
@@ -114,3 +157,14 @@ class TestHelpers:
     def test_short_id(self):
         uid = "12345678-1234-1234-1234-123456789012"
         assert _short_id(uid) == "12345678"
+
+    def test_format_season_empty(self):
+        assert _format_season([]) == "все сезоны"
+
+    def test_format_season_multiple(self):
+        result = _format_season(["winter", "spring"])
+        assert "Зима" in result
+        assert "Весна" in result
+
+    def test_format_date_none(self):
+        assert _format_date(None) == "—"

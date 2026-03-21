@@ -1681,67 +1681,43 @@ async def _process_media_group(
 # ── handle_wardrobe_menu (кнопка Гардероб в меню) ───────────────────────────
 
 async def handle_wardrobe_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Показать гардероб с кнопкой переключения владельца."""
+    """Показать гардероб — обзор с категориями, сезонами, переключением владельца."""
     user = context.user_data.get("db_user")
     if not user:
         return
 
-    async with AsyncReadSession() as session:
-        from db.crud.children import get_children
-        children = await get_children(session, user.id)
+    from bot.handlers.wardrobe_browser import (
+        _build_overview_text, _build_overview_buttons, _get_children_info,
+    )
 
     owner_id, owner_type = await _get_owner(user, context)
 
+    # Owner name
     if owner_type == "user":
-        owner_name = user.name
+        owner_name = user.name or "Мой"
     else:
+        async with AsyncReadSession() as session:
+            from db.crud.children import get_children
+            children = await get_children(session, user.id)
         child = next((c for c in children if c.id == owner_id), None)
         owner_name = child.name if child else "Ребёнок"
 
-    # Owner-specific icons
-    if owner_type == "child":
-        child_obj = next((c for c in children if c.id == owner_id), None)
-        _owner_icon = "👧" if (child_obj and child_obj.gender == "girl") else "👦"
-    else:
-        _owner_icon = "👩"
-
-    buttons = []
-    if children:
-        if owner_type == "child":
-            # Switch TO mama → show mama icon
-            buttons.append([InlineKeyboardButton(
-                "👩 Мои вещи",
-                callback_data="switch_owner:user"
-            )])
-        else:
-            # Switch TO child → show child icon
-            child = children[0]
-            _child_icon = "👧" if child.gender == "girl" else "👦"
-            buttons.append([InlineKeyboardButton(
-                f"{_child_icon} Вещи {child.name}",
-                callback_data=f"switch_owner:child:{child.id}"
-            )])
-
     async with AsyncReadSession() as session:
         all_items = await get_owner_items(session, owner_id, owner_type)
-    item_count = len(all_items)
 
-    from core.permissions import get_effective_plan, can_gap_analysis
-    _ep = get_effective_plan(user)
-    top_row = [
-        InlineKeyboardButton("🌤 Образ дня", callback_data="outfit_request"),
-        InlineKeyboardButton("👀 Посмотреть вещи", callback_data="w:ov"),
-    ]
-    extra_rows = []
-    if can_gap_analysis(_ep):
-        extra_rows.append([InlineKeyboardButton("📋 Что не хватает?", callback_data="gap_analysis")])
-    markup = InlineKeyboardMarkup([top_row] + extra_rows + buttons)
+    has_children, child_name, child_id, child_gender = await _get_children_info(user)
 
-    await update.message.reply_text(
-        f"{_owner_icon} Гардероб: *{owner_name}* · {item_count} вещей",
-        parse_mode="Markdown",
-        reply_markup=markup,
+    text = _build_overview_text(all_items, owner_name)
+    markup = _build_overview_buttons(
+        all_items,
+        owner_type=owner_type,
+        has_children=has_children,
+        child_name=child_name,
+        child_id=child_id,
+        child_gender=child_gender,
     )
+
+    await update.message.reply_text(text, reply_markup=markup)
 
 
 async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1795,54 +1771,41 @@ async def handle_switch_owner(update: Update, context: ContextTypes.DEFAULT_TYPE
         mode_val = f"child:{new_owner_id}" if new_owner_type == "child" else "user"
         await redis.set(f"owner_mode:{user.id}", mode_val, ex=86400 * 30)
 
-    # Загрузить вещи нового owner для count
+    # Show updated overview with new owner
+    from bot.handlers.wardrobe_browser import (
+        _build_overview_text, _build_overview_buttons,
+    )
+
     async with AsyncReadSession() as session:
         items = await get_owner_items(session, new_owner_id, new_owner_type)
-    count = len(items)
 
-    # Заголовок
-    if count == 0:
-        header = (
-            f"✅ Переключено\n"
-            f"{owner_label} · 0 вещей\n"
-            f"Пришли фото чтобы добавить вещи 📸"
-        )
-    else:
-        header = f"✅ Переключено\n{owner_label} · {count} вещей"
+    owner_name = owner_label.split(": ", 1)[-1] if ": " in owner_label else owner_label
+    text = f"✅ Переключено\n\n{_build_overview_text(items, owner_name)}"
 
-    # Кнопка переключения на другого owner
-    if new_owner_type == "child":
-        switch_btn = InlineKeyboardButton("👩 Мои вещи", callback_data="switch_owner:user")
-    elif children:
-        child = children[0]
-        _sw_icon = "👧" if child.gender == "girl" else "👦"
-        switch_btn = InlineKeyboardButton(
-            f"{_sw_icon} Вещи {child.name}",
-            callback_data=f"switch_owner:child:{child.id}"
-        )
-    else:
-        switch_btn = None
+    has_children = bool(children)
+    child_name = ""
+    _child_id_btn = ""
+    child_gender = "girl"
+    if children:
+        _c = children[0]
+        child_name = _c.name
+        _child_id_btn = str(_c.id)
+        child_gender = _c.gender or "girl"
 
-    # Кнопка действия
-    if count == 0:
-        action_btn = InlineKeyboardButton("📸 Добавить вещи", callback_data="add_items_hint")
-    else:
-        action_btn = InlineKeyboardButton("👀 Посмотреть вещи", callback_data="w:ov")
-
-    keyboard_rows = [[
-        InlineKeyboardButton("🌤 Образ дня", callback_data="outfit_request"),
-        action_btn,
-    ]]
-    if switch_btn:
-        keyboard_rows.append([switch_btn])
-
-    new_markup = InlineKeyboardMarkup(keyboard_rows)
+    new_markup = _build_overview_buttons(
+        items,
+        owner_type=new_owner_type,
+        has_children=has_children,
+        child_name=child_name,
+        child_id=_child_id_btn,
+        child_gender=child_gender,
+    )
 
     try:
-        await query.edit_message_text(header, reply_markup=new_markup)
+        await query.edit_message_text(text, reply_markup=new_markup)
     except Exception as e:
         if "not modified" not in str(e).lower():
-            await query.message.reply_text(header, reply_markup=new_markup)
+            await query.message.reply_text(text, reply_markup=new_markup)
 
 
 async def handle_add_items_hint(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
