@@ -153,7 +153,16 @@ async def _reroll_adult_advice(message, user) -> None:
 
 
 async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Callback pattern: ^reroll:{brief_id} или ^reroll_advice → новый образ/совет."""
+    """Callback pattern: ^reroll:{brief_id} или ^reroll_advice → новый образ/совет.
+
+    Flow:
+      - reroll_advice (no brief_id): advice-only reroll via Haiku (adults without items)
+      - reroll:{brief_id}: outfit reroll — works for BOTH adults and children
+        1. Get current outfit item_ids from brief_log
+        2. Add them to Redis exclude set reroll:{user_id}:{date} (SADD, TTL 24h)
+        3. Generate new outfit with those items excluded via _generate_outfit_for_user
+        4. Send as new photo message, remove buttons from old message
+    """
     query = update.callback_query
     await query.answer()
 
@@ -161,44 +170,37 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not user:
         return
 
-    # Взрослый бриф — перегенерировать совет
-    is_adult = user.segment not in ("mom_girl", "mom_boy")
+    redis = context.bot_data.get("redis")
     is_advice_reroll = query.data == "reroll_advice"
 
-    if is_adult or is_advice_reroll:
-        redis = context.bot_data.get("redis")
+    # ── Check reroll limits ──
+    from core.permissions import get_effective_plan, get_limit, get_effective_limits
+    plan = get_effective_plan(user)
+    effective = get_effective_limits(user)
+    reroll_limit = effective.get("reroll", get_limit("reroll", plan))
 
-        from core.permissions import get_effective_plan, get_limit, get_effective_limits
-        plan = get_effective_plan(user)
-        effective = get_effective_limits(user)
-        reroll_limit = effective.get("reroll", get_limit("reroll", plan))
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    reroll_key = f"reroll_count:{user.id}:{today}"
+    count = 0
+    if redis:
+        val = await redis.get(reroll_key)
+        count = int(val) if val else 0
 
-        if reroll_limit == 0:
-            await query.answer(
-                "🔄 Новые советы доступны в Premium! Нажми «Подписка» для доступа.",
-                show_alert=True,
-            )
-            return
+    if count >= reroll_limit:
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton(
+                "✨ Подписка →", callback_data="show_upgrade",
+            ),
+        ]])
+        await query.message.reply_text(
+            "Хочешь больше? В Premium — безлимитные варианты! ✨",
+            reply_markup=keyboard,
+        )
+        return
 
-        from datetime import date as _date
-        today = _date.today().isoformat()
-        reroll_key = f"reroll:{user.id}:{today}"
-        count = 0
-        if redis:
-            val = await redis.get(reroll_key)
-            count = int(val) if val else 0
-
-        if count >= reroll_limit:
-            keyboard = InlineKeyboardMarkup([[
-                InlineKeyboardButton("✨ Безлимит →", callback_data="show_upgrade"),
-            ]])
-            await query.message.reply_text(
-                f"На сегодня варианты закончились ({reroll_limit}/день) 🙈\n"
-                "Завтра утром подготовлю новую идею!",
-                reply_markup=keyboard,
-            )
-            return
-
+    # ── Advice-only reroll (adults without items) ──
+    if is_advice_reroll:
         await query.message.reply_text("🔄 Генерирую новый совет...")
         await _reroll_adult_advice(query.message, user)
 
@@ -214,41 +216,8 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         logger.info("reroll.adult_advice.done", user_id=str(user.id))
         return
 
-    # Детский бриф — стандартный реролл образа
-    redis = context.bot_data.get("redis")
-
-    from core.permissions import get_effective_plan, get_limit, get_effective_limits
-    plan = get_effective_plan(user)
-    effective = get_effective_limits(user)
-    reroll_limit = effective.get("reroll", get_limit("reroll", plan))
-
-    if reroll_limit == 0:
-        await query.answer(
-            "🔄 Переодевание доступно в Premium! Нажми «Подписка» для доступа.",
-            show_alert=True,
-        )
-        return
-
-    from datetime import date as _date
-    today = _date.today().isoformat()
-    reroll_key = f"reroll:{user.id}:{today}"
-    count = 0
-    if redis:
-        val = await redis.get(reroll_key)
-        count = int(val) if val else 0
-
-    if count >= reroll_limit:
-        keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("✨ Безлимит →", callback_data="show_upgrade"),
-        ]])
-        await query.message.reply_text(
-            f"На сегодня переодевания закончились ({reroll_limit}/день) 🙈\n"
-            "Завтра утром соберу новый образ!",
-            reply_markup=keyboard,
-        )
-        return
-
-    # Получить outfit_items из brief_log для исключения
+    # ── Outfit reroll (adults with items + children) ──
+    # Get outfit_items from brief_log to build exclude set
     parts = query.data.split(":", 1)
     brief_id_str = parts[1] if len(parts) > 1 else None
     exclude_ids: set = set()
@@ -263,6 +232,27 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 exclude_ids = {uuid.UUID(i) for i in log.outfit_items}
         except Exception as e:
             logger.warning("reroll.log_fetch_failed", error=str(e))
+
+    # Accumulate excludes in Redis set (persists across rerolls within the day)
+    exclude_set_key = f"reroll:{user.id}:{today}"
+    if redis and exclude_ids:
+        try:
+            await redis.sadd(exclude_set_key, *[str(eid) for eid in exclude_ids])
+            await redis.expire(exclude_set_key, 86400)
+        except Exception:
+            pass
+
+    # Load all previously excluded items from Redis
+    if redis:
+        try:
+            raw_excluded = await redis.smembers(exclude_set_key)
+            for raw in raw_excluded:
+                try:
+                    exclude_ids.add(uuid.UUID(raw.decode() if isinstance(raw, bytes) else raw))
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     await query.message.reply_text("🔄 Подбираю другой вариант...")
 

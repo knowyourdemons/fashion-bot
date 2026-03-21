@@ -18,7 +18,7 @@ LIMITS: dict[str, dict[str, Any]] = {
         "brief_days":         [1, 3],   # вт=1, чт=3 (weekday, 0=пн)
         "brief_weekends":     False,
         "children_max":       1,
-        "reroll":             0,
+        "reroll":             1,
         "evening_brief":      False,
         "gap_analysis":       False,
     },
