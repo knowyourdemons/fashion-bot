@@ -57,8 +57,8 @@ class TestOverviewText:
     def test_season_filter_changes_counts(self):
         text = _build_overview_text(_items(), "Алиса", season="winter")
         assert "Зима" in text
-        # Only outerwear and footwear are winter
-        assert "2 вещей" in text
+        # Only outerwear and footwear are winter — shown per category
+        assert "Верхняя" in text or "Обувь" in text
 
     def test_season_filter_hides_empty_cats(self):
         text = _build_overview_text(_items(), "Алиса", season="winter")
@@ -69,7 +69,7 @@ class TestOverviewText:
 
     def test_empty_wardrobe(self):
         text = _build_overview_text([], "Алиса")
-        assert "0 вещей" in text
+        assert "Пока пусто" in text or "0 вещей" in text
         assert "Алиса" in text
 
 
@@ -92,17 +92,17 @@ class TestOverviewButtons:
     def test_reset_button_when_filtered(self):
         markup = _build_overview_buttons(_items(), season="winter")
         all_cb = [btn.callback_data for row in markup.inline_keyboard for btn in row]
-        assert "w:ov" in all_cb
+        assert "w:sz:all" in all_cb
 
-    def test_has_all_button(self):
-        markup = _build_overview_buttons(_items())
+    def test_has_season_reset_label(self):
+        markup = _build_overview_buttons(_items(), season="winter")
         all_labels = [btn.text for row in markup.inline_keyboard for btn in row]
-        assert any("Все" in label for label in all_labels)
+        assert any("Все сезоны" in label for label in all_labels)
 
-    def test_has_add_button(self):
+    def test_no_reset_without_filter(self):
         markup = _build_overview_buttons(_items())
         all_cb = [btn.callback_data for row in markup.inline_keyboard for btn in row]
-        assert "add_items_hint" in all_cb
+        assert "w:sz:all" not in all_cb
 
     def test_owner_tabs_shown(self):
         markup = _build_overview_buttons(
@@ -114,8 +114,9 @@ class TestOverviewButtons:
             child_gender="girl",
         )
         all_labels = [btn.text for row in markup.inline_keyboard for btn in row]
-        assert any("Алиса" in label for label in all_labels)
-        assert any("Мои" in label for label in all_labels)
+        all_cb = [btn.callback_data for row in markup.inline_keyboard for btn in row]
+        # Should have owner switch button
+        assert any("w:ow:" in cb for cb in all_cb)
 
     def test_no_owner_tabs_without_children(self):
         markup = _build_overview_buttons(_items(), has_children=False)

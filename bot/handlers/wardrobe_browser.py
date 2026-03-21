@@ -270,7 +270,8 @@ def _build_overview_text(items: list, owner_name: str, season: str = None) -> st
     for i in filtered:
         groups[i.category_group] += 1
 
-    title = f"👗 Гардероб {owner_name}"
+    total = len(filtered)
+    title = f"👗 Гардероб {owner_name} · {total} вещей"
     if season and season != "all":
         title += f" · {_SEASON_EMOJI.get(season, '')} {_SEASON_NAME.get(season, season)}"
 
