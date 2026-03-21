@@ -86,6 +86,12 @@ class WardrobeItem(Base):
         comment="True if waterproof/water-resistant",
     )
 
+    # Bbox for cropping individual item from multi-item photo
+    bbox: Mapped[Optional[dict]] = mapped_column(
+        JSONB, nullable=True,
+        comment="Vision bbox: {x, y, w, h} normalized 0-1",
+    )
+
     # Скоринг
     score_item: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
     score_breakdown: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)

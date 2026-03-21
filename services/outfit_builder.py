@@ -212,6 +212,7 @@ def build_outfit_slots(
                 "item_color": getattr(item, "color", "") or "",
                 "photo_id": item.photo_id,
                 "photo_url": getattr(item, "photo_url", None),
+                "bbox": getattr(item, "bbox", None),
                 "has_item": True,
                 "adult": is_adult,
                 "gender": gender,

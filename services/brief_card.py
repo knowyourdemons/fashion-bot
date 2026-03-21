@@ -127,6 +127,20 @@ async def _download_slot_photos(outfit_slots: list[dict]) -> None:
                     logger.warning("brief_card.photo_empty", slot=slot.get("slot"))
                     continue
 
+                # 2.5. Bbox crop: if item has bbox, crop individual item BEFORE processing
+                _bbox = slot.get("bbox")
+                if _bbox and isinstance(_bbox, dict) and _bbox.get("w", 1.0) < 0.95:
+                    try:
+                        from services.vision import _crop_bbox
+                        photo_bytes = _crop_bbox(photo_bytes, _bbox)
+                        logger.info(
+                            "brief_card.bbox_crop",
+                            slot=slot.get("slot"),
+                            bbox=_bbox,
+                        )
+                    except Exception as _crop_err:
+                        logger.warning("brief_card.bbox_crop_failed", error=str(_crop_err))
+
                 # 3. Build thumbnail (EXIF → brightness → rembg → edges → pad → resize)
                 from services.image_processor import make_collage_thumbnail
                 from PIL import Image

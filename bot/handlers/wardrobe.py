@@ -770,6 +770,7 @@ async def _save_one(
             warmth_level=_warmth,
             style_tag=_style_tag,
             rain_ok=bool(data.get("rain_ok", False)),
+            bbox=data.get("bbox"),
             score_item=score_item,
             score_breakdown=score_breakdown,
             score_version=score_version,
