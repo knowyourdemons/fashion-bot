@@ -1,7 +1,7 @@
 """Engagement push для trial-юзеров в ключевые дни (3/7/10/11)."""
 import structlog
 from datetime import date
-from worker.fast_worker import register
+from worker.slow_worker import register
 
 logger = structlog.get_logger()
 

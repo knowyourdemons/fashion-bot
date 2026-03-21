@@ -44,7 +44,7 @@ class SlowWorker:
             growth_alert, gap_analysis, declutter,
             capsule_season, birthday_alert, subscription_expiry,
             reminders, analytics_report, unknown_items_report,
-            taxonomy_review,
+            taxonomy_review, engagement,
         )
 
     async def run(self, shutdown: asyncio.Event) -> None:
