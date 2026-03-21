@@ -730,17 +730,84 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
         pb = progress_bar(3)
         done_text = (
             f"{pb}\n\n"
-            f"🎉 Отлично, {display_name}! Познакомились!\n\n"
-            "Завтра в 07:00 пришлю погоду + совет по образу.\n"
-            "А пока — сфоткай вещи, чтобы я начала подбирать!"
+            f"🎉 Отлично, {display_name}! Познакомились!"
         )
+        await update.effective_message.reply_text(done_text)
+
+        # ── Immediate value: weather card ──
+        _weather_sent = False
+        try:
+            if city:
+                from services.brief_weather import _geocode_city, _get_weather
+                _coords = await _geocode_city(city)
+                if _coords:
+                    _w = await _get_weather(_coords[0], _coords[1], timezone)
+                    temp_m = _w.get("temp_morning") or _w.get("temp_now")
+                    temp_d = _w.get("temp_day")
+                    temp_e = _w.get("temp_evening") or temp_m
+                    precip = _w.get("precip_max", 0)
+
+                    if temp_m is not None:
+                        from services.brief_card import build_brief_card
+                        from services.outfit_builder import get_temp_regime
+
+                        # Build weather-only card (0 photos state)
+                        _card_bytes = await build_brief_card(
+                            user=user,
+                            child=None,
+                            outfit={"underwear_items": [], "underwear_text": "трусики",
+                                    "tights": None, "socks": None},
+                            weather=_w,
+                            outfit_slots=[],
+                            advice_text="",
+                        )
+                        if _card_bytes:
+                            await update.effective_message.reply_photo(photo=_card_bytes)
+                            _weather_sent = True
+        except Exception as we:
+            logger.warning("onboarding.weather_card_failed", error=str(we))
+
+        # ── Time-based CTA ──
+        import pytz as _pytz
+        from datetime import datetime as _dt
+        _tz = _pytz.timezone(timezone)
+        _hour = _dt.now(_tz).hour
+
+        if 17 <= _hour < 23:
+            _cta = "Сфоткай 3 вещи прямо сейчас — через 5 мин покажу образ! 📸"
+            _btn_text = "📸 Сфоткать сейчас"
+            _later_text = "Потом"
+        elif 6 <= _hour < 12:
+            _cta = "Одень так! А вечером сфоткай 3 вещи — завтра подберу из ваших 📸"
+            _btn_text = "📸 Сфоткать"
+            _later_text = "Завтра вечером"
+        elif 12 <= _hour < 17:
+            _cta = "Вечером дома сфоткай 3 вещи — завтра утром пришлю готовый образ! 📸"
+            _btn_text = "📸 Сфоткать"
+            _later_text = "Завтра вечером"
+        else:  # 23-06
+            _cta = "Завтра утром в 07:00 пришлю погоду! А когда будет минутка — сфоткай вещи 📸"
+            _btn_text = "📸 Сфоткать"
+            _later_text = "Потом"
+
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📸 Сфоткать первую вещь", callback_data="onboard_done:photo")],
-            [InlineKeyboardButton("Потом", callback_data="onboard_done:later")],
+            [InlineKeyboardButton(_btn_text, callback_data="onboard_done:photo")],
+            [InlineKeyboardButton(_later_text, callback_data="onboard_done:later")],
         ])
         await update.effective_message.reply_text(
-            done_text, reply_markup=keyboard,
+            _cta, reply_markup=keyboard,
         )
+
+        # ── Schedule 19:00 reminder if installed before 17:00 ──
+        if _hour < 17:
+            try:
+                _redis_ob = context.bot_data.get("redis")
+                if _redis_ob:
+                    _reminder_key = f"onboard_reminder:{user.id}"
+                    await _redis_ob.set(_reminder_key, "1", ex=86400)
+                    logger.info("onboarding.reminder_scheduled", user_id=str(user.id), hour=_hour)
+            except Exception:
+                pass
 
         logger.info(
             "onboarding.completed",

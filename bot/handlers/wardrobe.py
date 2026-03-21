@@ -233,11 +233,22 @@ async def check_milestones(user, item_count: int, message, owner_id, owner_type,
     reached = list(user.milestones_reached or [])
     new_milestones = []
 
-    # 3 items: mini outfit unlocked
+    # 3 items: mini outfit unlocked — instant collage!
     if item_count >= 3 and "mini_outfit" not in reached:
         new_milestones.append("mini_outfit")
-        await message.reply_text("🎉 Мини-образ разблокирован!")
-        # Generate mini card
+        # Time-aware message
+        try:
+            import pytz as _pytz_ms
+            from datetime import datetime as _dt_ms
+            _tz_ms = _pytz_ms.timezone(getattr(user, "timezone", None) or "Europe/Vilnius")
+            _hour_ms = _dt_ms.now(_tz_ms).hour
+        except Exception:
+            _hour_ms = 12
+        if 17 <= _hour_ms < 23:
+            await message.reply_text("🎉 3 вещи есть! Собираю образ на завтра — секунду...")
+        else:
+            await message.reply_text("🎉 Мини-образ разблокирован! Собираю...")
+        # Generate collage via worker queue
         try:
             _redis = context.bot_data.get("redis") if context else None
             if _redis:
@@ -248,6 +259,8 @@ async def check_milestones(user, item_count: int, message, owner_id, owner_type,
                     {"user_id": str(user.id)},
                     priority=QueuePriority.HIGH,
                 )
+                # Clear onboarding reminder since user already engaged
+                await _redis.delete(f"onboard_reminder:{user.id}")
         except Exception as e:
             logger.warning("milestone.mini_outfit.failed", error=str(e))
 

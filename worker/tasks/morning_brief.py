@@ -172,6 +172,68 @@ async def schedule_all() -> None:
 
     logger.info("morning_brief.schedule_all", count=count, teaser_count=teaser_count, hour=datetime.utcnow().hour)
 
+    # ── 19:00 onboarding reminder for users who installed before 17:00 ──
+    try:
+        from config import settings as _settings
+        from telegram import Bot as _Bot
+        from db.crud.wardrobe import get_owner_items
+
+        _reminder_keys = []
+        _cursor = b"0"
+        while True:
+            _cursor, _keys = await redis_client.scan(_cursor, match="onboard_reminder:*", count=100)
+            _reminder_keys.extend(_keys)
+            if _cursor == b"0":
+                break
+
+        if _reminder_keys:
+            _bot = _Bot(token=_settings.telegram_bot_token)
+            for _rkey in _reminder_keys:
+                try:
+                    _uid_str = (_rkey.decode() if isinstance(_rkey, bytes) else _rkey).split(":", 1)[1]
+                    _uid = uuid.UUID(_uid_str) if hasattr(uuid, "UUID") else None
+                    if not _uid:
+                        continue
+
+                    # Check timezone: only send at 19:00 local
+                    async with AsyncReadSession() as _rs:
+                        from sqlalchemy import select as _sel_r
+                        _res_r = await _rs.execute(_sel_r(User).where(User.id == _uid))
+                        _user_r = _res_r.scalar_one_or_none()
+                    if not _user_r:
+                        await redis_client.delete(_rkey)
+                        continue
+
+                    _tz_r = pytz.timezone(_user_r.timezone or "Europe/Vilnius")
+                    if datetime.now(_tz_r).hour != 19:
+                        continue
+
+                    # Check: already has photos? Skip reminder.
+                    from db.crud.children import get_children as _gc_r
+                    async with AsyncReadSession() as _rs2:
+                        _children_r = await _gc_r(_rs2, _user_r.id)
+                    _owner_id_r = _children_r[0].id if _children_r else _user_r.id
+                    _owner_type_r = "child" if _children_r else "user"
+                    async with AsyncReadSession() as _rs3:
+                        _items_r = await get_owner_items(_rs3, _owner_id_r, _owner_type_r)
+                    if _items_r:
+                        await redis_client.delete(_rkey)
+                        continue  # has items → no reminder needed
+
+                    # Send reminder
+                    _child_name = _children_r[0].name if _children_r else ""
+                    _reminder_text = (
+                        f"Дома? Сфоткай 3 вещи{' ' + _child_name if _child_name else ''} — 2 минуты!\n"
+                        "Завтра утром в 07:00 покажу готовый образ 📸"
+                    )
+                    await _bot.send_message(chat_id=_user_r.telegram_id, text=_reminder_text)
+                    await redis_client.delete(_rkey)  # one-time only
+                    logger.info("onboard_reminder.sent", user_id=_uid_str)
+                except Exception as _re:
+                    logger.warning("onboard_reminder.failed", error=str(_re))
+    except Exception as _re2:
+        logger.warning("onboard_reminder.schedule_error", error=str(_re2))
+
 
 # ── Evening brief comparison helper ────────────────────────────────────────
 
