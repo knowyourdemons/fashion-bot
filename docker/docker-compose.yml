@@ -74,7 +74,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres.conf:/etc/postgresql/postgresql.conf
-    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf -c log_min_duration_statement=500 -c log_statement=none -c log_line_prefix='%t [%p] %u@%d '
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U user -d fashion"]
       interval: 30s
@@ -174,6 +174,26 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # --- Optional: Log Aggregation ---
+  # Uncomment to enable Grafana Loki log aggregation
+  # loki:
+  #   image: grafana/loki:3.0.0
+  #   ports:
+  #     - "3100:3100"  # Note: conflicts with satori renderer if on same port
+  #   volumes:
+  #     - loki_data:/loki
+  #   mem_limit: 256m
+  #
+  # grafana:
+  #   image: grafana/grafana:11.0.0
+  #   ports:
+  #     - "3001:3000"
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana
+  #   mem_limit: 256m
 
 volumes:
   postgres_data:

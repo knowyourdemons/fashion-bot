@@ -5,6 +5,7 @@ import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 
 from config import settings
+from api.middleware.rate_limit import RateLimitMiddleware
 from api.middleware.request_id import RequestIdMiddleware
 from api.routes import auth, wardrobe, brief, onboarding, billing, webhooks
 
@@ -24,6 +25,7 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(RateLimitMiddleware)
     # В продакшене разрешаем только внутренние/webhook источники.
     # Telegram и Stripe используют server-side запросы — CORS им не нужен.
     cors_origins = ["*"] if settings.environment == "dev" else []
