@@ -49,14 +49,14 @@ services:
       renderer:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import redis; r=redis.from_url('${REDIS_URL}'); r.ping()"]
+      test: ["CMD", "python", "-c", "import redis; r=redis.Redis(host='redis',port=6379); r.ping()"]
       interval: 30s
       timeout: 10s
       retries: 3
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 768m
     logging:
       driver: json-file
       options:
@@ -119,7 +119,7 @@ services:
       dockerfile: Dockerfile
     container_name: docker-renderer-1
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/health"]
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3100/health').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 3
