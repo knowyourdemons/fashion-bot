@@ -131,6 +131,26 @@ _SLOT_ORDER = [
     "footwear", "hat", "scarf", "gloves", "tights",
 ]
 
+# ── Base layer items: NEVER show as photos in collage, only in text line ────
+# Matched by substring in item.type (lowercase)
+BASE_LAYER_TYPE_PATTERNS = frozenset([
+    "носк", "трусик", "колготк", "майк", "undershirt", "socks",
+    "tights", "underwear", "бюстгальт", "гольф", "термо",
+    "боди",  # bodysuit base layer
+])
+
+# Category groups that are always base layer (never visual)
+BASE_LAYER_GROUPS = frozenset(["underwear", "base_layer"])
+
+
+def _is_base_layer_item(item) -> bool:
+    """Check if item is a base layer piece that should NOT appear as photo in collage."""
+    cg = getattr(item, "category_group", "") or ""
+    if cg in BASE_LAYER_GROUPS:
+        return True
+    item_type = (getattr(item, "type", "") or "").lower()
+    return any(pat in item_type for pat in BASE_LAYER_TYPE_PATTERNS)
+
 
 def build_outfit_slots(
     outfit: dict,
@@ -180,6 +200,10 @@ def build_outfit_slots(
             item = outfit.get(slot_key)
 
         if item and getattr(item, "show_in_collage", True):
+            # Base layer items (socks, underwear, tights, etc.) → text only, no photo
+            if _is_base_layer_item(item):
+                seen.add(slot_key)
+                continue
             seen.add(slot_key)
             slots.append({
                 "slot": slot_key,
@@ -237,6 +261,42 @@ def build_outfit_slots(
                 slots.append(ph_slot)
 
     return slots
+
+
+# ── Minimum outfit validation ─────────────────────────────────────────────────
+
+
+def has_minimum_outfit(outfit: dict) -> bool:
+    """Check if outfit has at least top+bottom or a one_piece/dress.
+
+    Without this minimum, showing a collage is misleading.
+    Returns True if the outfit is displayable.
+    """
+    has_one_piece = outfit.get("one_piece") is not None
+    has_top = outfit.get("top") is not None
+    has_bottom = outfit.get("bottom") is not None
+    return has_one_piece or (has_top and has_bottom)
+
+
+def has_minimum_wardrobe(items: list) -> bool:
+    """Check if wardrobe has items to form a minimum outfit (top+bottom or one_piece).
+
+    Args:
+        items: list of WardrobeItem objects
+    """
+    has_top = any(
+        getattr(i, "category_group", "") in ("top",)
+        for i in items
+    )
+    has_bottom = any(
+        getattr(i, "category_group", "") in ("bottom",)
+        for i in items
+    )
+    has_one_piece = any(
+        getattr(i, "category_group", "") in ("one_piece",)
+        for i in items
+    )
+    return has_one_piece or (has_top and has_bottom)
 
 
 # ── Score → text ──────────────────────────────────────────────────────────────

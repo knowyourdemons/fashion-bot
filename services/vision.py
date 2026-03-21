@@ -312,10 +312,92 @@ def _color_similar(a: str, b: str) -> bool:
     return SequenceMatcher(None, a.lower().strip(), b.lower().strip()).ratio() > 0.95
 
 
+# ── Post-validation: fix Vision mistakes using weather context ──────────────
+
+def _post_validate_vision(
+    items: list[dict],
+    temp: float | None = None,
+    season: str | None = None,
+) -> list[dict]:
+    """Fix common Vision misclassifications using weather/season context.
+
+    Rules:
+    - "шорты" at temp < 10°C for children → reclassify to "штаны"
+    - "сандалии" at temp < 5°C → reclassify to "кроссовки"
+    """
+    if temp is None:
+        return items
+
+    for item in items:
+        item_type = (item.get("type") or "").lower()
+        cg = item.get("category_group", "")
+
+        # Shorts at cold temperatures → pants
+        if cg == "bottom" and "шорт" in item_type and temp < 10:
+            logger.info(
+                "vision.post_validate.reclassify",
+                from_type=item["type"],
+                to_type="штаны",
+                reason=f"shorts_at_{temp}C",
+            )
+            item["type"] = "штаны"
+            # Update season to include cold seasons
+            if item.get("season") and "winter" not in item["season"]:
+                item["season"] = ["spring", "summer", "autumn", "winter"]
+
+        # Sandals at very cold temps → sneakers
+        if cg == "footwear" and "сандал" in item_type and temp < 5:
+            logger.info(
+                "vision.post_validate.reclassify",
+                from_type=item["type"],
+                to_type="кроссовки",
+                reason=f"sandals_at_{temp}C",
+            )
+            item["type"] = "кроссовки"
+            if item.get("season"):
+                item["season"] = ["spring", "summer", "autumn", "winter"]
+
+    return items
+
+
 # ── Claude Vision calls ────────────────────────────────────────────────────
 
-async def _call_vision(photo_bytes: bytes) -> list[dict]:
+async def _call_vision(
+    photo_bytes: bytes,
+    *,
+    owner_type: str = "child",
+    age: int | None = None,
+    season: str | None = None,
+    temp: float | None = None,
+    city: str | None = None,
+) -> list[dict]:
+    """Analyze photo with Claude Vision. Context improves accuracy.
+
+    Args:
+        owner_type: "child" or "user" (adult)
+        age: child's age in years (None for adults)
+        season: current season name
+        temp: current temperature in Celsius
+        city: user's city for weather context
+    """
     pool = get_anthropic_pool()
+
+    # Build context-aware user message
+    context_parts = []
+    if owner_type == "child" and age is not None:
+        context_parts.append(f"Вещь для ребёнка {age} лет.")
+    elif owner_type == "user":
+        context_parts.append("Вещь для взрослой женщины.")
+
+    if season and temp is not None:
+        _season_ru = {"winter": "зима", "spring": "весна", "summer": "лето", "autumn": "осень"}.get(season, season)
+        _city_part = f" в {city}" if city else ""
+        context_parts.append(f"Сейчас {_season_ru}, {temp:+.0f}°C{_city_part}.")
+
+    user_text = "Определи все вещи на фото."
+    if context_parts:
+        user_text = " ".join(context_parts) + "\n" + user_text
+
     response = await pool.create_message(
         model="claude-sonnet-4-6",
         system=_VISION_SYSTEM,
@@ -330,7 +412,7 @@ async def _call_vision(photo_bytes: bytes) -> list[dict]:
                         "data": base64.standard_b64encode(photo_bytes).decode(),
                     },
                 },
-                {"type": "text", "text": "Определи все вещи на фото."},
+                {"type": "text", "text": user_text},
             ],
         }],
         max_tokens=4096,
@@ -360,6 +442,9 @@ async def _call_vision(photo_bytes: bytes) -> list[dict]:
             item["type"] = item["type"].lower()
         if isinstance(item.get("color"), str):
             item["color"] = item["color"].lower()
+
+    # Post-validation: fix misclassifications using weather context
+    parsed = _post_validate_vision(parsed, temp=temp, season=season)
 
     return parsed
 

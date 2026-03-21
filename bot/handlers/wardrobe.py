@@ -53,6 +53,7 @@ from services.outfit_builder import (
     get_temp_regime,
     get_collage_params,
     build_outfit_slots,
+    has_minimum_outfit,
     score_to_text,
     outfit_score_to_text,
     color_circle,
@@ -776,17 +777,30 @@ async def _analyze_and_save(
     bot,
     matrix=None,
     redis=None,
+    *,
+    vision_context: dict | None = None,
 ) -> list[dict]:
     """Скачать фото → Claude Vision → сохранить WardrobeItem → enqueue bg removal.
 
     Background removal (crop + rembg + R2 upload) is deferred to the worker
     via rmbg_process task so the user gets an immediate response after Vision.
     All DB inserts happen inside a single transaction.
+
+    Args:
+        vision_context: optional dict with keys: owner_type, age, season, temp, city
     """
     tg_file = await bot.get_file(photo_id)
     photo_bytes = bytes(await tg_file.download_as_bytearray())
 
-    items_data = await _call_vision(photo_bytes)
+    _vc = vision_context or {}
+    items_data = await _call_vision(
+        photo_bytes,
+        owner_type=_vc.get("owner_type", owner_type),
+        age=_vc.get("age"),
+        season=_vc.get("season"),
+        temp=_vc.get("temp"),
+        city=_vc.get("city"),
+    )
 
     # Дедупликация: загружаем существующие вещи
     existing_set = await _load_existing_set(owner_id, owner_type)
@@ -1129,7 +1143,33 @@ async def _handle_single_photo(
 
         redis = context.bot_data.get("redis")
         matrix = await _get_scoring_matrix(redis, user, owner_id, owner_type)
-        added = await _analyze_and_save(photo_id, owner_id, owner_type, context.bot, matrix, redis=redis)
+
+        # Build vision context for better item identification
+        _vc: dict = {"owner_type": owner_type, "city": getattr(user, "city", None)}
+        if owner_type == "child":
+            from db.crud.children import get_children as _gc_vision
+            async with AsyncReadSession() as _s_vc:
+                _children_vc = await _gc_vision(_s_vc, user.id)
+            if _children_vc:
+                _child_vc = _children_vc[0]
+                _age_vc = (date.today() - _child_vc.birthdate).days // 365 if _child_vc.birthdate else None
+                _vc["age"] = _age_vc
+        _vc["season"] = SEASONS.get(date.today().month, "spring")
+        # Get current temp if city is available
+        try:
+            if user.city:
+                from services.brief_weather import _geocode_city, _get_weather
+                _coords_vc = await _geocode_city(user.city)
+                if _coords_vc:
+                    _w_vc = await _get_weather(_coords_vc[0], _coords_vc[1], user.timezone or "Europe/Vilnius")
+                    _vc["temp"] = _w_vc.get("temp_morning") or _w_vc.get("temp_now")
+        except Exception:
+            pass
+
+        added = await _analyze_and_save(
+            photo_id, owner_id, owner_type, context.bot, matrix, redis=redis,
+            vision_context=_vc,
+        )
 
         new_count = user.daily_requests_used + 1
         async with AsyncWriteSession() as session:
@@ -1457,6 +1497,27 @@ async def _process_media_group(
     _redis = context.bot_data.get("redis") if context else None
     matrix = await _get_scoring_matrix(_redis, user, owner_id, owner_type)
 
+    # Build vision context for better item identification
+    _vc_bulk: dict = {"owner_type": owner_type, "city": getattr(user, "city", None)}
+    if owner_type == "child":
+        from db.crud.children import get_children as _gc_vb
+        async with AsyncReadSession() as _s_vb:
+            _children_vb = await _gc_vb(_s_vb, user.id)
+        if _children_vb:
+            _child_vb = _children_vb[0]
+            _age_vb = (date.today() - _child_vb.birthdate).days // 365 if _child_vb.birthdate else None
+            _vc_bulk["age"] = _age_vb
+    _vc_bulk["season"] = SEASONS.get(date.today().month, "spring")
+    try:
+        if user.city:
+            from services.brief_weather import _geocode_city, _get_weather
+            _coords_vb = await _geocode_city(user.city)
+            if _coords_vb:
+                _w_vb = await _get_weather(_coords_vb[0], _coords_vb[1], user.timezone or "Europe/Vilnius")
+                _vc_bulk["temp"] = _w_vb.get("temp_morning") or _w_vb.get("temp_now")
+    except Exception:
+        pass
+
     photo_lines: list[str] = []
     all_added_items: list[dict] = []  # track all added items for final message
     total_added = 0
@@ -1476,7 +1537,14 @@ async def _process_media_group(
             logger.info("wardrobe.vision_start", index=i)
             tg_file = await bot.get_file(file_id)
             photo_bytes = bytes(await tg_file.download_as_bytearray())
-            items_data = await _call_vision(photo_bytes)
+            items_data = await _call_vision(
+                photo_bytes,
+                owner_type=_vc_bulk.get("owner_type", owner_type),
+                age=_vc_bulk.get("age"),
+                season=_vc_bulk.get("season"),
+                temp=_vc_bulk.get("temp"),
+                city=_vc_bulk.get("city"),
+            )
             logger.info("wardrobe.vision_done", index=i, items_count=len(items_data))
 
             if not items_data:
@@ -1949,6 +2017,43 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         today_date = _date.today()
         season = SEASONS[today_date.month]
         outfit = select_outfit(items_shuffled, season, today_date, temp_m, temp_e)
+
+        # ── Minimum outfit check: need top+bottom or one_piece ──
+        if not has_minimum_outfit(outfit):
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+            # Determine what's missing for a helpful CTA
+            _has_top = any(i.category_group == "top" for i in items)
+            _has_bottom = any(i.category_group == "bottom" for i in items)
+            if not _has_top and not _has_bottom:
+                _cta = "Сфоткай кофту и штанишки — соберу образ! 📸"
+            elif not _has_top:
+                _cta = "Сфоткай кофту или футболку — соберу образ! 📸"
+            else:
+                _cta = "Сфоткай штаны или юбку — соберу образ! 📸"
+            # Show weather card + CTA instead of incomplete collage
+            _weather_text = ""
+            if temp_m is not None:
+                _sm = "+" if temp_m >= 0 else ""
+                _weather_text = f"🌡 Сейчас {_sm}{temp_m:.0f}°C"
+                if temp_e is not None and abs(temp_e - temp_m) >= 3:
+                    _se = "+" if temp_e >= 0 else ""
+                    _weather_text += f", вечером {_se}{temp_e:.0f}°C"
+            _msg_parts = []
+            if _weather_text:
+                _msg_parts.append(_weather_text)
+            # Praise existing items
+            _existing_desc = [f"{i.type} {i.color}".strip() for i in items[:3]]
+            if _existing_desc:
+                _msg_parts.append(f"В гардеробе: {', '.join(_existing_desc)}")
+            _msg_parts.append(f"\n{_cta}")
+            await message.reply_text(
+                "\n".join(_msg_parts),
+                reply_markup=get_main_menu(context.user_data.get("db_user"), context),
+            )
+            return
 
         regime = get_temp_regime(temp_m)
         all_slots = build_outfit_slots(

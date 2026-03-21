@@ -653,6 +653,63 @@ async def generate_brief(payload: dict) -> dict:
             )
             continue
 
+        # ── Minimum outfit check: need top+bottom or one_piece ──
+        from services.outfit_builder import has_minimum_outfit as _has_min
+        if not _has_min(outfit):
+            _has_top = any(i.category_group == "top" for i in items)
+            _has_bottom = any(i.category_group == "bottom" for i in items)
+            if not _has_top and not _has_bottom:
+                _cta_brief = "Сфоткай кофту и штанишки — соберу образ!"
+            elif not _has_top:
+                _cta_brief = "Сфоткай кофту или футболку — соберу образ!"
+            else:
+                _cta_brief = "Сфоткай штаны или юбку — соберу образ!"
+            child_briefs.append(
+                f"👧 {child.name}: пока мало вещей для полного образа. {_cta_brief} 📸"
+            )
+            # Still go to Mode B (weather card) path
+            from services.weather_card import build_weather_card, generate_weather_advice, season_palette
+            from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
+            from core.redis import get_redis as _get_redis_min
+
+            try:
+                _pool_min = get_anthropic_pool()
+            except RuntimeError:
+                _r_min = _get_redis_min()
+                init_anthropic_pool(_r_min)
+                _pool_min = get_anthropic_pool()
+
+            temp_d = weather.get("temp_day") or temp_m
+            precip_max = weather.get("precip_max", precip_e or 0)
+
+            advice = await generate_weather_advice(
+                pool=_pool_min,
+                child_name=child.name,
+                temp_morning=temp_m or 10.0,
+                temp_day=temp_d,
+                temp_evening=temp_e or temp_m or 10.0,
+                precip_max=precip_max,
+                day_type=day_type,
+            )
+
+            weather_card_bytes = build_weather_card(
+                child_name=child.name,
+                day_type=day_type,
+                temp_morning=temp_m or 10.0,
+                temp_day=temp_d,
+                temp_evening=temp_e or temp_m or 10.0,
+                precip_max=precip_max,
+                advice_text=advice,
+                items_count=len(items),
+            )
+
+            child_briefs[-1] = (
+                f"👧 {child.name} ({day_type}):\n"
+                f"💬 {advice}\n"
+                f"📸 {_cta_brief}"
+            )
+            continue
+
         all_outfit_ids.extend(str(i.id) for i in outfit["all_items"])
         scored = [float(i.score_item) for i in outfit["all_items"] if i.score_item]
         internal_score = round(sum(scored) / len(scored), 1) if scored else 0.0
@@ -698,9 +755,12 @@ async def generate_brief(payload: dict) -> dict:
         from services.scoring_comment import generate_outfit_comment
         child_age = (date.today() - child.birthdate).days // 365
         weather_str = f"{temp_m:.0f}°C" if temp_m is not None else ""
+        # Count real visual items (exclude base layer)
+        from services.outfit_builder import _is_base_layer_item
+        _visual_items = [i for i in outfit["all_items"] if not _is_base_layer_item(i)]
         outfit_comment = await generate_outfit_comment(
             pool=_pool,
-            outfit_items=[f"{i.type} {i.color}" for i in outfit["all_items"]],
+            outfit_items=[f"{i.type} {i.color}" for i in _visual_items],
             weather=weather_str,
             context=day_type,
             score=internal_score,
@@ -713,6 +773,7 @@ async def generate_brief(payload: dict) -> dict:
             colortype=getattr(child, "colortype", None) or getattr(user, "colortype", None),
             segment=getattr(user, "segment", None),
             redis=redis_client,
+            item_count=len(_visual_items),
         )
 
         child_briefs.append(_format_child_block(
@@ -1525,10 +1586,13 @@ async def generate_evening_brief(payload: dict) -> dict:
         scored = [float(i.score_item) for i in outfit.get("all_items", []) if i.score_item]
         _score = round(sum(scored) / len(scored), 1) if scored else 0.0
 
+        # Count visual items (exclude base layer)
+        from services.outfit_builder import _is_base_layer_item as _is_bl_eve
+        _visual_eve = [i for i in outfit.get("all_items", []) if not _is_bl_eve(i)]
         try:
             _comment = await generate_outfit_comment(
                 pool=_pool_ch,
-                outfit_items=[f"{i.type} {i.color}" for i in outfit.get("all_items", [])],
+                outfit_items=[f"{i.type} {i.color}" for i in _visual_eve],
                 weather=f"{temp_m:.0f}°C" if temp_m else "",
                 context=day_type,
                 score=_score,
@@ -1541,6 +1605,7 @@ async def generate_evening_brief(payload: dict) -> dict:
                 colortype=getattr(child, "colortype", None) or getattr(user, "colortype", None),
                 segment=getattr(user, "segment", None),
                 redis=redis_client,
+                item_count=len(_visual_eve),
             )
         except Exception:
             _comment = ""

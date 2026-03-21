@@ -168,15 +168,36 @@ async def generate_outfit_comment(
     colortype: str | None = None,
     segment: str | None = None,
     redis=None,
+    item_count: int | None = None,
 ) -> str:
     """Генерирует текстовый комментарий об образе для брифа (Haiku, ~$0.003).
 
-    Now includes colortype awareness and variable reward templates.
+    Now includes colortype awareness, variable reward templates,
+    and item-count-aware commentary.
+
+    Args:
+        item_count: number of real wardrobe items in outfit (affects comment style)
     """
+    _n = item_count if item_count is not None else len(outfit_items)
+
     # Build colortype instruction
     colortype_line = ""
     if colortype:
         colortype_line = f"\n- Цветотип: {colortype}. Упоминай подходящие цвета из палитры цветотипа."
+
+    # Item-count-aware instructions
+    if _n <= 2:
+        count_instruction = (
+            "\n- В гардеробе мало вещей (1-2). НЕ говори слово 'образ'. "
+            "Похвали конкретную вещь и мотивируй сфоткать ещё: 'Отличные штанишки! Сфоткай кофту — соберу полный образ!'"
+        )
+    elif _n <= 5:
+        count_instruction = (
+            "\n- В гардеробе 3-5 вещей. Комментируй сочетание тех вещей что есть. "
+            "Можно сказать 'образ', но упомяни конкретные вещи."
+        )
+    else:
+        count_instruction = ""
 
     system = (
         "Ты стилист Касси. Напиши короткий комментарий (2-3 предложения) об образе на день.\n\n"
@@ -187,10 +208,11 @@ async def generate_outfit_comment(
         f"- Учти контекст: {context}\n"
         f"- Тон: {tone or 'дружелюбный стилист'}"
         f"{colortype_line}"
+        f"{count_instruction}"
     )
 
     items_text = ", ".join(outfit_items) if outfit_items else "вещи подобраны"
-    prompt = f"Образ: {items_text}."
+    prompt = f"Вещи: {items_text}. Всего вещей в образе: {_n}."
     if weather:
         prompt += f" Погода: {weather}."
     if child_name:

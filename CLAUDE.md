@@ -246,6 +246,11 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 ## Известные баги / TODO (v1.0)
 - "Что надеть" в меню вызывает handle_rate_menu вместо генерации образа → фикс маппинга
 - Помощь: старый текст с "Оценить образ" → обновить
+- ~~Носки/базовый слой видны в коллаже~~ — ИСПРАВЛЕНО (base layer filter)
+- ~~Нет проверки минимального набора для образа~~ — ИСПРАВЛЕНО (has_minimum_outfit)
+- ~~Vision не получает контекст (возраст/погода)~~ — ИСПРАВЛЕНО (vision context)
+- ~~Шорты при +2° не переклассифицируются~~ — ИСПРАВЛЕНО (post-validation)
+- ~~Комментарий "отличный образ" при 1 вещи~~ — ИСПРАВЛЕНО (item_count)
 - Подписи на коллаже не центрированы для реальных фото (placeholder — ок)
 - Иконки/фото не заполняют ячейку (80% вместо текущих ~60%)
 - Онбординг: размер обуви только int → нужен float (26.5)
@@ -339,6 +344,14 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - `test_crud.py` (25) — CRUD operations
 - pytest-forked для изоляции тестов
 - CI/CD: GitHub Actions на каждый push/PR
+
+### Outfit generation: 5 фундаментальных фиксов
+- **Фильтрация базового слоя**: носки, трусики, колготки, майки → НИКОГДА фото в коллаже. Только текст "🩲 трусики, носки". `_is_base_layer_item()` в `outfit_builder.py`, фильтр в `build_outfit_slots()`
+- **Минимальный образ**: `has_minimum_outfit()` / `has_minimum_wardrobe()` — без top+bottom или one_piece → погодная карточка + CTA "сфоткай ещё". Применяется в wardrobe handler и morning brief
+- **Vision с контекстом**: `_call_vision()` принимает age, season, temp, city. Контекст в user message помогает Vision не путать шорты/штаны
+- **Post-validation Vision**: `_post_validate_vision()` — "шорты" при <10°C → "штаны", "сандалии" при <5°C → "кроссовки"
+- **Адекватный комментарий**: `generate_outfit_comment()` + `item_count` — при 1-2 вещах НЕ хвалит "образ", мотивирует сфоткать ещё; при 3-5 про сочетание; при 6+ полный стилистический
+- **Тесты**: 45 тестов (`test_outfit_fixes.py`)
 
 ## Документация
 - **WORKFLOW.md** — методология защитного проектирования (7 линз, 5 итераций, Three-Pass)

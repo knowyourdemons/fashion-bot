@@ -441,3 +441,22 @@ premium_yearly:    $72 / 5500 Stars
 - **Brief card**: 3 состояния (0/1-7/8+), 2 темы, палитра, прогресс-бар
 - **UX фиксы**: прогресс-бар видимый, подписи убраны с фото, кнопки короче, палитра полная, re-roll без засорения чата
 - **Тесты**: ~600 → 957 (+350)
+
+## Outfit generation: 5 фундаментальных фиксов (21 марта 2026)
+
+### Исправленные проблемы
+| # | Проблема | Решение | Файл |
+|---|----------|---------|------|
+| 1 | Носки/бельё показаны как фото в коллаже | `_is_base_layer_item()` фильтр в `build_outfit_slots()` | `outfit_builder.py` |
+| 2 | Коллаж из 1 вещи = не образ | `has_minimum_outfit()` — без top+bottom → weather card + CTA | `outfit_builder.py`, `wardrobe.py`, `morning_brief.py` |
+| 3 | Vision не знает возраст/погоду | `_call_vision()` + контекст (age, season, temp, city) | `vision.py`, `wardrobe.py` |
+| 4 | "Шорты" при +2°C | `_post_validate_vision()` — шорты→штаны при <10°C | `vision.py` |
+| 5 | "Отличный образ" при 1 вещи | `item_count` в `generate_outfit_comment()`, разные промпты по кол-ву | `scoring_comment.py`, `morning_brief.py` |
+
+### Новые тесты: 45 (test_outfit_fixes.py)
+- 12 тестов: base layer filtering
+- 10 тестов: minimum outfit validation
+- 4 теста: vision context
+- 10 тестов: post-validation
+- 6 тестов: comment item count
+- 3 теста: integration pipeline
