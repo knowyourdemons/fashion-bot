@@ -210,20 +210,15 @@ async def _load_existing_set(owner_id: uuid.UUID, owner_type: str = "user") -> s
 # ── Guided first 5 minutes (hints after each photo) ───────────────────────
 
 _GUIDED_HINTS = {
-    1: "🎉 Первая! Ещё 2 — покажу мини-образ.\n\n💡 Совет: расправь вещь на светлом фоне — образы будут красивее!",
-    2: "Супер! Штаны или юбку? 👖",
+    1: "\n🎉 Первая! Ещё 2 — покажу мини-образ",
+    2: "\nСупер! Добавь штаны или юбку 👖",
     # 3 handled by milestone (mini_outfit)
 }
 
 
-async def _send_guided_hint(item_count: int, message) -> None:
-    """Send appropriate hint based on item count (guided first 5 minutes)."""
-    hint = _GUIDED_HINTS.get(item_count)
-    if hint:
-        try:
-            await message.reply_text(hint)
-        except Exception:
-            pass
+def _get_guided_hint(item_count: int) -> str:
+    """Return guided hint TEXT to append to photo response (not a separate message)."""
+    return _GUIDED_HINTS.get(item_count, "")
 
 
 # ── Milestone rewards ─────────────────────────────────────────────────────
@@ -1013,6 +1008,15 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Сначала пройди настройку: /start")
         return
 
+    # ── Clean up stale bot messages (e.g. "гардероб пуст", "сфоткай кофту") ──
+    _stale_id = context.user_data.pop("_stale_msg_id", None)
+    _stale_chat = context.user_data.pop("_stale_chat_id", None)
+    if _stale_id and _stale_chat:
+        try:
+            await context.bot.delete_message(chat_id=_stale_chat, message_id=_stale_id)
+        except Exception:
+            pass
+
     # Selfie colortype detection mode
     if context.user_data.get("awaiting_selfie"):
         handled = await _handle_selfie_photo(update, context)
@@ -1114,7 +1118,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await update.message.reply_text(msg, reply_markup=keyboard)
             return
 
-    # ── Trial активация при первом фото ──────────────────────────────────────
+    # ── Trial активация при первом фото (silent — no separate message) ──
     if not getattr(user, "trial_started_at", None):
         from datetime import datetime as _dt, timezone as _tz, timedelta as _td
         from sqlalchemy import update as _sa_update
@@ -1131,22 +1135,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             user.trial_started_at = _now
             user.trial_ends_at = _now + _td(days=14)
             logger.info("trial.activated", user_id=str(user.id))
-            await update.message.reply_text(t("trial.activated"))
-
-    # Подсказка про bulk upload — один раз, если гардероб пуст
-    if redis:
-        tip_key = f"shown_bulk_tip:{user.id}"
-        if not await redis.get(tip_key):
-            async with AsyncReadSession() as session:
-                existing = await get_owner_items(session, user.id, "user")
-            if not existing:
-                await update.message.reply_text(
-                    "💡 Советы для лучшего результата:\n"
-                    "📱 Снимай вертикально\n"
-                    "🗂 До 10 вещей на фото\n"
-                    "💡 Раскладывай вещи так чтобы они не перекрывали друг друга"
-                )
-                await redis.set(tip_key, "1", ex=31_536_000)
+            # Trial info will be included in the photo response, not separate message
 
     if not redis:
         # Redis недоступен — немедленное добавление в гардероб
@@ -1265,10 +1254,17 @@ async def _handle_single_photo(
         if not added:
             lines.append("🤔 На фото не найдено одежды")
 
+        # Append guided hint to main response (no separate message)
+        if added:
+            _hint = _get_guided_hint(_total_now)
+            if _hint:
+                lines.append(_hint)
+
         await update.message.reply_text("\n".join(lines))
 
-        # Комментарий стилиста для первой добавленной вещи
-        if added:
+        # Комментарий стилиста — skip for now, the main message is enough
+        # (reduces chat clutter from 3 messages to 1)
+        if False and added:
             try:
                 from datetime import date
                 from services.scoring_comment import generate_item_comment
@@ -1314,10 +1310,6 @@ async def _handle_single_photo(
                 await update.message.reply_text(f"💬 {_comment}")
             except Exception as _e:
                 logger.warning("wardrobe.item_comment_failed", error=str(_e))
-
-        # ── Guided hints for first items ──────────────────────────────────
-        if added:
-            await _send_guided_hint(_total_now, update.message)
 
         # ── Milestone rewards ──────────────────────────────────────────────
         if added and user.onboarding_completed:
@@ -1771,6 +1763,9 @@ async def _process_media_group(
             _cta = _suggest_next_item(_all_items_now, _current_count)
             if _cta:
                 _final_multi += f"\n\n{_cta}"
+            _hint = _get_guided_hint(_current_count)
+            if _hint:
+                _final_multi += _hint
         await _safe_edit_text(progress_msg, _final_multi)
 
     if total_added > 0:
@@ -1780,10 +1775,6 @@ async def _process_media_group(
                 item_count=_current_count,
                 segment=user.segment,
             )
-
-        # Guided hints for first items (skip for single — CTA already shown)
-        if not is_single and _current_count > 0:
-            await _send_guided_hint(_current_count, message)
 
         # Milestone rewards
         if _current_count > 0 and user.onboarding_completed:
@@ -2025,6 +2016,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
 
             # For women: generate style formula advice even without wardrobe
             is_no_kids = getattr(user, "segment", None) == "no_kids"
+            _cta_msg = None
             if is_no_kids and temp_m is not None:
                 try:
                     from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
@@ -2053,20 +2045,25 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                     _formula = _resp_sf.content[0].text.strip() if _resp_sf.content else ""
                     if _formula:
                         _sm_sf = "+" if temp_m >= 0 else ""
-                        await message.reply_text(
+                        _cta_msg = await message.reply_text(
                             f"🌡 {_sm_sf}{temp_m:.0f}°C\n\n"
                             f"💡 Формула образа:\n{_formula}\n\n"
                             "📸 Сфоткай вещи — подберу конкретный образ из твоего гардероба!",
                             reply_markup=get_main_menu(context.user_data.get("db_user"), context),
                         )
-                        return
                 except Exception:
                     pass
 
-            await message.reply_text(
-                "Гардероб пуст — сфоткай вещи или отправь из галереи 📸",
-                reply_markup=get_main_menu(context.user_data.get("db_user"), context),
-            )
+            if not _cta_msg:
+                _cta_msg = await message.reply_text(
+                    "Гардероб пуст — сфоткай вещи или отправь из галереи 📸",
+                    reply_markup=get_main_menu(context.user_data.get("db_user"), context),
+                )
+
+            # Store for cleanup when user sends next photo
+            if _cta_msg:
+                context.user_data["_stale_msg_id"] = _cta_msg.message_id
+                context.user_data["_stale_chat_id"] = _cta_msg.chat_id
             return
 
         # Полностью случайный seed при каждом запросе
@@ -2139,10 +2136,14 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             if _existing_desc:
                 _msg_parts.append(f"В гардеробе: {', '.join(_existing_desc)}")
             _msg_parts.append(f"\n{_cta}")
-            await message.reply_text(
+            _min_msg = await message.reply_text(
                 "\n".join(_msg_parts),
                 reply_markup=get_main_menu(context.user_data.get("db_user"), context),
             )
+            # Store for cleanup when user sends next photo
+            if _min_msg:
+                context.user_data["_stale_msg_id"] = _min_msg.message_id
+                context.user_data["_stale_chat_id"] = _min_msg.chat_id
             return
 
         # ── AI Outfit Engine v2 ──
