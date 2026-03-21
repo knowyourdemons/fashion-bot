@@ -30,6 +30,9 @@ def _item(category_group: str, type_: str, color: str = "белый",
     i.photo_id = f"photo_{type_}"
     i.photo_url = None
     i.score_item = score
+    i.warmth_level = 3
+    i.style_tag = "casual"
+    i.rain_ok = False
     return i
 
 

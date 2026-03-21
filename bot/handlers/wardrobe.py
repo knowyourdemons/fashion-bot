@@ -718,6 +718,24 @@ async def _save_one(
     from services.scoring import classify_role as _classify_role
     item_role = _classify_role(data.get("type") or "", data.get("color") or "")
 
+    # Map style to English tag
+    _STYLE_TAG_MAP = {
+        "повседневный": "casual", "casual": "casual",
+        "спортивный": "sport", "sport": "sport",
+        "нарядный": "formal", "formal": "formal",
+        "домашний": "home", "home": "home",
+    }
+    _style_tag = _STYLE_TAG_MAP.get((data.get("style") or "").lower().strip(), "casual")
+
+    # Warmth level: from Vision or infer from type
+    _warmth = data.get("warmth_level")
+    if _warmth is not None:
+        try:
+            _warmth = int(_warmth)
+            _warmth = max(1, min(5, _warmth))
+        except (ValueError, TypeError):
+            _warmth = 3
+
     async def _do_create(s):
         return await create(
             s,
@@ -741,6 +759,9 @@ async def _save_one(
             show_in_collage=show_in_collage,
             is_base_layer=(category_group == "base_layer"),
             role=item_role,
+            warmth_level=_warmth,
+            style_tag=_style_tag,
+            rain_ok=bool(data.get("rain_ok", False)),
             score_item=score_item,
             score_breakdown=score_breakdown,
             score_version=score_version,

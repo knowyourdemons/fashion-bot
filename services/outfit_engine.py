@@ -26,6 +26,139 @@ from worker.tasks.style_config import _needs_tights
 
 logger = structlog.get_logger()
 
+# ── Warmth requirements per temperature regime ──────────────────────────────
+# (min_warmth, max_warmth) per slot. None = slot not needed.
+
+WARMTH_REQUIREMENTS: dict[str, dict[str, tuple[int, int] | None]] = {
+    "жара": {  # > 25°C
+        "top": (1, 2), "bottom": (1, 2), "one_piece": (1, 2),
+        "outerwear": None, "footwear": (1, 2),
+        "hat": (1, 1), "scarf": None, "gloves": None,
+    },
+    "тепло": {  # 15-25°C
+        "top": (1, 3), "bottom": (1, 3), "one_piece": (1, 3),
+        "outerwear": (1, 2), "footwear": (1, 3),
+        "hat": None, "scarf": None, "gloves": None,
+    },
+    "прохладно": {  # 10-15°C
+        "top": (2, 4), "bottom": (2, 4), "one_piece": (2, 4),
+        "outerwear": (2, 3), "footwear": (2, 4),
+        "hat": None, "scarf": None, "gloves": None,
+    },
+    "холодно": {  # 5-10°C
+        "top": (3, 5), "bottom": (2, 4), "one_piece": (3, 5),
+        "outerwear": (3, 4), "footwear": (2, 4),
+        "hat": (3, 5), "scarf": None, "gloves": None,
+    },
+    "мороз": {  # 0-5°C
+        "top": (3, 5), "bottom": (3, 5), "one_piece": None,
+        "outerwear": (4, 5), "footwear": (3, 5),
+        "hat": (3, 5), "scarf": (3, 5), "gloves": None,
+    },
+    "сильный_мороз": {  # < 0°C
+        "top": (4, 5), "bottom": (3, 5), "one_piece": None,
+        "outerwear": (4, 5), "footwear": (4, 5),
+        "hat": (4, 5), "scarf": (4, 5), "gloves": (3, 5),
+    },
+}
+
+# Style clashes (only enforced for women segments)
+_STYLE_CLASHES = [
+    frozenset({"sport", "formal"}),
+    frozenset({"home", "formal"}),
+    frozenset({"home", "sport"}),
+]
+
+
+def _filter_by_warmth(items: list, regime: str) -> list:
+    """Filter items by warmth requirements for temperature regime.
+
+    Items without warmth_level are kept (graceful degradation).
+    """
+    reqs = WARMTH_REQUIREMENTS.get(regime, {})
+    if not reqs:
+        return items
+
+    filtered = []
+    for item in items:
+        wl = getattr(item, "warmth_level", None)
+        if wl is None:
+            filtered.append(item)  # no data → keep
+            continue
+        cg = getattr(item, "category_group", "") or ""
+        req = reqs.get(cg)
+        if req is None:
+            filtered.append(item)  # slot not in requirements → keep
+            continue
+        min_w, max_w = req
+        if min_w <= wl <= max_w:
+            filtered.append(item)
+        else:
+            logger.debug(
+                "outfit_engine.warmth_filtered",
+                type=getattr(item, "type", ""),
+                warmth=wl, required=(min_w, max_w), regime=regime,
+            )
+    return filtered
+
+
+def _check_warmth_consistency(slot_items: dict) -> bool:
+    """Check that warmth spread between visual items is ≤ 2."""
+    warmth_values = []
+    for item in slot_items.values():
+        wl = getattr(item, "warmth_level", None)
+        if wl is not None:
+            warmth_values.append(wl)
+    if len(warmth_values) < 2:
+        return True
+    return (max(warmth_values) - min(warmth_values)) <= 2
+
+
+def _check_style_compatibility(slot_items: dict, segment: str) -> bool:
+    """Check style compatibility. Only enforced for women segments."""
+    if segment in ("mom_girl", "mom_boy"):
+        return True  # kids: everything goes
+    tags = set()
+    for item in slot_items.values():
+        tag = getattr(item, "style_tag", None)
+        if tag:
+            tags.add(tag)
+    for clash in _STYLE_CLASHES:
+        if clash.issubset(tags):
+            return False
+    return True
+
+
+def _get_missing_warmth_cta(items: list, regime: str) -> str | None:
+    """If items exist but none match warmth requirements, give specific CTA."""
+    reqs = WARMTH_REQUIREMENTS.get(regime, {})
+    if not reqs:
+        return None
+
+    has_top = any(i.category_group == "top" for i in items if not _is_base_layer_item(i))
+    has_bottom = any(i.category_group == "bottom" for i in items if not _is_base_layer_item(i))
+
+    if not has_top and not has_bottom:
+        return None  # genuinely empty wardrobe, handled elsewhere
+
+    # Check if any tops meet warmth requirement
+    top_req = reqs.get("top")
+    if top_req:
+        warm_enough_tops = [
+            i for i in items
+            if i.category_group == "top"
+            and not _is_base_layer_item(i)
+            and getattr(i, "warmth_level", None) is not None
+            and top_req[0] <= i.warmth_level <= top_req[1]
+        ]
+        if has_top and not warm_enough_tops:
+            warmth_names = {3: "кофту", 4: "свитер", 5: "тёплый свитер"}
+            needed = warmth_names.get(top_req[0], "тёплую кофту")
+            return f"Твои кофточки легковаты для этой погоды! Сфоткай {needed} 📸"
+
+    return None
+
+
 # ── Result dataclass ─────────────────────────────────────────────────────────
 
 
@@ -103,23 +236,33 @@ _AI_SLOTS = frozenset([
 
 def _serialize_item(item) -> dict:
     """Serialize a wardrobe item for AI consumption."""
-    return {
+    d = {
         "id": str(item.id),
         "cg": item.category_group or "top",
         "type": item.type or "",
         "color": item.color or "",
-        "style": getattr(item, "style", "") or "",
+        "style": getattr(item, "style_tag", "") or getattr(item, "style", "") or "",
         "score": float(item.score_item) if item.score_item else 5.0,
     }
+    wl = getattr(item, "warmth_level", None)
+    if wl is not None:
+        d["warmth"] = wl
+    if getattr(item, "rain_ok", False):
+        d["rain"] = True
+    return d
 
 
-def _build_candidates(items: list, season: str, today: date) -> dict[str, list[dict]]:
-    """Group and serialize items for AI, filtering by season and base layer."""
+def _build_candidates(items: list, season: str, today: date, regime: str = "") -> dict[str, list[dict]]:
+    """Group and serialize items for AI, filtering by season, base layer, and warmth."""
     available = [
         i for i in items
         if (not i.season or season in i.season)
         and not _is_base_layer_item(i)
     ]
+
+    # Warmth pre-filter: remove items clearly wrong for temperature
+    if regime:
+        available = _filter_by_warmth(available, regime)
 
     # Group by category_group
     groups: dict[str, list] = {}
@@ -214,6 +357,7 @@ def _build_user_prompt(
     day_type: str = "",
     rotation_text: str = "",
     item_count_total: int = 0,
+    precip: float = 0,
 ) -> str:
     """Build the user prompt for Haiku."""
     _season_ru = {
@@ -237,6 +381,10 @@ def _build_user_prompt(
         f"Погода: утро {sm}{temp_morning:.0f}°C, вечер {se}{temp_evening:.0f}°C. "
         f"Сезон: {_season_ru}. Режим: {regime}."
     )
+
+    # Rain
+    if precip > 50:
+        parts.append("ДОЖДЬ! Приоритет: вещи с rain=true (непромокаемые). Если нет — предупреди взять зонт.")
 
     # Colortype
     if colortype and colortype != "default":
@@ -478,11 +626,20 @@ async def select_outfit_ai(
     regime = _get_temp_regime(temp)
 
     # Build candidates (excluding base layer)
-    candidates = _build_candidates(items, season, today)
+    candidates = _build_candidates(items, season, today, regime=regime)
     total_candidate_count = sum(len(v) for v in candidates.values())
 
-    # If too few candidates, use rule-based fallback directly
+    # Check if warmth-filtered items are too few but raw wardrobe has items
     if total_candidate_count < 2:
+        # Check if items exist but are wrong warmth
+        warmth_cta = _get_missing_warmth_cta(items, regime)
+        if warmth_cta:
+            return OutfitResult(
+                outfit=_select_outfit(items, season, today, temp, temp_eve, precip_evening),
+                comment=warmth_cta,
+                is_wow=False,
+                ai_selected=False,
+            )
         return _fallback_result(items, season, today, temp, temp_eve, precip_evening,
                                 segment, child_name)
 
@@ -517,6 +674,7 @@ async def select_outfit_ai(
         day_type=day_type,
         rotation_text=rotation_text,
         item_count_total=total_candidate_count,
+        precip=precip_evening,
     )
 
     # Call Haiku
@@ -549,6 +707,18 @@ async def select_outfit_ai(
 
     slot_items, comment, is_wow = parsed
 
+    # Post-validation: warmth consistency (spread ≤ 2)
+    if not _check_warmth_consistency(slot_items):
+        logger.warning("outfit_engine.warmth_inconsistent")
+        return _fallback_result(items, season, today, temp, temp_eve, precip_evening,
+                                segment, child_name)
+
+    # Post-validation: style compatibility (women only)
+    if not _check_style_compatibility(slot_items, segment):
+        logger.warning("outfit_engine.style_clash", segment=segment)
+        return _fallback_result(items, season, today, temp, temp_eve, precip_evening,
+                                segment, child_name)
+
     # Build outfit dict
     outfit = _build_outfit_from_ai(slot_items, items, temp, season, today)
 
@@ -562,7 +732,6 @@ async def select_outfit_ai(
     if outfit.get("bottom") and temp < 10:
         bottom_type = (getattr(outfit["bottom"], "type", "") or "").lower()
         if "шорт" in bottom_type:
-            # Try to find pants instead
             pants = next(
                 (i for i in items
                  if i.category_group == "bottom"
@@ -572,6 +741,23 @@ async def select_outfit_ai(
             )
             if pants:
                 outfit["bottom"] = pants
+
+    # Post-validation: rain priority
+    if precip_evening > 50:
+        ow = outfit.get("outerwear")
+        if ow and not getattr(ow, "rain_ok", False):
+            rain_coat = next(
+                (i for i in items
+                 if i.category_group == "outerwear"
+                 and getattr(i, "rain_ok", False)
+                 and (not i.season or season in i.season)),
+                None,
+            )
+            if rain_coat:
+                outfit["outerwear"] = rain_coat
+                logger.info("outfit_engine.rain_swap", from_type=ow.type, to_type=rain_coat.type)
+            else:
+                outfit["warnings"].append("☂️ Дождь — возьми зонт!")
 
     return OutfitResult(
         outfit=outfit,

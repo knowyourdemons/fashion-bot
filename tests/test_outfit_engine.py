@@ -18,7 +18,7 @@ pytest.importorskip("structlog", reason="structlog not installed")
 
 def _item(category_group: str, type_: str, color: str = "белый",
           season=None, last_worn=None, show=True, score=7.0,
-          style="повседневный"):
+          style="повседневный", warmth=3, style_tag="casual", rain_ok=False):
     i = MagicMock()
     i.id = uuid.uuid4()
     i.category_group = category_group
@@ -31,6 +31,9 @@ def _item(category_group: str, type_: str, color: str = "белый",
     i.photo_url = None
     i.score_item = score
     i.style = style
+    i.warmth_level = warmth
+    i.style_tag = style_tag
+    i.rain_ok = rain_ok
     return i
 
 

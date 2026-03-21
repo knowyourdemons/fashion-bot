@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
-    ARRAY, Boolean, Date, DateTime, Enum, Integer, Numeric, String, Text, func
+    ARRAY, Boolean, Date, DateTime, Enum, Integer, Numeric, SmallInteger, String, Text, func
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -71,6 +71,20 @@ class WardrobeItem(Base):
 
     # Роль вещи в гардеробе
     role: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+
+    # Warmth & weather metadata (populated by Vision + backfill)
+    warmth_level: Mapped[Optional[int]] = mapped_column(
+        SmallInteger, nullable=True,
+        comment="1=very light, 2=light, 3=medium, 4=warm, 5=very warm",
+    )
+    style_tag: Mapped[Optional[str]] = mapped_column(
+        String(32), nullable=True,
+        comment="casual/sport/formal/smart/home",
+    )
+    rain_ok: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True, default=False,
+        comment="True if waterproof/water-resistant",
+    )
 
     # Скоринг
     score_item: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
