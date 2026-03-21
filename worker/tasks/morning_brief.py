@@ -20,6 +20,7 @@ from services.outfit_builder import build_outfit_slots, get_collage_params
 from services.brief_weather import _SEASONS, _geocode_city, _get_weather
 from services.outfit_selector import _get_temp_regime, _select_outfit
 from services.brief_formatter import _format_item, _format_child_block, format_weather_line
+from services.brief_card import build_brief_card, get_brief_buttons, _get_segment, _count_real_photos
 
 logger = structlog.get_logger()
 
@@ -302,8 +303,26 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
     _collage_params = get_collage_params(user=user, temp=temp_m, temp_now=temp_now_adult, temp_day=temp_d_adult, temp_evening=temp_e, precip=precip_e_adult or 0)
     collage_header = _collage_params["header_text"]
 
+    # ── PRIMARY: brief_card (Satori card with theme) ──
+    import base64 as _b64_adult
+    brief_card_bytes = None
     collage_bytes_val = None
-    if outfit_slots:
+
+    if outfit_slots or not items:
+        try:
+            brief_card_bytes = await build_brief_card(
+                user=user,
+                child=None,
+                outfit={},
+                weather=weather,
+                outfit_slots=outfit_slots,
+                advice_text=stylist_advice,
+            )
+        except Exception as e:
+            logger.warning("brief.adult.brief_card_failed", error=str(e))
+
+    # ── FALLBACK: old collage if brief_card failed ──
+    if not brief_card_bytes and outfit_slots:
         try:
             collage_bytes_val = await build_collage(
                 outfit_slots=outfit_slots,
@@ -327,29 +346,40 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
         await session.commit()
         brief_id = str(log.id)
 
+    # Determine segment + real photos for button logic
+    _adult_segment = _get_segment(user)
+    _adult_real_photos = _count_real_photos(outfit_slots) if outfit_slots else 0
+
     # Push send task
     redis_client = get_redis()
     try:
         queue = RedisQueue(redis_client)
+        _send_payload: dict = {
+            "telegram_id": user.telegram_id,
+            "text": brief_text,
+            "brief_id": brief_id,
+            "is_adult": True,
+            "segment": _adult_segment,
+            "real_photo_count": _adult_real_photos,
+        }
+        if brief_card_bytes:
+            _send_payload["brief_card_b64"] = _b64_adult.b64encode(brief_card_bytes).decode()
+        elif collage_bytes_val:
+            _send_payload["adult_has_outfit"] = True
+            _send_payload["collage_bytes_b64"] = _b64_adult.b64encode(collage_bytes_val).decode()
+        else:
+            _send_payload["adult_has_outfit"] = False
+
         await queue.push(
             "send_morning_brief",
-            {
-                "telegram_id": user.telegram_id,
-                "text": brief_text,
-                "brief_id": brief_id,
-                "is_adult": True,
-                "adult_has_outfit": bool(collage_bytes_val),
-                "collage_bytes_b64": (
-                    __import__("base64").b64encode(collage_bytes_val).decode()
-                    if collage_bytes_val else None
-                ),
-            },
+            _send_payload,
             priority=QueuePriority.HIGH,
         )
     finally:
         pass  # singleton — не закрываем
 
-    logger.info("morning_brief.adult_generated", user_id=str(user.id), brief_id=brief_id)
+    logger.info("morning_brief.adult_generated", user_id=str(user.id), brief_id=brief_id,
+                has_brief_card=bool(brief_card_bytes))
     return {"brief_id": brief_id}
 
 
@@ -708,72 +738,77 @@ async def generate_brief(payload: dict) -> dict:
     else:
         collage_photo_urls = []
 
-    # Утренний бриф = brief_card (карточка в порядке одевания)
+    # ── PRIMARY: new brief_card with segment themes ──
     import base64 as _b64_brief
     _brief_card_bytes = None
-    if all_outfit_slots:
-        try:
-            from services.image_builder import build_collage_satori
-            from services.collage_styles import build_brief_card, collect_palette
 
-            # Собрать outfit для передачи в brief_card (нужен underwear_text и т.д.)
-            _first_outfit = {}
+    # Build advice text from child briefs
+    _advice_for_card = ""
+    if child_briefs:
+        for _cb in child_briefs:
+            if "\U0001f4ac" in _cb:  # 💬
+                _parts = _cb.split("\U0001f4ac", 1)
+                if len(_parts) > 1:
+                    import re
+                    _advice_for_card = re.sub(r"<[^>]+>", "", _parts[1].strip().split("\n")[0].strip())
+                    break
+        if not _advice_for_card:
+            _t = temp_m or 10
+            if _t < 5:
+                _advice_for_card = f"На улице {'+' if _t >= 0 else ''}{_t:.0f}° -- одевайтесь теплее!"
+            elif _t < 15:
+                _advice_for_card = f"Прохладно {'+' if _t >= 0 else ''}{_t:.0f}° -- не забудьте куртку"
+            else:
+                _advice_for_card = "Хорошей прогулки!"
+
+    # Собрать outfit для передачи в brief_card
+    _first_outfit = {}
+    _first_child = children[0] if children else None
+    if all_outfit_slots or _first_child:
+        try:
             for _ch in children:
                 async with AsyncReadSession() as _s_out:
                     _ch_items = await get_owner_items(_s_out, _ch.id, "child")
                 if _ch_items:
                     _first_outfit = _select_outfit(_ch_items, season, today, temp_m, temp_e, precip_e or 0)
                     break
+        except Exception:
+            pass
 
-            _palette = collect_palette(all_outfit_slots, colortype=getattr(children[0], "colortype", "") if children else "")
-            _weather_footer = ""
-            if temp_e is not None and temp_m is not None and temp_m - temp_e >= 5:
-                se = "+" if temp_e >= 0 else ""
-                _weather_footer = f"К вечеру {se}{temp_e:.0f}° — оденьте потеплее"
-            elif precip_e and precip_e > 50:
-                _weather_footer = "Возможен дождь — возьмите зонт"
-
-            # Fallback: use last child's outfit comment if no weather advice
-            if not _weather_footer and child_briefs:
-                # Extract comment from child_briefs (after 💬 marker)
-                for _cb in child_briefs:
-                    if "💬" in _cb:
-                        _parts = _cb.split("💬", 1)
-                        if len(_parts) > 1:
-                            _comment = _parts[1].strip().split("\n")[0].strip()
-                            # Remove HTML tags
-                            import re
-                            _weather_footer = re.sub(r"<[^>]+>", "", _comment).strip()
-                            break
-                if not _weather_footer:
-                    # Generic based on temp
-                    _t = temp_m or 10
-                    if _t < 5:
-                        _weather_footer = f"На улице {'+' if _t >= 0 else ''}{_t:.0f}° — одевайтесь теплее!"
-                    elif _t < 15:
-                        _weather_footer = f"Прохладно {'+' if _t >= 0 else ''}{_t:.0f}° — не забудьте куртку"
-                    else:
-                        _weather_footer = "Хорошей прогулки!"
-
-            _child_ct = getattr(children[0], "colortype", "") if children else ""
-            _el, _w, _h = build_brief_card(
-                all_outfit_slots, collage_header, _weather_footer, _palette,
-                weather_data=weather, outfit=_first_outfit, colortype=_child_ct or "default",
-            )
-            from services.image_builder import _render_satori
-            _brief_card_bytes = await _render_satori(_el, _w, _h)
-            if _brief_card_bytes:
-                logger.info("morning_brief.brief_card_ok", size=len(_brief_card_bytes))
-        except Exception as _bc_err:
-            logger.warning("morning_brief.brief_card_failed", error=str(_bc_err))
+    try:
+        _brief_card_bytes = await build_brief_card(
+            user=user,
+            child=_first_child,
+            outfit=_first_outfit,
+            weather=weather,
+            outfit_slots=all_outfit_slots,
+            advice_text=_advice_for_card,
+        )
+        if _brief_card_bytes:
+            logger.info("morning_brief.brief_card_ok", size=len(_brief_card_bytes))
+    except Exception as _bc_err:
+        logger.warning("morning_brief.brief_card_failed", error=str(_bc_err))
 
     redis_client = get_redis()
     try:
         queue = RedisQueue(redis_client)
+        _child_segment = _get_segment(user)
+        _child_real_photos = _count_real_photos(all_outfit_slots) if all_outfit_slots else 0
+        # Find first missing slot for button CTA
+        _first_missing = ""
+        for _ms in all_outfit_slots:
+            if not _ms.get("has_item") and _ms.get("slot") not in ("underwear", "tights", "socks", "base_layer"):
+                _first_missing = _ms.get("label") or get_placeholder_label(
+                    _ms.get("slot", "top"), _ms.get("gender", "girl"))
+                break
+
         _payload: dict = {
             "telegram_id": user.telegram_id,
             "text": brief_text,
             "brief_id": brief_id,
+            "segment": _child_segment,
+            "real_photo_count": _child_real_photos,
+            "first_missing_slot": _first_missing,
         }
         if _brief_card_bytes:
             _payload["brief_card_b64"] = _b64_brief.b64encode(_brief_card_bytes).decode()
@@ -826,38 +861,52 @@ async def send_morning_brief(payload: dict) -> dict:
 
     adult_has_outfit = payload.get("adult_has_outfit", False)
 
-    if is_weather_card:
+    # ── New brief_card button logic ──
+    _segment = payload.get("segment", "")
+    _real_photo_count = payload.get("real_photo_count", 0)
+    _first_missing = payload.get("first_missing_slot", "")
+
+    if _segment and (is_brief_card or is_text_only):
+        # Use new button logic from brief_card module
+        reply_markup = get_brief_buttons(
+            segment=_segment,
+            real_photo_count=_real_photo_count,
+            brief_id=brief_id,
+            first_missing_slot=_first_missing,
+        )
+    elif is_weather_card:
         reply_markup = {
             "inline_keyboard": [[
-                {"text": "📸 Добавить вещи", "callback_data": "add_items_hint"},
+                {"text": "Сфоткать", "callback_data": "add_items_hint"},
+                {"text": "Потом", "callback_data": f"brief_feedback:later:{brief_id}"},
             ]]
         }
     elif is_adult and not adult_has_outfit:
-        # Взрослый бриф без вещей — только совет
+        # Взрослый бриф без вещей — только совет (fallback)
         reply_markup = {
             "inline_keyboard": [[
-                {"text": "👍 Спасибо", "callback_data": f"brief_feedback:up:{brief_id}"},
-                {"text": "🔄 Ещё совет", "callback_data": f"reroll:{brief_id}"},
+                {"text": "Спасибо", "callback_data": f"brief_feedback:up:{brief_id}"},
+                {"text": "Ещё совет", "callback_data": "reroll_advice"},
             ]]
         }
     elif is_adult:
-        # Взрослый бриф с коллажем
+        # Взрослый бриф с коллажем (fallback)
         reply_markup = {
             "inline_keyboard": [[
-                {"text": "👍 Нравится", "callback_data": f"brief_feedback:up:{brief_id}"},
-                {"text": "🔄 Другой вариант", "callback_data": f"reroll:{brief_id}"},
+                {"text": "Нравится", "callback_data": f"brief_feedback:up:{brief_id}"},
+                {"text": "Другой вариант", "callback_data": f"reroll:{brief_id}"},
             ], [
-                {"text": "📤 Переслать", "callback_data": f"share:{brief_id}"},
+                {"text": "Переслать", "callback_data": f"share:{brief_id}"},
             ]]
         }
     elif is_text_only or is_brief_card:
-        # Детский бриф (карточка или текст)
+        # Детский бриф (fallback)
         reply_markup = {
             "inline_keyboard": [[
-                {"text": "👍 Надели", "callback_data": f"brief_feedback:up:{brief_id}"},
-                {"text": "🔄 Переодень", "callback_data": f"reroll:{brief_id}"},
+                {"text": "Надели", "callback_data": f"brief_feedback:up:{brief_id}"},
+                {"text": "Переодень", "callback_data": f"reroll:{brief_id}"},
             ], [
-                {"text": "📤 Переслать", "callback_data": f"share:{brief_id}"},
+                {"text": "Переслать", "callback_data": f"share:{brief_id}"},
             ]]
         }
     else:
