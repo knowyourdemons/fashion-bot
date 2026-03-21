@@ -1780,6 +1780,25 @@ async def _process_media_group(
             _final_multi += "\n\n💡 Для лучшего качества — фоткай по одной вещи"
         await _safe_edit_text(progress_msg, _final_multi)
 
+    # Restore reply keyboard (main menu) — it disappears after inline button edit
+    if total_added > 0:
+        try:
+            from bot.handlers.menu import get_main_menu
+            _menu_user = None
+            try:
+                async with AsyncReadSession() as _ms:
+                    from sqlalchemy import select as _sel_m
+                    _res_m = await _ms.execute(_sel_m(User).where(User.id == uid))
+                    _menu_user = _res_m.scalar_one_or_none()
+            except Exception:
+                pass
+            await message.reply_text(
+                "📸 Ещё фото или нажми «Что надеть»",
+                reply_markup=get_main_menu(_menu_user, context),
+            )
+        except Exception:
+            pass
+
     if total_added > 0:
         if _current_count > 0:
             logger.info("metric.photo_added",
