@@ -278,7 +278,7 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
     brief_text = f"🌅 {greeting}, {user.name}!\n"
     if weather_line:
         brief_text += f"{weather_line}\n\n"
-    brief_text += f"👗 Совет дня:\n{stylist_advice}"
+    brief_text += f"💡 Идея на сегодня:\n{stylist_advice}"
     if not items:
         brief_text += "\n\n📸 Добавь вещи в гардероб — буду подбирать образы каждое утро!"
 
@@ -338,6 +338,7 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
                 "text": brief_text,
                 "brief_id": brief_id,
                 "is_adult": True,
+                "adult_has_outfit": bool(collage_bytes_val),
                 "collage_bytes_b64": (
                     __import__("base64").b64encode(collage_bytes_val).decode()
                     if collage_bytes_val else None
@@ -823,14 +824,34 @@ async def send_morning_brief(payload: dict) -> dict:
     is_brief_card = bool(payload.get("brief_card_b64"))
     is_weather_card = bool(payload.get("weather_card_b64"))
 
+    adult_has_outfit = payload.get("adult_has_outfit", False)
+
     if is_weather_card:
         reply_markup = {
             "inline_keyboard": [[
                 {"text": "📸 Добавить вещи", "callback_data": "add_items_hint"},
             ]]
         }
+    elif is_adult and not adult_has_outfit:
+        # Взрослый бриф без вещей — только совет
+        reply_markup = {
+            "inline_keyboard": [[
+                {"text": "👍 Спасибо", "callback_data": f"brief_feedback:up:{brief_id}"},
+                {"text": "🔄 Ещё совет", "callback_data": f"reroll:{brief_id}"},
+            ]]
+        }
+    elif is_adult:
+        # Взрослый бриф с коллажем
+        reply_markup = {
+            "inline_keyboard": [[
+                {"text": "👍 Нравится", "callback_data": f"brief_feedback:up:{brief_id}"},
+                {"text": "🔄 Другой вариант", "callback_data": f"reroll:{brief_id}"},
+            ], [
+                {"text": "📤 Переслать", "callback_data": f"share:{brief_id}"},
+            ]]
+        }
     elif is_text_only or is_brief_card:
-        # Утренний бриф (карточка или текст)
+        # Детский бриф (карточка или текст)
         reply_markup = {
             "inline_keyboard": [[
                 {"text": "👍 Надели", "callback_data": f"brief_feedback:up:{brief_id}"},
