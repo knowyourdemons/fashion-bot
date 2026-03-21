@@ -13,7 +13,7 @@ LIMITS: dict[str, dict[str, Any]] = {
         "photos_per_day":     3,
         "wardrobe_size":      30,
         "rate_per_day":       3,
-        "chat_per_day":       1,
+        "chat_per_day":       3,
         "outfit_req_per_day": 1,
         "brief_days":         [1, 3],   # вт=1, чт=3 (weekday, 0=пн)
         "brief_weekends":     False,
@@ -248,7 +248,7 @@ def get_effective_limits(user) -> dict:
             if days_left <= 1:  # день 13
                 limits["evening_brief"] = False
             if days_left <= 0:  # день 14 (последний)
-                limits["chat_per_day"] = 1
+                limits["chat_per_day"] = 3
                 limits["outfit_req_per_day"] = 1
 
     return limits

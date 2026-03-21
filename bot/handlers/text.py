@@ -20,39 +20,47 @@ logger = structlog.get_logger()
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
 
 
-def _get_text_system(user) -> str:
+def _get_text_system(user, weather_line: str = "") -> str:
+    name = getattr(user, "name", "").split()[0] if getattr(user, "name", "") else ""
     segment = getattr(user, "segment", "no_kids") or "no_kids"
+    city = getattr(user, "city", None)
     colortype = getattr(user, "colortype", None)
     body_type = getattr(user, "body_type", None)
-    colortype_text = f"Цветотип: {colortype}." if colortype else ""
-    body_text = f" Тип фигуры: {body_type}." if body_type else ""
 
+    # Контекст сегмента
     if segment in ("mom_girl", "mom_boy"):
         gender = "девочки" if segment == "mom_girl" else "мальчика"
-        context_line = (
-            f"Пользователь — мама {gender}. "
-            f"Отвечай про детскую и женскую моду. "
-            f"{colortype_text}{body_text}"
-        )
+        segment_text = f"мама {gender}"
     elif segment == "pregnant":
-        context_line = (
-            f"Пользователь беременна. "
-            f"Отвечай про моду для беременных и будущих мам. "
-            f"{colortype_text}{body_text}"
-        )
-    else:  # no_kids
-        context_line = (
-            f"Пользователь без детей. "
-            f"Отвечай ТОЛЬКО про взрослую моду и стиль. "
-            f"НЕ упоминай детей, семью с детьми, детскую одежду. "
-            f"{colortype_text}{body_text}"
-        )
+        segment_text = "беременна"
+    else:
+        segment_text = "без детей"
+
+    # Профиль пользователя
+    profile_parts = [f"Имя: {name}" if name else None,
+                     f"сегмент: {segment_text}",
+                     f"город: {city}" if city else None,
+                     f"цветотип: {colortype}" if colortype else "цветотип: не определён",
+                     f"тип фигуры: {body_type}" if body_type else None]
+    profile_line = ", ".join(p for p in profile_parts if p)
+
+    # Ограничения по сегменту
+    if segment in ("mom_girl", "mom_boy"):
+        segment_rule = "Отвечай про детскую и женскую моду."
+    elif segment == "pregnant":
+        segment_rule = "Отвечай про моду для беременных и будущих мам."
+    else:
+        segment_rule = "Отвечай ТОЛЬКО про взрослую моду и стиль. НЕ упоминай детей."
+
+    weather_part = f"\nПогода сейчас: {weather_line}" if weather_line else ""
 
     return (
-        f"Ты Касси — дружелюбный персональный стилист. "
-        f"{context_line}\n\n"
+        f"Ты Касси — личный стилист.\n"
+        f"{profile_line}\n"
+        f"{segment_rule}{weather_part}\n\n"
         f"Правила:\n"
-        f"- Отвечай коротко (до 5 строк)\n"
+        f"- Отвечай коротко (2-3 предложения)\n"
+        f"- Предлагай конкретные вещи из гардероба юзера\n"
         f"- Только про одежду и стиль\n"
         f"- Если вопрос не про одежду — вежливо скажи: "
         f"\"Я стилист, могу помочь только с вопросами про одежду и стиль 👗\"\n"
@@ -263,14 +271,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     if chat_count >= chat_limit and effective_plan != "admin":
         keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("✨ Получить безлимит →", callback_data="show_upgrade")
+            InlineKeyboardButton("✨ Premium →", callback_data="show_upgrade")
         ]])
         if is_trial_just_ended(user):
             msg = t("trial.expired")
         else:
             msg = (
-                f"✋ Лимит вопросов на сегодня ({chat_limit}/день).\n"
-                "Лимит восстановится завтра!"
+                "Касси ответит завтра! 💬\n"
+                "Premium = 20 вопросов/день."
             )
         await update.message.reply_text(msg, reply_markup=keyboard)
         return
@@ -278,7 +286,20 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     try:
         start = time.monotonic()
         pool = get_anthropic_pool()
-        system = _get_text_system(user)
+
+        # Получить погоду для контекста
+        weather_line = ""
+        city = getattr(user, "city", None)
+        if city and redis:
+            try:
+                from services.weather import WeatherService
+                ws = WeatherService(redis)
+                wd = await ws.get(city)
+                weather_line = f"{wd.temp_c}°C, {wd.description}"
+            except Exception:
+                pass  # не критично
+
+        system = _get_text_system(user, weather_line=weather_line)
 
         # Добавить контекст гардероба в system prompt
         try:
