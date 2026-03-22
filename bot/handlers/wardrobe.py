@@ -709,7 +709,17 @@ async def _save_one(
     The caller is responsible for committing. If ``session`` is None, a new
     session is created and committed immediately (legacy behaviour).
     """
-    category_group = data.get("category_group") or "top"
+    # Normalize type and color through synonym mapping
+    from services.normalize import normalize_type, normalize_color
+    raw_type = (data.get("type") or "").lower().strip()
+    raw_color = (data.get("color") or "").lower().strip()
+    raw_cg = data.get("category_group") or "top"
+    norm_type, norm_cg = normalize_type(raw_type, raw_cg)
+    norm_color = normalize_color(raw_color)
+    data["type"] = norm_type
+    data["color"] = norm_color
+
+    category_group = norm_cg
     if category_group not in _VALID_CATEGORY_GROUPS:
         category_group = "top"
     data["category_group"] = category_group
