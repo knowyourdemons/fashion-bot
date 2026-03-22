@@ -445,7 +445,7 @@ def get_brief_buttons(
             "inline_keyboard": [[
                 {"text": "👍 Нравится", "callback_data": f"brief_feedback:up:{brief_id}"},
                 {"text": "🔄 Другой", "callback_data": f"reroll:{brief_id}"},
-                {"text": "📤 Stories", "callback_data": f"share:{brief_id}"},
+                {"text": "📤 Подругу", "callback_data": f"ask_friend:{brief_id}"},
             ]]
         }
     elif real_photo_count > 0:

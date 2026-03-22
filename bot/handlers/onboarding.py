@@ -254,6 +254,16 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     if not user:
         return ConversationHandler.END
 
+    # Deep link: vote_XXXX → friend voting
+    if context.args and context.args[0].startswith("vote_"):
+        try:
+            from bot.handlers.ask_friend import handle_vote_start
+            vote_id = context.args[0][5:]
+            await handle_vote_start(update, context, vote_id)
+        except Exception:
+            pass
+        return ConversationHandler.END
+
     if user.onboarding_completed:
         from datetime import datetime as _dt
         _hour = _dt.now().hour

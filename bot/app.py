@@ -130,6 +130,16 @@ def create_application() -> Application:
     # Brief share
     app.add_handler(CallbackQueryHandler(brief.handle_share, pattern="^share:"))
 
+    # Challenge
+    from bot.handlers.challenge import handle_challenge_start, handle_challenge_later
+    app.add_handler(CallbackQueryHandler(handle_challenge_start, pattern="^challenge_start$"))
+    app.add_handler(CallbackQueryHandler(handle_challenge_later, pattern="^challenge_later$"))
+
+    # Ask friend
+    from bot.handlers.ask_friend import handle_ask_friend, handle_vote_callback
+    app.add_handler(CallbackQueryHandler(handle_ask_friend, pattern="^ask_friend:"))
+    app.add_handler(CallbackQueryHandler(handle_vote_callback, pattern="^vote:"))
+
     # Gap analysis
     app.add_handler(CallbackQueryHandler(wardrobe.handle_gap_analysis, pattern="^gap_analysis$"))
 

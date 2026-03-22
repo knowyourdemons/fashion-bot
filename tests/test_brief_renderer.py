@@ -530,7 +530,7 @@ class TestGetBriefButtons:
         from services.brief_card import get_brief_buttons
         btn = get_brief_buttons("woman", 10, "abc")
         kb = btn["inline_keyboard"]
-        assert any("Stories" in b["text"] for row in kb for b in row)
+        assert any("Подругу" in b["text"] or "Stories" in b["text"] for row in kb for b in row)
         assert any("Нравится" in b["text"] for row in kb for b in row)
 
     def test_hybrid_woman(self):
