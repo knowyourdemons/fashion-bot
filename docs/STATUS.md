@@ -1,462 +1,227 @@
-# Fashion Bot — STATUS (21 марта 2026)
+# Fashion Bot — STATUS (22 марта 2026)
 
-## Git: последние 20 коммитов
+## Git: последние коммиты (сессия 22 марта)
 ```
-(pending) chore: dead code cleanup, +19 tests, update docs
-c0ea34d feat: smart thumbnail pipeline for collage photos
-caa16ab fix: smart thumbnail pipeline — bg removal + contain for collage photos
-afa8910 docs: full project status report + fix 2 broken button tests
-20b281b fix: brief card UX — 7 fixes from user feedback
-1690ad3 fix: download photos before rendering collage, fix owner switch button
-3779304 feat: Jinja2 HTML templates for brief cards via Playwright
-d435b9f fix: remove --single-process flag from Chromium (crashes after 1st render)
-f4b2af2 fix: renderer healthcheck (wget→node fetch), worker memory 512→768MB
-eeb159c fix: renderer integration tests skip when Playwright not deployed
-a3ee861 feat: migrate renderer from Satori to Playwright, improve outfit UX
-1d5f78c Add pre-push hook: run tests before every push
-d30fe94 Fix wardrobe browser: add total count, align tests with new UI
-0debc11 Redesign wardrobe browser: 3 screens with thumbnails, season editing, owner tabs
-c07ab47 Fix tests: update chat_per_day free limit from 1 to 3
-32af60e docs
-89d1c09 Redesign wardrobe browsing UI with Satori 3x3 grid
-e1f8337 Add colortype detection via selfie and adaptive Kassi tone
-f51b452 Contextual chat improvements and trial degradation notifications
-b35ef66 Serve landing page at root via FastAPI
+520d83c fix: pass body_type to AI engine + update CLAUDE.md with session work
+b9beccf feat: pre-Vision photo quality assessment + auto-correction
+6bdf970 feat: expand normalization to 250+ type synonyms, 150+ color synonyms
+f50bc60 feat: type/color normalization for unknown clothing items
+52aaa19 feat: 63 stylist simulation tests + fix analogous color range
+f4d00e9 feat: professional styling system — 12 improvements across 10 files
+f93c45f feat: 470 synthetic wardrobe tests + 2 outfit selector fixes
 ```
 
 ## Тесты
-- Всего: 977
-- Passed: 971
-- Skipped: 6
-- Failed: 0
+- Всего: **1897**
+- Passed: **1897**
+- Skipped: 5
+- Failed: **0**
+
+## Новые модули (22 марта 2026)
+
+### `services/color_harmony.py` — HSL матрица цветовой совместимости
+- 100+ русских цветов → HSL (hue, saturation, lightness)
+- `color_compatibility(a, b)` → score -2..+2:
+  - +2: neutral + anything, monochrome
+  - +1: analogous (hues ≤60°), complementary (~180°)
+  - 0: triadic, unknown
+  - -1: mild clash (70-100° + saturated)
+- `score_outfit_colors(items)` → 0..10
+- `is_neutral()` — белый/чёрный/серый/бежевый/navy = combine with anything
+
+### `services/normalize.py` — нормализация типов вещей и цветов
+- **250+ типов** → канонические формы для `_select_outfit()`:
+  - Headwear: капор, балаклава, тюбетейка, берет, шляпа, федора → "шапка"
+  - Footwear: кеды, лоферы, оксфорды, мюли, эспадрильи, берцы → canonical
+  - Tops: баска→блузка, болеро→кардиган, бралетт→топ, свитшот→худи
+  - Bottoms: скинни→джинсы, палаццо→брюки, плиссе→юбка
+  - Baby: ползунки→комбинезон, распашонка→футболка, конверт→комбинезон
+- **150+ цветов** → канонические:
+  - маренго→тёмно-серый, марсала→бордовый, фуксия→розовый
+  - цвет морской волны→бирюзовый, сиреневый→лавандовый
+  - English: navy→тёмно-синий, burgundy→бордовый, teal→бирюзовый
+- **Интеграция**: `wardrobe.py` вызывает нормализацию ДО записи в БД
+- **Также исправляет category_group**: берет как "top" → "accessory"
+
+### `services/photo_quality.py` — оценка качества фото до Vision API
+- **Проверки** (< 50ms):
+  - Разрешение: < 200×200 → reject ("слишком маленькое")
+  - Яркость: < 40 → auto-fix + warn ("слишком тёмное")
+  - Яркость: > 245 → warn ("пересвечено")
+  - Blur: Laplacian variance < 30 → warn ("размытое")
+  - Aspect ratio: > 4:1 → warn ("скриншот/панорама")
+  - Contrast: stddev < 15 → warn ("однотонное")
+- **Auto-correction**: тёмные фото осветляются перед Vision (экономия $0.003/call)
+- **User tips**: конкретные подсказки на русском ("включи свет", "держи ровно")
+
+## Улучшения outfit selection (22 марта 2026)
+
+### AI промпты (outfit_engine.py)
+| Улучшение | Описание |
+|-----------|----------|
+| Цветовая гармония | 60-30-10 rule, 3 цвета max, monochrome/analogous/complementary |
+| Body type | 5 типов фигуры → стилистические правила в промпте |
+| Occasion filtering | Исключение evening/party в будни, formal в выходные |
+| 4 возрастных промпта | 0-3 (безопасность), 3-7 (самостоятельность), 7-12 (баланс), 12-16 (тренды) |
+| Wind chill | `calc_wind_chill()` — ощущаемая температура |
+| UV index | UV≥6 → "панамка обязательна" |
+| Colortype palette | Конкретные цвета из палитры в промпте |
+| Style preferences | avoid/prefer/style из user.style_preferences |
+
+### Rule-based selector (outfit_selector.py)
+| Улучшение | Описание |
+|-----------|----------|
+| Season fallback | Если нет top+bottom после фильтра → используй ВСЕ вещи |
+| Score preference | `_first()` сортирует по score_item desc |
+| Freshness bonus | +1.0 для вещей не ношенных >7 дней |
+| Warmth consistency | Нет пуховик (warmth=5) + шорты (warmth=1) |
+
+### 12-season colortype (style_config.py)
+- 12 подтипов вместо 4: Bright/True/Light Spring, Light/True/Soft Summer, Soft/True/Deep Autumn, Deep/True/Bright Winter
+- 6-8 цветов на слот (было 3)
+- Backward-compatible: "Лето" → True Summer, "Зима" → True Winter
+
+### Capsule wardrobe (scoring.py)
+- `calc_item_versatility()` — сколько вещей сочетается с данной
+- `get_wardrobe_gaps()` — минимумы (3 tops, 2 bottoms, 2 shoes), orphan detection
+- Combo potential: tops × bottoms × (outerwear+1) + dresses
+
+### Scoring refactor (scoring.py)
+- Adult: color_harmony 2→3, occasion_fit 1→2, +body_type_fit(1) = 26 max
+- Child: +safety(1) = 11 max
+- WOW threshold: transformation≥3 AND unexpected_combination≥2
+
+## Интеграционные фиксы
+- `body_type` теперь передаётся в `select_outfit_ai()` из:
+  - `wardrobe.py` (кнопка "Что надеть")
+  - `morning_brief.py` (утренний бриф)
+- `day_type` корректно определяется: weekday<5 → "садик"/"работа", else → "прогулка"/"выходной"
+
+## Новые тестовые файлы
+
+| Файл | Тестов | Покрытие |
+|------|--------|----------|
+| `test_wardrobe_optimizer.py` | 470 | 12 сегментов × 4 размера гардероба × 8 погод + edge cases |
+| `test_stylist_simulation.py` | 63 | 3 персоны: стилист (цвета), мама (детская безопасность), женщина (стиль) |
+| `test_normalize.py` | 175 | 250+ типов, 150+ цветов, интеграция с selector |
+| `test_photo_quality.py` | 52 | Яркость, blur, resolution, форматы, телефоны, corrupt |
 
 ## Контейнеры
 
-| Контейнер | Статус | Uptime | Memory |
-|-----------|--------|--------|--------|
-| docker-app-1 | Up (healthy) | 4 мин | 113 MiB / 1.5 GiB |
-| docker-worker-1 | Up (healthy) | 4 мин | 85 MiB / 768 MiB |
-| docker-renderer-1 | Up (healthy) | 59 мин | 104 MiB / 768 MiB |
-| docker-postgres-1 | Up (healthy) | 9 часов | 27 MiB / 512 MiB |
-| docker-redis-1 | Up (healthy) | 46 часов | 4.5 MiB / 256 MiB |
-| docker-cloudflared-1 | Up | 46 часов | 16 MiB |
+| Контейнер | Статус | Memory |
+|-----------|--------|--------|
+| docker-app-1 | Up (healthy) | 113 MiB / 1.5 GiB |
+| docker-worker-1 | Up (restarted) | 85 MiB / 768 MiB |
+| docker-renderer-1 | Up (healthy) | 104 MiB / 768 MiB |
+| docker-postgres-1 | Up (healthy) | 27 MiB / 512 MiB |
+| docker-redis-1 | Up (healthy) | 4.5 MiB / 256 MiB |
 
-## Renderer
-- **Тип**: Playwright (Chromium headless). Satori заменён.
-- **Health**: `{"status":"ok","connected":true}`
-- **Время рендера**: ~83 мс (POST /render, 440px HTML→PNG)
-- **Emoji**: цветные (NotoColorEmoji.ttf установлен в контейнере)
-- **Кириллица**: работает (Nunito Regular/Bold + DejaVu + Inter)
-- **Шрифты загружены**: Nunito-Regular.ttf, Nunito-Bold.ttf, Inter-Regular.otf, DejaVuSans.ttf, DejaVuSans-Bold.ttf
-- **Шаблоны**: `tpl_hybrid.html`, `tpl_full.html`, `tpl_weather.html`, `tpl_morning.html`
-- **Файл сервера**: `renderer/server.mjs` (224 строки, express + playwright)
+## DB миграции (22 марта)
+- `ALTER TABLE users ADD COLUMN style_preferences JSONB` — применена вручную
 
-## Коллаж (генерация образа)
+## Архитектура outfit selection (текущая)
 
-### Файлы
-| Файл | Строк | Роль |
-|------|-------|------|
-| `services/brief_card.py` | 396 | Точка входа: выбор шаблона по количеству фото |
-| `services/brief_renderer.py` | 490 | Подготовка данных для шаблонов, рендер HTML→PNG |
-| `services/image_builder.py` | 1175 | Satori JSON коллаж (старый путь), PIL fallback, утилиты |
-| `services/collage_styles.py` | 1105 | 6 стилей Satori, палитра, зоны |
-
-### Формат рендера
-**Primary**: Jinja2 HTML → POST to Playwright → PNG (через `brief_renderer.py`)
-**Legacy**: Satori JSON → POST to renderer → PNG (через `image_builder.py`, `collage_styles.py`)
-**Fallback**: PIL 3-зонный layout (если рендерер недоступен)
-
-### Три состояния карточки
-| Фото | Шаблон | Содержимое |
-|------|--------|------------|
-| 0 | `tpl_weather.html` | Погода + слои одежды + совет Касси + CTA |
-| 1–7 | `tpl_hybrid.html` | Фото + placeholder + missing + прогресс-бар + палитра + комментарий |
-| 8+ | `tpl_full.html` | Flat-lay всех вещей + палитра + комментарий |
-
-### Два тона
-- **mom** (mom_girl/mom_boy): тёплая розовая палитра (`#F5EDE8→#F0E8E4`, акцент `#C0607A`)
-- **woman** (no_kids/pregnant): холодная синяя палитра (`#E8EDF5→#E4E8F0`, акцент `#5070B0`)
-
-### Реальные фото в коллаже
-- **Работает**: `photo_id` → download via Telegram Bot API → `_auto_trim()` → base64 → CSS `background-image`
-- **Pipeline**: `_download_slot_photos()` в `brief_card.py` (httpx async, timeout 15s)
-- **Если фото недоступно**: показывает emoji placeholder на пастельном фоне
-
-### Placeholder
-- Emoji (👚👖🧥👟) на пастельном градиенте по цвету (`bg-pink`, `bg-blue` и т.д.)
-- Opacity 0.5, размер 36px (hybrid) / 28px (full)
-- 23 PNG-иконки в `assets/silhouettes/` (для Satori path, не используются в Playwright path)
-
-### Палитра-кружочки
-- **Есть**: до 5 кружочков, position absolute right:6px top:6px
-- **Источник**: `collect_palette()` из `collage_styles.py` — цвета реальных вещей + placeholder рекомендации + цветотип (Весна/Лето/Осень/Зима)
-- **Размер**: 10px диаметр, border 1.5px white
-- **Фикс 20b281b**: ранее использовался простой `collect_palette` из `brief_renderer.py` (только реальные вещи), теперь переключён на богатый вариант
-
-### Прогресс-бар (только hybrid, 1-7 фото)
-- **Есть**: в `tpl_hybrid.html`
-- **Размер**: 10px высота (было 4px), border-radius 5px
-- **Контрастность**: акцент `#C0607A` на фоне `#E8D8DE` (mom) — хорошо видно
-- **Текст**: 11px bold (было 8px), цвет `--c` (тёмный, было `--cm` блёклый)
-- **Формат**: `2/8 · 📸 Сфоткай куртку!`
-- **Threshold**: 8 для мам, 12 для женщин
-
-### Подписи
-- **Только для placeholder** (после фикса 20b281b)
-- Формат: "Тип цвет" (max 28 символов), без emoji
-- На реальных фото подписей нет
-
-### Smart Thumbnail Pipeline (новый)
-Pipeline рендера фото для коллажа:
 ```
-original → EXIF rotate → auto-brightness (dark <90) → rembg (RMBG-1.4)
-→ edge softening (blur alpha 1.5px) → auto-trim → pad square → resize 400×400
-```
-- **Worker path** (`rmbg_task.py`): при загрузке фото → кэш Redis `thumb:{item_id}` (7 дней)
-- **Inline fallback** (`brief_card.py`): при рендере если кэша нет → полный pipeline
-- **CSS**: `background-size: contain` (вместо cover) — вещь видна целиком
+User фото → photo_quality.py (brightness/blur check)
+         → normalize.py (капор→шапка, маренго→серый)
+         → vision.py (Claude Sonnet 4.6, multi-item detection)
+         → post_validate (шорты→штаны при <10°C)
+         → wardrobe DB (with score, warmth, bbox)
 
-### Комментарий Касси
-- **Источник**: `warm_outfit_comment()` в `services/outfit_builder.py`
-- Шаблонный (не Haiku) — `random.choice()` из ~15 вариантов по score bracket
-- **Score >= 8.5**: 4 варианта ("Отличный образ...", "Собрала классный...", ...)
-- **Score 7.0-8.5**: 5 вариантов
-- **Score 5.0-7.0**: 3 варианта
-- **Score < 5.0**: 2 варианта
-- **1 вещь**: отдельные 4 шаблона хвалят конкретную вещь, не "образ"
-- **Anti-repeat**: предыдущий комментарий сохраняется в Redis (`last_kassi_comment:{user_id}`), исключается из выбора
-- **Suffix**: "Совет: добавь {X} и {Y} в гардероб!" если есть missing slots
-
-## Утренний / вечерний бриф
-
-### Утренний бриф
-- **Есть**: `worker/tasks/morning_brief.py` (1737 строк)
-- **Время**: 07:00 по местному времени пользователя
-- **Расписание**: `schedule_all()` каждый час, фильтрует по timezone
-- **Batching**: по 500 пользователей (LIMIT/OFFSET)
-- **Lock**: Redis `lock:brief:{user_id}:{date}` предотвращает дубликаты
-- **Что отправляет**:
-  - Для мам: коллаж (Playwright) + текст с погодой + кнопки
-  - Для женщин: коллаж или только совет (зависит от наличия вещей)
-  - Haiku-совет для взрослых, шаблонный комментарий для детских
-- **Формат текста** (мам):
-  ```
-  🌅 Доброе утро!
-  ☀️ +5°C → +2°C вечером
-
-  👧 Алиса (садик):
-  🩲 Под одежду: трусики, майка, носки
-  💬 [Комментарий Касси]
-  ```
-
-### Вечерний бриф
-- **Есть**: `worker/tasks/evening_push.py`
-- **Время**: 20:00 UTC
-- **Что отправляет**: напоминание-nudge (без коллажа)
-  ```
-  🌅 Завтра утром Касси подготовит образ для {child_name}!
-  Добавь новые вещи сегодня вечером 📸
-  ```
-- **Отличие от утреннего**: только текст, нет генерации outfit
-
-### Утренний update (погода изменилась)
-- **Есть**: шаблон `tpl_morning.html`, функция `build_morning_update()` в `brief_card.py`
-- Сравнивает утреннюю погоду с вечерним прогнозом
-- Показывает что изменилось + мини-коллаж ключевых вещей
-
-### Погода
-- **3 значения**: temp_morning, temp_day, temp_evening
-- **Источник**: Open-Meteo API через `services/brief_weather.py`
-- **Geocoding**: Nominatim (город → координаты)
-- **WMO codes** → emoji (☀️🌤⛅🌧❄️)
-
-## Кнопки
-
-### Под коллажем (inline keyboard)
-| Состояние | Кнопки |
-|-----------|--------|
-| 0 фото | [📸 Сфоткать] [Потом] |
-| 1-7 мама | [👍 Надели] [🔄 Другой] |
-| 8+ мама | [👍 Надели] [🔄 Другой] [📤 Переслать] |
-| 1-7 женщина | [👍 Нравится] [🔄 Другой] |
-| 8+ женщина | [👍 Нравится] [🔄 Другой] [📤 Stories] |
-| 0 женщина (advice only) | [Спасибо] [Ещё совет] |
-
-### Re-roll
-- **Outfit re-roll**: удаляет старое сообщение, отправляет новое (без засорения чата)
-- **Advice re-roll**: редактирует текст существующего сообщения in-place
-- **Лимит**: free=0, premium=3/день, admin=unlimited
-- **Exclude set**: Redis SADD, накапливает показанные item_ids за день
-- **Degradation**: day 12 trial → re-roll = 0
-
-### Обрезка кнопок
-- **Исправлено**: "Переодень" → "Другой", убрана 3-я кнопка из ряда мам 1-7
-- Все кнопки умещаются в 2-3 в ряд (Telegram влезает)
-
-## Обработка фото
-
-### Pipeline
-- **Async**: через PTB handler → `_analyze_and_save()` async
-- **Media groups**: собираются 3 сек, потом обрабатываются батчем
-
-### Прогрессивные сообщения
-- Нет последовательных обновлений ("Анализирую..." → "Кофта!" → "Добавлена")
-- **Одно финальное**: `✅ Добавила {count} вещей:` + список
-- **Guided hints** (первые 3 вещи): "🎉 Первая! Ещё 2 — покажу мини-образ"
-- **Стилист-комментарий** (Haiku, на 1-ю вещь)
-
-### Время обработки
-| Фаза | Время |
-|------|-------|
-| RMBG-1.4 inference | ~4 сек (1024×1024) |
-| Vision API (Sonnet) | ~5-10 сек |
-| Haiku comment | ~2-3 сек |
-| **Итого** | **~12-20 сек** |
-
-### RMBG
-- **Primary**: RMBG-1.4 quantized (44MB, `/root/.u2net/rmbg14_quantized.onnx`)
-- **Fallback**: silueta (43MB) → remove.bg API → оригинал RGB
-- **Sync**: inference в том же процессе (threading.Lock + double-check singleton)
-- **Не worker queue**: inline в app контейнере
-
-## Онбординг
-
-### Шаги (3 основных, 12 внутренних состояний)
-1. **Для кого** → пол ребёнка → имя → возраст (мамы) ИЛИ имя (no_kids)
-2. **Город** → geocoding → timezone
-3. **Готово** → "Завтра в 07:00 пришлю образ"
-
-### Данные
-- segment: mom_girl / mom_boy / pregnant / no_kids
-- child: name, gender, birthdate (из возраста)
-- city, timezone
-- **Цветотип**: НЕ спрашивается в онбординге (отдельно по milestone при 5 вещах)
-
-### Post-onboarding
-- "🎉 Отлично, {name}! Познакомились!"
-- "Завтра в 07:00 пришлю погоду + совет по образу."
-- Кнопки: [📸 Сфоткать первую вещь] [Потом]
-- Progress bar: 🟪⬜⬜ визуальный
-
-### Resume
-- Если прервано: `/start` → "Продолжить / Начать заново"
-
-## Меню
-
-### Главное меню (ReplyKeyboard)
-```
-✨ Что надеть              ← full-width
-👗 Гардероб  | 💬 Спросить Касси
-👤 Профиль   | ❓ Помощь
+"Что надеть" / Morning brief:
+  → load items + weather + user profile
+  → outfit_engine.py (Claude Haiku):
+      - Age-specific prompt (0-3/3-7/7-12/12-16)
+      - Color harmony rules (60-30-10)
+      - Body type hints
+      - Occasion filtering
+      - Colortype palette
+      - Wind chill + UV
+  → fallback: outfit_selector.py (rule-based):
+      - Season + warmth + score preference
+      - Freshness bonus
+      - Warmth consistency check
+  → outfit_builder.py (slots assembly, base layer filter)
+  → brief_card.py → Playwright → PNG collage
 ```
 
-### Маппинг → handlers
-| Кнопка | Handler | Файл | Работает? |
-|--------|---------|------|-----------|
-| ✨ Что надеть | `handle_what_to_wear()` | wardrobe.py:2094 | ✅ |
-| 👗 Гардероб | `handle_wardrobe_menu()` | wardrobe.py | ✅ |
-| 💬 Спросить Касси | `handle_ask_kassi()` | wardrobe.py:2102 | ✅ |
-| 👤 Профиль | `handle_profile()` | (profile handler) | ✅ |
-| ❓ Помощь | `handle_help()` | help.py | ✅ |
+## Роадмап статус
 
-**Прошлый баг "Что надеть → handle_rate_menu"**: ИСПРАВЛЕН, маппинг корректный.
+### v1.0 ✅ DONE
+- Онбординг, утренний бриф, Sentry, CI/CD, RMBG-1.4
 
-## Гардероб
+### v1.1 (апрель) — в процессе
+| Фича | Статус |
+|------|--------|
+| Контекстный чат | ✅ DONE |
+| Re-roll (детский + взрослый) | ✅ DONE |
+| Вечерний образ 20:00 | ✅ DONE |
+| Trial degradation дни 12-14 | ✅ DONE |
+| RMBG-1.4 quantized | ✅ DONE |
+| Sentry + CI/CD | ✅ DONE |
+| Профессиональная стилистика | ✅ DONE (22 марта) |
+| Нормализация вещей/цветов | ✅ DONE (22 марта) |
+| Pre-Vision photo quality | ✅ DONE (22 марта) |
+| /profile + /add_child | 🔲 TODO |
+| Оценка образа по фото | 🔲 TODO |
+| Gap analysis + growth alert | 🔲 TODO (capsule scoring готов) |
+| Тизеры, engagement push | 🔲 TODO |
 
-### Формат: visual browser (3 экрана)
-1. **Overview** (`w:ov`): текстовые счётчики по категориям + фильтры
-2. **Category Grid** (`w:cat:{cat}:{page}`): Satori 3×3 grid (9 thumbnails/page), PIL fallback
-3. **Item Detail** (`w:it:{index}`): фото + метаданные + кнопки
+### v1.2 (май) — планируется
+- Шоппинг-лист + affiliate
+- ЮKassa/Paddle
+- Антибот, реферальная
+- Prometheus + Grafana
+- User style_preferences через онбординг
+- 12-season цветотип через расширенный анализ селфи
 
-### Фильтры
-- **Сезон**: ❄️🌸☀️🍂 / все (toggle кнопки)
-- **Owner**: 👩 мама / 👧👦 ребёнок (switch tabs)
-- **Категория**: 12 категорий в фиксированном порядке
+### v2.0 (июль)
+- Ultra план, семейный аккаунт, EN, маркетинг
 
-### Кэш
-- Thumbnails: Redis, TTL 24ч (`_THUMB_TTL = 86400`)
+## Файлы проекта (ключевые)
 
-## Чат "Спросить Касси"
-
-### Реализован: ДА
-- **Модель**: claude-haiku-4-5-20251001
-- **Контекстный**: ДА — system prompt включает:
-  - Segment, timezone, city, colortype, body_type
-  - Текущая погода (WeatherService)
-  - Wardrobe summary (cached, 1h TTL)
-- **max_tokens**: 512
-
-### Лимиты
-| План | Сообщений/день |
-|------|---------------|
-| free | 3 |
-| premium | 20 |
-| admin | 9999 |
-| trial day 14 | 3 |
-
-### Rate limiting
-- Redis key `chat_limit:{user_id}:{date}` → INCR + 86400 TTL
-- Показывает остаток если ≤2 сообщения
-
-## Подписки и trial
-
-### Trial
-- **Работает**: ДА
-- **Активация**: при первом фото (`trial_started_at` = now)
-- **Длительность**: 14 дней
-- **Уровень**: полный premium
-
-### Degradation (последние 3 дня trial)
-| День | Осталось | Ограничение |
-|------|----------|-------------|
-| 12 | ≤2 дня | re-roll = 0 |
-| 13 | ≤1 день | evening_brief = false |
-| 14 | 0 дней | chat = 3/день, outfit = 1/день |
-
-### Уведомления
-- **День 12**: "Пробный период заканчивается через 2 дня" + кнопка подписки
-- **День 14**: "Пробный период завершён! Бесплатный план: образ вт/чт, 3 сообщения/день."
-- Redis dedup: `trial_warn_d12:{user_id}`, `trial_expired_d14:{user_id}`
-
-### Stripe
-- **Зарегистрирован**: `/subscribe`, callback `pay_stripe:`, timeout 30s
-- **Статус**: реализован (billing/stripe_provider.py), webhook обработка
-
-### Stars (Telegram Stars)
-- **Зарегистрирован**: `pay_stars:`, `confirm_stars:`, `SUCCESSFUL_PAYMENT`
-- **Статус**: реализован, PreCheckout + payment flow
-
-### Цены
 ```
-premium_monthly:   $9 / 700 Stars
-premium_quarterly: $22 / 1700 Stars
-premium_yearly:    $72 / 5500 Stars
+services/
+  color_harmony.py     — NEW: HSL матрица 100+ цветов, compatibility scoring
+  normalize.py         — NEW: 250+ типов + 150+ цветов нормализация
+  photo_quality.py     — NEW: pre-Vision яркость/blur/contrast + auto-fix
+  outfit_engine.py     — AI outfit selection (Haiku), 4 возрастных промпта
+  outfit_selector.py   — Rule-based fallback, score preference, warmth check
+  outfit_builder.py    — Slot assembly, base layer filter, collage params
+  scoring.py           — Item/outfit scoring, capsule analysis, gap detection
+  weather.py           — wttr.in + wind_chill(), UV index
+  vision.py            — Claude Sonnet Vision, multi-item, bbox, post-validation
+  image_processor.py   — EXIF, RMBG-1.4, thumbnail pipeline
+  collage_styles.py    — 6 стилей, hex colors (расширено для 12-season)
+
+worker/tasks/
+  style_config.py      — 12-season colortype palettes (72 палитры)
+  morning_brief.py     — Brief generation, body_type integration
+
+tests/
+  test_wardrobe_optimizer.py  — 470 тестов: full matrix
+  test_stylist_simulation.py  — 63 теста: 3 персоны
+  test_normalize.py           — 175 тестов: типы + цвета
+  test_photo_quality.py       — 52 теста: фото quality
+  test_outfit_engine.py       — 80+ тестов: AI engine
+  test_outfit.py              — 45 тестов: rule-based
+  test_outfit_fixes.py        — 57 тестов: fixes
 ```
 
-## Milestones
-
-### Реализованы: ДА (4 штуки)
-| Milestone | Условие | Действие |
-|-----------|---------|----------|
-| `mini_outfit` | ≥3 вещей | "🎉 Мини-образ!" + генерация коллажа |
-| `colortype_prompt` | ≥5 вещей | "Хочешь точнее подбирать цвета?" + кнопка селфи |
-| `full_outfit` | ≥8 вещей (мамы) | "🎉 Первый полный образ!" + генерация |
-| `wardrobe_collected` | ≥10 вещей (женщины) | "🎉 Гардероб собран!" |
-
-### milestones_reached
-- **Поле**: `User.milestones_reached` — JSONB list
-- **Миграция**: `e5f6a7b8c9d0_add_milestones_reached_to_users.py`
-- **Логика**: `check_milestones()` в `wardrobe.py:230-308`
-
-## Инфра
-
-### Sentry
-- **Настроен**: ДА
-- **DSN**: `https://bcc6aec7...@o4511082039934976.ingest.de.sentry.io/4511082045177936`
-- **Интеграция**: app (FastAPI middleware), worker (init в consumer.py), PTB error handler, image_builder
-
-### Auto-backup БД
-- **Скрипт**: `backup.sh` (pg_dump → gzip → `/home/stas/backups/`)
-- **Retention**: 7 дней
-- **НЕ в crontab** — только ручной запуск ⚠️
-
-### Health-check cron
-- **Настроен**: `* * * * * /home/stas/fashion-bot/scripts/watchdog.sh`
-- Пингует `/health` каждые 30 сек
-- Worker heartbeat проверка
-- 2 consecutive failures → алерт в Telegram
-
-### Metrics digest
-- **Не настроен** — нет Prometheus/Grafana (шаблон в docker-compose закомментирован)
-
-### Деплой
-- **Текущий**: `docker cp` + `docker restart` (быстро, но теряется при rebuild)
-- **Rebuild**: `docker compose up --build -d` (полный, все docker cp теряются)
-- **Pre-push hook**: `.githooks/pre-push` — запускает тесты перед push
-
-## Известные баги
-
-### Критические
-- (нет)
+## Известные баги / TODO
 
 ### Средние
-1. **backup.sh не в crontab** — бэкапы БД только вручную
-2. **Thumbnail cache cold start** — при первом запуске коллажа после деплоя inline rembg ~4с на фото
+1. backup.sh не в crontab
+2. Thumbnail cache cold start (~4с на фото)
+3. photo_url пустой (только Telegram file_id)
 
-### Косметические (известные, не критичные)
-3. **SAWarning**: `Child.wardrobe_items` overlaps `User.wardrobe_items` — нужно `overlaps="wardrobe_items"`
-4. **PTBUserWarning**: `per_message=False` в ConversationHandler — косметика
-5. **RMBG inference ~4 сек** (1024×1024) — можно ускорить до ~1.5 сек при 512×512
-6. **photo_url пустой** — фото только через Telegram file_id
-7. **Онбординг**: размер обуви только int → нужен float (26.5)
-8. **Помощь**: текст может содержать устаревшие пункты
+### Косметические
+4. SAWarning Child.wardrobe_items overlaps
+5. PTBUserWarning per_message
+6. Размер обуви только int (нужен float 26.5)
 
-### Не реализовано (из roadmap v1.0)
-9. Прогрессивные сообщения при обработке фото ("Анализирую..." → "Кофта!")
-10. Иконки/фото не заполняют ячейку (80% вместо ~60%)
-
-## Файлы изменённые за последние 20 коммитов
-
-```
- .githooks/pre-push                  |   22 +
- api/app.py                          |   14 +
- bot/app.py                          |   16 +-
- bot/handlers/brief.py               |  121 +++-
- bot/handlers/text.py                |   77 ++-
- bot/handlers/wardrobe.py            |  538 ++++++++++++---
- bot/handlers/wardrobe_browser.py    | 1227 ++++++++++++++++++++++++++++-------
- core/permissions.py                 |    4 +-
- docker/docker-compose.yml           |    8 +-
- docs/prompt_wardrobe_redesign.md    |  107 +++
- docs/roadmap_backlog.md             |  109 ++++
- renderer/Dockerfile                 |   21 +-
- renderer/package.json               |    9 +-
- renderer/server.mjs                 |  224 ++-----
- renderer/templates/tpl_full.html    |  120 ++++
- renderer/templates/tpl_hybrid.html  |  151 +++++
- renderer/templates/tpl_morning.html |  106 +++
- renderer/templates/tpl_weather.html |   97 +++
- requirements.txt                    |    1 +
- services/brief_card.py              | 1047 ++++++++----------------------
- services/brief_renderer.py          |  490 ++++++++++++++
- services/image_builder.py           |  131 +++-
- services/outfit_builder.py          |   32 +-
- services/scoring_comment.py         |  119 +++-
- tests/test_brief_renderer.py        |  666 +++++++++++++++++++
- tests/test_satori.py                |  215 +++++-
- tests/test_smoke.py                 |    2 +-
- tests/test_trial_degradation.py     |    2 +-
- tests/test_unit.py                  |    4 +-
- tests/test_wardrobe_browser.py      |   65 +-
- worker/slow_worker.py               |    2 +-
- worker/tasks/engagement.py          |    2 +-
- worker/tasks/morning_brief.py       |   34 +-
- worker/tasks/subscription_expiry.py |  141 +++-
- 34 files changed, 4480 insertions(+), 1444 deletions(-)
-```
-
-### Ключевые изменения за сессию
-- **Renderer**: Satori → Playwright (Chromium headless). 4 HTML шаблона.
-- **Wardrobe browser**: полный редизайн, 3 экрана с thumbnails
-- **Brief card**: 3 состояния (0/1-7/8+), 2 темы, палитра, прогресс-бар
-- **UX фиксы**: прогресс-бар видимый, подписи убраны с фото, кнопки короче, палитра полная, re-roll без засорения чата
-- **Тесты**: ~600 → 957 (+350)
-
-## Outfit generation: 5 фундаментальных фиксов (21 марта 2026)
-
-### Исправленные проблемы
-| # | Проблема | Решение | Файл |
-|---|----------|---------|------|
-| 1 | Носки/бельё показаны как фото в коллаже | `_is_base_layer_item()` фильтр в `build_outfit_slots()` | `outfit_builder.py` |
-| 2 | Коллаж из 1 вещи = не образ | `has_minimum_outfit()` — без top+bottom → weather card + CTA | `outfit_builder.py`, `wardrobe.py`, `morning_brief.py` |
-| 3 | Vision не знает возраст/погоду | `_call_vision()` + контекст (age, season, temp, city) | `vision.py`, `wardrobe.py` |
-| 4 | "Шорты" при +2°C | `_post_validate_vision()` — шорты→штаны при <10°C | `vision.py` |
-| 5 | "Отличный образ" при 1 вещи | `item_count` в `generate_outfit_comment()`, разные промпты по кол-ву | `scoring_comment.py`, `morning_brief.py` |
-
-### Новые тесты: 45 (test_outfit_fixes.py)
-- 12 тестов: base layer filtering
-- 10 тестов: minimum outfit validation
-- 4 теста: vision context
-- 10 тестов: post-validation
-- 6 тестов: comment item count
-- 3 теста: integration pipeline
+### Не реализовано
+7. /profile + /add_child UI
+8. Оценка образа по фото
+9. style_preferences сбор через онбординг (поле в БД готово, UI нет)
+10. 12-season определение через селфи (палитры готовы, Vision prompt нет)
