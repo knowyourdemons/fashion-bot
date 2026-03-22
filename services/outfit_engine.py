@@ -616,6 +616,20 @@ def _build_user_prompt(
             "В гардеробе 3-5 вещей. Прокомментируй сочетание."
         )
 
+    # Occasion hints
+    _OCCASION_HINTS = {
+        "офис": "деловой casual, не слишком яркий, комфортно для сидения весь день",
+        "садик": "удобно, практично, легко одеть самому, ребёнок может испачкать",
+        "школа": "аккуратно, удобная обувь, не вызывающе",
+        "кэжуал": "расслабленный, можно экспериментировать с цветом и стилем",
+        "прогулка": "удобная обувь, по погоде, свобода движений",
+        "отдых": "максимально комфортно, расслабленный стиль",
+    }
+    if day_type:
+        _hint = _OCCASION_HINTS.get(day_type)
+        if _hint:
+            parts.append(f"Повод: {day_type} — {_hint}.")
+
     # Rotation
     if rotation_text:
         parts.append(rotation_text)
@@ -825,6 +839,7 @@ async def select_outfit_ai(
     recent_outfit_ids: list[list[str]] | None = None,
     day_type: str = "",
     body_type: str | None = None,
+    style_preferences: dict | None = None,
     redis=None,
 ) -> OutfitResult:
     """AI-powered outfit selection. Returns OutfitResult with outfit + comment.
@@ -886,7 +901,21 @@ async def select_outfit_ai(
         item_count_total=total_candidate_count,
         precip=precip_evening,
         body_type=body_type,
+        style_preferences=style_preferences,
     )
+
+    # Forgotten treasures hint (items not worn >21 days)
+    from datetime import date as _date_ft
+    _today_ft = _date_ft.today()
+    forgotten = [
+        i for i in items
+        if getattr(i, "last_worn", None) is not None
+        and (_today_ft - i.last_worn).days > 21
+        and getattr(i, "category_group", "") not in ("underwear", "base_layer")
+    ]
+    if forgotten:
+        _names = ", ".join(f"{i.type} {i.color}" for i in forgotten[:5])
+        user_prompt += f"\n\nЗабытые вещи (не ношены 3+ недели): {_names}. Попробуй включить 1-2 в образ!"
 
     # Call Haiku
     try:

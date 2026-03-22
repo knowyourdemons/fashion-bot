@@ -69,16 +69,21 @@ def _select_outfit(
     def _score(item):
         """Sort key: higher score first, with freshness bonus.
 
+        Items not worn in >21 days get +2.0 bonus (forgotten treasures).
         Items not worn in >7 days get +1.0 bonus.
         Items worn today get -2.0 penalty (should be filtered already, but safety).
+        Never-worn items (last_worn=None) get +1.5 bonus.
         """
         base = float(item.score_item) if getattr(item, "score_item", None) else 0.0
         last = getattr(item, "last_worn", None)
-        if last is not None:
-            if last == today:
-                base -= 2.0
-            elif (today - last).days >= 7:
-                base += 1.0
+        if last is None:
+            base += 1.5  # never worn — prioritize discovery
+        elif last == today:
+            base -= 2.0
+        elif (today - last).days >= 21:
+            base += 2.0  # forgotten treasure
+        elif (today - last).days >= 7:
+            base += 1.0
         return base
 
     def _first(cg=None, type_contains=None, type_not_contains=None,

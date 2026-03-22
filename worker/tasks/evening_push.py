@@ -1,12 +1,16 @@
-"""Evening push — напоминание о завтрашнем брифе в 20:00 UTC."""
+"""Evening push — напоминание о завтрашнем брифе. Timezone-aware: local 20:xx."""
 import structlog
-from datetime import datetime, timezone
+from datetime import datetime
+
+import pytz
 
 logger = structlog.get_logger()
 
+_TARGET_HOUR = 20  # 20:00 по местному времени юзера
+
 
 async def run() -> None:
-    """Ежедневно в 20:00 UTC — пуш пользователям у которых завтра есть бриф."""
+    """Каждый час — пуш юзерам у которых сейчас 20:xx по их timezone."""
     from db.base import AsyncReadSession
     from db.models.user import User
     from sqlalchemy import select, orm
@@ -31,8 +35,18 @@ async def run() -> None:
 
     for user in users:
         try:
+            # Timezone filter: only send when user's local time is 20:xx
+            tz_name = user.timezone or "Europe/Vilnius"
+            try:
+                tz = pytz.timezone(tz_name)
+                local_hour = datetime.now(tz).hour
+            except Exception:
+                local_hour = datetime.utcnow().hour + 2  # fallback EET
+            if local_hour != _TARGET_HOUR:
+                continue
+
             effective_plan = get_effective_plan(user)
-            if not is_brief_day_tomorrow(effective_plan, user.timezone or "Europe/Vilnius"):
+            if not is_brief_day_tomorrow(effective_plan, tz_name):
                 continue
 
             children = [c for c in (user.children or []) if c.deleted_at is None]
@@ -50,9 +64,9 @@ async def run() -> None:
                 )
 
             await bot.send_message(chat_id=user.telegram_id, text=text)
-            logger.info("push.evening_sent", user_id=str(user.id))
+            logger.info("push.evening_sent", user_id=str(user.id), tz=tz_name)
             count += 1
         except Exception as e:
             logger.warning("push.evening_failed", user_id=str(user.id), error=str(e))
 
-    logger.info("evening_push.run", sent=count)
+    logger.info("evening_push.run", sent=count, hour=_TARGET_HOUR)

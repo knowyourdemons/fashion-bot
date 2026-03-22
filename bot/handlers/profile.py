@@ -79,6 +79,27 @@ async def handle_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if pref_parts:
             lines.append(f"💅 Предпочтения: {'; '.join(pref_parts)}")
 
+    # Wardrobe math
+    try:
+        from db.crud.wardrobe import get_owner_items
+        from services.wardrobe_math import calc_wardrobe_combos
+        async with AsyncReadSession() as _ws:
+            _w_items = await get_owner_items(_ws, user.id, "user")
+        if _w_items:
+            _combos = calc_wardrobe_combos(_w_items)
+            _visual = len([i for i in _w_items if i.category_group not in ("underwear", "base_layer")])
+            if _combos > 0:
+                lines.append(f"\n📊 {_visual} вещей → {_combos} комбинаций")
+    except Exception:
+        pass
+
+    # Style type from quiz
+    if prefs.get("style_type"):
+        from bot.handlers.style_quiz import STYLE_TYPES
+        _st = STYLE_TYPES.get(prefs["style_type"])
+        if _st:
+            lines.append(f"✨ Стиль: {_st['label']}")
+
     # Реферальный код
     ref_code = getattr(user, "referral_code", None)
     if ref_code:

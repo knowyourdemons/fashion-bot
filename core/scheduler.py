@@ -83,10 +83,10 @@ class Scheduler:
             replace_existing=True,
         )
 
-        # evening_push — ежедневно 20:00 UTC
+        # evening_push — каждый час :45, фильтрует по timezone юзера (local 20:xx)
         self._scheduler.add_job(
             evening_push.run,
-            CronTrigger(hour=20, minute=0),
+            CronTrigger(hour="*", minute=45),
             id="evening_push",
             replace_existing=True,
         )

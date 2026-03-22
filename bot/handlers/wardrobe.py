@@ -2275,9 +2275,30 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         season = SEASONS[today_date.month]
         _is_weekend = today_date.weekday() >= 5
         if child:
-            _day_type = "прогулка" if _is_weekend else "садик"
+            _child_age_dt = None
+            if child.birthdate:
+                _child_age_dt = (today_date - child.birthdate).days // 365
+            if _is_weekend:
+                _day_type = "прогулка"
+            elif _child_age_dt is not None and _child_age_dt < 7:
+                _day_type = "садик"
+            elif _child_age_dt is not None and _child_age_dt >= 7:
+                _day_type = "школа"
+            else:
+                _day_type = "садик"
         else:
-            _day_type = "выходной" if _is_weekend else ""
+            _segment = getattr(user, "segment", "no_kids")
+            if _segment == "no_kids":
+                if today_date.weekday() < 5:
+                    _day_type = "офис"
+                elif today_date.weekday() == 5:
+                    _day_type = "кэжуал"
+                else:
+                    _day_type = "отдых"
+            elif _segment == "pregnant":
+                _day_type = "отдых" if _is_weekend else "прогулка"
+            else:
+                _day_type = "выходной" if _is_weekend else ""
 
         # ── Minimum wardrobe check ──
         from services.outfit_builder import has_minimum_wardrobe
