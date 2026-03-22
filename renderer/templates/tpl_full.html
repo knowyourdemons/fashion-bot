@@ -1,6 +1,5 @@
 {# TEMPLATE: full flat lay (8+ фото)
-   Vars: name, context, date_str, css_class, weather, items, base_layer,
-         kassi_comment, palette
+   Vars: name, context, date_str, css_class, weather, items, palette
    Нет прогресса, нет missing.
    Превью: открыть в Chrome, width=440px #}
 <!DOCTYPE html>
@@ -58,10 +57,6 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
 .palette{position:absolute;right:4px;top:4px;display:flex;flex-direction:column;gap:3px}
 .dot{width:10px;height:10px;border-radius:50%;border:1.5px solid #fff}
 
-.base{font-size:9px;color:var(--cm);text-align:center;margin:4px 0}
-.kassi{background:rgba(255,255,255,.5);border-radius:10px;padding:8px 10px;margin-top:8px}
-.kassi-t{font-size:10px;color:var(--c);line-height:1.4}
-.kassi-a{font-size:8px;color:var(--cm);margin-top:3px}
 </style>
 </head>
 <body class="{{ css_class }}">
@@ -109,16 +104,6 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
   {% endif %}
 </div>
 
-{% if base_layer %}
-<div class="base">{{ base_layer }}</div>
-{% endif %}
-
-{% if kassi_comment %}
-<div class="kassi">
-  <div class="kassi-t">{{ kassi_comment }}</div>
-  <div class="kassi-a">— Касси</div>
-</div>
-{% endif %}
 
 </body>
 </html>

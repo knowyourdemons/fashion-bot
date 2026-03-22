@@ -58,7 +58,7 @@ class TestBriefFeedback:
 
         await handle_brief_feedback(update, context)
 
-        # Now uses edit_message_caption with reply_markup
-        call_args = update.callback_query.edit_message_caption.call_args
+        # Split delivery: buttons on text message, so edit_message_text
+        call_args = update.callback_query.edit_message_text.call_args
         assert call_args is not None
         assert "reply_markup" in call_args.kwargs

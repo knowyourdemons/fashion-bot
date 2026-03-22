@@ -20,9 +20,12 @@ async def handle_brief_feedback(update: Update, context: ContextTypes.DEFAULT_TY
         if brief_id_str == "noop":
             if vote == "up":
                 try:
-                    await query.edit_message_caption(caption="✅ Надели!")
+                    await query.edit_message_text(text="✅ Надели!")
                 except Exception:
-                    await query.edit_message_reply_markup(reply_markup=None)
+                    try:
+                        await query.edit_message_caption(caption="✅ Надели!")
+                    except Exception:
+                        await query.edit_message_reply_markup(reply_markup=None)
             else:
                 await query.edit_message_reply_markup(reply_markup=None)
             return
@@ -37,30 +40,35 @@ async def handle_brief_feedback(update: Update, context: ContextTypes.DEFAULT_TY
                 item_ids = [uuid.UUID(i) for i in (log.outfit_items or [])]
                 await update_wear_count(session, item_ids)
             await session.commit()
-        # Clean UX: edit caption on collage, not new message
+        # Clean UX: edit text message (buttons are on text, not photo)
         if vote == "up":
             try:
-                await query.edit_message_caption(caption="✅ Надели!")
+                await query.edit_message_text(text="✅ Надели!")
             except Exception:
                 try:
-                    await query.edit_message_reply_markup(reply_markup=None)
+                    await query.edit_message_caption(caption="✅ Надели!")
                 except Exception:
-                    pass
+                    await query.edit_message_reply_markup(reply_markup=None)
         else:
             keyboard = InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔄 Другой образ", callback_data="outfit_request"),
             ]])
             try:
-                await query.edit_message_caption(
-                    caption="Подберу другой 👗",
+                await query.edit_message_text(
+                    text="Подберу другой 👗",
                     reply_markup=keyboard,
                 )
             except Exception:
-                await query.edit_message_reply_markup(reply_markup=None)
-                await query.message.reply_text(
-                    "Понятно! Напиши что не подошло — подберу лучше 👗",
-                    reply_markup=keyboard,
-                )
+                try:
+                    await query.edit_message_caption(
+                        caption="Подберу другой 👗",
+                        reply_markup=keyboard,
+                    )
+                except Exception:
+                    await query.message.reply_text(
+                        "Понятно! Напиши что не подошло — подберу лучше 👗",
+                        reply_markup=keyboard,
+                    )
         logger.info(
             "brief.feedback",
             brief_id=str(brief_id),
@@ -115,9 +123,10 @@ async def _reroll_adult_advice(message, user) -> None:
             f"Погода: {sm}{temp_m:.0f}°C, {regime}. "
             f"Цветотип: {colortype}.{body_hint} "
             f"Гардероб: {wardrobe_context}. "
-            f"Дай короткий (2-3 предложения) совет по образу на день "
-            f"используя вещи из гардероба. Говори на русском, тон дружелюбный. "
+            f"Дай короткий (1-2 предложения) совет по образу на день "
+            f"используя вещи из гардероба. Говори на русском, тепло и с энтузиазмом. "
             f"Не используй markdown символы (# * _ и т.д.). Только обычный текст. "
+            f"ЗАПРЕЩЕНО: критически, обязательно, срочно, не хватает, нужно, должна, нельзя. "
             f"Дай ДРУГОЙ совет, не повторяй предыдущий."
         )
     else:
@@ -128,9 +137,10 @@ async def _reroll_adult_advice(message, user) -> None:
         prompt = (
             f"Погода: {sm}{temp_m:.0f}°C, {regime}. "
             f"Цветотип: {colortype}. "
-            f"Дай короткий (2-3 предложения) совет по образу на день. "
-            f"Рекомендуй {color_hint}. Говори на русском, тон дружелюбный. "
+            f"Дай короткий (1-2 предложения) совет по образу на день. "
+            f"Рекомендуй {color_hint}. Говори на русском, тепло и с энтузиазмом. "
             f"Не используй markdown символы (# * _ и т.д.). Только обычный текст. "
+            f"ЗАПРЕЩЕНО: критически, обязательно, срочно, не хватает, нужно, должна, нельзя. "
             f"Дай ДРУГОЙ совет, не повторяй предыдущий."
         )
 
@@ -145,7 +155,7 @@ async def _reroll_adult_advice(message, user) -> None:
         resp = await pool.create_message(
             model="claude-haiku-4-5-20251001",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=256,
+            max_tokens=150,
         )
         advice = resp.content[0].text.strip()
     except Exception as e:
@@ -275,12 +285,15 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         except Exception:
             pass
 
-    # Show loading state on existing collage
+    # Show loading state on text message (buttons are on text, not photo)
     old_message = query.message
     try:
-        await query.edit_message_caption(caption="🔄 Подбираю другой вариант...")
+        await query.edit_message_text(text="🔄 Подбираю другой вариант...")
     except Exception:
-        pass
+        try:
+            await query.edit_message_caption(caption="🔄 Подбираю другой вариант...")
+        except Exception:
+            pass
 
     from bot.handlers.wardrobe import _generate_outfit_for_user
     await _generate_outfit_for_user(old_message, user, context, exclude_ids=exclude_ids, silent_status=True)
@@ -289,7 +302,7 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await redis.incr(reroll_key)
         await redis.expire(reroll_key, 86400)
 
-    # Delete old collage (new one already sent by _generate_outfit_for_user)
+    # Delete old text message (new photo+text already sent by _generate_outfit_for_user)
     try:
         await old_message.delete()
     except Exception:

@@ -129,6 +129,16 @@ class AnthropicPool:
                 await asyncio.sleep(1)
                 continue
 
+            except anthropic.APIStatusError as e:
+                if e.status_code == 529:
+                    logger.warning("anthropic.api.overloaded", key_id=key_id, attempt=attempt)
+                    last_error = e
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                logger.error("anthropic.request.api_error", key_id=key_id, status=e.status_code, error=str(e))
+                last_error = e
+                continue
+
             except Exception as e:
                 logger.error("anthropic.request.error", key_id=key_id, error=str(e))
                 last_error = e

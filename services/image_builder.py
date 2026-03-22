@@ -1012,14 +1012,15 @@ async def _render_playwright(html: str, width: int, height: int | None = None) -
     try:
         async with httpx.AsyncClient(timeout=RENDERER_TIMEOUT) as client:
             r = await client.post(RENDERER_URL, json=payload)
-            r.raise_for_status()
+            if r.status_code != 200:
+                logger.warning("playwright.http_error", status=r.status_code, body=r.text[:200])
+                return None
             if r.content[:4] == b"\x89PNG":
                 return r.content
             logger.warning("playwright.not_png", content_type=r.headers.get("content-type"))
             return None
     except Exception as e:
-        logger.warning("playwright.render_failed", error=str(e), exc_info=True)
-        sentry_sdk.capture_exception(e)
+        logger.warning("playwright.render_failed", error=str(e))
         return None
 
 

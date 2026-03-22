@@ -1317,26 +1317,20 @@ async def send_morning_brief(payload: dict) -> dict:
                         logger.warning("morning_brief.collage_failed", error=str(e))
 
             if collage_bytes:
+                # Split delivery: фото без caption, текст отдельным сообщением
                 _fname = "weather_card.png" if is_weather_card else "collage.jpg"
                 _mime = "image/png" if is_weather_card else "image/jpeg"
                 resp = await client.post(
                     f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendPhoto",
                     data={
                         "chat_id": telegram_id,
-                        "caption": text,
-                        "reply_markup": json.dumps(reply_markup),
+                        "disable_notification": "true",
                     },
                     files={"photo": (_fname, collage_bytes, _mime)},
                 )
-            else:
-                resp = await client.post(
-                    f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
-                    json={"chat_id": telegram_id, "text": text, "reply_markup": reply_markup},
-                )
-            resp.raise_for_status()
+                resp.raise_for_status()
 
-            # Сохранить collage_file_id для возможности пересылки
-            if collage_bytes:
+                # Сохранить collage_file_id для возможности пересылки
                 try:
                     tg_result = resp.json()
                     photos = tg_result.get("result", {}).get("photo", [])
@@ -1350,6 +1344,24 @@ async def send_morning_brief(payload: dict) -> dict:
                             await _s.commit()
                 except Exception as e:
                     logger.warning("morning_brief.save_file_id_failed", error=str(e))
+
+                # Текст + кнопки — отдельное сообщение
+                import asyncio as _asyncio
+                await _asyncio.sleep(0.1)
+                try:
+                    text_resp = await client.post(
+                        f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+                        json={"chat_id": telegram_id, "text": text, "reply_markup": reply_markup},
+                    )
+                    text_resp.raise_for_status()
+                except Exception as e:
+                    logger.warning("morning_brief.text_message_failed", error=str(e))
+            else:
+                resp = await client.post(
+                    f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+                    json={"chat_id": telegram_id, "text": text, "reply_markup": reply_markup},
+                )
+                resp.raise_for_status()
 
         logger.info("morning_brief.sent", telegram_id=telegram_id, brief_id=brief_id, has_collage=bool(collage_bytes))
         logger.info("metric.brief_sent",

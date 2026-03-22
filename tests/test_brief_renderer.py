@@ -267,7 +267,7 @@ class TestRenderTemplate:
         assert "САДИК" in html
         assert "+4°" in html
         assert "куртка!" in html
-        assert "Касси" in html
+        # kassi_comment removed from card (split delivery)
         assert "class=\"mom\"" in html
 
     def test_hybrid_template(self):
@@ -305,7 +305,7 @@ class TestRenderTemplate:
         assert "miss-outer" in html
         assert "Куртка" in html
         assert "25%" in html  # progress bar
-        assert "Касси" in html
+        # kassi_comment removed from card (split delivery)
 
     def test_full_template(self):
         from services.brief_renderer import render_template
@@ -433,7 +433,7 @@ class TestBuildBriefCard:
         mock_render.assert_called_once()
         html = mock_render.call_args[0][0]
         assert "Алиса" in html
-        assert "Тепло!" in html
+        # advice_text no longer on card (split delivery)
 
     def test_hybrid_card_2_photos(self):
         from services.brief_card import build_brief_card

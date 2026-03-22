@@ -1153,7 +1153,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("⭐ Оцениваю...")
         _track_task(
             _rate_photos([file_id], "single", update.message,
-                         context.bot, owner_id=owner_id, owner_type=owner_type)
+                         context.bot, owner_id=owner_id, owner_type=owner_type, db_user=user)
         )
         # Увеличить счётчик после запуска оценки
         if redis:
@@ -1509,7 +1509,7 @@ async def handle_photo_action(update: Update, context: ContextTypes.DEFAULT_TYPE
             await query.edit_message_text("Как оцениваем?", reply_markup=keyboard)
         else:
             await query.edit_message_text("⭐ Оцениваю...")
-            _track_task(_rate_photos(file_ids, "single", query.message, context.bot, owner_id=owner_id, owner_type=owner_type))
+            _track_task(_rate_photos(file_ids, "single", query.message, context.bot, owner_id=owner_id, owner_type=owner_type, db_user=user))
 
 
 
@@ -2457,12 +2457,21 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             pass
 
         if collage_bytes:
-            await message.reply_photo(
-                photo=collage_bytes, caption=caption, reply_markup=_outfit_markup
-            )
+            # Split delivery: фото без caption, текст + кнопки отдельно
+            await message.reply_photo(photo=collage_bytes, disable_notification=True)
+            import asyncio as _asyncio
+            await _asyncio.sleep(0.1)
+            _kassi_text = f"💬 {comment}" if comment else ""
+            if _kassi_text:
+                try:
+                    await message.reply_text(_kassi_text, reply_markup=_outfit_markup)
+                except Exception as e:
+                    logger.warning("outfit.text_message_failed", error=str(e))
+            else:
+                await message.reply_text("Образ готов!", reply_markup=_outfit_markup)
         else:
             await message.reply_text(
-                f"💡 {comment}" if comment else "Не удалось собрать коллаж. Попробуй позже.",
+                f"💬 {comment}" if comment else "Не удалось собрать коллаж. Попробуй позже.",
                 reply_markup=_outfit_markup,
             )
 

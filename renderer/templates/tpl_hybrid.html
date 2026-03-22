@@ -1,6 +1,6 @@
 {# TEMPLATE: hybrid (1-7 фото в образе)
    Vars: name, context, date_str, css_class, weather, items, missing,
-         base_layer, kassi_comment, progress_pct, progress_text, palette
+         progress_pct, progress_text, palette
    Превью: открыть в Chrome, width=440px #}
 <!DOCTYPE html>
 <html>
@@ -65,14 +65,6 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
 .miss-acc{background:#E0F0E8}
 .miss-top{background:#F0E8EC}
 
-/* Base layer */
-.base{font-size:9px;color:var(--cm);text-align:center;margin:4px 0}
-
-/* Kassi */
-.kassi{background:rgba(255,255,255,.5);border-radius:10px;padding:8px 10px;margin-top:8px}
-.kassi-t{font-size:10px;color:var(--c);line-height:1.4}
-.kassi-a{font-size:8px;color:var(--cm);margin-top:3px}
-
 /* Progress */
 .prog{background:#fff;border-radius:8px;padding:8px 12px;margin-top:6px;text-align:center}
 .prog-bar{background:var(--pbg);height:10px;border-radius:5px;overflow:hidden}
@@ -133,17 +125,6 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
     <div class="miss-i {{ item.miss_css }}"><div class="icon">{{ item.emoji }}</div><div class="name">{{ item.name_ru }}</div></div>
     {% endfor %}
   </div>
-</div>
-{% endif %}
-
-{% if base_layer %}
-<div class="base">{{ base_layer }}</div>
-{% endif %}
-
-{% if kassi_comment %}
-<div class="kassi">
-  <div class="kassi-t">{{ kassi_comment }}</div>
-  <div class="kassi-a">— Касси</div>
 </div>
 {% endif %}
 

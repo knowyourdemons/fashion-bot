@@ -480,6 +480,7 @@ class TestRenderPlaywright:
             mock_client.__aexit__ = AsyncMock(return_value=False)
             mock_response = MagicMock()
             mock_response.content = png_data
+            mock_response.status_code = 200
             mock_response.raise_for_status = MagicMock()
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_cls.return_value = mock_client
@@ -508,6 +509,7 @@ class TestRenderPlaywright:
             mock_client.__aexit__ = AsyncMock(return_value=False)
             mock_response = MagicMock()
             mock_response.content = png_data
+            mock_response.status_code = 200
             mock_response.raise_for_status = MagicMock()
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_cls.return_value = mock_client
