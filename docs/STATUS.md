@@ -12,8 +12,8 @@ f93c45f feat: 470 synthetic wardrobe tests + 2 outfit selector fixes
 ```
 
 ## Тесты
-- Всего: **1897**
-- Passed: **1897**
+- Всего: **1978**
+- Passed: **1978**
 - Skipped: 5
 - Failed: **0**
 
@@ -165,7 +165,10 @@ User фото → photo_quality.py (brightness/blur check)
 | /profile + /add_child | 🔲 TODO |
 | Оценка образа по фото | 🔲 TODO |
 | Gap analysis + growth alert | 🔲 TODO (capsule scoring готов) |
-| Тизеры, engagement push | 🔲 TODO |
+| Reminders (3/7/30 дней) | ✅ DONE (22 марта) |
+| Birthday alert | ✅ DONE (22 марта) |
+| Gap insights в brief | ✅ DONE (22 марта) |
+| Тизеры, engagement push | ✅ DONE (ранее) |
 
 ### v1.2 (май) — планируется
 - Шоппинг-лист + affiliate
