@@ -113,13 +113,16 @@ def get_wardrobe_balance_insight(items: list) -> str | None:
 
 # ── Capsule wardrobe analysis ────────────────────────────────────────────────
 
-_COMBINABLE_PAIRS = {
-    # (category_group_a, category_group_b) — pairs that can form outfit combos
+_COMBINABLE_PAIRS_RAW = [
     ("top", "bottom"), ("top", "one_piece"), ("outerwear", "top"),
     ("outerwear", "bottom"), ("outerwear", "one_piece"),
-    ("footwear", "bottom"), ("footwear", "one_piece"),
-    ("accessory", "top"), ("accessory", "outerwear"),
-}
+    ("footwear", "bottom"), ("footwear", "one_piece"), ("footwear", "top"),
+    ("accessory", "top"), ("accessory", "outerwear"), ("accessory", "bottom"),
+]
+# Normalize pairs alphabetically for consistent lookup
+_COMBINABLE_PAIRS = set()
+for a, b in _COMBINABLE_PAIRS_RAW:
+    _COMBINABLE_PAIRS.add((min(a, b), max(a, b)))
 
 _NEUTRAL_COLORS = frozenset([
     "белый", "чёрный", "серый", "бежевый", "navy", "тёмно-синий",
@@ -150,7 +153,7 @@ def calc_item_versatility(item, all_items: list) -> int:
         if other.id == item.id:
             continue
         other_cg = getattr(other, "category_group", "") or ""
-        pair = (cg, other_cg) if cg < other_cg else (other_cg, cg)
+        pair = (min(cg, other_cg), max(cg, other_cg))
         if pair not in _COMBINABLE_PAIRS:
             continue
         other_color = getattr(other, "color", "") or ""
