@@ -75,6 +75,9 @@ db/models/         — SQLAlchemy модели
 db/crud/           — CRUD операции
 db/seeds/          — taxonomy_seed, scoring_matrix_seed, dev_seed
 services/
+  color_harmony.py — HSL матрица 100+ цветов, color_compatibility(), score_outfit_colors()
+  normalize.py     — 250+ типов + 150+ цветов: normalize_type(), normalize_color()
+  photo_quality.py — Pre-Vision проверка: brightness, blur, contrast, auto-correction
   image_processor.py — resize, EXIF, phash, bg removal (RMBG-1.4 + silueta fallback)
                        Thread-safe singleton (threading.Lock + double-check) для каждой модели
                        Smart thumbnail pipeline: exif_rotate → auto_brightness → rembg
@@ -368,6 +371,48 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - **Адекватный комментарий**: `generate_outfit_comment()` + `item_count` — при 1-2 вещах НЕ хвалит "образ", мотивирует сфоткать ещё; при 3-5 про сочетание; при 6+ полный стилистический
 - **Тесты**: 45 тестов (`test_outfit_fixes.py`)
 
+## Что сделано (22 марта 2026)
+
+### Профессиональная стилистика: 12 улучшений
+- **Цветовая гармония в AI-промптах**: правило 60-30-10, 3 цвета max, monochrome/analogous/complementary
+- **HSL матрица совместимости цветов** (`services/color_harmony.py`): 100+ русских цветов, score -2..+2
+- **12-сезонная система цветотипов**: Bright/True/Light Spring, Light/True/Soft Summer и т.д. (72 палитры)
+- **Body type в AI-промпте**: 5 типов фигуры → конкретные стилистические правила
+- **4 возрастных промпта для детей**: 0-3 (безопасность), 3-7 (самостоятельность), 7-12 (баланс), 12-16 (самовыражение)
+- **Occasion filtering**: фильтр по day_type (садик/школа/работа/прогулка/гости)
+- **Wind chill + UV**: `calc_wind_chill()`, UV≥6 → шапка обязательна
+- **Warmth consistency в rule-based selector**: нет пуховик+шорты
+- **Item freshness**: +1.0 бонус для вещей не ношенных >7 дней
+- **Capsule wardrobe**: versatility score, gap analysis, orphan detection
+- **Scoring refactor**: color_harmony 2→3, occasion_fit 1→2, body_type_fit, safety (дети)
+- **User style_preferences**: JSONB поле для avoid/prefer/style
+
+### Нормализация типов и цветов (`services/normalize.py`)
+- **250+ типов вещей**: капор→шапка, балаклава→шапка, кеды→кроссовки, баска→блузка, и т.д.
+- **150+ цветов**: маренго→тёмно-серый, марсала→бордовый, цвет морской волны→бирюзовый
+- **Детская одежда**: ползунки, распашонка, человечек, конверт, царапки
+- **Обувь**: мюли, эспадрильи, лоферы, оксфорды, берцы, ботфорты
+- **Интеграция**: нормализация при сохранении в wardrobe.py ДО записи в БД
+
+### Pre-Vision проверка качества фото (`services/photo_quality.py`)
+- **Яркость**: тёмные фото авто-осветляются перед Vision (экономия API)
+- **Размытие**: Laplacian variance <30 → "держи телефон ровно"
+- **Разрешение**: <200px → "отправь оригинал, не превью"
+- **Контраст**: stddev <15 → "положи на контрастный фон"
+- **Aspect ratio**: >4:1 → "похоже на скриншот"
+
+### Оптимизация outfit selector
+- **Сезонный fallback**: если нет top+bottom после фильтра → используй ВСЕ вещи
+- **Score-based preference**: `_first()` сортирует по score_item desc
+- **body_type передаётся** в select_outfit_ai из wardrobe handler и morning_brief
+
+### Тесты: 1053 → 1897 (+844)
+- `test_wardrobe_optimizer.py` (470) — 12 сегментов × 4 размера × 8 погод
+- `test_stylist_simulation.py` (63) — 3 персоны (стилист/мама/женщина)
+- `test_normalize.py` (175) — 250+ типов, 150+ цветов
+- `test_photo_quality.py` (52) — яркость, blur, resolution, форматы
+- Обновлены: test_outfit_engine, test_core2, test_regression
+
 ## Документация
 - **WORKFLOW.md** — методология защитного проектирования (7 линз, 5 итераций, Three-Pass)
 - **claude_code_smart_brief.md** — спецификация умного брифа: два режима + погода + палитра
@@ -389,6 +434,9 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - ~~Trial отключение дни 12-14~~ — ГОТОВО
 - ~~rembg~~ — ГОТОВО (RMBG-1.4 quantized)
 - ~~Sentry, CI/CD~~ — ГОТОВО
+- ~~Профессиональная стилистика~~ — ГОТОВО (12-season, color harmony, body type, capsule)
+- ~~Нормализация вещей/цветов~~ — ГОТОВО (250+ типов, 150+ цветов)
+- ~~Pre-Vision photo quality~~ — ГОТОВО (brightness, blur, contrast, auto-correction)
 - /profile + /add_child
 - Оценка образа по фото (вещь vs outfit detection)
 - Gap analysis + growth alert WHO
@@ -400,6 +448,8 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - Антибот, реферальная программа
 - Prometheus + Grafana dashboards
 - Loki log aggregation (шаблон готов в docker-compose)
+- User style_preferences через онбординг
+- 12-season цветотип через онбординг (расширенный анализ селфи)
 
 ### v2.0 (июль)
 - Ultra план, семейный аккаунт, EN, маркетинг

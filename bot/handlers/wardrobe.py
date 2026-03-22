@@ -2266,6 +2266,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             colortype=colortype_for_outfit,
             recent_outfit_ids=_recent_ids,
             day_type=_day_type,
+            body_type=getattr(user, "body_type", None),
             redis=redis,
         )
 

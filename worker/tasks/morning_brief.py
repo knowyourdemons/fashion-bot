@@ -881,6 +881,7 @@ async def generate_brief(payload: dict) -> dict:
             colortype=colortype,
             recent_outfit_ids=_recent_ids_brief,
             day_type=day_type,
+            body_type=getattr(user, "body_type", None),
             redis=redis_client,
         )
 
