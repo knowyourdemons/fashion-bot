@@ -1,168 +1,597 @@
 <!DOCTYPE html>
-<!-- Deploy: Cloudflare Pages (connect repo, set build output to /landing)
-     or nginx: root /home/stas/fashion-bot/landing; index index.html; -->
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Касси — личный стилист в Telegram</title>
-<meta name="description" content="Образы на каждый день для мам и девушек. Подбирает одежду по погоде, гардеробу и цветотипу.">
-<link rel="icon" href="favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Касси — автопилот для гардероба</title>
+<meta name="description" content="AI-стилист в Telegram. Образ каждое утро из твоих вещей по погоде. Для мам и девушек. 14 дней бесплатно.">
+<meta property="og:title" content="Касси — одно решение меньше каждое утро">
+<meta property="og:description" content="AI-стилист, который знает твой гардероб. Образ приходит сам — в 7 утра, по погоде, из твоих вещей.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-  background:#F5EDE8;color:#5B3A4A;line-height:1.6;-webkit-font-smoothing:antialiased}
-.container{max-width:720px;margin:0 auto;padding:0 20px}
+:root {
+  --warm: #F5EDE8;
+  --warm-deep: #E8D8D0;
+  --rose: #D080A0;
+  --rose-light: #F0D0E0;
+  --rose-bg: #FFF5F8;
+  --text: #3A2A2A;
+  --text-muted: #8A7A7A;
+  --text-light: #B0A0A0;
+  --white: #FFFFFF;
+  --accent: #5B3A4A;
+  --blue: #E8EDF5;
+  --blue-accent: #7090C0;
+  --blue-bg: #F0F4FA;
+  --green: #5DCAA5;
+  --green-bg: #F0FAF5;
+  --orange-bg: #FFF8F0;
+  --card-shadow: 0 2px 20px rgba(90,50,70,0.08);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { font-family: 'Nunito', sans-serif; color: var(--text); background: var(--white); overflow-x: hidden; }
 
-/* Hero */
-.hero{text-align:center;padding:80px 20px 60px}
-.hero h1{font-size:2.4rem;font-weight:800;margin-bottom:12px;letter-spacing:-.02em}
-.hero .subtitle{font-size:1.15rem;color:#8B6B7A;margin-bottom:32px}
-.cta{display:inline-block;background:#D080A0;color:#fff;text-decoration:none;
-  padding:16px 36px;border-radius:50px;font-size:1.05rem;font-weight:600;
-  transition:transform .15s,box-shadow .15s}
-.cta:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(208,128,160,.35)}
+/* ═══ Hero ═══ */
+.hero {
+  min-height: 100vh;
+  background: linear-gradient(170deg, var(--warm) 0%, #FFF8F5 40%, var(--white) 100%);
+  display: flex; align-items: center; justify-content: center;
+  padding: 80px 24px 60px;
+  position: relative; overflow: hidden;
+}
+.hero::before {
+  content: ''; position: absolute; top: -200px; right: -200px;
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(208,128,160,0.12) 0%, transparent 70%);
+  border-radius: 50%;
+}
+.hero-inner {
+  max-width: 1100px; width: 100%;
+  display: flex; align-items: center; gap: 60px;
+  position: relative; z-index: 1;
+}
+.hero-text { flex: 1; }
+.hero-badge {
+  display: inline-block;
+  background: var(--rose-light); color: var(--accent);
+  font-size: 12px; font-weight: 700;
+  padding: 6px 14px; border-radius: 20px;
+  letter-spacing: 0.5px; margin-bottom: 20px;
+}
+.hero-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(32px, 5vw, 52px);
+  font-weight: 700; line-height: 1.1;
+  color: var(--accent); margin-bottom: 16px;
+}
+.hero-title em {
+  font-style: normal;
+  background: linear-gradient(135deg, var(--rose), var(--blue-accent));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.hero-sub {
+  font-size: 17px; color: var(--text-muted);
+  line-height: 1.6; margin-bottom: 32px; max-width: 480px;
+}
+.hero-cta {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--accent); color: white;
+  font-size: 16px; font-weight: 600;
+  padding: 16px 32px; border-radius: 50px;
+  text-decoration: none; transition: all 0.3s;
+  box-shadow: 0 4px 20px rgba(91,58,74,0.25);
+}
+.hero-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 30px rgba(91,58,74,0.35); }
+.hero-note { margin-top: 12px; font-size: 13px; color: var(--text-light); }
 
-/* For whom */
-.section{padding:60px 0}
-.section-title{text-align:center;font-size:1.5rem;font-weight:700;margin-bottom:36px}
-.cards{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-.card{background:#fff;border-radius:16px;padding:32px 24px;text-align:center;
-  box-shadow:0 2px 12px rgba(91,58,74,.06)}
-.card-emoji{font-size:2.4rem;margin-bottom:12px}
-.card h3{font-size:1.15rem;margin-bottom:8px}
-.card p{color:#8B6B7A;font-size:.95rem}
+/* Phone mockup */
+.hero-visual { flex-shrink: 0; width: 300px; position: relative; }
+.phone-mockup {
+  width: 280px; height: 560px;
+  background: #1a1a1a; border-radius: 36px;
+  padding: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+}
+.phone-screen {
+  width: 100%; height: 100%;
+  border-radius: 24px; overflow: hidden;
+  background: linear-gradient(180deg, var(--warm) 0%, #F0E8E4 100%);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 20px; text-align: center;
+}
+.phone-screen .placeholder-text {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 18px; color: var(--accent); opacity: 0.4; line-height: 1.4;
+}
+/* Когда добавите скриншот:
+.phone-screen img { width:100%; height:100%; object-fit:cover; border-radius:24px; } */
+.phone-float-1 {
+  position: absolute; top: -20px; right: -30px;
+  width: 80px; height: 80px;
+  background: var(--rose-light); border-radius: 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px; box-shadow: var(--card-shadow);
+  animation: float 3s ease-in-out infinite;
+}
+.phone-float-2 {
+  position: absolute; bottom: 40px; left: -40px;
+  width: 70px; height: 70px;
+  background: var(--blue); border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; box-shadow: var(--card-shadow);
+  animation: float 3s ease-in-out infinite 1s;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
 
-/* Steps */
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;text-align:center}
-.step-num{display:inline-flex;align-items:center;justify-content:center;
-  width:40px;height:40px;border-radius:50%;background:#D080A0;color:#fff;
-  font-weight:700;font-size:1.1rem;margin-bottom:12px}
-.step-emoji{font-size:2rem;margin-bottom:8px}
-.step p{color:#8B6B7A;font-size:.95rem}
+/* ═══ Sections ═══ */
+.section { padding: 80px 24px; }
+.section-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700; text-align: center;
+  color: var(--accent); margin-bottom: 12px;
+}
+.section-sub {
+  text-align: center; font-size: 16px;
+  color: var(--text-muted); margin-bottom: 48px;
+  max-width: 560px; margin-left: auto; margin-right: auto;
+}
 
-/* Pricing */
-.pricing{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-.price-card{background:#fff;border-radius:16px;padding:32px 24px;
-  box-shadow:0 2px 12px rgba(91,58,74,.06);position:relative}
-.price-card.featured{border:2px solid #D080A0}
-.price-card .badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);
-  background:#D080A0;color:#fff;padding:4px 16px;border-radius:20px;font-size:.8rem;font-weight:600}
-.price-card h3{font-size:1.3rem;margin-bottom:4px}
-.price-card .price{font-size:1.8rem;font-weight:800;margin-bottom:16px}
-.price-card .price span{font-size:.9rem;font-weight:400;color:#8B6B7A}
-.price-card ul{list-style:none;text-align:left;margin-bottom:20px}
-.price-card li{padding:6px 0;font-size:.95rem;color:#5B3A4A}
-.price-card li::before{content:"";display:inline-block;width:6px;height:6px;
-  border-radius:50%;background:#D080A0;margin-right:10px;vertical-align:middle}
+/* ═══ USP (NEW) ═══ */
+.usp { background: linear-gradient(180deg, var(--white) 0%, #FFF8F5 100%); }
+.usp-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px; max-width: 900px; margin: 0 auto;
+}
+.usp-card {
+  padding: 28px 24px; border-radius: 20px;
+  transition: transform 0.3s;
+}
+.usp-card:hover { transform: translateY(-4px); }
+.usp-icon { font-size: 28px; margin-bottom: 12px; }
+.usp-card h3 {
+  font-size: 16px; font-weight: 700;
+  color: var(--accent); margin-bottom: 6px;
+}
+.usp-card p { font-size: 14px; color: var(--text-muted); line-height: 1.5; }
+.usp-1 { background: var(--rose-bg); border: 1px solid rgba(208,128,160,0.15); }
+.usp-2 { background: var(--blue-bg); border: 1px solid rgba(112,144,192,0.15); }
+.usp-3 { background: var(--green-bg); border: 1px solid rgba(93,202,165,0.15); }
+.usp-4 { background: var(--orange-bg); border: 1px solid rgba(224,160,80,0.15); }
+.usp-5 { background: #F8F0F8; border: 1px solid rgba(155,127,196,0.15); }
 
-/* Footer */
-.footer{text-align:center;padding:40px 20px;color:#B09888;font-size:.9rem}
+/* ═══ For Who ═══ */
+.for-who { background: var(--white); }
+.cards { display: flex; gap: 24px; max-width: 900px; margin: 0 auto; flex-wrap: wrap; justify-content: center; }
+.card {
+  flex: 1; min-width: 280px; max-width: 420px;
+  background: white; border-radius: 24px;
+  padding: 36px 28px; box-shadow: var(--card-shadow);
+  border: 1px solid rgba(208,128,160,0.1);
+  transition: transform 0.3s;
+}
+.card:hover { transform: translateY(-4px); }
+.card-icon { font-size: 40px; margin-bottom: 16px; }
+.card-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px; font-weight: 700;
+  color: var(--accent); margin-bottom: 8px;
+}
+.card-pain { font-size: 15px; font-weight: 600; color: var(--rose); margin-bottom: 8px; font-style: italic; }
+.card-text { font-size: 15px; color: var(--text-muted); line-height: 1.6; }
 
-/* Responsive */
-@media(max-width:600px){
-  .hero h1{font-size:1.8rem}
-  .hero .subtitle{font-size:1rem}
-  .cards,.pricing{grid-template-columns:1fr}
-  .steps{grid-template-columns:1fr;gap:32px}
-  .section{padding:40px 0}
-  .hero{padding:60px 20px 40px}
+/* ═══ How it looks (NEW) ═══ */
+.looks { background: linear-gradient(180deg, #FFF8F5 0%, var(--white) 100%); }
+.looks-grid {
+  display: flex; gap: 24px; max-width: 800px;
+  margin: 0 auto; justify-content: center; flex-wrap: wrap;
+}
+.look-item {
+  width: 240px; text-align: center;
+}
+.look-phone {
+  width: 200px; height: 360px;
+  background: #1a1a1a; border-radius: 28px;
+  padding: 8px; margin: 0 auto 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+}
+.look-screen {
+  width: 100%; height: 100%;
+  border-radius: 20px; overflow: hidden;
+  background: linear-gradient(180deg, var(--warm) 0%, #F0E8E4 100%);
+  display: flex; align-items: center; justify-content: center;
+  padding: 12px;
+}
+.look-screen .placeholder-text {
+  font-size: 13px; color: var(--accent); opacity: 0.35;
+  font-family: 'Cormorant Garamond', serif;
+}
+.look-label {
+  font-size: 14px; font-weight: 600; color: var(--accent);
+}
+.look-desc { font-size: 12px; color: var(--text-muted); }
+
+/* ═══ Math tease (NEW) ═══ */
+.math-section {
+  background: var(--accent); color: white;
+  padding: 60px 24px; text-align: center;
+}
+.math-section .section-title { color: white; margin-bottom: 8px; }
+.math-big {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(48px, 8vw, 80px);
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--rose-light), var(--blue));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  margin: 16px 0;
+  line-height: 1;
+}
+.math-sub {
+  font-size: 18px; color: rgba(255,255,255,0.7);
+  max-width: 500px; margin: 0 auto 24px;
+}
+
+/* ═══ How it works ═══ */
+.how { background: var(--white); }
+.steps { display: flex; gap: 32px; max-width: 800px; margin: 0 auto; flex-wrap: wrap; justify-content: center; }
+.step { flex: 1; min-width: 200px; max-width: 240px; text-align: center; }
+.step-num {
+  width: 56px; height: 56px;
+  background: linear-gradient(135deg, var(--rose-light), var(--blue));
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px; font-weight: 700; color: var(--accent);
+  margin: 0 auto 16px;
+}
+.step-icon { font-size: 32px; margin-bottom: 8px; }
+.step-title { font-size: 16px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+.step-text { font-size: 14px; color: var(--text-muted); line-height: 1.5; }
+
+/* ═══ Pricing ═══ */
+.pricing { background: linear-gradient(180deg, #FFF8F5 0%, var(--warm) 100%); }
+.plans { display: flex; gap: 24px; max-width: 700px; margin: 0 auto; flex-wrap: wrap; justify-content: center; }
+.plan {
+  flex: 1; min-width: 260px; max-width: 320px;
+  background: white; border-radius: 24px;
+  padding: 32px 28px; box-shadow: var(--card-shadow); position: relative;
+}
+.plan.featured { border: 2px solid var(--rose); transform: scale(1.02); }
+.plan-badge {
+  position: absolute; top: -12px; right: 20px;
+  background: var(--rose); color: white;
+  font-size: 11px; font-weight: 700;
+  padding: 4px 12px; border-radius: 12px;
+}
+.plan-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px; font-weight: 700; color: var(--accent); margin-bottom: 4px;
+}
+.plan-price { font-size: 36px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+.plan-price span { font-size: 16px; color: var(--text-muted); font-weight: 400; }
+.plan-anchor { font-size: 12px; color: var(--rose); margin-bottom: 16px; }
+.plan-desc { font-size: 13px; color: var(--text-light); margin-bottom: 20px; }
+.plan-features { list-style: none; margin-bottom: 24px; }
+.plan-features li {
+  font-size: 14px; color: var(--text-muted);
+  padding: 6px 0; display: flex; align-items: center; gap: 8px;
+}
+.plan-features li::before { content: '✓'; color: var(--green); font-weight: 700; }
+.plan-cta {
+  display: block; text-align: center; padding: 14px;
+  border-radius: 50px; text-decoration: none;
+  font-weight: 600; font-size: 15px; transition: all 0.3s;
+}
+.plan-cta.outline { border: 2px solid var(--warm-deep); color: var(--accent); }
+.plan-cta.outline:hover { background: var(--warm); }
+.plan-cta.filled {
+  background: var(--accent); color: white;
+  box-shadow: 0 4px 16px rgba(91,58,74,0.2);
+}
+.plan-cta.filled:hover { transform: translateY(-2px); }
+
+/* ═══ FAQ ═══ */
+.faq { background: var(--white); }
+.faq-list { max-width: 640px; margin: 0 auto; }
+.faq-item { border-bottom: 1px solid var(--warm-deep); padding: 20px 0; }
+.faq-q {
+  font-size: 16px; font-weight: 600; color: var(--accent);
+  cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+}
+.faq-q::after { content: '+'; font-size: 20px; color: var(--text-light); transition: transform 0.3s; }
+.faq-item.open .faq-q::after { transform: rotate(45deg); }
+.faq-a {
+  font-size: 14px; color: var(--text-muted); line-height: 1.6;
+  max-height: 0; overflow: hidden; transition: max-height 0.3s, padding 0.3s;
+}
+.faq-item.open .faq-a { max-height: 300px; padding-top: 12px; }
+
+/* ═══ Final CTA ═══ */
+.final-cta {
+  text-align: center; padding: 80px 24px;
+  background: linear-gradient(180deg, var(--warm) 0%, var(--rose-light) 100%);
+}
+.final-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700; color: var(--accent); margin-bottom: 8px;
+}
+.final-sub { font-size: 16px; color: var(--text-muted); margin-bottom: 32px; }
+
+footer { text-align: center; padding: 24px; font-size: 13px; color: var(--text-light); }
+
+/* ═══ Responsive ═══ */
+@media (max-width: 768px) {
+  .hero-inner { flex-direction: column; text-align: center; gap: 40px; }
+  .hero-sub { margin: 0 auto 32px; }
+  .hero-visual { width: 240px; }
+  .phone-mockup { width: 220px; height: 440px; }
+  .phone-float-1 { top: -10px; right: -15px; width: 60px; height: 60px; font-size: 24px; }
+  .phone-float-2 { bottom: 30px; left: -20px; width: 55px; height: 55px; font-size: 22px; }
+  .plan.featured { transform: none; }
+  .usp-grid { grid-template-columns: 1fr; max-width: 400px; }
+  .math-big { font-size: 56px; }
+}
+
+/* ═══ Animations ═══ */
+@media (prefers-reduced-motion: no-preference) {
+  .card, .usp-card, .step, .plan, .look-item {
+    opacity: 0; transform: translateY(20px);
+    animation: fadeUp 0.6s forwards;
+  }
+  .card:nth-child(1) { animation-delay: 0.1s; }
+  .card:nth-child(2) { animation-delay: 0.2s; }
+  .usp-card:nth-child(1) { animation-delay: 0.1s; }
+  .usp-card:nth-child(2) { animation-delay: 0.15s; }
+  .usp-card:nth-child(3) { animation-delay: 0.2s; }
+  .usp-card:nth-child(4) { animation-delay: 0.25s; }
+  .usp-card:nth-child(5) { animation-delay: 0.3s; }
+  .step:nth-child(1) { animation-delay: 0.1s; }
+  .step:nth-child(2) { animation-delay: 0.2s; }
+  .step:nth-child(3) { animation-delay: 0.3s; }
+}
+@keyframes fadeUp {
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>
 </head>
 <body>
 
+<!-- ═══ Hero ═══ -->
 <section class="hero">
-  <div class="container">
-    <h1>Личный стилист в&nbsp;Telegram</h1>
-    <p class="subtitle">Образы на каждый день за&nbsp;$9/мес</p>
-    <a href="https://t.me/fashion_castle_bot" class="cta">Попробовать бесплатно &rarr;</a>
-  </div>
-</section>
-
-<section class="section">
-  <div class="container">
-    <h2 class="section-title">Для кого</h2>
-    <div class="cards">
-      <div class="card">
-        <div class="card-emoji">👩‍👧</div>
-        <h3>Мамам</h3>
-        <p>Подбирает детям образ по&nbsp;погоде. Утром открыла &mdash; одела &mdash; пошла в&nbsp;садик.</p>
+  <div class="hero-inner">
+    <div class="hero-text">
+      <div class="hero-badge">✨ AI-стилист в Telegram</div>
+      <h1 class="hero-title">Одно решение<br>меньше <em>каждое утро</em></h1>
+      <p class="hero-sub">Касси знает твой гардероб, стиль и погоду. К 7 утра образ уже в телефоне — из твоих вещей, с объяснением почему это красиво. Как стилист за $200, только $9.</p>
+      <a href="https://t.me/fashion_castle_bot" class="hero-cta">Попробовать бесплатно →</a>
+      <p class="hero-note">14 дней бесплатно · Без карты · Отмена в один клик</p>
+    </div>
+    <div class="hero-visual">
+      <div class="phone-mockup">
+        <div class="phone-screen">
+          <!-- TODO: заменить на скриншот коллажа -->
+          <!-- <img src="collage.png" alt="Пример коллажа" style="width:100%;height:100%;object-fit:cover;border-radius:24px"> -->
+          <div class="placeholder-text">Скриншот<br>коллажа</div>
+        </div>
       </div>
-      <div class="card">
-        <div class="card-emoji">👗</div>
-        <h3>Девушкам</h3>
-        <p>Стиль + гардероб + цветотип. Каждый день новая идея из&nbsp;твоих вещей.</p>
-      </div>
+      <div class="phone-float-1">👗</div>
+      <div class="phone-float-2">☀️</div>
     </div>
   </div>
 </section>
 
-<section class="section" style="background:rgba(255,255,255,.4)">
-  <div class="container">
-    <h2 class="section-title">Как это работает</h2>
-    <div class="steps">
-      <div>
-        <div class="step-num">1</div>
-        <div class="step-emoji">📸</div>
-        <p>Сфоткай вещи</p>
-      </div>
-      <div>
-        <div class="step-num">2</div>
-        <div class="step-emoji">☀️</div>
-        <p>Получай образы каждое утро</p>
-      </div>
-      <div>
-        <div class="step-num">3</div>
-        <div class="step-emoji">👗</div>
-        <p>Надень и&nbsp;иди</p>
-      </div>
+<!-- ═══ USP — Чем Касси отличается (NEW) ═══ -->
+<section class="section usp">
+  <h2 class="section-title">Чего не делает ни один AI-стилист</h2>
+  <p class="section-sub">Все приложения ждут, пока ты зайдёшь. Касси приходит сама.</p>
+  <div class="usp-grid">
+    <div class="usp-card usp-1">
+      <div class="usp-icon">🔔</div>
+      <h3>Образ приходит сам</h3>
+      <p>Push в 7 утра. Не надо ничего открывать, листать, выбирать. Просто оденься и иди.</p>
+    </div>
+    <div class="usp-card usp-2">
+      <div class="usp-icon">🧠</div>
+      <h3>Знает тебя</h3>
+      <p>Стиль, цветотип, погода, случай — 5 слоёв контекста. Не generic «наденьте куртку», а конкретная куртка из твоего шкафа.</p>
+    </div>
+    <div class="usp-card usp-3">
+      <div class="usp-icon">👧</div>
+      <h3>Одевает ребёнка</h3>
+      <p>Единственный AI-стилист для детей 0–16 лет. Образ по погоде, возрасту и размеру. Утром — без скандалов.</p>
+    </div>
+    <div class="usp-card usp-4">
+      <div class="usp-icon">💡</div>
+      <h3>Объясняет почему</h3>
+      <p>Не просто «это подходит» — а «этот голубой подчёркивает глаза, а силуэт удлиняет фигуру».</p>
+    </div>
+    <div class="usp-card usp-5">
+      <div class="usp-icon">💎</div>
+      <h3>Находит забытое</h3>
+      <p>«Зелёная кофта — 3 недели без дела! С бежевыми брюками — свежий образ.» Новый гардероб без покупок.</p>
     </div>
   </div>
 </section>
 
-<section class="section">
-  <div class="container">
-    <h2 class="section-title">Тарифы</h2>
-    <div class="pricing">
-      <div class="price-card">
-        <h3>Free</h3>
-        <div class="price">$0</div>
-        <ul>
-          <li>3 фото вещей</li>
-          <li>2 образа в&nbsp;неделю</li>
-          <li>1 re-roll в&nbsp;день</li>
-          <li>Погода + палитра</li>
-        </ul>
-        <a href="https://t.me/fashion_castle_bot" class="cta" style="display:block;text-align:center;font-size:.95rem;padding:12px 0">Начать</a>
-      </div>
-      <div class="price-card featured">
-        <div class="badge">Popular</div>
-        <h3>Premium</h3>
-        <div class="price">$9<span>/мес</span></div>
-        <ul>
-          <li>Безлимит фото</li>
-          <li>Образы каждый день</li>
-          <li>3 re-roll в&nbsp;день</li>
-          <li>Вечерний образ</li>
-          <li>Чат со стилистом</li>
-        </ul>
-        <a href="https://t.me/fashion_castle_bot" class="cta" style="display:block;text-align:center;font-size:.95rem;padding:12px 0">Попробовать бесплатно &rarr;</a>
-      </div>
+<!-- ═══ For Who ═══ -->
+<section class="section for-who">
+  <h2 class="section-title">Для кого Касси</h2>
+  <div class="cards">
+    <div class="card">
+      <div class="card-icon">👩‍👧</div>
+      <div class="card-title">Мамам</div>
+      <div class="card-pain">«7 утра, Алиса кричит, садик через 30 минут»</div>
+      <div class="card-text">А образ уже в телефоне — Касси подобрала с вечера. По погоде, из ваших вещей, с учётом что малышке 3 года. Осталось достать из шкафа и одеть.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">👗</div>
+      <div class="card-title">Девушкам</div>
+      <div class="card-pain">«Полный шкаф — а надеть нечего»</div>
+      <div class="card-text">Касси знает каждую твою вещь и каждое утро собирает новый образ. Забытые вещи, неожиданные сочетания, стиль и цветотип — как персональный стилист, только $9 вместо $200.</div>
     </div>
   </div>
 </section>
 
-<section class="hero" style="padding:60px 20px">
-  <div class="container">
-    <h2 style="font-size:1.6rem;margin-bottom:16px">14 дней бесплатно. Без карты.</h2>
-    <a href="https://t.me/fashion_castle_bot" class="cta">Попробовать бесплатно &rarr;</a>
+<!-- ═══ Гардеробная математика (NEW) ═══ -->
+<section class="math-section">
+  <div class="section-title" style="font-size:clamp(20px,3vw,28px)">Знаешь сколько образов в твоём шкафу?</div>
+  <div class="math-big">156</div>
+  <div class="math-sub">комбинаций из 28 вещей. Ты используешь 12. Касси покажет остальные.</div>
+  <a href="https://t.me/fashion_castle_bot" class="hero-cta" style="background:white;color:var(--accent)">Узнать свою цифру →</a>
+</section>
+
+<!-- ═══ How it looks (NEW) ═══ -->
+<section class="section looks">
+  <h2 class="section-title">Как это выглядит</h2>
+  <p class="section-sub">Вот что вы увидите каждое утро в Telegram</p>
+  <div class="looks-grid">
+    <div class="look-item">
+      <div class="look-phone">
+        <div class="look-screen">
+          <!-- TODO: скриншот детского коллажа -->
+          <div class="placeholder-text">Детский<br>образ</div>
+        </div>
+      </div>
+      <div class="look-label">Алиса · +4° · садик</div>
+      <div class="look-desc">Тёплый образ для прогулки</div>
+    </div>
+    <div class="look-item">
+      <div class="look-phone">
+        <div class="look-screen">
+          <!-- TODO: скриншот взрослого коллажа -->
+          <div class="placeholder-text">Взрослый<br>образ</div>
+        </div>
+      </div>
+      <div class="look-label">Лена · +14° · офис</div>
+      <div class="look-desc">Элегантный кэжуал на среду</div>
+    </div>
+    <div class="look-item">
+      <div class="look-phone">
+        <div class="look-screen">
+          <!-- TODO: скриншот стиль-паспорта -->
+          <div class="placeholder-text">Стиль-<br>паспорт</div>
+        </div>
+      </div>
+      <div class="look-label">Стиль-паспорт</div>
+      <div class="look-desc">Узнай свой тип за 30 сек</div>
+    </div>
   </div>
 </section>
 
-<footer class="footer">
-  <div class="container">Сделано с &#10084;&#65039;</div>
+<!-- ═══ How it works ═══ -->
+<section class="section how">
+  <h2 class="section-title">Три шага — и утро проще</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-icon">📸</div>
+      <div class="step-title">Сфоткай вещи</div>
+      <div class="step-text">По одной, на светлом фоне. Касси сама определит тип, цвет и уберёт фон.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-icon">✨</div>
+      <div class="step-title">Получай образы</div>
+      <div class="step-text">Вечером — look на завтра. Утром — напоминание с погодой. Не нравится — «переодень».</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-icon">👗</div>
+      <div class="step-title">Надень и иди</div>
+      <div class="step-text">Одно решение меньше. 15 минут экономии каждое утро. 7 часов в месяц.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Pricing ═══ -->
+<section class="section pricing" id="pricing">
+  <h2 class="section-title">Тарифы</h2>
+  <div class="plans">
+    <div class="plan">
+      <div class="plan-name">Free</div>
+      <div class="plan-price">$0</div>
+      <div class="plan-desc">Попробовать</div>
+      <ul class="plan-features">
+        <li>2 образа в неделю</li>
+        <li>Погода + совет Касси</li>
+        <li>30 вещей в гардеробе</li>
+        <li>Гардеробная математика</li>
+      </ul>
+      <a href="https://t.me/fashion_castle_bot" class="plan-cta outline">Начать бесплатно</a>
+    </div>
+    <div class="plan featured">
+      <div class="plan-badge">14 дней бесплатно</div>
+      <div class="plan-name">Premium</div>
+      <div class="plan-price">$9<span>/мес</span></div>
+      <div class="plan-anchor">= 1 кофе. Стилист стоит от $200.</div>
+      <ul class="plan-features">
+        <li>Образ каждый день + вечерний</li>
+        <li>Безлимит вещей</li>
+        <li>3 варианта «переодень»</li>
+        <li>Чат с Касси</li>
+        <li>Стиль-квиз и цветотип</li>
+        <li>Забытые сокровища</li>
+      </ul>
+      <a href="https://t.me/fashion_castle_bot" class="plan-cta filled">Попробовать бесплатно →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ FAQ ═══ -->
+<section class="section faq">
+  <h2 class="section-title">Вопросы</h2>
+  <div class="faq-list">
+    <div class="faq-item">
+      <div class="faq-q">Это бот или живой стилист?</div>
+      <div class="faq-a">AI-стилист Касси. Знает твой гардероб, погоду в городе и цветотип. Подбирает образы каждый день автоматически — и объясняет, почему это сочетание работает.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Чем лучше ChatGPT?</div>
+      <div class="faq-a">Касси помнит весь твой гардероб, присылает образ сама каждое утро, показывает фото ТВОИХ вещей в коллаже и учитывает погоду. ChatGPT забудет всё завтра и не покажет картинку.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Мои фото в безопасности?</div>
+      <div class="faq-a">Да. Фото хранятся только на наших серверах в Европе. Не передаются никому. Не используются для обучения AI.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Сколько вещей нужно сфоткать?</div>
+      <div class="faq-a">Минимум 8 — и Касси соберёт первый полный образ. 10 вещей = 34+ комбинации. 3 минуты на 10 фото.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Можно отменить подписку?</div>
+      <div class="faq-a">В любой момент, одним кликом. Нет автоплатежей. Гардероб сохранится — просто перейдёшь на бесплатный план.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Работает для мужчин?</div>
+      <div class="faq-a">Пока для женщин и детей. Мужской стиль — в ближайших обновлениях!</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Final CTA ═══ -->
+<section class="final-cta">
+  <div class="final-title">14 дней бесплатно. Без карты.</div>
+  <p class="final-sub">35 000 решений в день. Одежда — не одно из них.</p>
+  <a href="https://t.me/fashion_castle_bot" class="hero-cta">Начать бесплатно →</a>
+</section>
+
+<footer>
+  Касси — AI-стилист в Telegram · 2026 · <a href="mailto:hello@fashioncastle.app" style="color:inherit">hello@fashioncastle.app</a>
 </footer>
 
+<script>
+document.querySelectorAll('.faq-item').forEach(item => {
+  item.querySelector('.faq-q').addEventListener('click', () => {
+    item.classList.toggle('open');
+  });
+});
+</script>
 </body>
 </html>
