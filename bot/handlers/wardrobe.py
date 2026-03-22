@@ -832,9 +832,16 @@ async def _analyze_and_save(
     tg_file = await bot.get_file(photo_id)
     photo_bytes = bytes(await tg_file.download_as_bytearray())
 
+    # Pre-Vision quality check + brightness correction
+    from services.photo_quality import preprocess_for_vision
+    photo_for_vision, photo_quality = preprocess_for_vision(photo_bytes)
+
+    if not photo_quality.is_usable:
+        raise NoClothingDetectedError(photo_quality.tip_text())
+
     _vc = vision_context or {}
     items_data = await _call_vision(
-        photo_bytes,
+        photo_for_vision,
         owner_type=_vc.get("owner_type", owner_type),
         age=_vc.get("age"),
         season=_vc.get("season"),
@@ -939,6 +946,11 @@ async def _analyze_and_save(
             logger.info("wardrobe.rmbg_enqueued", count=len(rmbg_queue))
         except Exception as e:
             logger.warning("wardrobe.rmbg_enqueue_failed", error=str(e))
+
+    # Attach photo quality tips (if any) for caller to display
+    if hasattr(photo_quality, 'tips') and photo_quality.tips and added:
+        for item in added:
+            item["_photo_tips"] = photo_quality.tip_text()
 
     return added
 
@@ -1600,8 +1612,16 @@ async def _process_media_group(
             logger.info("wardrobe.vision_start", index=i)
             tg_file = await bot.get_file(file_id)
             photo_bytes = bytes(await tg_file.download_as_bytearray())
+
+            # Pre-Vision quality check + brightness correction
+            from services.photo_quality import preprocess_for_vision
+            photo_for_vision, _pq = preprocess_for_vision(photo_bytes)
+            if not _pq.is_usable:
+                photo_results.append(f"📷 Фото {i + 1}: {_pq.tip_text()}")
+                continue
+
             items_data = await _call_vision(
-                photo_bytes,
+                photo_for_vision,
                 owner_type=_vc_bulk.get("owner_type", owner_type),
                 age=_vc_bulk.get("age"),
                 season=_vc_bulk.get("season"),
