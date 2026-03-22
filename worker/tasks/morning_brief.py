@@ -1345,6 +1345,16 @@ async def send_morning_brief(payload: dict) -> dict:
                 except Exception as e:
                     logger.warning("morning_brief.save_file_id_failed", error=str(e))
 
+                # Save photo message_id for cleanup on reroll
+                try:
+                    _photo_mid = resp.json().get("result", {}).get("message_id")
+                    if _photo_mid and brief_id:
+                        from core.redis import get_redis as _get_redis_photo
+                        _r = _get_redis_photo()
+                        await _r.set(f"photo_msg:{telegram_id}:{brief_id}", str(_photo_mid), ex=86400)
+                except Exception:
+                    pass
+
                 # Текст + кнопки — отдельное сообщение
                 import asyncio as _asyncio
                 await _asyncio.sleep(0.1)

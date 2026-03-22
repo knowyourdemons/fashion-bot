@@ -2458,7 +2458,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
 
         if collage_bytes:
             # Split delivery: фото без caption, текст + кнопки отдельно
-            await message.reply_photo(photo=collage_bytes, disable_notification=True)
+            _photo_msg = await message.reply_photo(photo=collage_bytes, disable_notification=True)
             import asyncio as _asyncio
             await _asyncio.sleep(0.1)
             _kassi_text = f"💬 {comment}" if comment else ""
@@ -2469,6 +2469,15 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                     logger.warning("outfit.text_message_failed", error=str(e))
             else:
                 await message.reply_text("Образ готов!", reply_markup=_outfit_markup)
+            # Save photo message_id for cleanup on reroll
+            if redis and _outfit_brief_id and _photo_msg:
+                try:
+                    await redis.set(
+                        f"photo_msg:{message.chat_id}:{_outfit_brief_id}",
+                        str(_photo_msg.message_id), ex=86400,
+                    )
+                except Exception:
+                    pass
         else:
             await message.reply_text(
                 f"💬 {comment}" if comment else "Не удалось собрать коллаж. Попробуй позже.",

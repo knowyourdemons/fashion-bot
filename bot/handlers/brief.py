@@ -302,6 +302,16 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await redis.incr(reroll_key)
         await redis.expire(reroll_key, 86400)
 
+    # Delete old photo message (split delivery: photo is a separate message)
+    if redis and brief_id_str:
+        try:
+            _photo_mid = await redis.get(f"photo_msg:{old_message.chat_id}:{brief_id_str}")
+            if _photo_mid:
+                _mid = int(_photo_mid if isinstance(_photo_mid, str) else _photo_mid.decode())
+                await context.bot.delete_message(chat_id=old_message.chat_id, message_id=_mid)
+        except Exception:
+            pass
+
     # Delete old text message (new photo+text already sent by _generate_outfit_for_user)
     try:
         await old_message.delete()
