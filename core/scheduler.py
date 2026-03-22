@@ -40,7 +40,7 @@ class Scheduler:
     def _setup_jobs(self) -> None:
         from worker.tasks import morning_brief, gap_analysis
         from worker.tasks import subscription_expiry, reminders, analytics_report
-        from worker.tasks import evening_push
+        from worker.tasks import evening_push, weekly_plan
         from worker.tasks import daily_reset, cleanup_r2
 
         # daily_reset — каждый час, фильтрует юзеров у кого сейчас 00:xx по local timezone
@@ -88,6 +88,14 @@ class Scheduler:
             evening_push.run,
             CronTrigger(hour="*", minute=45),
             id="evening_push",
+            replace_existing=True,
+        )
+
+        # weekly_plan — каждый час :15, фильтрует по timezone (вс 19:00 local)
+        self._scheduler.add_job(
+            weekly_plan.schedule_weekly,
+            CronTrigger(hour="*", minute=15),
+            id="weekly_plan",
             replace_existing=True,
         )
 

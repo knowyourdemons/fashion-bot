@@ -145,11 +145,32 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(wardrobe.handle_selfie_colortype_later, pattern="^selfie_colortype_later$"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_selfie_colortype_manual, pattern="^manual_colortype:"))
 
+    # Weekly plan callbacks
+    async def _weekly_ok(update, context):
+        await update.callback_query.answer()
+        try:
+            await update.callback_query.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+    async def _weekly_reshuffle(update, context):
+        await update.callback_query.answer("🔄 Перемешиваю...")
+        # TODO: regenerate weekly plan
+        try:
+            await update.callback_query.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+    app.add_handler(CallbackQueryHandler(_weekly_ok, pattern="^weekly_ok$"))
+    app.add_handler(CallbackQueryHandler(_weekly_reshuffle, pattern="^weekly_reshuffle$"))
+
     # Геолокация для смены города в профиле
     app.add_handler(MessageHandler(filters.LOCATION, handle_edit_city_location))
 
+    # Fitting (🛍 Подойдёт?) — menu handler
+    from bot.handlers.fitting import handle_fitting_start
+    app.add_handler(MessageHandler(filters.Regex("^🛍 Подойдёт"), handle_fitting_start))
+
     # Текстовые сообщения → стилист — group=2 (после меню-хендлеров)
-    _menu_texts = filters.Regex("^((👗|👧|👦|👩)\uFE0F? Гардероб|✨ Что надеть|💬 Спросить Касси|👤 Профиль|❓ Помощь)$")
+    _menu_texts = filters.Regex("^((👗|👧|👦|👩)\uFE0F? Гардероб|✨ Что надеть|💬 Спросить Касси|🛍 Подойдёт|👤 Профиль|❓ Помощь)$")
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND & ~_menu_texts, text.handle_text),
         group=2,
