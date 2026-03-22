@@ -56,9 +56,19 @@ def _select_outfit(
         i for i in items
         if (not i.season or season in i.season) and i.last_worn != today
     ]
-    # Fallback: if too few items after last_worn filter, include all seasonal
+    # Fallback 1: if too few items after last_worn filter, include all seasonal
     if len(available) < 3:
         available = [i for i in items if not i.season or season in i.season]
+    # Fallback 2: if seasonal filter leaves no viable outfit, use ALL items
+    # (better to suggest something out-of-season than nothing at all)
+    has_top = any(i.category_group in ("top", "one_piece") for i in available)
+    has_bottom = any(i.category_group in ("bottom", "one_piece") for i in available)
+    if not (has_top and has_bottom):
+        available = list(items)
+
+    def _score(item):
+        """Sort key: higher score first."""
+        return float(item.score_item) if getattr(item, "score_item", None) else 0.0
 
     def _first(cg=None, type_contains=None, type_not_contains=None,
                prefer_contains=None, exclude_ids=None):
@@ -74,6 +84,8 @@ def _select_outfit(
             pool = [i for i in pool if type_not_contains.lower() not in (i.type or "").lower()]
         if exclude_ids:
             pool = [i for i in pool if i.id not in exclude_ids]
+        # Sort by score descending — prefer higher-scored items
+        pool = sorted(pool, key=_score, reverse=True)
         if prefer_contains and pool:
             preferred = [i for i in pool if prefer_contains.lower() in (i.type or "").lower()]
             return preferred[0] if preferred else pool[0]
