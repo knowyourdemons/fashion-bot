@@ -1,19 +1,104 @@
 # Fashion Bot — STATUS (22 марта 2026)
 
-## Git: последние коммиты (сессия 22 марта)
+## Git: 151 коммит за 20-22 марта 2026
+
+### 22 марта (13 коммитов)
 ```
-520d83c fix: pass body_type to AI engine + update CLAUDE.md with session work
+8d2f597 feat: 12-season colortype, style preferences, debug commands, 61 TA tests
+8b91767 feat: professional outfit evaluation — 6 dimensions, cross-validation, 89 tests
+dd7fcd8 feat: implement reminders, birthday alerts, gap insights in brief
+31d958e feat: expert panel simulation (50 tests) + 3 bug fixes
 b9beccf feat: pre-Vision photo quality assessment + auto-correction
 6bdf970 feat: expand normalization to 250+ type synonyms, 150+ color synonyms
 f50bc60 feat: type/color normalization for unknown clothing items
 52aaa19 feat: 63 stylist simulation tests + fix analogous color range
 f4d00e9 feat: professional styling system — 12 improvements across 10 files
 f93c45f feat: 470 synthetic wardrobe tests + 2 outfit selector fixes
+520d83c fix: pass body_type to AI engine + update CLAUDE.md with session work
+cb02291 docs: update STATUS.md and roadmap with session results
+3849441 docs: update STATUS.md — 1978 tests, reminders/birthday/gaps DONE
+```
+
+### 21 марта (75 коммитов) — ключевые
+```
+# Фичи
+ace4c55 feat: Outfit Engine v2 — AI-powered outfit selection via Haiku
+a3ee861 feat: migrate renderer from Satori to Playwright, improve outfit UX
+3779304 feat: Jinja2 HTML templates for brief cards via Playwright
+c560260 feat: cold user reminders + gallery hints + weekend mode + style formula
+c0da30d feat: adaptive first contact — instant value in 30 seconds
+af5c7e9 feat: bbox crop per item — isolate individual items from multi-item photos
+1b237fc feat: warmth-based outfit filtering — never show absurd outfits
+2dc2217 feat: improve collage thumbnails — sharpening, borders, solid labels
+c0ea34d feat: smart thumbnail pipeline for collage photos
+888d051 Add brief card system with three card states and two color themes
+c64df51 Add evening brief with tomorrow's weather and morning brief integration
+e1f8337 Add colortype detection via selfie and adaptive Kassi tone
+f51b452 Contextual chat improvements and trial degradation notifications
+365b55e Redesign onboarding to 3 steps and add milestone rewards
+0debc11 Redesign wardrobe browser: 3 screens with thumbnails, season editing, owner tabs
+
+# Инфраструктура
+65e0ac5 Add CI/CD: GitHub Actions test workflow
+a9ee237 Configure Sentry: DSN in .env, send_default_pii=True
+e748f38 Add timeouts to all external API calls
+a8f0f9e Add infra improvements: PG slow query logging, Loki/Grafana template, API rate limiting
+36baa60 Improve Sentry integration: worker init, PTB error handler, exception capture
+d2f5bbf Increase app memory limit to 1536m for RMBG-1.4
+5e97595 Defer background removal to async worker for faster photo upload UX
+1d5f78c Add pre-push hook: run tests before every push
+
+# Фиксы (20+)
+6bad850 fix: outfit generation — 5 fundamental fixes + 45 tests
+74b71db fix: photos in collage now show WITHOUT background
+138aca0 fix: eliminate chat clutter — one action = one message
+cd59f40 fix: clean chat — edit captions instead of new messages
+20b281b fix: brief card UX — 7 fixes from user feedback
+846bc5d fix: bbox crop on ORIGINAL photo, not after resize
+34da531 fix: 3 bugs — reroll crash, duplicate status, missing photo hint
+# + ~13 minor fixes (renderer, tests, imports)
+```
+
+### 20 марта (63 коммита) — ключевые
+```
+# Фичи
+ae0215b feat: smart brief — two modes (collage vs weather card) + text fixes
+bf7082d feat: morning brief as Satori card with dressing order + weather icons
+681b0fe feat: brief card redesign — grouped sections, white cards, proper order
+4fdfc64 feat: colortype-aware placeholder dots — recommended colors visible
+b2a4125 feat: collage styles match Miro references — silhouettes, colors, footer
+e2718b6 feat: story style matches reference — frosted glass, gradient bg, centered
+eba3b19 feat: flat_lay matches Miro reference — overlapping cards, centered name
+8e824b0 feat: onboarding redesign — 3 steps to first outfit
+237f440 feat: add Надели/Переодень/Переслать buttons to "Что надеть"
+c25a6ca feat: 3 new collage styles replacing 6 old ones
+239c1eb feat: weather PNG icons on collage + weather data pipeline
+2c084ec feat: visual wardrobe browser — 4 screens with filters and grid
+467aeed feat: Satori rendering quality — Bold font + Twemoji emoji
+980d902 feat: wire underutilized data into prompts, UI, and cleanup dead code
+e6bcd9c feat: morning brief redesign — text-only in dressing order, no collage
+
+# Инфра
+402a5cd infra: add Satori renderer to docker-compose
+d820247 perf: cache geocoding (7d Redis + in-memory) and weather (15min Redis)
+0c1edd5 fix: stale cache race condition — versioned cache keys + deploy script
+
+# Фиксы (30+)
+ea27ce3 fix: "Что надеть" — use Open-Meteo for full weather + pass all temps
+9b3f7e4 fix: UX issues — weather display, geolocation, shopping list, season grammar
+569f242 fix: 3 UX bugs — collage placeholders, help text, child size save
+7bb764f fix: shopping list now strongly context-aware for children
+471e109 fix: simplify gap analysis prompt — Haiku was ignoring child context
+# + ~25 visual polish fixes (palette, icons, layout, owner switching)
+
+# Тесты
+e4e4817 test: 27 regression tests covering all bugs from March 20 session
+2ba7032 Add tests for storage providers (BaseStorage, R2Storage, TelegramStorage)
 ```
 
 ## Тесты
-- Всего: **2128**
-- Passed: **2128**
+- Всего: **2133** (1487 функций + parametrize-кейсы)
+- Passed: **2133**
 - Skipped: 5
 - Failed: **0**
 
@@ -175,12 +260,12 @@ f93c45f feat: 470 synthetic wardrobe tests + 2 outfit selector fixes
 
 ## Новые тестовые файлы
 
-| Файл | Тестов | Покрытие |
-|------|--------|----------|
-| `test_wardrobe_optimizer.py` | 470 | 12 сегментов × 4 размера гардероба × 8 погод + edge cases |
-| `test_stylist_simulation.py` | 63 | 3 персоны: стилист (цвета), мама (детская безопасность), женщина (стиль) |
-| `test_normalize.py` | 175 | 250+ типов, 150+ цветов, интеграция с selector |
-| `test_photo_quality.py` | 52 | Яркость, blur, resolution, форматы, телефоны, corrupt |
+| Файл | Функций | Кейсов (с parametrize) | Покрытие |
+|------|---------|------------------------|----------|
+| `test_wardrobe_optimizer.py` | 33 | ~470 | 12 сегментов × 4 размера гардероба × 8 погод + edge cases |
+| `test_stylist_simulation.py` | 43 | ~63 | 3 персоны: стилист (цвета), мама (детская безопасность), женщина (стиль) |
+| `test_normalize.py` | 24 | ~175 | 250+ типов, 150+ цветов, интеграция с selector |
+| `test_photo_quality.py` | 43 | ~52 | Яркость, blur, resolution, форматы, телефоны, corrupt |
 
 ## Контейнеры
 
@@ -251,8 +336,8 @@ User фото → photo_quality.py (brightness/blur check)
 - ЮKassa/Paddle
 - Антибот, реферальная
 - Prometheus + Grafana
-- User style_preferences через онбординг
-- 12-season цветотип через расширенный анализ селфи
+- ~~User style_preferences~~ — ГОТОВО (v1.1, через профиль)
+- ~~12-season цветотип~~ — ГОТОВО (v1.1, 12 подтипов через селфи)
 
 ### v2.0 (июль)
 - Ultra план, семейный аккаунт, EN, маркетинг
@@ -278,16 +363,30 @@ worker/tasks/
   style_config.py      — 12-season colortype palettes (72 палитры)
   morning_brief.py     — Brief generation, body_type integration
 
-tests/
-  test_wardrobe_optimizer.py  — 470 тестов: full matrix
-  test_stylist_simulation.py  — 63 теста: 3 персоны
-  test_normalize.py           — 175 тестов: типы + цвета
-  test_photo_quality.py       — 52 теста: фото quality
-  test_outfit_evaluator.py    — NEW: 89 тестов: оценка образа, pipeline
-  test_ta_scenarios.py        — NEW: 61 тест: 7 персон расширенной ЦА
-  test_outfit_engine.py       — 80+ тестов: AI engine
-  test_outfit.py              — 45 тестов: rule-based
-  test_outfit_fixes.py        — 57 тестов: fixes
+tests/ (60 файлов, 1487 функций, 2133 кейса с parametrize)
+  test_outfit_evaluator.py    — 89 функций: оценка образа, pipeline
+  test_unit.py                — 88 функций: юнит-тесты ядра
+  test_morning_brief.py       — 56 функций: утренний бриф
+  test_core.py                — 51 функция: core модули
+  test_satori.py              — 48 функций: Satori renderer
+  test_ta_scenarios.py        — 47 функций: 7 персон расширенной ЦА
+  test_core2.py               — 47 функций: core модули (часть 2)
+  test_brief_renderer.py      — 47 функций: рендеринг брифа
+  test_smoke.py               — 45 функций: smoke-тесты
+  test_permissions.py         — 45 функций: планы, лимиты, trial
+  test_outfit_fixes.py        — 45 функций: fixes
+  test_stylist_simulation.py  — 43 функции (~63 кейса): 3 персоны
+  test_photo_quality.py       — 43 функции (~52 кейса): фото quality
+  test_worker_tasks.py        — 40 функций: worker tasks
+  test_outfit_engine.py       — 38 функций: AI engine
+  test_outfit_builder.py      — 38 функций: outfit builder
+  test_error_paths.py         — 37 функций: error paths
+  test_vision.py              — 34 функции: vision API
+  test_expert_panel.py        — 34 функции: совет экспертов
+  test_wardrobe_optimizer.py  — 33 функции (~470 кейсов): full matrix
+  test_remaining_v11.py       — 32 функции: v1.1 остатки
+  test_normalize.py           — 24 функции (~175 кейсов): типы + цвета
+  + 38 файлов (по 1-29 функций каждый)
 ```
 
 ## Известные баги / TODO

@@ -37,14 +37,19 @@ bot/handlers/
   wardrobe.py      — Vision, коллаж, owner switching, генерация образа
                      _track_task() для tracked background tasks
                      Транзакционные границы: photo upload в единой сессии
+  wardrobe_browser.py — просмотр гардероба, пагинация, удаление вещей
   onboarding.py    — ConversationHandler онбординга
-  subscription.py  — /subscribe, /test_subscribe, Stars/Stripe
+  billing.py       — /subscribe, Stars/Stripe, платёжные callbacks
   text.py          — Haiku чат стилиста (_get_text_system по сегменту)
   brief.py         — feedback на morning brief:
                      Детский: "Надели"/"Другой"
                      Взрослый с коллажем: "Нравится"/"Другой"
                      Взрослый без вещей: "Спасибо"/"Ещё совет"
                      Реролл: outfit → delete old + send new; advice → edit in-place
+  profile.py       — /profile, style preferences, colortype display
+  debug.py         — /debug_eval, /debug_gaps, /debug_style, /debug_wardrobe (admin-only)
+  shopping.py      — шоппинг-лист, gap-based рекомендации
+  feedback.py      — сбор обратной связи от пользователей
   error.py         — PTB global error handler → Sentry
   menu.py          — get_main_menu(), кнопки
   help.py          — /help текст
@@ -69,6 +74,19 @@ worker/tasks/
                            get_temp_regime() → lazy import из outfit_selector (избегая circular)
   subscription_expiry.py — уведомления об окончании trial
   evening_push.py        — вечерний push в 20:00
+  engagement.py          — тизеры и engagement push
+  reminders.py           — напоминания (3/7/30 дней без фото)
+  birthday_alert.py      — алерт о скором дне рождения ребёнка (размеры)
+  growth_alert.py        — алерт о росте ребёнка (пересмотр гардероба)
+  gap_analysis.py        — AI gap insights в бриф
+  daily_reset.py         — ежедневный сброс счётчиков usage
+  analytics_report.py    — аналитика использования
+  capsule_season.py      — сезонная ротация капсулы
+  wardrobe_analysis.py   — анализ гардероба (versatility, orphans)
+  taxonomy_review.py     — ревью неизвестных типов вещей
+  unknown_items_report.py — отчёт о нераспознанных вещах
+  cleanup_r2.py          — очистка старых файлов в R2
+  declutter.py           — предложения по разбору гардероба
 worker/consumer.py — FastWorker (HIGH, 4 concurrent) + SlowWorker (LOW, 2 concurrent)
                      Sentry init при старте worker
 db/models/         — SQLAlchemy модели
@@ -86,12 +104,25 @@ services/
                      Thumb cache: Redis thumb:{item_id} (7 дней)
                      Inline fallback: make_collage_thumbnail() если кэша нет
   brief_renderer.py — Jinja2 шаблоны → Playwright → PNG (440px)
+  brief_formatter.py — форматирование текста брифа (детский/взрослый)
+  brief_weather.py — геокодинг + погода для утреннего брифа
+  weather_card.py  — PIL-рендеринг погодной карточки 440x520
   image_builder.py — Satori коллаж (legacy), PNG-иконки, фоны
                      _shadow_cache с LRU (max 32 entries)
                      Sentry capture на критических ошибках
   collage_styles.py — 6 стилей, atomic round-robin через Redis INCR (next_style_async)
   outfit_selector.py — КАНОНИЧЕСКАЯ _get_temp_regime() (единственный источник)
-  scoring.py, weather.py, usage.py, i18n/
+  outfit_engine.py — AI outfit selection (Haiku), 4 возрастных промпта
+  outfit_builder.py — Slot assembly, base layer filter, collage params
+  outfit_evaluator.py — оценка образа по фото: 6 измерений, cross-validation
+  vision.py        — Claude Sonnet Vision, multi-item, bbox, post-validation
+  scoring.py       — item/outfit scoring, capsule analysis, gap detection
+  scoring_comment.py — fallback Haiku-комментарии (шаблоны)
+  gap_analysis.py  — AI shopping list, пробелы гардероба
+  share.py         — "спросить подругу" — share + голосование
+  notifications.py — notification service
+  weather.py, usage.py, i18n/
+  storage/         — R2/Telegram storage providers
 billing/           — stripe_provider.py (таймаут 30s), yukassa_provider.py (stub), paddle_provider.py (stub)
 scripts/
   watchdog.py      — health check + worker heartbeat мониторинг, Telegram алерты
@@ -242,7 +273,7 @@ docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
 ## Тестирование
 ```bash
 docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
-# 2128 тестов, pytest-forked для изоляции (22 марта 2026)
+# 2133 теста (1487 функций + parametrize), pytest-forked для изоляции (22 марта 2026)
 # CI: GitHub Actions запускает тесты на каждый push/PR
 # Pre-push hook: .githooks/pre-push блокирует push если тесты не проходят
 ```
@@ -265,6 +296,31 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - SAWarning про Child.wardrobe_items overlaps — косметика
 - PTBUserWarning про per_message — косметика
 - RMBG-1.4 inference ~4 сек (1024x1024 input) — можно попробовать 512x512 для ~1.5 сек
+
+## Git log: 151 коммит за 20-22 марта 2026
+
+### 22 марта (13 коммитов)
+- `8d2f597` feat: 12-season colortype, style preferences, debug commands, 61 TA tests
+- `8b91767` feat: professional outfit evaluation — 6 dimensions, cross-validation, 89 tests
+- `dd7fcd8` feat: implement reminders, birthday alerts, gap insights in brief
+- `31d958e` feat: expert panel simulation (50 tests) + 3 bug fixes
+- `b9beccf` feat: pre-Vision photo quality assessment + auto-correction
+- `6bdf970` feat: expand normalization to 250+ type synonyms, 150+ color synonyms
+- `f4d00e9` feat: professional styling system — 12 improvements across 10 files
+- `f93c45f` feat: 470 synthetic wardrobe tests + 2 outfit selector fixes
+- + 5 docs/fix коммитов
+
+### 21 марта (75 коммитов) — ключевые
+**Фичи:** Outfit Engine v2 (AI Haiku), Playwright renderer (замена Satori), bbox crop, warmth filtering, adaptive onboarding, brief card system, evening brief, colortype selfie, contextual chat, cold user reminders
+**Инфра:** CI/CD GitHub Actions, Sentry, API timeouts, rate limiting, RMBG-1.4 1536MB, async bg removal, pre-push hook
+**Фиксы:** outfit generation 5 fixes, chat clutter, collage photos without bg, brief card UX 7 fixes, reroll crash
+**Тесты:** +45 outfit fixes, +77 error paths + worker tasks, +19 dead code cleanup
+
+### 20 марта (63 коммита) — ключевые
+**Фичи:** smart brief (2 modes), morning brief Satori card, brief card redesign, 3 collage styles (flat_lay/story/moodboard по Miro), colortype placeholder dots, onboarding redesign, weather icons, wardrobe browser, Надели/Переодень кнопки
+**Инфра:** Satori renderer в docker-compose, geocoding cache (7d Redis), weather cache (15min)
+**Фиксы:** Open-Meteo weather, shopping list context-aware, gap analysis prompt, ~25 visual polish (palette, icons, layout, owner switching)
+**Тесты:** +27 regression, +storage providers
 
 ## Что сделано (19 марта 2026)
 
@@ -432,12 +488,10 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - /debug_style — colortype + палитра + preferences
 - /debug_wardrobe — скоры, роли, versatility, orphans
 
-### Тесты: 1053 → 2128 (+1075)
-- `test_wardrobe_optimizer.py` (470) — 12 сегментов × 4 размера × 8 погод
-- `test_stylist_simulation.py` (63) — 3 персоны (стилист/мама/женщина)
-- `test_normalize.py` (175) — 250+ типов, 150+ цветов
-- `test_photo_quality.py` (52) — яркость, blur, resolution, форматы
-- `test_outfit_evaluator.py` (89) — 11 групп: tiers, prompts, parsing, TA scenarios, pipeline
+### Тесты: 1053 → 2133 (+1080)
+- 60 тестовых файлов, 1487 test-функций, 2133 кейса (с parametrize)
+- Крупнейшие: test_outfit_evaluator (89), test_unit (88), test_morning_brief (56)
+- Parametrize-интенсивные: test_wardrobe_optimizer (33 функций → ~470 кейсов), test_normalize (24 → ~175)
 - Обновлены: test_outfit_engine, test_core2, test_regression
 
 ## Документация
@@ -475,8 +529,6 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - Антибот, реферальная программа
 - Prometheus + Grafana dashboards
 - Loki log aggregation (шаблон готов в docker-compose)
-- ~~User style_preferences~~ — ГОТОВО (через профиль)
-- ~~12-season цветотип через селфи~~ — ГОТОВО (12 подтипов)
 
 ### v2.0 (июль)
 - Ultra план, семейный аккаунт, EN, маркетинг
