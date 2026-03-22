@@ -303,6 +303,18 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
         system = _get_text_system(user, weather_line=weather_line)
 
+        # Добавить style_type в system prompt
+        _style_prefs = getattr(user, "style_preferences", None) or {}
+        _style_type = _style_prefs.get("style_type")
+        if _style_type:
+            from bot.handlers.style_quiz import STYLE_TYPES
+            _st = STYLE_TYPES.get(_style_type)
+            if _st:
+                system += f"\n\nСтиль пользователя: {_st['label']}. Используй слова: {', '.join(_st['tone_words'])}."
+
+        # Typing indicator
+        await context.bot.send_chat_action(update.effective_chat.id, "typing")
+
         # Добавить контекст гардероба в system prompt
         try:
             from bot.handlers.wardrobe import _get_owner

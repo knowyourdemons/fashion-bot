@@ -133,6 +133,13 @@ def create_application() -> Application:
     # Gap analysis
     app.add_handler(CallbackQueryHandler(wardrobe.handle_gap_analysis, pattern="^gap_analysis$"))
 
+    # Style quiz
+    from bot.handlers.style_quiz import handle_quiz_start, handle_quiz_answer, handle_quiz_later, handle_quiz_done
+    app.add_handler(CallbackQueryHandler(handle_quiz_start, pattern="^quiz_start$"))
+    app.add_handler(CallbackQueryHandler(handle_quiz_answer, pattern="^quiz:"))
+    app.add_handler(CallbackQueryHandler(handle_quiz_later, pattern="^quiz_later$"))
+    app.add_handler(CallbackQueryHandler(handle_quiz_done, pattern="^quiz_done$"))
+
     # Selfie colortype
     app.add_handler(CallbackQueryHandler(wardrobe.handle_selfie_colortype_start, pattern="^selfie_colortype_start$"))
     app.add_handler(CallbackQueryHandler(wardrobe.handle_selfie_colortype_later, pattern="^selfie_colortype_later$"))

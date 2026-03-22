@@ -572,12 +572,25 @@ def _build_user_prompt(
         avoid = style_preferences.get("avoid", [])
         prefer = style_preferences.get("prefer", [])
         style = style_preferences.get("style", "")
+        style_type = style_preferences.get("style_type", "")
         if avoid:
             parts.append(f"ИЗБЕГАЙ: {', '.join(avoid)}. Пользователь не носит эти вещи.")
         if prefer:
             parts.append(f"ПРЕДПОЧИТАЙ стиль: {', '.join(prefer)}.")
         if style:
             parts.append(f"Общий стиль: {style}.")
+        if style_type:
+            _STYLE_HINTS = {
+                "elegant_classic": "Предпочитай структурированные вещи, нейтральные цвета, минимум аксессуаров. Элегантно и безупречно.",
+                "romantic_soft": "Предпочитай мягкие ткани, нежные цвета, многослойность. Женственно и воздушно.",
+                "street_casual": "Предпочитай свободный крой, оверсайз, смелые акценты. Urban и дерзко.",
+                "sporty_minimal": "Предпочитай чистые линии, функциональность, лаконичность. Свежо и просто.",
+                "bold_creative": "Предпочитай яркие сочетания, неожиданные миксы, выразительность. Смело и ярко.",
+                "relaxed_natural": "Предпочитай натуральные тона, уютные текстуры, простоту. Естественно и тепло.",
+            }
+            _hint = _STYLE_HINTS.get(style_type)
+            if _hint:
+                parts.append(f"Стиль-тип пользователя: {style_type}. {_hint}")
 
     # Required slots hint
     required = ["top или one_piece", "bottom (если не платье)", "обувь"]

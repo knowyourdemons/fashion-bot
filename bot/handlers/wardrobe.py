@@ -290,12 +290,33 @@ async def check_milestones(user, item_count: int, message, owner_id, owner_type,
         except Exception as e:
             logger.warning("milestone.full_outfit.failed", error=str(e))
 
-    # 10 items (woman/no_kids): wardrobe collected
+    # 10 items (woman/no_kids): wardrobe collected + style quiz trigger
     if item_count >= 10 and segment in ("no_kids", "pregnant") and "wardrobe_collected" not in reached:
         new_milestones.append("wardrobe_collected")
-        await message.reply_text(
-            "🎉 Гардероб собран! Завтра утром — первый образ."
-        )
+        # Check if style quiz should be offered
+        _prefs = getattr(user, "style_preferences", None) or {}
+        _quiz_done = _prefs.get("quiz_completed", False)
+        _redis_quiz = context.bot_data.get("redis") if context else None
+        _quiz_declined = False
+        if _redis_quiz and not _quiz_done:
+            try:
+                _quiz_declined = bool(await _redis_quiz.get(f"quiz_declined:{user.id}"))
+            except Exception:
+                pass
+        if segment == "no_kids" and not _quiz_done and not _quiz_declined:
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("👗 Давай!", callback_data="quiz_start")],
+                [InlineKeyboardButton("Потом", callback_data="quiz_later")],
+            ])
+            await message.reply_text(
+                "🎉 10 вещей — классная база!\n\n"
+                "Хочешь узнать свой стиль? 30 секунд — и буду подбирать образы ещё точнее ✨",
+                reply_markup=keyboard,
+            )
+        else:
+            await message.reply_text(
+                "🎉 Гардероб собран! Завтра утром — первый образ."
+            )
 
     # Save new milestones
     if new_milestones:
@@ -1038,6 +1059,7 @@ async def _rate_photos(
     )
 
     try:
+        await bot.send_chat_action(message.chat_id, "typing")
         if mode == "single":
             photo_bytes_list = []
             for file_id in file_ids:
@@ -2338,6 +2360,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             recent_outfit_ids=_recent_ids,
             day_type=_day_type,
             body_type=getattr(user, "body_type", None),
+            style_preferences=getattr(user, "style_preferences", None),
             redis=redis,
         )
 

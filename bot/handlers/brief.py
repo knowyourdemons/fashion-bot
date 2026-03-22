@@ -295,6 +295,7 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         except Exception:
             pass
 
+    await context.bot.send_chat_action(old_message.chat_id, "typing")
     from bot.handlers.wardrobe import _generate_outfit_for_user
     await _generate_outfit_for_user(old_message, user, context, exclude_ids=exclude_ids, silent_status=True)
 
