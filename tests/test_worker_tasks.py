@@ -469,20 +469,17 @@ class TestEngagement:
 class TestBirthdayAlert:
     """Tests for worker/tasks/birthday_alert.py"""
 
-    def test_run_executes_without_error(self):
-        """Happy path: run() logs and returns (stub)."""
-        async def _test():
-            from worker.tasks.birthday_alert import run
-            await run()
-        _run(_test())
+    def test_birthday_messages_defined(self):
+        """Birthday messages should exist for key ages."""
+        from worker.tasks.birthday_alert import _BIRTHDAY_MESSAGES
+        assert 1 in _BIRTHDAY_MESSAGES
+        assert "default" in _BIRTHDAY_MESSAGES
 
-    def test_run_returns_none(self):
-        """run() is a stub that returns None."""
-        async def _test():
-            from worker.tasks.birthday_alert import run
-            result = await run()
-            assert result is None
-        _run(_test())
+    def test_birthday_message_format(self):
+        """Messages should format with child name."""
+        from worker.tasks.birthday_alert import _BIRTHDAY_MESSAGES
+        msg = _BIRTHDAY_MESSAGES[1].format(name="Алиса")
+        assert "Алиса" in msg
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -736,33 +733,52 @@ class TestGrowthAlertRun:
 class TestReminders:
     """Tests for worker/tasks/reminders.py"""
 
-    def test_run_executes_without_error(self):
-        """run() is a stub — should not crash."""
-        async def _test():
-            from worker.tasks.reminders import run
-            result = await run()
-            assert result is None
-        _run(_test())
+    def test_reminder_rules_structure(self):
+        """REMINDER_RULES should have 3 entries with days and text."""
+        from worker.tasks.reminders import REMINDER_RULES
+        assert len(REMINDER_RULES) == 3
+        for days, text in REMINDER_RULES:
+            assert isinstance(days, int)
+            assert isinstance(text, str)
+            assert len(text) >= 20
 
     def test_handle_send_reminder_returns_sent(self):
         """handle_send_reminder returns {"sent": True}."""
         async def _test():
             from worker.tasks.reminders import handle_send_reminder
-            result = await handle_send_reminder({
-                "user_id": str(uuid.uuid4()),
-                "reminder_type": 3,
-            })
-            assert result == {"sent": True}
+            with patch("telegram.Bot") as MockBot:
+                mock_bot = AsyncMock()
+                MockBot.return_value = mock_bot
+                with patch("core.redis.get_redis") as mock_redis:
+                    mock_redis.return_value = AsyncMock()
+                    with patch("config.settings") as mock_settings:
+                        mock_settings.telegram_bot_token = "test"
+                        result = await handle_send_reminder({
+                            "user_id": str(uuid.uuid4()),
+                            "telegram_id": 12345,
+                            "text": "Test",
+                            "reminder_type": 3,
+                        })
+                        assert result == {"sent": True}
         _run(_test())
 
     def test_handle_send_reminder_default_type(self):
         """reminder_type defaults to 3 when not provided."""
         async def _test():
             from worker.tasks.reminders import handle_send_reminder
-            result = await handle_send_reminder({
-                "user_id": str(uuid.uuid4()),
-            })
-            assert result == {"sent": True}
+            with patch("telegram.Bot") as MockBot:
+                mock_bot = AsyncMock()
+                MockBot.return_value = mock_bot
+                with patch("core.redis.get_redis") as mock_redis:
+                    mock_redis.return_value = AsyncMock()
+                    with patch("config.settings") as mock_settings:
+                        mock_settings.telegram_bot_token = "test"
+                        result = await handle_send_reminder({
+                            "user_id": str(uuid.uuid4()),
+                            "telegram_id": 12345,
+                            "text": "Test",
+                        })
+                        assert result == {"sent": True}
         _run(_test())
 
     def test_reminder_rules_structure(self):

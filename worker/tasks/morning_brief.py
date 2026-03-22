@@ -893,6 +893,14 @@ async def generate_brief(payload: dict) -> dict:
         if is_wow_outfit:
             any_wow = True
 
+        # Gap insight: append tip if wardrobe is small (< 15 items)
+        if len(items) < 15:
+            from services.scoring import get_wardrobe_gaps
+            _gaps = get_wardrobe_gaps(items)
+            _gap_tips = [g for g in _gaps if "Добавь" in g]
+            if _gap_tips:
+                outfit_comment += f"\n\n💡 {_gap_tips[0]}"
+
         regime = get_temp_regime(_temp)
 
         child_briefs.append(_format_child_block(
