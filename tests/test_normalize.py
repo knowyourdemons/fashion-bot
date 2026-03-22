@@ -34,6 +34,13 @@ class TestTypeNormalization:
         ("косынка", "шапка", "accessory"),
         ("чепчик", "шапка", "accessory"),
         ("ушанка", "шапка", "accessory"),
+        ("шляпа", "шапка", "accessory"),
+        ("федора", "шапка", "accessory"),
+        ("пилотка", "шапка", "accessory"),
+        ("фуражка", "шапка", "accessory"),
+        ("канотье", "шапка", "accessory"),
+        ("тиара", "украшения", "accessory"),
+        ("диадема", "украшения", "accessory"),
     ])
     def test_headwear_variants(self, raw, expected_type, expected_cg):
         norm_type, norm_cg = normalize_type(raw)
@@ -45,16 +52,29 @@ class TestTypeNormalization:
     @pytest.mark.parametrize("raw,expected_type", [
         ("валенки", "зимние сапоги"),
         ("дутики", "зимние сапоги"),
+        ("унты", "зимние сапоги"),
         ("кеды", "кроссовки"),
         ("слипоны", "кроссовки"),
+        ("хайтопы", "кроссовки"),
         ("балетки", "туфли"),
         ("мокасины", "туфли"),
+        ("лоферы", "туфли"),
+        ("оксфорды", "туфли"),
+        ("броги", "туфли"),
+        ("лодочки", "туфли"),
+        ("мери джейн", "туфли"),
         ("шлёпки", "сандалии"),
         ("вьетнамки", "сандалии"),
         ("кроксы", "сандалии"),
+        ("мюли", "сандалии"),
+        ("эспадрильи", "сандалии"),
+        ("босоножки", "сандалии"),
         ("ботильоны", "ботинки"),
         ("челси", "ботинки"),
         ("тимберленды", "ботинки"),
+        ("берцы", "ботинки"),
+        ("мартинсы", "ботинки"),
+        ("ботфорты", "сапоги"),
         ("пинетки", "тапочки"),
     ])
     def test_footwear_variants(self, raw, expected_type):
@@ -71,9 +91,16 @@ class TestTypeNormalization:
         ("поло", "рубашка"),
         ("джемпер", "свитер"),
         ("пуловер", "свитер"),
+        ("кофта", "свитер"),
         ("гольф", "водолазка"),
         ("бадлон", "водолазка"),
+        ("баска", "блузка"),
         ("туника", "блузка"),
+        ("болеро", "кардиган"),
+        ("бралетт", "топ"),
+        ("бюстье", "топ"),
+        ("кроп-топ", "топ"),
+        ("реглан", "лонгслив"),
     ])
     def test_top_variants(self, raw, expected_type):
         norm_type, norm_cg = normalize_type(raw)
@@ -84,13 +111,19 @@ class TestTypeNormalization:
 
     @pytest.mark.parametrize("raw,expected_type", [
         ("бриджи", "шорты"),
+        ("бермуды", "шорты"),
         ("кюлоты", "брюки"),
         ("лосины", "леггинсы"),
         ("треники", "брюки"),
         ("joggers", "брюки"),
+        ("джоггеры", "брюки"),
         ("карго", "брюки"),
         ("чиносы", "брюки"),
         ("палаццо", "брюки"),
+        ("скинни", "джинсы"),
+        ("бойфренды", "джинсы"),
+        ("плиссе", "юбка"),
+        ("юбка-карандаш", "юбка"),
     ])
     def test_bottom_variants(self, raw, expected_type):
         norm_type, norm_cg = normalize_type(raw)
@@ -102,12 +135,17 @@ class TestTypeNormalization:
     @pytest.mark.parametrize("raw,expected_type", [
         ("парка", "куртка"),
         ("анорак", "куртка"),
+        ("бомбер", "куртка"),
         ("косуха", "кожаная куртка"),
         ("кожанка", "кожаная куртка"),
         ("шуба", "пальто"),
         ("дублёнка", "пальто"),
+        ("пелерина", "пальто"),
+        ("манто", "пальто"),
+        ("тренчкот", "тренч"),
         ("пиджак", "пиджак"),
         ("жакет", "пиджак"),
+        ("блейзер", "пиджак"),
     ])
     def test_outerwear_variants(self, raw, expected_type):
         norm_type, norm_cg = normalize_type(raw)
@@ -141,6 +179,21 @@ class TestTypeNormalization:
         norm_type, norm_cg = normalize_type(raw)
         assert norm_type == expected_type
         assert norm_cg == "accessory"
+
+    # ── Baby / Toddler ──
+
+    @pytest.mark.parametrize("raw,expected_type,expected_cg", [
+        ("ползунки", "комбинезон", "one_piece"),
+        ("человечек", "комбинезон", "one_piece"),
+        ("распашонка", "футболка", "top"),
+        ("конверт", "комбинезон", "outerwear"),
+        ("царапки", "перчатки", "accessory"),
+        ("слюнявчик", "нагрудник", "accessory"),
+    ])
+    def test_baby_items(self, raw, expected_type, expected_cg):
+        norm_type, norm_cg = normalize_type(raw)
+        assert norm_type == expected_type, f"'{raw}' → '{norm_type}', expected '{expected_type}'"
+        assert norm_cg == expected_cg
 
     # ── Known items pass through unchanged ──
 
@@ -217,6 +270,21 @@ class TestColorNormalization:
         ("сухая роза", "пыльно-розовый"),
         ("пудра", "пудровый"),
         ("васильковый", "голубой"),
+
+        # NEW: previously missing
+        ("сиреневый", "лавандовый"),
+        ("лиловый", "фиолетовый"),
+        ("фуксия", "розовый"),
+        ("малиновый", "розовый"),
+        ("баклажан", "фиолетовый"),
+        ("шоколадный", "коричневый"),
+        ("графитовый", "графит"),
+        ("жемчужный", "белый"),
+        ("рубиновый", "красный"),
+        ("травяной", "зелёный"),
+        ("мшистый", "хаки"),
+        ("замшевый", "бежевый"),
+        ("грязно-розовый", "пыльно-розовый"),
 
         # English → Russian
         ("white", "белый"),
