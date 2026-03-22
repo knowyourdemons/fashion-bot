@@ -137,9 +137,8 @@ def color_compatibility(color_a: str, color_b: str) -> float:
     if hue_dist <= 15 and lightness_diff >= 15:
         return 2.0
 
-    # Analogous: hues within 30°
-    if hue_dist <= 30:
-        # Same hue, same lightness = too matchy but OK
+    # Analogous: hues within 60° (fashion standard — green+teal, blue+purple)
+    if hue_dist <= 60:
         return 1.0
 
     # Complementary: hues ~180° apart
@@ -154,11 +153,11 @@ def color_compatibility(color_a: str, color_b: str) -> float:
     if 140 <= hue_dist <= 160:
         return 0.5
 
-    # Potential clash: 45-90° apart with both saturated
-    if 40 <= hue_dist <= 90 and s_a >= 50 and s_b >= 50:
+    # Potential clash: 70-100° apart with both saturated
+    if 70 <= hue_dist <= 100 and s_a >= 50 and s_b >= 50:
         return -1.0
 
-    # Everything else
+    # Everything else — not great, not terrible
     return 0.0
 
 
