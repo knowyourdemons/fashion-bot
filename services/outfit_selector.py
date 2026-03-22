@@ -67,8 +67,19 @@ def _select_outfit(
         available = list(items)
 
     def _score(item):
-        """Sort key: higher score first."""
-        return float(item.score_item) if getattr(item, "score_item", None) else 0.0
+        """Sort key: higher score first, with freshness bonus.
+
+        Items not worn in >7 days get +1.0 bonus.
+        Items worn today get -2.0 penalty (should be filtered already, but safety).
+        """
+        base = float(item.score_item) if getattr(item, "score_item", None) else 0.0
+        last = getattr(item, "last_worn", None)
+        if last is not None:
+            if last == today:
+                base -= 2.0
+            elif (today - last).days >= 7:
+                base += 1.0
+        return base
 
     def _first(cg=None, type_contains=None, type_not_contains=None,
                prefer_contains=None, exclude_ids=None):
@@ -252,6 +263,37 @@ def _select_outfit(
         result["scarf"] = _first_any("accessory", ["шарф", "scarf"])
     if temp < 0:
         result["gloves"] = _first_any("accessory", ["перчатк", "варежк", "gloves"])
+
+    # ── Warmth consistency check ────────────────────────────────────────────
+    # Prevent absurd combos like puffer jacket (warmth=5) + shorts (warmth=1)
+    visual_keys = ("one_piece", "top", "bottom", "outerwear", "footwear")
+    warmth_vals = []
+    for key in visual_keys:
+        item = result.get(key)
+        if item:
+            wl = getattr(item, "warmth_level", None)
+            if wl is not None and isinstance(wl, (int, float)):
+                warmth_vals.append((key, wl))
+    if len(warmth_vals) >= 2:
+        max_w = max(w for _, w in warmth_vals)
+        min_w = min(w for _, w in warmth_vals)
+        if max_w - min_w > 2:
+            # Find the outlier and try to replace it
+            for slot_key, wl in warmth_vals:
+                if wl == min_w and regime in ("холодно", "мороз", "сильный_мороз"):
+                    # Too light item in cold weather — try to find warmer alternative
+                    item = result[slot_key]
+                    cg = item.category_group
+                    warmer = [
+                        i for i in available
+                        if i.category_group == cg
+                        and i.id != item.id
+                        and getattr(i, "warmth_level", 3) >= max_w - 2
+                    ]
+                    if warmer:
+                        warmer.sort(key=_score, reverse=True)
+                        result[slot_key] = warmer[0]
+                    break
 
     # Все вещи для скоринга
     all_items = []

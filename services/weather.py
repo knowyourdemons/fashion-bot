@@ -46,6 +46,18 @@ SPECIAL_RULES: dict[str, str] = {
 }
 
 
+def calc_wind_chill(temp_c: float, wind_kmph: float) -> float:
+    """Calculate wind chill (felt temperature).
+
+    Uses Environment Canada formula for temp ≤ 10°C and wind ≥ 4.8 km/h.
+    Returns original temp if conditions don't apply.
+    """
+    if temp_c > 10 or wind_kmph < 4.8:
+        return temp_c
+    wc = 13.12 + 0.6215 * temp_c - 11.37 * (wind_kmph ** 0.16) + 0.3965 * temp_c * (wind_kmph ** 0.16)
+    return round(wc, 1)
+
+
 class WeatherData:
     def __init__(self, raw: dict[str, Any]) -> None:
         current = raw["current_condition"][0]
@@ -54,6 +66,9 @@ class WeatherData:
         self.wind_kmph: int = int(current["windspeedKmph"])
         self.uv_index: int = int(current.get("uvIndex", 0))
         self.description: str = current["weatherDesc"][0]["value"]
+
+        # Wind chill — effective temperature for outfit selection
+        self.wind_chill_c: float = calc_wind_chill(self.temp_c, self.wind_kmph)
 
         # Вечерняя температура из почасового
         hourly = raw["weather"][0].get("hourly", [])
@@ -196,8 +211,18 @@ class WeatherService:
         is_rain = weather_code in range(263, 300)
         precip_evening = 60.0 if is_rain else 0.0
 
+        # Wind chill for outfit selection
+        wind_morning = float(morning_h.get("windspeedKmph", 0))
+        felt_morning = calc_wind_chill(temp_morning, wind_morning)
+
+        # UV index
+        uv = int(morning_h.get("uvIndex", 0))
+
         return {
             "temp_morning": temp_morning,
             "temp_evening": temp_evening,
+            "felt_morning": felt_morning,
             "precip_evening": precip_evening,
+            "wind_kmph": wind_morning,
+            "uv_index": uv,
         }

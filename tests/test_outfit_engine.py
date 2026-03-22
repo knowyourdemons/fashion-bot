@@ -354,14 +354,25 @@ class TestBuildOutfitFromAI:
 class TestSegmentPrompts:
     def test_mom_system_prompt(self):
         from services.outfit_engine import _SYSTEM_MOM
-        assert "удобно" in _SYSTEM_MOM.lower()
-        assert "тепло" in _SYSTEM_MOM.lower()
         assert "ребёнк" in _SYSTEM_MOM.lower()
+        assert "json" in _SYSTEM_MOM.lower()
+        assert "цвет" in _SYSTEM_MOM.lower()
+
+    def test_mom_age_prompts(self):
+        from services.outfit_engine import _get_mom_system_prompt
+        p03 = _get_mom_system_prompt(2)
+        assert "безопасность" in p03.lower()
+        p37 = _get_mom_system_prompt(5)
+        assert "садик" in p37.lower()
+        p712 = _get_mom_system_prompt(9)
+        assert "школа" in p712.lower()
+        p1216 = _get_mom_system_prompt(14)
+        assert "подросток" in p1216.lower()
 
     def test_woman_system_prompt(self):
         from services.outfit_engine import _SYSTEM_WOMAN
         assert "стильно" in _SYSTEM_WOMAN.lower()
-        assert "гармонир" in _SYSTEM_WOMAN.lower()
+        assert "60-30-10" in _SYSTEM_WOMAN
         assert "женщин" in _SYSTEM_WOMAN.lower()
 
 

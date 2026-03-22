@@ -181,17 +181,15 @@ class OutfitResult:
 
 # ── Segment prompts ──────────────────────────────────────────────────────────
 
-_SYSTEM_MOM = """Ты стилист Касси. Подбираешь одежду для ребёнка.
+_SYSTEM_MOM_BASE = """Ты стилист Касси. Подбираешь одежду для ребёнка.
 
 ЗАДАЧА: из списка вещей выбери лучшую комбинацию на день.
 
-ПРАВИЛА для детского образа:
-- Главное: УДОБНО, тепло, практично. Легко надеть/снять.
-- При <10° платье/юбку для садика НЕ предлагать (бегать неудобно).
-- При <5° обязательны: тёплая куртка, шапка.
-- При >20° можно шорты, платье, лёгкую обувь.
-- Цвета: мягкие рекомендации (для ребёнка всё сочетается).
-- Тон: тёплый, как подруга-мама. Коротко и по делу.
+ПРАВИЛА ЦВЕТА:
+- Максимум 3 цвета в образе. Нейтральные (чёрный, белый, серый, бежевый, navy) НЕ считаются.
+- Предпочитай: один цвет верх+низ (monochrome), или 2 сочетающихся + нейтральный.
+- Для ребёнка допускается мягкая гамма — избегай кричащих clashes (красный+оранжевый, розовый+красный).
+- Если есть вещи в палитре цветотипа ребёнка — предпочитай их.
 
 ФОРМАТ ОТВЕТА — строго JSON:
 {
@@ -204,8 +202,78 @@ _SYSTEM_MOM = """Ты стилист Касси. Подбираешь одежд
 - UUID бери ТОЛЬКО из списка кандидатов. НИКОГДА не пиши текст вместо UUID.
 - Если для слота нет подходящей вещи — ПРОПУСТИ этот слот, не включай его.
 - comment = комментарий Касси к образу. НЕ упоминай числовой скор.
-- is_wow = true если образ особенно удачный (цвета + стиль + сезон).
-- При холодной погоде: предпочитай более тёплые вещи (warmth 3-4)."""
+- is_wow = true если образ особенно удачный (цвета + стиль + сезон)."""
+
+# Age-specific rules appended to _SYSTEM_MOM_BASE
+_AGE_RULES = {
+    "0-3": """
+ВОЗРАСТ 0-3 года:
+- ГЛАВНОЕ: безопасность, мягкость, лёгкость надевания/снятия.
+- Никаких мелких деталей, завязок, шнурков — только кнопки, липучки, молнии.
+- Обувь: на липучках, мягкая подошва.
+- Размер лучше чуть больше — быстро растёт.
+- При <10° платье/юбку НЕ предлагать.
+- При <5° обязательны: тёплая куртка, шапка.
+- При >20° можно боди, лёгкое платье, сандалии.
+- При холодной погоде: предпочитай более тёплые вещи (warmth 3-4).
+- Тон: тёплый, нежный, как подруга-мама.""",
+
+    "3-7": """
+ВОЗРАСТ 3-7 лет (садик):
+- ГЛАВНОЕ: удобство для самостоятельного одевания + активных игр.
+- Эластичные пояса лучше пуговиц. Обувь на липучках > шнурки.
+- Одежда должна стираться легко — ребёнок пачкается.
+- Все вещи должны сочетаться между собой (ребёнок может выбрать сам).
+- При <10° платье/юбку для садика НЕ предлагать (бегать неудобно).
+- При <5° обязательны: тёплая куртка, шапка.
+- При >20° можно шорты, платье, лёгкую обувь.
+- При холодной погоде: предпочитай более тёплые вещи (warmth 3-4).
+- Тон: тёплый, как подруга-мама. Коротко и по делу.""",
+
+    "7-12": """
+ВОЗРАСТ 7-12 лет (школа):
+- БАЛАНС стиля и практичности. Ребёнок уже имеет мнение о стиле.
+- Учитывай, что нужно переодеваться на физкультуру — удобная обувь.
+- Можно предлагать чуть более модные сочетания.
+- Цветовые сочетания важнее чем для малышей.
+- При <10° платье допустимо с тёплыми колготками.
+- При <5° обязательны: тёплая куртка, шапка.
+- При >20° можно шорты, платье, лёгкую обувь.
+- При холодной погоде: предпочитай более тёплые вещи (warmth 3-4).
+- Тон: тёплый, немного взрослый — не сюсюкай.""",
+
+    "12-16": """
+ВОЗРАСТ 12-16 лет (подросток):
+- ГЛАВНОЕ: самовыражение через стиль. Тренды ВАЖНЫ.
+- Предлагай неожиданные, стильные сочетания — как для молодого взрослого.
+- Учитывай подростковый стиль: оверсайз, лейеринг, яркие акценты.
+- Можно смелее с цветами и силуэтами.
+- Платья и юбки — если они в гардеробе, значит подросток их носит.
+- При <5° обязательны: тёплая куртка, шапка.
+- При холодной погоде: предпочитай более тёплые вещи (warmth 3-4).
+- Тон: уверенный, как старшая подруга. НЕ менторский.""",
+}
+
+# Default for unknown ages
+_AGE_RULES_DEFAULT = _AGE_RULES["3-7"]
+
+
+def _get_mom_system_prompt(child_age: int | None) -> str:
+    """Get age-appropriate system prompt for children's outfits."""
+    if child_age is None:
+        return _SYSTEM_MOM_BASE + _AGE_RULES_DEFAULT
+    if child_age <= 3:
+        return _SYSTEM_MOM_BASE + _AGE_RULES["0-3"]
+    elif child_age <= 7:
+        return _SYSTEM_MOM_BASE + _AGE_RULES["3-7"]
+    elif child_age <= 12:
+        return _SYSTEM_MOM_BASE + _AGE_RULES["7-12"]
+    else:
+        return _SYSTEM_MOM_BASE + _AGE_RULES["12-16"]
+
+
+# Keep backward-compatible reference
+_SYSTEM_MOM = _SYSTEM_MOM_BASE + _AGE_RULES_DEFAULT
 
 _SYSTEM_WOMAN = """Ты стилист Касси. Подбираешь образ для женщины.
 
@@ -213,11 +281,18 @@ _SYSTEM_WOMAN = """Ты стилист Касси. Подбираешь обра
 
 ПРАВИЛА для женского образа:
 - Главное: СТИЛЬНО, неожиданные сочетания которые женщина не подумала бы сама.
-- Цвета должны гармонировать: нейтральная база + яркий акцент, или monochrome.
 - Аксессуары (сумка, шарф) = завершение образа, включи если есть.
 - Платье — приветствуется для офиса/свидания.
 - При ре-ролле дай ДРУГОЕ настроение, не просто другую кофту.
+- При холодной погоде: предпочитай более тёплые вещи (warmth 3-4).
 - Тон: стильный, уверенный. Объясни ПОЧЕМУ это сочетание работает.
+
+ПРАВИЛА ЦВЕТА (обязательно):
+- Правило 60-30-10: 60% доминантный цвет (низ/платье), 30% вторичный (верх/куртка), 10% акцент (аксессуар/обувь).
+- Максимум 3 цвета. Нейтральные (чёрный, белый, серый, бежевый, navy, коричневый, хаки) НЕ считаются к лимиту.
+- Схемы: monochrome (один цвет, разные оттенки), analogous (соседние: синий+бирюзовый), complementary (контрастные: синий+оранжевый).
+- ИЗБЕГАЙ: два ярких рядом (красный+оранжевый), принт+принт, три акцентных цвета.
+- Если есть вещи в палитре цветотипа — ПРЕДПОЧИТАЙ их.
 
 ФОРМАТ ОТВЕТА — строго JSON:
 {
@@ -230,8 +305,7 @@ _SYSTEM_WOMAN = """Ты стилист Касси. Подбираешь обра
 - UUID бери ТОЛЬКО из списка кандидатов. НИКОГДА не пиши текст вместо UUID.
 - Если для слота нет подходящей вещи — ПРОПУСТИ этот слот, не включай его.
 - comment = стилистический разбор. НЕ упоминай числовой скор.
-- is_wow = true если образ особенно стильный.
-- При холодной погоде: предпочитай более тёплые вещи (warmth 3-4)."""
+- is_wow = true если образ особенно стильный."""
 
 # ── Item serialization ───────────────────────────────────────────────────────
 
@@ -264,14 +338,46 @@ def _serialize_item(item) -> dict:
     return d
 
 
-def _build_candidates(items: list, season: str, today: date, regime: str = "") -> dict[str, list[dict]]:
-    """Group and serialize items for AI, filtering by season, base layer, and warmth."""
+_OCCASION_EXCLUDE = {
+    "weekday": {"evening", "party", "sport", "beach", "vacation"},
+    "weekend": {"formal", "business", "office"},
+    "sport": {"formal", "business", "office", "evening", "party"},
+    # Russian day_type mappings from morning_brief
+    "садик": {"evening", "party", "sport", "beach", "vacation"},
+    "школа": {"evening", "party", "sport", "beach", "vacation"},
+    "работа": {"evening", "party", "sport", "beach", "vacation"},
+    "прогулка": {"formal", "business", "office"},
+    "гости": {"formal", "business", "office", "sport"},
+}
+
+
+def _build_candidates(
+    items: list, season: str, today: date, regime: str = "",
+    day_type: str = "",
+) -> dict[str, list[dict]]:
+    """Group and serialize items for AI, filtering by season, base layer, warmth, and occasion."""
+    exclude_occasions = _OCCASION_EXCLUDE.get(day_type, set())
+
     available = [
         i for i in items
         if (not i.season or season in i.season)
         and not _is_base_layer_item(i)
         and getattr(i, "style_tag", "") != "home"  # exclude pajamas/home clothes
     ]
+
+    # Occasion filter: remove items whose occasion doesn't fit the day_type
+    if exclude_occasions:
+        filtered = []
+        for i in available:
+            item_occasions = getattr(i, "occasion", None) or []
+            if not item_occasions:
+                filtered.append(i)  # no occasion tag → keep (universal)
+            elif not set(item_occasions) & exclude_occasions:
+                filtered.append(i)  # no overlap with excluded → keep
+            # else: all item's occasions are excluded → skip
+        # Graceful: if filtering removes too many, keep all
+        if len(filtered) >= max(2, len(available) // 3):
+            available = filtered
 
     # Warmth pre-filter: remove items clearly wrong for temperature
     if regime:
@@ -356,6 +462,19 @@ def _build_rotation_text(recent_outfit_ids: list[list[str]]) -> str:
 
 # ── Build user prompt ────────────────────────────────────────────────────────
 
+_BODY_TYPE_HINTS = {
+    "hourglass": "Фигура: песочные часы. Подчёркивай талию: приталенное, wrap-силуэты, V-вырез. Избегай мешковатого.",
+    "pear": "Фигура: груша. Акцент на верх: V-вырез, структурные плечи, А-line юбки. Избегай обтягивающего на бёдрах.",
+    "apple": "Фигура: яблоко. Удлиняй торс: empire waist, V-вырез, расклёшенные юбки. Избегай обтягивающего на животе.",
+    "rectangle": "Фигура: прямоугольник. Создавай изгибы: пояса, баска, слои, wrap-силуэт. Избегай прямых линий.",
+    "inverted_triangle": "Фигура: перевёрнутый треугольник. Добавь объём бёдрам: wide-leg, А-line, детали внизу. Избегай погон и лодочек.",
+    "песочные часы": "Фигура: песочные часы. Подчёркивай талию: приталенное, wrap-силуэты, V-вырез. Избегай мешковатого.",
+    "груша": "Фигура: груша. Акцент на верх: V-вырез, структурные плечи, А-line юбки. Избегай обтягивающего на бёдрах.",
+    "яблоко": "Фигура: яблоко. Удлиняй торс: empire waist, V-вырез, расклёшенные юбки. Избегай обтягивающего на животе.",
+    "прямоугольник": "Фигура: прямоугольник. Создавай изгибы: пояса, баска, слои, wrap-силуэт. Избегай прямых линий.",
+}
+
+
 def _build_user_prompt(
     candidates: dict[str, list[dict]],
     temp_morning: float,
@@ -371,6 +490,10 @@ def _build_user_prompt(
     rotation_text: str = "",
     item_count_total: int = 0,
     precip: float = 0,
+    body_type: str | None = None,
+    wind_kmph: float = 0,
+    uv_index: int = 0,
+    style_preferences: dict | None = None,
 ) -> str:
     """Build the user prompt for Haiku."""
     _season_ru = {
@@ -395,13 +518,55 @@ def _build_user_prompt(
         f"Сезон: {_season_ru}. Режим: {regime}."
     )
 
+    # Wind
+    if wind_kmph >= 15:
+        parts.append(f"ВЕТЕР {wind_kmph:.0f} км/ч! Предпочитай закрытую одежду, куртку с капюшоном.")
+    elif wind_kmph >= 10:
+        parts.append(f"Ветрено ({wind_kmph:.0f} км/ч) — куртка пригодится.")
+
     # Rain
     if precip > 50:
         parts.append("ДОЖДЬ! Приоритет: вещи с rain=true (непромокаемые). Если нет — предупреди взять зонт.")
 
-    # Colortype
+    # UV
+    if uv_index >= 6:
+        parts.append(f"Высокий УФ-индекс ({uv_index})! Обязательна панамка/шапка. Посоветуй солнцезащитный крем.")
+
+    # Colortype with specific palette
     if colortype and colortype != "default":
-        parts.append(f"Цветотип: {colortype}. Учитывай при выборе цветов.")
+        from worker.tasks.style_config import COLORTYPE_PALETTES
+        palette = COLORTYPE_PALETTES.get(colortype, {})
+        if palette:
+            top_colors = palette.get("top", [])
+            bottom_colors = palette.get("bottom", [])
+            ow_colors = palette.get("outerwear", [])
+            parts.append(
+                f"Цветотип: {colortype}. Лучшие цвета: "
+                f"верх — {', '.join(top_colors[:3])}; "
+                f"низ — {', '.join(bottom_colors[:3])}; "
+                f"куртка — {', '.join(ow_colors[:3])}. "
+                f"ПРЕДПОЧИТАЙ вещи этих оттенков."
+            )
+        else:
+            parts.append(f"Цветотип: {colortype}. Учитывай при выборе цветов.")
+
+    # Body type (women only)
+    if body_type and segment not in ("mom_girl", "mom_boy"):
+        hint = _BODY_TYPE_HINTS.get(body_type.lower(), "")
+        if hint:
+            parts.append(hint)
+
+    # User style preferences
+    if style_preferences:
+        avoid = style_preferences.get("avoid", [])
+        prefer = style_preferences.get("prefer", [])
+        style = style_preferences.get("style", "")
+        if avoid:
+            parts.append(f"ИЗБЕГАЙ: {', '.join(avoid)}. Пользователь не носит эти вещи.")
+        if prefer:
+            parts.append(f"ПРЕДПОЧИТАЙ стиль: {', '.join(prefer)}.")
+        if style:
+            parts.append(f"Общий стиль: {style}.")
 
     # Required slots hint
     required = ["top или one_piece", "bottom (если не платье)", "обувь"]
@@ -632,6 +797,7 @@ async def select_outfit_ai(
     colortype: str | None = None,
     recent_outfit_ids: list[list[str]] | None = None,
     day_type: str = "",
+    body_type: str | None = None,
     redis=None,
 ) -> OutfitResult:
     """AI-powered outfit selection. Returns OutfitResult with outfit + comment.
@@ -642,8 +808,8 @@ async def select_outfit_ai(
     temp_eve = temp_evening if temp_evening is not None else temp
     regime = _get_temp_regime(temp)
 
-    # Build candidates (excluding base layer)
-    candidates = _build_candidates(items, season, today, regime=regime)
+    # Build candidates (excluding base layer, filtered by occasion)
+    candidates = _build_candidates(items, season, today, regime=regime, day_type=day_type)
     total_candidate_count = sum(len(v) for v in candidates.values())
 
     # Check if warmth-filtered items are too few but raw wardrobe has items
@@ -668,9 +834,9 @@ async def select_outfit_ai(
     # Rotation text
     rotation_text = _build_rotation_text(recent_outfit_ids or [])
 
-    # Segment-specific system prompt
+    # Segment-specific system prompt (age-aware for children)
     is_mom = segment in ("mom_girl", "mom_boy")
-    system_prompt = _SYSTEM_MOM if is_mom else _SYSTEM_WOMAN
+    system_prompt = _get_mom_system_prompt(child_age) if is_mom else _SYSTEM_WOMAN
 
     # Colortype addition
     if colortype and colortype != "default":
@@ -692,6 +858,7 @@ async def select_outfit_ai(
         rotation_text=rotation_text,
         item_count_total=total_candidate_count,
         precip=precip_evening,
+        body_type=body_type,
     )
 
     # Call Haiku

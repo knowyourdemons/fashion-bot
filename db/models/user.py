@@ -67,6 +67,9 @@ class User(Base):
     onboarding_step: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
     colortype: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    # Style preferences: {"avoid": ["юбки", "каблуки"], "prefer": ["минимализм"],
+    #   "style": "casual", "work_days": 5}
+    style_preferences: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     milestones_reached: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True, default=list)
 
     # Soft delete

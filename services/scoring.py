@@ -111,14 +111,123 @@ def get_wardrobe_balance_insight(items: list) -> str | None:
     return None
 
 
+# ── Capsule wardrobe analysis ────────────────────────────────────────────────
+
+_COMBINABLE_PAIRS = {
+    # (category_group_a, category_group_b) — pairs that can form outfit combos
+    ("top", "bottom"), ("top", "one_piece"), ("outerwear", "top"),
+    ("outerwear", "bottom"), ("outerwear", "one_piece"),
+    ("footwear", "bottom"), ("footwear", "one_piece"),
+    ("accessory", "top"), ("accessory", "outerwear"),
+}
+
+_NEUTRAL_COLORS = frozenset([
+    "белый", "чёрный", "серый", "бежевый", "navy", "тёмно-синий",
+    "коричневый", "хаки", "молочный", "кремовый", "графит",
+    "white", "black", "gray", "grey", "beige", "brown", "navy",
+    "cream", "khaki", "charcoal", "taupe",
+])
+
+
+def _is_neutral_color(color: str) -> bool:
+    if not color:
+        return True
+    c = color.lower()
+    return any(nc in c for nc in _NEUTRAL_COLORS)
+
+
+def calc_item_versatility(item, all_items: list) -> int:
+    """Calculate how many other items this item can pair with.
+
+    A neutral item pairs with everything. Non-neutral pairs with neutrals only.
+    Returns count of compatible items (higher = more versatile).
+    """
+    cg = getattr(item, "category_group", "") or ""
+    color = getattr(item, "color", "") or ""
+    is_neutral = _is_neutral_color(color)
+    count = 0
+    for other in all_items:
+        if other.id == item.id:
+            continue
+        other_cg = getattr(other, "category_group", "") or ""
+        pair = (cg, other_cg) if cg < other_cg else (other_cg, cg)
+        if pair not in _COMBINABLE_PAIRS:
+            continue
+        other_color = getattr(other, "color", "") or ""
+        other_neutral = _is_neutral_color(other_color)
+        # Neutrals combine with everything; non-neutrals combine with neutrals
+        if is_neutral or other_neutral:
+            count += 1
+    return count
+
+
+def get_wardrobe_gaps(items: list, season: str = "") -> list[str]:
+    """Identify missing wardrobe categories for a complete capsule.
+
+    Returns list of actionable suggestions.
+    """
+    from services.outfit_builder import _is_base_layer_item
+
+    # Filter to visual items only
+    visual = [i for i in items if not _is_base_layer_item(i)]
+    if not visual:
+        return ["Гардероб пуст — начни с базовых вещей: футболка, джинсы, кроссовки"]
+
+    cg_counts: dict[str, int] = {}
+    for i in visual:
+        cg = getattr(i, "category_group", "") or ""
+        cg_counts[cg] = cg_counts.get(cg, 0) + 1
+
+    gaps = []
+
+    # Required minimums for a functional capsule
+    _MINIMUMS = {
+        "top": (3, "верх (футболки, кофты, рубашки)"),
+        "bottom": (2, "низ (джинсы, брюки, юбки)"),
+        "footwear": (2, "обувь (кроссовки + ботинки/сандалии)"),
+        "outerwear": (1, "верхнюю одежду (куртку)"),
+    }
+
+    for cg, (minimum, desc) in _MINIMUMS.items():
+        actual = cg_counts.get(cg, 0)
+        if actual < minimum:
+            need = minimum - actual
+            gaps.append(f"Добавь ещё {need} шт. {desc}")
+
+    # Orphan detection: items that pair with < 2 others
+    if len(visual) >= 8:
+        orphans = []
+        for i in visual:
+            v = calc_item_versatility(i, visual)
+            if v < 2:
+                orphans.append(f"{i.type} ({i.color})")
+        if orphans and len(orphans) <= 3:
+            gaps.append(
+                f"Одинокие вещи (мало сочетаний): {', '.join(orphans[:3])}. "
+                f"Добавь нейтральный верх/низ — они раскроются!"
+            )
+
+    # Combo potential
+    tops = cg_counts.get("top", 0)
+    bottoms = cg_counts.get("bottom", 0)
+    one_pieces = cg_counts.get("one_piece", 0)
+    outerwear_n = cg_counts.get("outerwear", 0)
+    combos = tops * bottoms * max(outerwear_n + 1, 1) + one_pieces
+    if combos > 0 and len(visual) >= 5:
+        gaps.append(f"Потенциал: ~{combos} комбинаций из {len(visual)} вещей")
+
+    return gaps
+
+
 # Скоринг образа (взрослые)
 OUTFIT_SCORE_WEIGHTS_ADULT = {
     "technical": {
-        "color_harmony": 2,
+        "color_harmony": 3,        # was 2, elevated — most impactful
         "style_unity": 2,
         "colortype_outfit": 2,
         "seasonality": 1,
-        "occasion_fit": 1,
+        "occasion_fit": 2,         # was 1, elevated — occasion matters
+        "body_type_fit": 1,        # NEW: does outfit flatter body type?
     },
     "aesthetic": {
         "unexpected_combination": 2,
@@ -134,7 +243,7 @@ OUTFIT_SCORE_WEIGHTS_ADULT = {
     },
 }
 
-OUTFIT_MAX_ADULT = 23  # нормируем в 10
+OUTFIT_MAX_ADULT = 26  # updated with new criteria
 WOW_THRESHOLD = {"transformation": 3, "unexpected_combination": 2}
 
 OUTFIT_SCORE_WEIGHTS_CHILD = {
@@ -144,8 +253,9 @@ OUTFIT_SCORE_WEIGHTS_CHILD = {
     "weather_fit": 2,
     "style_unity": 1,
     "variety": 1,
+    "safety": 1,               # NEW: no choking hazards, appropriate fasteners
 }
-OUTFIT_MAX_CHILD = 10
+OUTFIT_MAX_CHILD = 11
 
 
 class ScoringService:

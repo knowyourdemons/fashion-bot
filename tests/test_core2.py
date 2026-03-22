@@ -143,6 +143,7 @@ class TestScoreOutfit:
             "weather_fit": 2,
             "style_unity": 1,
             "variety": 1,
+            "safety": 1,
         }
         score, breakdown, is_wow = self.svc.score_outfit(scores, is_child=True)
         assert score == Decimal("10.00")
@@ -165,7 +166,7 @@ class TestScoreOutfit:
         """Значения выше максимума зажимаются."""
         scores = {"color_harmony": 99, "practicality_outfit": 99,
                   "age_appropriateness": 99, "weather_fit": 99,
-                  "style_unity": 99, "variety": 99}
+                  "style_unity": 99, "variety": 99, "safety": 99}
         score, _, _ = self.svc.score_outfit(scores, is_child=True)
         assert score == Decimal("10.00")
 
