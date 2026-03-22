@@ -478,7 +478,24 @@ async def _call_rate_vision(
     photo_bytes_list: list[bytes],
     owner_id=None,
     owner_type: str | None = None,
+    *,
+    colortype: str | None = None,
+    body_type: str | None = None,
+    segment: str | None = None,
+    child_age: int | None = None,
 ) -> str:
+    """Evaluate outfit photo using structured professional analysis.
+
+    Returns formatted text for the user (never raw JSON).
+    Uses new structured prompt → JSON → cross-validation → formatted text.
+    """
+    from services.outfit_evaluator import (
+        build_eval_prompt,
+        parse_eval_response,
+        format_eval_text,
+        cross_validate_colors,
+    )
+
     pool = get_anthropic_pool()
     content = []
     for photo_bytes in photo_bytes_list:
@@ -492,16 +509,64 @@ async def _call_rate_vision(
         })
     content.append({"type": "text", "text": "Оцени образ на фото."})
 
+    # Load wardrobe for swap suggestions
+    wardrobe_items = []
     if owner_id and owner_type:
         async with AsyncReadSession() as session:
             wardrobe_items = await get_owner_items(session, owner_id, owner_type)
-        system_prompt = _build_rate_prompt(wardrobe_items, owner_type=owner_type)
-    else:
-        system_prompt = _RATE_SYSTEM_CHILD
+
+    # Build structured evaluation prompt
+    system_prompt = build_eval_prompt(
+        owner_type=owner_type or "user",
+        wardrobe_items=wardrobe_items,
+        colortype=colortype,
+        body_type=body_type,
+        segment=segment,
+        child_age=child_age,
+    )
 
     response = await pool.create_message(
+        model="claude-sonnet-4-6",
         system=system_prompt,
         messages=[{"role": "user", "content": content}],
-        max_tokens=512,
+        max_tokens=1024,
     )
-    return response.content[0].text.strip() if response.content else "Не удалось оценить образ"
+    raw = response.content[0].text.strip() if response.content else ""
+
+    if not raw:
+        return "Не удалось оценить образ. Попробуй ещё раз."
+
+    # Parse structured response
+    eval_data = parse_eval_response(raw)
+    if eval_data is None:
+        # Fallback: return raw text if JSON parsing failed, truncated
+        logger.warning("rate_vision.json_fallback", raw=raw[:200])
+        return raw[:500] if len(raw) > 500 else raw
+
+    # Cross-validate colors with local harmony engine
+    detected = eval_data.get("detected_items", [])
+    if detected and eval_data.get("dimensions", {}).get("color_harmony"):
+        original_color_score = eval_data["dimensions"]["color_harmony"]
+        adjusted = cross_validate_colors(detected, original_color_score)
+        if adjusted != original_color_score:
+            eval_data["dimensions"]["color_harmony"] = adjusted
+            # Recalculate overall score with adjusted color
+            dims = eval_data["dimensions"]
+            if dims:
+                # Simple weighted average
+                from services.outfit_evaluator import EVAL_DIMENSIONS
+                total_weight = sum(d["weight"] for d in EVAL_DIMENSIONS.values())
+                weighted = sum(
+                    dims.get(k, 5) * EVAL_DIMENSIONS[k]["weight"]
+                    for k in EVAL_DIMENSIONS
+                    if k in dims
+                )
+                used_weight = sum(
+                    EVAL_DIMENSIONS[k]["weight"]
+                    for k in EVAL_DIMENSIONS
+                    if k in dims
+                )
+                if used_weight > 0:
+                    eval_data["score"] = round(weighted / used_weight, 1)
+
+    return format_eval_text(eval_data, owner_type=owner_type or "user")

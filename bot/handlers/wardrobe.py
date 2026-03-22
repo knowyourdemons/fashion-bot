@@ -966,6 +966,36 @@ async def _rate_photos(
     owner_type: str | None = None,
     db_user=None,
 ) -> None:
+    """Download photo(s) and evaluate outfit using structured professional analysis."""
+    # Extract user context for better evaluation
+    colortype = getattr(db_user, "colortype", None)
+    body_type = getattr(db_user, "body_type", None)
+    segment = getattr(db_user, "segment", None)
+
+    # Get child age if evaluating child outfit
+    child_age = None
+    if owner_type == "child" and owner_id:
+        try:
+            from db.models.child import Child as _RateChild
+            from sqlalchemy import select as _rate_sel
+            from datetime import date as _rate_date
+            async with AsyncReadSession() as _rate_s:
+                _res = await _rate_s.execute(_rate_sel(_RateChild).where(_RateChild.id == owner_id))
+                _child = _res.scalar_one_or_none()
+                if _child and _child.birthdate:
+                    child_age = (_rate_date.today() - _child.birthdate).days // 365
+        except Exception:
+            pass
+
+    rate_kwargs = dict(
+        owner_id=owner_id,
+        owner_type=owner_type,
+        colortype=colortype,
+        body_type=body_type,
+        segment=segment,
+        child_age=child_age,
+    )
+
     try:
         if mode == "single":
             photo_bytes_list = []
@@ -977,13 +1007,13 @@ async def _rate_photos(
                 logger.info("rate.download_ok",
                     file_id=file_id[:20], size=len(photo_bytes))
                 photo_bytes_list.append(photo_bytes)
-            result = await _call_rate_vision(photo_bytes_list, owner_id=owner_id, owner_type=owner_type)
+            result = await _call_rate_vision(photo_bytes_list, **rate_kwargs)
             await message.reply_text(result, reply_markup=get_main_menu(db_user))
         else:
             for i, file_id in enumerate(file_ids, 1):
                 tg_file = await bot.get_file(file_id)
                 photo_bytes = bytes(await tg_file.download_as_bytearray())
-                result = await _call_rate_vision([photo_bytes], owner_id=owner_id, owner_type=owner_type)
+                result = await _call_rate_vision([photo_bytes], **rate_kwargs)
                 await message.reply_text(f"📷 Фото {i}:\n{result}", reply_markup=get_main_menu(db_user))
     except Exception as e:
         await message.reply_text("Не удалось оценить образ. Попробуй ещё раз.", reply_markup=get_main_menu(db_user))

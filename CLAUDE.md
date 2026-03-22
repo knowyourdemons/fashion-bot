@@ -242,7 +242,7 @@ docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
 ## Тестирование
 ```bash
 docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
-# 1053 теста, pytest-forked для изоляции (21 марта 2026)
+# 2066 тестов, pytest-forked для изоляции (22 марта 2026)
 # CI: GitHub Actions запускает тесты на каждый push/PR
 # Pre-push hook: .githooks/pre-push блокирует push если тесты не проходят
 ```
@@ -406,11 +406,22 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - **Score-based preference**: `_first()` сортирует по score_item desc
 - **body_type передаётся** в select_outfit_ai из wardrobe handler и morning_brief
 
-### Тесты: 1053 → 1897 (+844)
+### Оценка образа по фото (`services/outfit_evaluator.py`)
+- **6 измерений**: цвет (25%), пропорции (25%), стиль (20%), уместность (15%), детали (10%), креатив (5%)
+- **Детская оценка**: безопасность, комфорт, цвета, погода, возраст (другие веса)
+- **5 tier-ов**: Wow / Отличный / Хороший / Есть потенциал / Давай усилим!
+- **Cross-validation**: HSL-матрица перепроверяет Vision на цветовые клэши
+- **JSON-промпт**: Vision → JSON → cross-validation → formatted text
+- **Контекст**: colortype, body_type, segment, child_age, wardrobe для замен
+- **Правило пропорций, зеркальные селфи** — в промпте
+- **CTA после оценки** + truncated fallback
+
+### Тесты: 1053 → 2066 (+1013)
 - `test_wardrobe_optimizer.py` (470) — 12 сегментов × 4 размера × 8 погод
 - `test_stylist_simulation.py` (63) — 3 персоны (стилист/мама/женщина)
 - `test_normalize.py` (175) — 250+ типов, 150+ цветов
 - `test_photo_quality.py` (52) — яркость, blur, resolution, форматы
+- `test_outfit_evaluator.py` (89) — 11 групп: tiers, prompts, parsing, TA scenarios, pipeline
 - Обновлены: test_outfit_engine, test_core2, test_regression
 
 ## Документация
@@ -438,7 +449,7 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - ~~Нормализация вещей/цветов~~ — ГОТОВО (250+ типов, 150+ цветов)
 - ~~Pre-Vision photo quality~~ — ГОТОВО (brightness, blur, contrast, auto-correction)
 - /profile + /add_child
-- Оценка образа по фото (вещь vs outfit detection)
+- ~~Оценка образа по фото~~ — ГОТОВО (6 измерений, cross-validation, 89 тестов)
 - Gap analysis + growth alert WHO
 - Тизеры, engagement push
 
