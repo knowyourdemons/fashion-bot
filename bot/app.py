@@ -32,6 +32,10 @@ def create_application() -> Application:
     app.add_handler(CommandHandler("debug_reset", debug.handle_debug_reset))
     app.add_handler(CommandHandler("debug_free", debug.handle_debug_free))
     app.add_handler(CommandHandler("debug_brief", debug.handle_debug_brief))
+    app.add_handler(CommandHandler("debug_eval", debug.handle_debug_eval))
+    app.add_handler(CommandHandler("debug_gaps", debug.handle_debug_gaps))
+    app.add_handler(CommandHandler("debug_style", debug.handle_debug_style))
+    app.add_handler(CommandHandler("debug_wardrobe", debug.handle_debug_wardrobe))
     app.add_handler(CommandHandler("test_subscribe", handle_test_subscribe))
     app.add_handler(CommandHandler("help", help.handle_help))
     app.add_handler(CommandHandler("wardrobe", wardrobe.handle_list))
@@ -111,10 +115,14 @@ def create_application() -> Application:
     from bot.handlers.profile import (
         handle_edit_city, handle_edit_colortype, handle_set_colortype,
         handle_add_child_start, handle_new_child_gender, handle_edit_child_size,
+        handle_edit_style_prefs, handle_set_style, handle_avoid_pref,
     )
     app.add_handler(CallbackQueryHandler(handle_edit_city, pattern="^edit_city$"))
     app.add_handler(CallbackQueryHandler(handle_edit_colortype, pattern="^edit_colortype$"))
     app.add_handler(CallbackQueryHandler(handle_set_colortype, pattern="^set_colortype:"))
+    app.add_handler(CallbackQueryHandler(handle_edit_style_prefs, pattern="^edit_style_prefs$"))
+    app.add_handler(CallbackQueryHandler(handle_set_style, pattern="^set_style:"))
+    app.add_handler(CallbackQueryHandler(handle_avoid_pref, pattern="^avoid_pref:"))
     app.add_handler(CallbackQueryHandler(handle_add_child_start, pattern="^add_child_start$"))
     app.add_handler(CallbackQueryHandler(handle_new_child_gender, pattern="^new_child:"))
     app.add_handler(CallbackQueryHandler(handle_edit_child_size, pattern="^edit_child_size:"))

@@ -66,6 +66,19 @@ async def handle_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except Exception as e:
         logger.error("profile.children.error", error=str(e))
 
+    # Style preferences summary
+    prefs = getattr(user, "style_preferences", None) or {}
+    if prefs:
+        pref_parts = []
+        if prefs.get("style"):
+            pref_parts.append(f"стиль: {prefs['style']}")
+        if prefs.get("avoid"):
+            pref_parts.append(f"избегать: {', '.join(prefs['avoid'][:3])}")
+        if prefs.get("prefer"):
+            pref_parts.append(f"люблю: {', '.join(prefs['prefer'][:3])}")
+        if pref_parts:
+            lines.append(f"💅 Предпочтения: {'; '.join(pref_parts)}")
+
     # Реферальный код
     ref_code = getattr(user, "referral_code", None)
     if ref_code:
@@ -74,6 +87,7 @@ async def handle_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     edit_buttons = [
         [InlineKeyboardButton("🏙 Изменить город", callback_data="edit_city")],
         [InlineKeyboardButton("🎨 Изменить цветотип", callback_data="edit_colortype")],
+        [InlineKeyboardButton("💅 Стиль", callback_data="edit_style_prefs")],
         [InlineKeyboardButton("👶 Добавить ребёнка", callback_data="add_child_start")],
     ]
     # Кнопки редактирования детей
@@ -310,3 +324,133 @@ async def _finish_add_child(message, user, context) -> None:
         sentry_sdk.capture_exception(e)
     finally:
         context.user_data.pop("adding_child", None)
+
+
+# ── Style preferences ────────────────────────────────────────────────────
+
+_STYLE_OPTIONS = [
+    ("casual", "🧢 Кэжуал"),
+    ("smart_casual", "👔 Smart casual"),
+    ("minimal", "⬜ Минимализм"),
+    ("boho", "🌻 Бохо"),
+    ("classic", "👗 Классика"),
+    ("sporty", "🏃 Спортивный"),
+]
+
+_AVOID_COLORS = [
+    ("яркие", "🚫 Яркие"),
+    ("пастельные", "🚫 Пастельные"),
+    ("чёрный", "🚫 Чёрный"),
+    ("принты", "🚫 Принты"),
+]
+
+
+async def handle_edit_style_prefs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show style preference selection — step 1: choose style."""
+    query = update.callback_query
+    await query.answer()
+
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    keyboard = []
+    row = []
+    for code, label in _STYLE_OPTIONS:
+        row.append(InlineKeyboardButton(label, callback_data=f"set_style:{code}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+
+    await query.message.reply_text(
+        "💅 Какой стиль тебе ближе?\n(это поможет подбирать образы точнее)",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def handle_set_style(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Set style preference and ask about colors to avoid."""
+    query = update.callback_query
+    await query.answer()
+
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    style = query.data.split(":")[1]
+
+    # Save style immediately
+    import sqlalchemy as sa
+    from db.models.user import User as UserModel
+    prefs = getattr(user, "style_preferences", None) or {}
+    prefs["style"] = style
+
+    async with AsyncWriteSession() as session:
+        await session.execute(
+            sa.update(UserModel).where(UserModel.id == user.id)
+            .values(style_preferences=prefs)
+        )
+        await session.commit()
+    user.style_preferences = prefs
+
+    style_label = dict(_STYLE_OPTIONS).get(style, style)
+    await query.message.reply_text(
+        f"✅ Стиль: {style_label}\n\n"
+        "Есть что-то, что ты НЕ любишь носить?\n"
+        "(нажми «Готово» если всё ок)",
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("🚫 Яркие цвета", callback_data="avoid_pref:яркие"),
+                InlineKeyboardButton("🚫 Принты", callback_data="avoid_pref:принты"),
+            ],
+            [
+                InlineKeyboardButton("🚫 Обтягивающее", callback_data="avoid_pref:обтягивающее"),
+                InlineKeyboardButton("🚫 Оверсайз", callback_data="avoid_pref:оверсайз"),
+            ],
+            [InlineKeyboardButton("✅ Готово", callback_data="avoid_pref:done")],
+        ]),
+    )
+
+
+async def handle_avoid_pref(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Add item to avoid list or finish."""
+    query = update.callback_query
+    await query.answer()
+
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    value = query.data.split(":")[1]
+
+    if value == "done":
+        prefs = getattr(user, "style_preferences", None) or {}
+        avoid = prefs.get("avoid", [])
+        if avoid:
+            await query.message.reply_text(
+                f"✅ Настройки сохранены!\nИзбегаем: {', '.join(avoid)}\n\n"
+                "Теперь образы будут ещё точнее подобраны под тебя 🎯"
+            )
+        else:
+            await query.message.reply_text("✅ Настройки сохранены! Образы будут точнее 🎯")
+        return
+
+    import sqlalchemy as sa
+    from db.models.user import User as UserModel
+    prefs = getattr(user, "style_preferences", None) or {}
+    avoid = prefs.get("avoid", [])
+    if value not in avoid:
+        avoid.append(value)
+    prefs["avoid"] = avoid
+
+    async with AsyncWriteSession() as session:
+        await session.execute(
+            sa.update(UserModel).where(UserModel.id == user.id)
+            .values(style_preferences=prefs)
+        )
+        await session.commit()
+    user.style_preferences = prefs
+
+    await query.answer(f"Добавлено: {value} 🚫")

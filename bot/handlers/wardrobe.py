@@ -412,11 +412,26 @@ async def _save_colortype_to_user(user, colortype: str) -> None:
 
 
 async def _analyze_selfie_colortype(photo_bytes: bytes) -> dict:
-    """Call Vision (Sonnet) to determine colortype from selfie. Returns {colortype, confidence}."""
+    """Call Vision (Sonnet) to determine 12-season colortype from selfie.
+
+    Returns {colortype, sub_season, confidence}.
+    colortype: one of 4 base seasons (backward compat)
+    sub_season: one of 12 sub-seasons for precise palette selection
+    """
     pool = get_anthropic_pool()
     prompt = (
-        "Определи цветотип человека на фото. Анализируй тон кожи, цвет волос, контраст между ними.\n"
-        'Ответь JSON: {"colortype": "spring"|"summer"|"autumn"|"winter", "confidence": 0.0-1.0}\n'
+        "Определи цветотип человека на фото по 12-сезонной системе.\n\n"
+        "Анализируй:\n"
+        "1. Тон кожи (тёплый / холодный / нейтральный)\n"
+        "2. Цвет волос (от платины до чёрного, тёплый/холодный подтон)\n"
+        "3. Контраст между кожей и волосами (низкий / средний / высокий)\n"
+        "4. Общая яркость и насыщенность внешности\n\n"
+        "12 подтипов:\n"
+        "- Bright Spring, True Spring, Light Spring\n"
+        "- Light Summer, True Summer, Soft Summer\n"
+        "- Soft Autumn, True Autumn, Deep Autumn\n"
+        "- Deep Winter, True Winter, Bright Winter\n\n"
+        'Ответь JSON: {"sub_season": "True Summer", "confidence": 0.8}\n'
         "Только JSON, без пояснений."
     )
     try:
@@ -436,24 +451,35 @@ async def _analyze_selfie_colortype(photo_bytes: bytes) -> dict:
                     {"type": "text", "text": prompt},
                 ],
             }],
-            system="Ты эксперт по цветотипированию. Отвечай только JSON.",
+            system="Ты эксперт по 12-сезонному цветотипированию. Отвечай только JSON.",
             max_tokens=100,
         )
         text = response.content[0].text.strip()
-        # Parse JSON from response
         import re as _re
         json_match = _re.search(r'\{[^}]+\}', text)
         if json_match:
             result = json.loads(json_match.group())
+            sub_season = result.get("sub_season", "True Summer")
+
+            # Map sub-season → base season for backward compat
+            _BASE_SEASON_MAP = {
+                "Bright Spring": "Весна", "True Spring": "Весна", "Light Spring": "Весна",
+                "Light Summer": "Лето", "True Summer": "Лето", "Soft Summer": "Лето",
+                "Soft Autumn": "Осень", "True Autumn": "Осень", "Deep Autumn": "Осень",
+                "Deep Winter": "Зима", "True Winter": "Зима", "Bright Winter": "Зима",
+            }
+            base = _BASE_SEASON_MAP.get(sub_season, "Лето")
+
             return {
-                "colortype": result.get("colortype", "summer"),
+                "colortype": base,
+                "sub_season": sub_season,
                 "confidence": float(result.get("confidence", 0.5)),
             }
-        return {"colortype": "summer", "confidence": 0.0}
+        return {"colortype": "Лето", "sub_season": "True Summer", "confidence": 0.0}
     except Exception as e:
         logger.warning("selfie_colortype.vision_failed", error=str(e))
         sentry_sdk.capture_exception(e)
-        return {"colortype": "summer", "confidence": 0.0}
+        return {"colortype": "Лето", "sub_season": "True Summer", "confidence": 0.0}
 
 
 async def _build_colortype_card(name: str, colortype: str) -> bytes | None:
@@ -548,14 +574,20 @@ async def _handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data["awaiting_selfie"] = True
         return True
 
-    # Analyze
+    # Analyze (12-season)
     result = await _analyze_selfie_colortype(photo_bytes)
     colortype = result["colortype"]
+    sub_season = result.get("sub_season", "")
     confidence = result["confidence"]
+
+    # Use sub_season as colortype for palette matching (if recognized)
+    from worker.tasks.style_config import COLORTYPE_PALETTES
+    effective_colortype = sub_season if sub_season in COLORTYPE_PALETTES else colortype
 
     logger.info("selfie_colortype.result",
         user_id=str(user.id),
         colortype=colortype,
+        sub_season=sub_season,
         confidence=confidence,
     )
 
@@ -571,19 +603,28 @@ async def _handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYP
         target_name = user.name
 
     if confidence >= 0.6:
-        # High confidence — save directly
+        # High confidence — save sub_season (or base) for precise palette
         if segment in ("mom_girl", "mom_boy") and children:
             from db.models.child import Child
             async with AsyncWriteSession() as session:
                 await session.execute(
                     sa.update(Child).where(Child.id == children[0].id)
-                    .values(colortype=colortype)
+                    .values(colortype=effective_colortype)
                 )
                 await session.commit()
         else:
-            await _save_colortype_to_user(user, colortype)
+            await _save_colortype_to_user(user, effective_colortype)
 
+        # Use base season for card rendering (card has 4 styles)
         ct_label = _COLORTYPE_NAMES_RU.get(colortype, colortype)
+        if sub_season and sub_season != colortype:
+            _SUB_LABELS = {
+                "Bright Spring": "Яркая Весна", "True Spring": "Тёплая Весна", "Light Spring": "Светлая Весна",
+                "Light Summer": "Светлое Лето", "True Summer": "Настоящее Лето", "Soft Summer": "Мягкое Лето",
+                "Soft Autumn": "Мягкая Осень", "True Autumn": "Настоящая Осень", "Deep Autumn": "Тёмная Осень",
+                "Deep Winter": "Тёмная Зима", "True Winter": "Настоящая Зима", "Bright Winter": "Яркая Зима",
+            }
+            ct_label = _SUB_LABELS.get(sub_season, ct_label)
         card_bytes = await _build_colortype_card(target_name, colortype)
         if card_bytes:
             from io import BytesIO

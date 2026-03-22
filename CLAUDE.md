@@ -242,7 +242,7 @@ docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
 ## Тестирование
 ```bash
 docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
-# 2066 тестов, pytest-forked для изоляции (22 марта 2026)
+# 2128 тестов, pytest-forked для изоляции (22 марта 2026)
 # CI: GitHub Actions запускает тесты на каждый push/PR
 # Pre-push hook: .githooks/pre-push блокирует push если тесты не проходят
 ```
@@ -416,7 +416,23 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - **Правило пропорций, зеркальные селфи** — в промпте
 - **CTA после оценки** + truncated fallback
 
-### Тесты: 1053 → 2066 (+1013)
+### 12-season цветотип через селфи
+- Vision prompt определяет 12 подтипов (Bright Spring, True Summer, etc.)
+- Sub_season → COLORTYPE_PALETTES для точной палитры
+- Backward-compatible: base season для карточки
+
+### Style preferences (профиль)
+- Кнопка 💅 в /profile → стиль + avoid list
+- Сохраняется в user.style_preferences JSONB
+- Используется в outfit_engine для персонализации
+
+### Debug commands (admin-only)
+- /debug_eval — настройки оценки, tiers, контекст юзера
+- /debug_gaps — пробелы гардероба, категории, баланс
+- /debug_style — colortype + палитра + preferences
+- /debug_wardrobe — скоры, роли, versatility, orphans
+
+### Тесты: 1053 → 2128 (+1075)
 - `test_wardrobe_optimizer.py` (470) — 12 сегментов × 4 размера × 8 погод
 - `test_stylist_simulation.py` (63) — 3 персоны (стилист/мама/женщина)
 - `test_normalize.py` (175) — 250+ типов, 150+ цветов
@@ -448,10 +464,10 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - ~~Профессиональная стилистика~~ — ГОТОВО (12-season, color harmony, body type, capsule)
 - ~~Нормализация вещей/цветов~~ — ГОТОВО (250+ типов, 150+ цветов)
 - ~~Pre-Vision photo quality~~ — ГОТОВО (brightness, blur, contrast, auto-correction)
-- /profile + /add_child
+- ~~profile + add_child~~ — ГОТОВО (+ style prefs через профиль)
 - ~~Оценка образа по фото~~ — ГОТОВО (6 измерений, cross-validation, 89 тестов)
-- Gap analysis + growth alert WHO
-- Тизеры, engagement push
+- ~~Gap analysis + growth alert~~ — ГОТОВО (capsule scoring + AI shopping list)
+- ~~Тизеры, engagement push~~ — ГОТОВО
 
 ### v1.2 (май)
 - Шоппинг-лист + affiliate (Admitad/Skimlinks, H&M, Lamoda)
@@ -459,8 +475,8 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - Антибот, реферальная программа
 - Prometheus + Grafana dashboards
 - Loki log aggregation (шаблон готов в docker-compose)
-- User style_preferences через онбординг
-- 12-season цветотип через онбординг (расширенный анализ селфи)
+- ~~User style_preferences~~ — ГОТОВО (через профиль)
+- ~~12-season цветотип через селфи~~ — ГОТОВО (12 подтипов)
 
 ### v2.0 (июль)
 - Ultra план, семейный аккаунт, EN, маркетинг

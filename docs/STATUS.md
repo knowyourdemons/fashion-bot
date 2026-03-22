@@ -12,9 +12,9 @@ f93c45f feat: 470 synthetic wardrobe tests + 2 outfit selector fixes
 ```
 
 ## Тесты
-- Всего: **2066**
-- Passed: **2066**
-- Skipped: 6
+- Всего: **2128**
+- Passed: **2128**
+- Skipped: 5
 - Failed: **0**
 
 ## Что сделано (22 марта 2026 — сессия 2)
@@ -70,6 +70,28 @@ f93c45f feat: 470 synthetic wardrobe tests + 2 outfit selector fixes
   - CTA после оценки
   - Truncated fallback
 - **Итерация 2**: Финальная валидация — одобрено всеми 5 экспертами
+
+### 12-season цветотип через селфи
+- **Расширенный Vision prompt**: определяет 1 из 12 подтипов (Bright Spring, True Summer, Soft Autumn, Deep Winter и т.д.)
+- **Backward-compatible**: sub_season → base season для карточки, sub_season для палитры
+- **Маппинг**: sub_season → COLORTYPE_PALETTES (72 палитры уже готовы)
+
+### Style preferences (профиль)
+- **Кнопка 💅 в профиле** → выбор стиля (casual/smart/minimal/boho/classic/sporty)
+- **Avoid list** → что не любишь (яркие/принты/обтягивающее/оверсайз)
+- **Сохраняется** в `user.style_preferences` JSONB → используется outfit_engine
+- **3 новых callback handlers**: edit_style_prefs, set_style, avoid_pref
+
+### Debug commands (admin-only)
+- `/debug_eval` — показать настройки оценки образа (dimensions, tiers, user context)
+- `/debug_gaps` — gap analysis: категории, пробелы, цвета, баланс
+- `/debug_style` — стилистический профиль: colortype + палитра + preferences
+- `/debug_wardrobe` — полная статистика: скоры, роли, сезоны, versatility, orphans
+
+### Синтетические ТА-сценарии — расширенная аудитория
+- **7 персон** протестированы: Маша (мама), Лена (no_kids), Даша (студентка 22), Оля (бизнесвумен 40), Катя (беременная), Аня (выпускница 18), Дима (папа)
+- **Cross-TA тесты**: все 4 сегмента × 8 цветотипов × 5 типов фигуры
+- **61 тест** (`test_ta_scenarios.py`)
 
 ## Новые модули (22 марта 2026)
 
@@ -216,9 +238,9 @@ User фото → photo_quality.py (brightness/blur check)
 | Профессиональная стилистика | ✅ DONE (22 марта) |
 | Нормализация вещей/цветов | ✅ DONE (22 марта) |
 | Pre-Vision photo quality | ✅ DONE (22 марта) |
-| /profile + /add_child | 🔲 TODO |
+| /profile + /add_child | ✅ DONE (ранее + style prefs 22 марта) |
 | Оценка образа по фото | ✅ DONE (22 марта) |
-| Gap analysis + growth alert | 🔲 TODO (capsule scoring готов) |
+| Gap analysis + growth alert | ✅ DONE (capsule + AI shopping list) |
 | Reminders (3/7/30 дней) | ✅ DONE (22 марта) |
 | Birthday alert | ✅ DONE (22 марта) |
 | Gap insights в brief | ✅ DONE (22 марта) |
@@ -261,7 +283,8 @@ tests/
   test_stylist_simulation.py  — 63 теста: 3 персоны
   test_normalize.py           — 175 тестов: типы + цвета
   test_photo_quality.py       — 52 теста: фото quality
-  test_outfit_evaluator.py    — NEW: 89 тестов: оценка образа, TA сценарии
+  test_outfit_evaluator.py    — NEW: 89 тестов: оценка образа, pipeline
+  test_ta_scenarios.py        — NEW: 61 тест: 7 персон расширенной ЦА
   test_outfit_engine.py       — 80+ тестов: AI engine
   test_outfit.py              — 45 тестов: rule-based
   test_outfit_fixes.py        — 57 тестов: fixes
@@ -280,7 +303,7 @@ tests/
 6. Размер обуви только int (нужен float 26.5)
 
 ### Не реализовано
-7. /profile + /add_child UI
+7. ~~profile + add_child~~ — ✅ DONE (+ style prefs)
 8. ~~Оценка образа по фото~~ — ✅ DONE
-9. style_preferences сбор через онбординг (поле в БД готово, UI нет)
-10. 12-season определение через селфи (палитры готовы, Vision prompt нет)
+9. ~~style_preferences~~ — ✅ DONE (через профиль)
+10. ~~12-season через селфи~~ — ✅ DONE (12 подтипов)
