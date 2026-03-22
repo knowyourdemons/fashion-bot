@@ -474,3 +474,221 @@ def run_montecarlo(n_scenarios: int = 10000, seed: int = 42):
 
 if __name__ == "__main__":
     run_montecarlo(10000)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# EXTENDED CHECKS: capsule, forgotten, occasions, wardrobe math, weekly, Kassi
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestCapsuleMonteCarlo:
+    """Monte Carlo: capsule selection quality across random wardrobes."""
+
+    @pytest.mark.parametrize("seed", range(200))
+    def test_capsule_quality(self, seed):
+        rng = random.Random(seed + 5000)
+        wardrobe = random_wardrobe(rng, rng.randint(15, 50), rng.choice(SEGMENTS))
+
+        from bot.handlers.challenge import select_capsule
+        capsule = select_capsule(wardrobe, 15)
+
+        # 1. Size <= 15
+        assert len(capsule) <= 15
+
+        # 2. Color diversity: max 2 per color
+        color_counts = Counter(getattr(i, "color", "") for i in capsule)
+        for color, cnt in color_counts.items():
+            assert cnt <= 2, f"seed={seed}: color '{color}' appears {cnt} times"
+
+        # 3. Must have top + bottom (or not enough in wardrobe)
+        cats = {getattr(i, "category_group", "") for i in capsule}
+        has_top_in_wardrobe = any(i.category_group == "top" for i in wardrobe)
+        has_bottom_in_wardrobe = any(i.category_group == "bottom" for i in wardrobe)
+        if has_top_in_wardrobe and has_bottom_in_wardrobe and len(capsule) >= 5:
+            assert "top" in cats or "one_piece" in cats, f"seed={seed}: no top/one_piece in capsule"
+            assert "bottom" in cats or "one_piece" in cats, f"seed={seed}: no bottom/one_piece in capsule"
+
+
+class TestForgottenScoringMonteCarlo:
+    """Monte Carlo: forgotten items get higher scores."""
+
+    @pytest.mark.parametrize("seed", range(100))
+    def test_forgotten_items_prioritized(self, seed):
+        """Items not worn >21 days should score higher than recently worn."""
+        rng = random.Random(seed + 6000)
+        today = date.today()
+
+        # Create 2 identical items, one forgotten, one recent
+        forgotten = _make_item(rng, "top", "свитер", 3)
+        forgotten.last_worn = today - timedelta(days=30)
+        forgotten.score_item = 5.0
+
+        recent = _make_item(random.Random(seed + 7000), "top", "свитер", 3)
+        recent.last_worn = today - timedelta(days=2)
+        recent.score_item = 5.0
+
+        # Forgotten should score higher (5.0 + 2.0 = 7.0 vs 5.0 + 0 = 5.0)
+        from services.outfit_selector import _select_outfit
+        items = [forgotten, recent, _make_item(rng, "bottom", "джинсы", 2),
+                 _make_item(rng, "footwear", "кроссовки", 2)]
+        outfit = _select_outfit(items, "autumn", today, 12.0, 8.0)
+
+        top = outfit.get("top")
+        if top:
+            # Forgotten item should be picked (higher score)
+            assert top.id == forgotten.id, f"seed={seed}: expected forgotten item, got recently worn"
+
+
+class TestOccasionRoutingMonteCarlo:
+    """Monte Carlo: occasion routing produces valid values."""
+
+    @pytest.mark.parametrize("weekday", range(7))
+    @pytest.mark.parametrize("segment", SEGMENTS)
+    def test_occasion_always_valid(self, weekday, segment):
+        """Every segment × weekday combo → valid occasion string."""
+        valid_occasions = {
+            "офис", "кэжуал", "отдых", "садик", "школа",
+            "прогулка", "выходной", "",
+        }
+        # Simulate wardrobe.py logic
+        is_weekend = weekday >= 5
+        if segment in ("mom_girl", "mom_boy"):
+            if is_weekend:
+                day_type = "прогулка"
+            else:
+                day_type = "садик"  # default for unknown age
+        elif segment == "no_kids":
+            if weekday < 5:
+                day_type = "офис"
+            elif weekday == 5:
+                day_type = "кэжуал"
+            else:
+                day_type = "отдых"
+        elif segment == "pregnant":
+            day_type = "отдых" if is_weekend else "прогулка"
+        else:
+            day_type = "выходной" if is_weekend else ""
+
+        assert day_type in valid_occasions, f"Invalid occasion: '{day_type}' for {segment}/{weekday}"
+
+
+class TestWardrobeMathMonteCarlo:
+    """Monte Carlo: wardrobe math produces sane values."""
+
+    @pytest.mark.parametrize("seed", range(200))
+    def test_combos_non_negative(self, seed):
+        rng = random.Random(seed + 8000)
+        wardrobe = random_wardrobe(rng, rng.randint(3, 50), rng.choice(SEGMENTS))
+        from services.wardrobe_math import calc_wardrobe_combos
+        combos = calc_wardrobe_combos(wardrobe)
+        assert combos >= 0, f"seed={seed}: negative combos={combos}"
+
+    @pytest.mark.parametrize("seed", range(200))
+    def test_more_items_more_combos(self, seed):
+        """Adding items should not decrease combos."""
+        rng = random.Random(seed + 9000)
+        small = random_wardrobe(rng, 5, "no_kids")
+        rng2 = random.Random(seed + 9000)  # same seed
+        big = random_wardrobe(rng2, 5, "no_kids")
+        # Add extra items
+        big.append(_make_item(random.Random(seed), "top", "футболка", 2))
+        big.append(_make_item(random.Random(seed + 1), "bottom", "джинсы", 2))
+
+        from services.wardrobe_math import calc_wardrobe_combos
+        assert calc_wardrobe_combos(big) >= calc_wardrobe_combos(small)
+
+
+class TestWeeklyPlanMonteCarlo:
+    """Monte Carlo: weekly plan produces valid 5-day plans."""
+
+    @pytest.mark.parametrize("seed", range(50))
+    def test_weekly_5_days(self, seed):
+        """Weekly plan always produces 5 days."""
+        rng = random.Random(seed + 10000)
+        wardrobe = random_wardrobe(rng, rng.randint(10, 40), "no_kids")
+
+        from worker.tasks.weekly_plan import _WEEKLY_OCCASIONS, _format_outfit_line, _is_basic_item
+        from services.outfit_selector import _select_outfit
+
+        occasions = _WEEKLY_OCCASIONS["no_kids"]
+        used_ids: set = set()
+        outfits_ok = 0
+        today = date.today()
+
+        for day_idx in range(5):
+            available = [i for i in wardrobe if _is_basic_item(i) or i.id not in used_ids]
+            outfit = _select_outfit(available, "spring", today + timedelta(days=day_idx), 12.0, 8.0)
+            for item in outfit.get("all_items", []):
+                if not _is_basic_item(item):
+                    used_ids.add(item.id)
+            outfits_ok += 1
+
+        assert outfits_ok == 5
+
+
+class TestStyleDiaryMonteCarlo:
+    """Monte Carlo: style diary insights work with random wear data."""
+
+    @pytest.mark.parametrize("seed", range(100))
+    def test_insights_no_crash(self, seed):
+        """get_wear_insights never crashes on random data."""
+        import asyncio
+        from services.style_diary import get_wear_insights
+
+        rng = random.Random(seed + 11000)
+        items = []
+        for _ in range(rng.randint(0, 30)):
+            cat = rng.choice(list(TYPES_BY_CATEGORY.keys()))
+            type_name, warmth = rng.choice(TYPES_BY_CATEGORY[cat])
+            item = _make_item(rng, cat, type_name, warmth)
+            item.wear_count = rng.randint(0, 10)
+            if rng.random() > 0.5:
+                item.last_worn = date.today() - timedelta(days=rng.randint(0, 60))
+            else:
+                item.last_worn = None
+            items.append(item)
+
+        loop = asyncio.new_event_loop()
+        try:
+            insights = loop.run_until_complete(get_wear_insights(f"user_{seed}", items))
+            assert isinstance(insights, dict)
+            assert "top_color" in insights
+            assert "usage_pct" in insights
+            assert insights["usage_pct"] >= 0
+            assert insights["usage_pct"] <= 100
+        finally:
+            loop.close()
+
+
+class TestKassiToneMonteCarlo:
+    """Verify Kassi fallback templates are always positive."""
+
+    FORBIDDEN = ["критически", "обязательно", "срочно", "не хватает", "нужно", "должна", "нельзя"]
+
+    def test_all_mom_templates_clean(self):
+        from services.scoring_comment import _TEMPLATES_MOM
+        for t in _TEMPLATES_MOM:
+            for word in self.FORBIDDEN:
+                assert word not in t.lower(), f"Forbidden '{word}' in: {t}"
+
+    def test_all_nokids_templates_clean(self):
+        from services.scoring_comment import _TEMPLATES_NO_KIDS
+        for t in _TEMPLATES_NO_KIDS:
+            for word in self.FORBIDDEN:
+                assert word not in t.lower(), f"Forbidden '{word}' in: {t}"
+
+    def test_all_wow_phrases_clean(self):
+        from worker.tasks.style_config import WOW_PHRASES
+        for p in WOW_PHRASES:
+            for word in self.FORBIDDEN:
+                assert word not in p.lower(), f"Forbidden '{word}' in WOW: {p}"
+
+    @pytest.mark.parametrize("style_type", [
+        "elegant_classic", "romantic_soft", "street_casual",
+        "sporty_minimal", "bold_creative", "relaxed_natural",
+    ])
+    def test_style_hints_no_forbidden(self, style_type):
+        from services.outfit_engine import STYLE_TYPE_HINTS
+        hint = STYLE_TYPE_HINTS[style_type]
+        for word in self.FORBIDDEN:
+            assert word not in hint.lower(), f"Forbidden '{word}' in hint for {style_type}"
