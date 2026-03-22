@@ -6,6 +6,7 @@ Morning Brief задача:
 """
 from datetime import date, datetime
 
+import asyncio
 import json
 import httpx
 import pytz
@@ -173,7 +174,12 @@ async def schedule_all() -> None:
     logger.info("morning_brief.schedule_all", count=count, teaser_count=teaser_count, hour=datetime.utcnow().hour)
 
     # ── 19:00 cold user reminders (day 1/2/3/5 after onboarding, 0 photos) ──
-    await _send_cold_reminders(redis_client)
+    try:
+        await _send_cold_reminders(redis_client)
+    except asyncio.CancelledError:
+        logger.info("morning_brief.cold_reminders.cancelled")
+    except Exception as e:
+        logger.warning("morning_brief.cold_reminders.error", error=str(e))
 
 
 async def _send_cold_reminders(redis_client) -> None:
