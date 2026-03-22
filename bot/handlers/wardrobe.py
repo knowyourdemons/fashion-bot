@@ -1139,6 +1139,21 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             logger.error("fitting.photo_error", error=str(e))
             context.user_data.pop("mode", None)
 
+    # Boost mode: photo → confidence boost
+    if context.user_data.get("mode") == "boost":
+        try:
+            file_id = update.message.photo[-1].file_id if update.message.photo else None
+            if file_id:
+                tg_file = await context.bot.get_file(file_id)
+                photo_bytes = bytes(await tg_file.download_as_bytearray())
+                from bot.handlers.boost import process_boost_photo
+                handled = await process_boost_photo(update, context, user, photo_bytes)
+                if handled:
+                    return
+        except Exception as e:
+            logger.error("boost.photo_error", error=str(e))
+            context.user_data.pop("mode", None)
+
     # ── Clean up stale bot messages (e.g. "гардероб пуст", "сфоткай кофту") ──
     _stale_id = context.user_data.pop("_stale_msg_id", None)
     _stale_chat = context.user_data.pop("_stale_chat_id", None)

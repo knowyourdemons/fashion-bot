@@ -179,8 +179,12 @@ def create_application() -> Application:
     from bot.handlers.fitting import handle_fitting_start
     app.add_handler(MessageHandler(filters.Regex("^🛍 Подойдёт"), handle_fitting_start))
 
+    # Boost (💪 Как я?) — menu handler
+    from bot.handlers.boost import handle_boost_start
+    app.add_handler(MessageHandler(filters.Regex("^💪 Как я"), handle_boost_start))
+
     # Текстовые сообщения → стилист — group=2 (после меню-хендлеров)
-    _menu_texts = filters.Regex("^((👗|👧|👦|👩)\uFE0F? Гардероб|✨ Что надеть|💬 Спросить Касси|🛍 Подойдёт|👤 Профиль|❓ Помощь)$")
+    _menu_texts = filters.Regex("^((👗|👧|👦|👩)\uFE0F? Гардероб|✨ Что надеть|💬 Спросить Касси|🛍 Подойдёт|💪 Как я|👤 Профиль|❓ Помощь)$")
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND & ~_menu_texts, text.handle_text),
         group=2,

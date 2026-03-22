@@ -1,0 +1,48 @@
+{# TEMPLATE: seasonal capsule card
+   Vars: name, season_name, item_count, total_combos, palette (list of color names)
+   Размер: 440×400px #}
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face{font-family:'N';src:url('/usr/share/fonts/custom/Nunito-Regular.ttf');font-weight:400}
+@font-face{font-family:'N';src:url('/usr/share/fonts/custom/Nunito-Bold.ttf');font-weight:700}
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:440px;font-family:'N',sans-serif;padding:30px;
+  background:linear-gradient(160deg,#F5EDE8,#E8EDF5);
+  display:flex;flex-direction:column;align-items:center;justify-content:center}
+.badge{font-size:9px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px}
+.title{font-size:20px;font-weight:700;color:#3A3A3A;text-align:center;margin-bottom:4px}
+.subtitle{font-size:13px;color:#777;text-align:center;margin-bottom:20px}
+.big{text-align:center;margin:16px 0}
+.big .num{font-size:56px;font-weight:700;color:#5B3A4A}
+.big .label{font-size:12px;color:#999;margin-top:4px}
+.palette{display:flex;gap:8px;margin:16px 0}
+.dot{width:24px;height:24px;border-radius:50%;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.1)}
+.footer{font-size:11px;color:#888;text-align:center;margin-top:16px;line-height:1.5}
+.watermark{font-size:8px;color:#ccc;margin-top:12px;letter-spacing:0.5px}
+</style>
+</head>
+<body>
+
+<div class="badge">CAPSULE {{ season_name|upper }}</div>
+<div class="title">{{ name }}</div>
+<div class="subtitle">{{ item_count }} вещей — всё что нужно!</div>
+
+<div class="big">
+  <div class="num">{{ total_combos }}</div>
+  <div class="label">комбинаций</div>
+</div>
+
+<div class="palette">
+{% for color in palette[:6] %}
+  <div class="dot" style="background:{{ color }}"></div>
+{% endfor %}
+</div>
+
+<div class="footer">Убери остальное в коробку — и наслаждайся! ✨</div>
+<div class="watermark">fashioncastle.app</div>
+
+</body>
+</html>
