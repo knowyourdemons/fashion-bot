@@ -635,7 +635,7 @@ async def handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
     status = await message.reply_text("\U0001f52e Определяю цветотип...")
     await asyncio.sleep(3)
     try:
-        await status.edit_text("\u2728 Анализирую черты лица...")
+        await status.edit_text("✨ Смотрю на черты лица...")
     except Exception:
         pass
     await asyncio.sleep(3)
