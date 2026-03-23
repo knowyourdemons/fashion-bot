@@ -14,3 +14,8 @@ build/
 .git/
 .gitignore
 README.md
+
+# Exclude from Docker build
+*.bak
+*.zip
+logs/

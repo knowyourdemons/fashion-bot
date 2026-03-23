@@ -77,6 +77,7 @@ def build_weather_card(
     advice_text: str,
     items_count: int,
     items_needed: int = 8,
+    temp_now: float | None = None,
 ) -> bytes:
     """Рендерит погодную карточку 440x520 PNG через PIL."""
     W, H = 440, 520
@@ -115,8 +116,12 @@ def build_weather_card(
     )
 
     wy = box_y + 12
-    sm = _sign(temp_morning)
-    draw.text((35, wy), f"Утро    {sm}{temp_morning:.0f}°C", fill=(70, 50, 70), font=font_weather)
+    if temp_now is not None:
+        sn = _sign(temp_now)
+        draw.text((35, wy), f"Сейчас  {sn}{temp_now:.0f}°C", fill=(70, 50, 70), font=font_weather)
+    else:
+        sm = _sign(temp_morning)
+        draw.text((35, wy), f"Утро    {sm}{temp_morning:.0f}°C", fill=(70, 50, 70), font=font_weather)
     wy += 22
     if temp_day is not None:
         sd = _sign(temp_day)

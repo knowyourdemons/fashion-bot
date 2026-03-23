@@ -32,6 +32,8 @@ logger = structlog.get_logger()
 
 # FastAPI приложение
 app: FastAPI = create_app()
+from fastapi.staticfiles import StaticFiles
+app.mount("/", StaticFiles(directory="landing", html=True), name="landing")
 
 
 @app.on_event("startup")
