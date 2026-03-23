@@ -257,6 +257,18 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     if not user:
         return ConversationHandler.END
 
+    # Deep link: ref_SOURCENAME → referral tracking
+    if context.args and context.args[0].startswith("ref_"):
+        source = context.args[0][4:]
+        logger.info("onboarding.referral", source=source, user_id=str(user.telegram_id))
+        try:
+            redis = context.bot_data.get("redis")
+            if redis:
+                await redis.incr(f"referral_source:{source}")
+        except Exception:
+            pass
+        # Don't return — continue to normal /start flow
+
     # Deep link: vote_XXXX → friend voting
     if context.args and context.args[0].startswith("vote_"):
         try:

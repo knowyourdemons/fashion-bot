@@ -666,11 +666,13 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
         queue = RedisQueue(redis_client)
         _send_payload: dict = {
             "telegram_id": user.telegram_id,
+            "user_id": str(user.id),
             "text": brief_text,
             "brief_id": brief_id,
             "is_adult": True,
             "segment": _adult_segment,
             "real_photo_count": _adult_real_photos,
+            "trial_started_at": user.trial_started_at.isoformat() if user.trial_started_at else None,
         }
         if brief_card_bytes:
             _send_payload["brief_card_b64"] = _b64_adult.b64encode(brief_card_bytes).decode()
@@ -1216,11 +1218,13 @@ async def generate_brief(payload: dict) -> dict:
 
         _payload: dict = {
             "telegram_id": user.telegram_id,
+            "user_id": str(user.id),
             "text": brief_text,
             "brief_id": brief_id,
             "segment": _child_segment,
             "real_photo_count": _child_real_photos,
             "first_missing_slot": _first_missing,
+            "trial_started_at": user.trial_started_at.isoformat() if user.trial_started_at else None,
         }
         if _brief_card_bytes:
             _payload["brief_card_b64"] = _b64_brief.b64encode(_brief_card_bytes).decode()
@@ -1478,6 +1482,39 @@ async def send_morning_brief(payload: dict) -> dict:
             brief_type="morning",
             photo_count=payload.get("real_photo_count", 0),
         )
+
+        # ── Day 3 / Day 7 feedback prompt ────────────────────────────────
+        try:
+            _trial_started = payload.get("trial_started_at")
+            if _trial_started:
+                if isinstance(_trial_started, str):
+                    from datetime import datetime as _dt_fb
+                    _trial_dt = _dt_fb.fromisoformat(_trial_started).date()
+                else:
+                    _trial_dt = _trial_started if isinstance(_trial_started, date) else _trial_started.date()
+                _days_since = (date.today() - _trial_dt).days
+
+                if _days_since == 3:
+                    await client.post(
+                        f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+                        json={
+                            "chat_id": telegram_id,
+                            "text": "\U0001f4ac Привет! Касси работает уже 3 дня.\nЧто нравится? Что улучшить?\n\nПросто напиши \u2014 Касси передаст мне!",
+                        },
+                    )
+                    logger.info("feedback.day3_prompt", user_id=str(payload.get("user_id", telegram_id)))
+                elif _days_since == 7:
+                    await client.post(
+                        f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+                        json={
+                            "chat_id": telegram_id,
+                            "text": "\U0001f4ac Неделя с Касси! Как впечатления?\n\nЧто классно работает? Что бесит?\nНапиши честно \u2014 это поможет сделать Касси лучше!",
+                        },
+                    )
+                    logger.info("feedback.day7_prompt", user_id=str(payload.get("user_id", telegram_id)))
+        except Exception as _fb_err:
+            logger.warning("feedback.day_prompt_failed", error=str(_fb_err))
+
         return {"sent": True}
     except Exception as e:
         logger.error("morning_brief.send_failed", telegram_id=telegram_id, error=str(e))

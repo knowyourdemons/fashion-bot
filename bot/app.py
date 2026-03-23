@@ -39,6 +39,7 @@ def create_application() -> Application:
     app.add_handler(CommandHandler("debug_gaps", debug.handle_debug_gaps))
     app.add_handler(CommandHandler("debug_style", debug.handle_debug_style))
     app.add_handler(CommandHandler("debug_wardrobe", debug.handle_debug_wardrobe))
+    app.add_handler(CommandHandler("stats", debug.handle_stats))
     app.add_handler(CommandHandler("test_subscribe", handle_test_subscribe))
     app.add_handler(CommandHandler("help", help.handle_help))
     app.add_handler(CommandHandler("wardrobe", wardrobe.handle_list))

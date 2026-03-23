@@ -8,6 +8,7 @@
   /debug_gaps    — показать gap analysis гардероба
   /debug_style   — показать style_preferences + colortype
   /debug_wardrobe — статистика гардероба (слоты, баланс, комбо)
+  /stats         — quick dashboard (users, items, streaks, referrals)
 """
 import structlog
 from datetime import datetime, timezone
@@ -332,3 +333,59 @@ async def handle_debug_wardrobe(update: Update, context: ContextTypes.DEFAULT_TY
                 lines.append(f"  {item.type} {item.color} — {v} сочетаний")
 
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+async def handle_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin: /stats — quick dashboard."""
+    user = context.user_data.get("db_user")
+    if not user or user.telegram_id not in settings.admin_ids_list:
+        return
+
+    from sqlalchemy import select, func, text
+    from db.models.user import User
+
+    async with AsyncReadSession() as s:
+        total = (await s.execute(select(func.count(User.id)))).scalar()
+        active = (await s.execute(
+            select(func.count(User.id)).where(User.onboarding_completed.is_(True))
+        )).scalar()
+        with_items = (await s.execute(text(
+            "SELECT COUNT(DISTINCT owner_id) FROM wardrobe_items WHERE deleted_at IS NULL"
+        ))).scalar()
+
+    # Redis stats
+    from core.redis import get_redis
+    import json
+    redis = get_redis()
+    streaks = []
+    async for key in redis.scan_iter("streak:*"):
+        raw = await redis.get(key)
+        if raw:
+            try:
+                data = json.loads(raw)
+                streaks.append(data.get("current", 0))
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    avg_streak = sum(streaks) / len(streaks) if streaks else 0
+    max_streak = max(streaks) if streaks else 0
+
+    # Referral sources
+    sources = {}
+    async for key in redis.scan_iter("referral_source:*"):
+        name = key.decode().split(":")[-1] if isinstance(key, bytes) else key.split(":")[-1]
+        count = int(await redis.get(key) or 0)
+        sources[name] = count
+
+    text_msg = (
+        "\U0001f4ca Статистика\n\n"
+        f"\U0001f465 Юзеров: {total} (активных: {active})\n"
+        f"\U0001f4f8 С вещами: {with_items}\n"
+        f"\U0001f525 Streak: avg {avg_streak:.1f}, max {max_streak}\n"
+    )
+    if sources:
+        text_msg += "\n\U0001f4e3 Источники:\n"
+        for src, cnt in sorted(sources.items(), key=lambda x: -x[1]):
+            text_msg += f"  {src}: {cnt}\n"
+
+    await update.message.reply_text(text_msg)
