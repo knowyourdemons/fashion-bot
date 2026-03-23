@@ -1,0 +1,15 @@
+[Unit]
+Description=Fashion Bot Docker Compose
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/stas/fashion-bot
+ExecStart=/usr/bin/docker compose -f docker/docker-compose.yml up -d
+ExecStop=/usr/bin/docker compose -f docker/docker-compose.yml down
+ExecReload=/usr/bin/docker compose -f docker/docker-compose.yml up -d --force-recreate
+
+[Install]
+WantedBy=multi-user.target
