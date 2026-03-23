@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import Optional, TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, Enum, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Enum, Float, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -76,6 +76,12 @@ class User(Base):
         comment="DRAMATIC/NATURAL/CLASSIC/GAMINE/ROMANTIC")
     style_essence: Mapped[Optional[str]] = mapped_column(String(20), nullable=True,
         comment="Primary style essence from face analysis")
+    color_flow_to: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    color_flow_strength: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    tonal_depth: Mapped[Optional[str]] = mapped_column(String(20), nullable=True,
+        comment="LIGHT/MEDIUM-LIGHT/MEDIUM/MEDIUM-DEEP/DEEP")
+    chroma: Mapped[Optional[str]] = mapped_column(String(20), nullable=True,
+        comment="BRIGHT/MODERATE/MUTED")
     # Style preferences: {"avoid": ["юбки", "каблуки"], "prefer": ["минимализм"],
     #   "style": "casual", "work_days": 5}
     style_preferences: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)

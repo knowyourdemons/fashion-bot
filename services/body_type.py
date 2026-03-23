@@ -122,6 +122,36 @@ def build_full_styling_context(user) -> str:
         if prompt:
             lines.append(prompt.strip())
 
+    # Tonal depth
+    td = getattr(user, "tonal_depth", None)
+    if td:
+        _TONAL = {
+            "LIGHT": "Светлые оттенки в приоритете. Тёмные = акцент.",
+            "MEDIUM-LIGHT": "Мягкие средние тона — основа.",
+            "MEDIUM": "Баланс светлых и тёмных.",
+            "MEDIUM-DEEP": "Насыщенные цвета — основа. Светлые = акценты.",
+            "DEEP": "Глубокие богатые тона. Тёмные сочетания работают.",
+        }
+        lines.append(f"Тональность ({td}): {_TONAL.get(td, '')}")
+
+    # Chroma
+    ch = getattr(user, "chroma", None)
+    if ch:
+        _CHROMA = {
+            "BRIGHT": "Яркие чистые цвета. Приглушённые могут 'потушить'.",
+            "MODERATE": "Умеренно яркие. Баланс чистых и мягких.",
+            "MUTED": "Мягкие приглушённые тона. Dusty rose, sage. Неон — избегать.",
+        }
+        lines.append(f"Яркость ({ch}): {_CHROMA.get(ch, '')}")
+
+    # Color flow
+    cf = getattr(user, "color_flow_to", None)
+    cfs = getattr(user, "color_flow_strength", None)
+    if cf and cfs:
+        pct = int(cfs * 100)
+        ct = getattr(user, "colortype", "")
+        lines.append(f"Color flow: основа {ct}, можно ~{pct}% оттенков из {cf}.")
+
     if not lines:
         return ""
     return "Стилистический профиль:\n" + "\n".join(lines)

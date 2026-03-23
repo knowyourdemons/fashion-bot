@@ -36,6 +36,15 @@ def _make_user(**overrides):
     u.deleted_at = None
     u.milestones_reached = []
     u.referral_code = "TEST1234"
+    # Professional styling fields
+    u.contrast_level = overrides.get("contrast_level", None)
+    u.kibbe_family = overrides.get("kibbe_family", None)
+    u.style_essence = overrides.get("style_essence", None)
+    # Color depth fields
+    u.tonal_depth = overrides.get("tonal_depth", None)
+    u.chroma = overrides.get("chroma", None)
+    u.color_flow_to = overrides.get("color_flow_to", None)
+    u.color_flow_strength = overrides.get("color_flow_strength", None)
     return u
 
 

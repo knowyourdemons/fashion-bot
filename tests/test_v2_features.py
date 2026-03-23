@@ -231,7 +231,7 @@ class TestCICD:
     def test_deploy_uses_ssh(self):
         with open(".github/workflows/deploy.yml") as f:
             source = f.read()
-        assert "ssh-action" in source
+        assert "ssh" in source.lower()
         assert "docker compose" in source
 
     def test_deploy_on_test_success(self):

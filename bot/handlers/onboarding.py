@@ -819,6 +819,16 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
             _cta, reply_markup=keyboard,
         )
 
+        # ── Photo instruction ──
+        _photo_instruction = (
+            "📸 Как фоткать:\n"
+            "• Одна вещь на фото\n"
+            "• На светлом фоне\n"
+            "• Вся вещь в кадре\n"
+            "Касси уберёт фон сама ✨"
+        )
+        await update.effective_message.reply_text(_photo_instruction)
+
         # ── Schedule cold user reminders (day 1/2/3/5 at 19:00) ──
         try:
             _redis_ob = context.bot_data.get("redis")

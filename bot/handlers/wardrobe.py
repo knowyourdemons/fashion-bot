@@ -207,12 +207,43 @@ async def _load_existing_set(owner_id: uuid.UUID, owner_type: str = "user") -> s
     }
 
 
-# ── Guided first 5 minutes (hints after each photo) ───────────────────────
+# ── Progress bar + personalized reaction ──────────────────────────────────
+
+_PHOTO_TARGET = 5  # minimum photos for first brief
+
+_COLOR_REACTIONS = {
+    "синий": "базовый цвет", "белый": "must-have", "чёрный": "классика",
+    "красный": "яркий акцент", "зелёный": "свежий", "бежевый": "нейтральный",
+    "розовый": "нежный", "серый": "универсальный", "коричневый": "тёплая база",
+}
+
+
+def _progress_bar(current: int, target: int) -> str:
+    filled = min(current, target)
+    empty = max(0, target - filled)
+    return f"{'🟩' * filled}{'⬜' * empty} {filled}/{target}"
+
+
+def _photo_reaction(item_type: str, color: str, count: int, lang: str = "ru") -> str:
+    color_word = (color or "").split()[0].lower()
+    color_hint = _COLOR_REACTIONS.get(color_word, "")
+    color_text = f" — {color_hint}" if color_hint else ""
+
+    remaining = max(0, _PHOTO_TARGET - count)
+    bar = _progress_bar(count, _PHOTO_TARGET)
+
+    if count == 1:
+        return f"✨ Первая вещь!{color_text}\n\n{bar}\nЕщё {remaining} — и первый образ!"
+    elif remaining <= 0:
+        return f"🎉 Достаточно для первого образа!\n\n{bar}\nУтром пришлю!"
+    else:
+        return f"👍 {(color or '').capitalize()}{color_text}\n\n{bar}\nЕщё {remaining}!"
+
 
 _GUIDED_HINTS = {
-    1: "\n🎉 Первая! Ещё 2 — покажу мини-образ",
+    1: "\n🎉 Первая! Ещё 4 — покажу первый образ",
     2: "\nСупер! Добавь штаны или юбку 👖",
-    # 3 handled by milestone (mini_outfit)
+    # 3+ handled by progress bar
 }
 
 
@@ -470,10 +501,17 @@ async def _analyze_selfie_colortype(photo_bytes: bytes) -> dict:
         "- CLASSIC: refined, elegant\n"
         "- GAMINE: playful, animated\n"
         "- ROMANTIC: soft, feminine\n\n"
+        "Также определи цветовую глубину:\n"
+        "- tonal_depth: LIGHT / MEDIUM-LIGHT / MEDIUM / MEDIUM-DEEP / DEEP (общая тональность)\n"
+        "- chroma: BRIGHT / MODERATE / MUTED (яркость/приглушённость черт)\n"
+        "- flow_to: если на границе сезонов — укажи второй сезон (напр. True Summer -> Soft Autumn)\n"
+        "- flow_strength: 0.0-0.4 (0 = чисто основной, 0.4 = сильно на границе)\n\n"
         'Ответь JSON: {"sub_season": "True Summer", "confidence": 0.8, '
         '"contrast_level": "HIGH/MEDIUM/LOW", '
         '"kibbe_family": "DRAMATIC/NATURAL/CLASSIC/GAMINE/ROMANTIC", '
-        '"style_essence": "DRAMATIC/NATURAL/CLASSIC/GAMINE/ROMANTIC"}\n'
+        '"style_essence": "DRAMATIC/NATURAL/CLASSIC/GAMINE/ROMANTIC", '
+        '"tonal_depth": "MEDIUM", "chroma": "MUTED", '
+        '"flow_to": "Soft Autumn", "flow_strength": 0.2}\n'
         "Только JSON, без пояснений."
     )
     try:
@@ -494,7 +532,7 @@ async def _analyze_selfie_colortype(photo_bytes: bytes) -> dict:
                 ],
             }],
             system="Ты эксперт по 12-сезонному цветотипированию. Отвечай только JSON.",
-            max_tokens=200,
+            max_tokens=300,
         )
         text = response.content[0].text.strip()
         import re as _re
@@ -519,6 +557,10 @@ async def _analyze_selfie_colortype(photo_bytes: bytes) -> dict:
                 "contrast_level": result.get("contrast_level"),
                 "kibbe_family": result.get("kibbe_family"),
                 "style_essence": result.get("style_essence"),
+                "tonal_depth": result.get("tonal_depth"),
+                "chroma": result.get("chroma"),
+                "flow_to": result.get("flow_to"),
+                "flow_strength": result.get("flow_strength"),
             }
         return {"colortype": "Лето", "sub_season": "True Summer", "confidence": 0.0}
     except Exception as e:
@@ -619,7 +661,7 @@ async def _handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data["awaiting_selfie"] = True
         return True
 
-    # Analyze (12-season + contrast/Kibbe/essence)
+    # Analyze (12-season + contrast/Kibbe/essence + color depth)
     result = await _analyze_selfie_colortype(photo_bytes)
     colortype = result["colortype"]
     sub_season = result.get("sub_season", "")
@@ -627,6 +669,10 @@ async def _handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYP
     contrast_level = result.get("contrast_level")
     kibbe_family = result.get("kibbe_family")
     style_essence = result.get("style_essence")
+    tonal_depth = result.get("tonal_depth")
+    chroma = result.get("chroma")
+    flow_to = result.get("flow_to")
+    flow_strength = result.get("flow_strength")
 
     # Use sub_season as colortype for palette matching (if recognized)
     from worker.tasks.style_config import COLORTYPE_PALETTES
@@ -675,6 +721,23 @@ async def _handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYP
             if style_essence and style_essence in ("DRAMATIC", "NATURAL", "CLASSIC", "GAMINE", "ROMANTIC"):
                 _styling_updates["style_essence"] = style_essence
                 user.style_essence = style_essence
+            if tonal_depth and tonal_depth in ("LIGHT", "MEDIUM-LIGHT", "MEDIUM", "MEDIUM-DEEP", "DEEP"):
+                _styling_updates["tonal_depth"] = tonal_depth
+                user.tonal_depth = tonal_depth
+            if chroma and chroma in ("BRIGHT", "MODERATE", "MUTED"):
+                _styling_updates["chroma"] = chroma
+                user.chroma = chroma
+            if flow_to and isinstance(flow_to, str) and len(flow_to) <= 30:
+                _styling_updates["color_flow_to"] = flow_to
+                user.color_flow_to = flow_to
+            if flow_strength is not None:
+                try:
+                    _fs = float(flow_strength)
+                    if 0.0 <= _fs <= 0.4:
+                        _styling_updates["color_flow_strength"] = _fs
+                        user.color_flow_strength = _fs
+                except (TypeError, ValueError):
+                    pass
             if _styling_updates:
                 async with AsyncWriteSession() as session:
                     await session.execute(
@@ -738,9 +801,9 @@ async def _maybe_trigger_first_brief(user, owner_id, owner_type, message, contex
         from db.crud.wardrobe import get_owner_items_count
         async with AsyncReadSession() as session:
             wardrobe_count = await get_owner_items_count(session, owner_id, owner_type)
-        if wardrobe_count < 3:
+        if wardrobe_count < _PHOTO_TARGET:
             await redis.delete(lock_key)
-            remaining = 3 - wardrobe_count
+            remaining = _PHOTO_TARGET - wardrobe_count
             if remaining == 1:
                 suffix = "вещь"
             elif remaining < 5:
@@ -1446,24 +1509,29 @@ async def _handle_single_photo(
 
         lines = []
         if added:
-            # Guided first photos: counter + micro-praise
+            # Guided first photos: counter + micro-praise + progress bar
             async with AsyncReadSession() as _cnt_sess:
                 _all_now = await get_owner_items(_cnt_sess, owner_id, owner_type)
             _total_now = len(_all_now)
-            _first_outfit_threshold = 3
 
-            if _total_now < _first_outfit_threshold:
-                _left = _first_outfit_threshold - _total_now
-                _praise = f"✅ {_item_label(added[0])}"
-                if len(added) > 1:
-                    for d in added[1:]:
-                        _praise += f"\n✅ {_item_label(d)}"
-                _praise += f"\n\nЕщё {_left} и соберу первый образ ({_total_now}/{_first_outfit_threshold})"
-                lines.append(_praise)
-            elif _total_now == _first_outfit_threshold:
+            if _total_now <= _PHOTO_TARGET:
+                # Progress bar mode for first N photos
+                _first_item = added[0]
+                _item_color = getattr(_first_item, "color", None) or (
+                    _first_item.get("color") if isinstance(_first_item, dict) else None
+                )
+                _item_type = getattr(_first_item, "type", None) or (
+                    _first_item.get("type") if isinstance(_first_item, dict) else None
+                )
+                _reaction = _photo_reaction(
+                    _item_type or "", _item_color or "", _total_now,
+                    lang=get_user_lang(user),
+                )
+                # List all added items
                 for d in added:
                     lines.append(f"✅ {_item_label(d)}")
-                lines.append(f"\n🎉 Есть {_first_outfit_threshold} вещи! Собираю первый образ...")
+                lines.append("")
+                lines.append(_reaction)
             else:
                 lines.append(f"✅ Добавила {len(added)} вещей:")
                 for d in added:

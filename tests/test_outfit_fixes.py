@@ -193,13 +193,30 @@ class TestMinimumOutfit:
             _item("top", "кофта"),
             _item("bottom", "штаны"),
             _item("base_layer", "носки"),
+            _item("outerwear", "куртка"),
+            _item("footwear", "кроссовки"),
         ]
         assert has_minimum_wardrobe(items) is True
 
     def test_has_minimum_wardrobe_one_piece(self):
         from services.outfit_builder import has_minimum_wardrobe
-        items = [_item("one_piece", "платье")]
+        items = [
+            _item("one_piece", "платье"),
+            _item("base_layer", "носки"),
+            _item("outerwear", "куртка"),
+            _item("footwear", "кроссовки"),
+            _item("accessories", "шарф"),
+        ]
         assert has_minimum_wardrobe(items) is True
+
+    def test_has_minimum_wardrobe_too_few_items(self):
+        from services.outfit_builder import has_minimum_wardrobe
+        items = [
+            _item("top", "кофта"),
+            _item("bottom", "штаны"),
+            _item("base_layer", "носки"),
+        ]
+        assert has_minimum_wardrobe(items) is False
 
     def test_no_minimum_wardrobe_only_socks(self):
         from services.outfit_builder import has_minimum_wardrobe

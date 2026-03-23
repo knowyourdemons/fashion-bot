@@ -180,3 +180,12 @@ class Scheduler:
             id="unknown_items_report",
             replace_existing=True,
         )
+
+        # pre_generate_brief — каждый час :45 (проверяет local 02:00)
+        from worker.tasks import pre_generate_brief
+        self._scheduler.add_job(
+            pre_generate_brief.run,
+            CronTrigger(hour="*", minute=45),
+            id="pre_generate_brief",
+            replace_existing=True,
+        )

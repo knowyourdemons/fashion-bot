@@ -282,22 +282,15 @@ def has_minimum_outfit(outfit: dict) -> bool:
 def has_minimum_wardrobe(items: list) -> bool:
     """Check if wardrobe has items to form a minimum outfit (top+bottom or one_piece).
 
+    Requires at least 5 items AND matching category groups.
+
     Args:
         items: list of WardrobeItem objects
     """
-    has_top = any(
-        getattr(i, "category_group", "") in ("top",)
-        for i in items
-    )
-    has_bottom = any(
-        getattr(i, "category_group", "") in ("bottom",)
-        for i in items
-    )
-    has_one_piece = any(
-        getattr(i, "category_group", "") in ("one_piece",)
-        for i in items
-    )
-    return has_one_piece or (has_top and has_bottom)
+    if len(items) < 5:
+        return False
+    groups = {getattr(i, "category_group", "") for i in items}
+    return ("top" in groups and "bottom" in groups) or "one_piece" in groups
 
 
 # ── Score → text ──────────────────────────────────────────────────────────────
