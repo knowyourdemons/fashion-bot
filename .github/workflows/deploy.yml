@@ -36,18 +36,12 @@ jobs:
         if: success()
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"chat_id\": \"${{ secrets.ADMIN_TELEGRAM_ID }}\",
-              \"text\": \"✅ Deploy complete!\nCommit: ${{ github.event.workflow_run.head_commit.message }}\"
-            }"
+            --data-urlencode "chat_id=${{ secrets.ADMIN_TELEGRAM_ID }}" \
+            --data-urlencode "text=✅ Deploy complete! SHA: ${{ github.event.workflow_run.head_sha }}"
 
       - name: Notify failure
         if: failure()
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"chat_id\": \"${{ secrets.ADMIN_TELEGRAM_ID }}\",
-              \"text\": \"❌ Deploy FAILED!\nCheck: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
-            }"
+            --data-urlencode "chat_id=${{ secrets.ADMIN_TELEGRAM_ID }}" \
+            --data-urlencode "text=❌ Deploy FAILED! Check: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
