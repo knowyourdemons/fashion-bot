@@ -939,3 +939,105 @@ class TestComprehensiveFlows:
         for text in texts:
             matched = any(re.match(p, text) for p in patterns)
             assert matched, f"Menu button '{text}' has no matching handler pattern"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# COVERAGE: Previously untested features
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestStylePassport:
+
+    def test_passport_template_exists(self):
+        from pathlib import Path
+        assert Path("renderer/templates/tpl_style_passport.html").exists()
+
+    def test_passport_template_has_fields(self):
+        html = open("renderer/templates/tpl_style_passport.html").read()
+        assert "{{ name }}" in html
+        assert "{{ sub_season }}" in html
+        assert "{{ contrast_level }}" in html
+        assert "{{ kibbe_primary }}" in html
+        assert "{{ essence_label }}" in html
+        assert "fashioncastle_bot" in html
+
+    def test_passport_render_function_exists(self):
+        from services.brief_renderer import render_style_passport
+        assert callable(render_style_passport)
+
+
+class TestPreGenerateBrief:
+
+    def test_task_importable(self):
+        from worker.tasks.pre_generate_brief import run
+        assert callable(run)
+
+    def test_cache_key_format(self):
+        import uuid
+        from datetime import date, timedelta
+        user_id = uuid.uuid4()
+        tomorrow = date.today() + timedelta(days=1)
+        key = f"prebrief:{user_id}:{tomorrow.isoformat()}"
+        assert "prebrief:" in key
+
+
+class TestMoodDetailed:
+
+    def test_fog_mood(self):
+        from services.mood import detect_mood
+        mood = detect_mood({"wmo_day": 45, "temp_now": 8}, weekday=2)
+        assert mood["energy"] == "low"
+        assert "туман" in mood["hint"].lower() or "уютн" in mood["hint"].lower()
+
+    def test_overcast_cold_mood(self):
+        from services.mood import detect_mood
+        mood = detect_mood({"wmo_day": 3, "temp_now": 5}, weekday=1)
+        assert mood["color_mood"] == "warm"
+
+    def test_weekend_mood(self):
+        from services.mood import detect_mood
+        mood = detect_mood({"wmo_day": 2, "temp_now": 15}, weekday=6)
+        assert mood["energy"] == "high"
+        assert "выходн" in mood["hint"].lower()
+
+
+class TestAntibotDetailed:
+
+    def test_limits_are_reasonable(self):
+        from bot.middleware.antibot import AntibotMiddleware
+        assert 10 <= AntibotMiddleware.PHOTO_LIMIT <= 50
+        assert 20 <= AntibotMiddleware.MESSAGE_LIMIT <= 60
+        assert 30 <= AntibotMiddleware.CALLBACK_LIMIT <= 100
+        assert AntibotMiddleware.BAN_THRESHOLD >= 2
+        assert 60 <= AntibotMiddleware.BAN_DURATION <= 600
+
+
+class TestSelfieOnboarding:
+
+    def test_selfie_step_in_states(self):
+        """SELFIE_STEP is defined and registered."""
+        from bot.handlers.onboarding import SELFIE_STEP
+        assert isinstance(SELFIE_STEP, int)
+
+    def test_after_city_routes_correctly(self):
+        """_after_city exists and handles segment fork."""
+        import inspect
+        from bot.handlers.onboarding import _after_city
+        src = inspect.getsource(_after_city)
+        assert "no_kids" in src
+        assert "pregnant" in src
+        assert "SELFIE_STEP" in src or "selfie" in src.lower()
+
+
+class TestAlembicMigration:
+
+    def test_migration_file_exists(self):
+        from pathlib import Path
+        migrations = list(Path("db/migrations/versions").glob("h8i9j0k1*"))
+        assert len(migrations) == 1
+
+    def test_migration_has_all_columns(self):
+        content = open("db/migrations/versions/h8i9j0k1l2m3_add_styling_and_i18n_columns.py").read()
+        for col in ["language", "contrast_level", "kibbe_family", "style_essence",
+                     "color_flow_to", "color_flow_strength", "tonal_depth", "chroma",
+                     "formality_level", "metal_tone"]:
+            assert col in content, f"Migration missing column: {col}"

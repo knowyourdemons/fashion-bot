@@ -47,6 +47,21 @@ def create_application() -> Application:
     app.add_handler(CommandHandler("cancel", billing.handle_cancel))
     app.add_handler(CommandHandler("shopping", handle_shopping))
 
+    # Style passport command
+    async def _style_passport_cmd(update, context):
+        user = context.user_data.get("db_user")
+        if not user or not getattr(user, "colortype", None):
+            from services.i18n import t, get_user_lang
+            await update.message.reply_text(
+                "Для стиль-паспорта нужен цветотип.\n"
+                "Отправь селфи или зайди в 👤 Профиль → 🎨 Цветотип"
+            )
+            return
+        from bot.handlers.wardrobe import _send_style_passport
+        from services.i18n import get_user_lang
+        await _send_style_passport(update.message, user, get_user_lang(user))
+    app.add_handler(CommandHandler("style_passport", _style_passport_cmd))
+
     # Photo handlers (сжатое фото и документ-изображение оригинального качества)
     app.add_handler(MessageHandler(filters.PHOTO, wardrobe.handle_photo))
     app.add_handler(MessageHandler(filters.Document.IMAGE, wardrobe.handle_photo))
