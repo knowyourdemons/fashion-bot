@@ -1,10 +1,11 @@
 # Fashion Bot — CLAUDE.md
 
 ## Инфраструктура
-- VPS: agent-farm-01, user=stas, ~/fashion-bot
-- Containers: docker-app-1 (FastAPI+PTB), docker-worker-1, docker-postgres-1, docker-redis-1, docker-renderer-1 (Satori)
+- VPS: agent-farm-2, user=stas, ~/fashion-bot, IP: 46.225.210.62
+- Containers: docker-app-1 (FastAPI+PTB), docker-worker-1, docker-postgres-1, docker-redis-1, docker-renderer-1 (Satori), docker-watchdog-1, docker-cloudflared-1
 - GitHub: knowyourdemons/fashion-bot
-- CI/CD: GitHub Actions (`.github/workflows/test.yml`) — тесты на каждый push/PR
+- CI/CD: GitHub Actions — Tests (pytest on push) → Deploy (SSH → docker compose build → recreate)
+- Deploy: `./scripts/deploy.sh` (build-based, не docker cp). systemd fashionbot.service (auto-start on reboot)
 - Tunnel: bot.fashioncastle.app (именованный Cloudflare tunnel)
 - Webhook: https://bot.fashioncastle.app/api/v1/webhooks/telegram
 - Тест-пользователи: Стас telegram_id=195169 (plan=admin), жена telegram_id=263775083 (plan=free, тестирует как обычный юзер)
@@ -563,44 +564,91 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - **4 worker tasks**: wardrobe_analysis, declutter, taxonomy_review, unknown_items_report
 - **UV sunglasses**: "☀️ UV высокий — не забудь очки!" при UV≥6
 
-### Тесты: 101 в test_e2e_flows.py
-- Payment (9), Photo Pipeline (14), i18n Coverage (7), Scoring v3 (15), Phase 2 Accessories (5), Phase 3 (4), Preference Learner (4), Streak (7), Mood (7), Memory (4), Conversion (6), Language (1), Comprehensive Flows (11), Professional Styling (10)
+### Онбординг UX + Pre-generation + Color Depth
+- **Photo reactions**: персонализированная реакция Касси на каждое фото + прогресс-бар 🟩⬜
+- **5-photo threshold**: minimum wardrobe снижен с 8 до 5 (с проверкой top+bottom)
+- **Photo instruction**: текстовая инструкция при первом фото
+- **Pre-generate briefs**: worker task `pre_generate_brief.py` (02:00 local, weather cache 12h TTL)
+- **Color depth**: tonal_depth, chroma, color_flow_to, flow_strength (16-season equiv)
+
+### Style Passport Stories + Selfie-first
+- **Style Passport** (1080×1920): tpl_style_passport.html, dark gradient + gold, /style_passport command
+- **Selfie-first**: no_kids/pregnant → селфи после города → паспорт → bridge к фото вещей
+- **Animated status**: "Определяю цветотип..." → "Смотрю на черты лица..." → "Формирую палитру..."
+- **Redo selfie**: кнопка "📸 Переснять селфи" в профиле
+- **Jewelry hint для мам**: заколка/ободок/бантик (не взрослые серьги)
+
+### Selfie refactor + Beta prep
+- **Рефактор**: selfie analysis → `services/selfie_analysis.py` (7 функций из wardrobe.py)
+- **Referral tracking**: `t.me/fashioncastle_bot?start=ref_SOURCE` → Redis analytics
+- **Day 3/7 feedback**: автоматический запрос "Что нравится? Что улучшить?"
+- **`/stats`**: admin dashboard (юзеры, streak, referral sources)
+
+### Оркестрация + Мониторинг
+- **systemd**: `fashionbot.service` — auto-start docker compose on reboot
+- **Watchdog upgrade**: restart loop detection + log tail в Telegram alert + recovery notification
+- **Healthcheck**: `start_period: 30s` grace для контейнеров
+- **CI/CD**: Tests → Deploy via SSH (native, base64 key) → Telegram notification
+
+### Критические баги — всего 12 исправлено
+- `photo_results` NameError, `daily_requests_used` race condition, payment без try/catch
+- Photo counter не инкрементился, chat/reroll limit race → atomic INCR
+- Redis `aclose()` в workers, `{knows_pct}` placeholder, mood energy comparison
+- N+1 query preference_learner, "Анализирую" в user text, deploy SSH key
+
+### Тесты: 122 в test_e2e_flows.py, 4371 total
+- Payment (9), Photo Pipeline (14), i18n (7), Scoring v3 (15), Accessories (5)
+- Phase 3 (4), Preference (6), Streak (9), Mood (10), Memory (6)
+- Conversion (6), Language (1), Comprehensive (11), Professional Styling (10)
+- Style Passport (3), Pre-gen (2), Selfie Onboarding (2), Alembic (2), Antibot (2)
+
+### Юнит-экономика (актуальная)
+- **API cost**: $0.15/юзер/мес (prompt caching включён, маржа 98.4%)
+- **Breakeven**: 1 paying user ($7.60/мес infra)
+- **10 юзеров**: $1.50/мес API, $90 revenue (если все paid)
+- **100 юзеров**: $14.50/мес API, $900 revenue
 
 ## Документация
-- **WORKFLOW.md** — методология защитного проектирования
+- **WORKFLOW.md** — методология + deploy rules + red flags
 - **claude_code_smart_brief.md** — спецификация умного брифа
 - **docs/simulation_1000_users.md** — симуляция 1000 юзеров, unit economics, breakeven
 
+## Деплой
+```bash
+./scripts/deploy.sh          # полный: test → build → restart → health check
+./scripts/deploy.sh --quick  # без тестов
+./scripts/deploy.sh --hotfix file1.py  # emergency docker cp
+```
+systemd: `sudo systemctl restart fashionbot` (auto-start on reboot enabled)
+
 ## Роадмап
 
-### v1.0 ✅ ГОТОВО (запуск жене)
-- ~~Все базовые фичи~~ — онбординг, бриф, photo upload, outfit, profile
-- ~~Sentry, CI/CD, watchdog~~ — мониторинг
-- ~~Deploy скрипт~~ — `./scripts/deploy.sh`
+### v1.0-v1.1 ✅ ГОТОВО
+- Все базовые + продвинутые фичи, CI/CD, monitoring, i18n, deploy
 
-### v1.1 ✅ ГОТОВО
-- ~~i18n 100%~~ — RU + EN, 80+ ключей
-- ~~Docker deploy~~ — единый image build
-- ~~Интеграционные тесты~~ — 101 e2e тест
-- ~~Capsule, Travel, Monthly Report~~ — UI подключение
-- ~~Аксессуары Phase 1+2~~ — bags, jewelry, belt, formality, metal tone
-- ~~Скоринг v3~~ — 8 измерений, segment overrides
-- ~~Professional styling~~ — contrast, Kibbe, essence
-- ~~USP features~~ — preference learning, streak, memory, mood
-- ~~Conversion optimization~~ — nudge, smart paywall, language picker
-- ~~Критические баги~~ — 9 исправлено
+### v1.2 ✅ ГОТОВО (23 марта — 1 сессия)
 - ~~Антибот~~ — rate limiting + temp ban
 - ~~4 worker tasks~~ — wardrobe_analysis, declutter, taxonomy_review, unknown_items_report
+- ~~Professional styling~~ — contrast + Kibbe + essence + fabric-body harmony
+- ~~Scoring v3~~ — 8 измерений + segment overrides
+- ~~Аксессуары Phase 2~~ — jewelry, belt, metal tone, neckline rules
+- ~~USP~~ — preference learning, streak, memory, mood, style passport
+- ~~Онбординг UX~~ — reactions, progress, 5-photo, selfie-first, photo instruction
+- ~~Pre-generate briefs~~ — overnight weather cache
+- ~~Color depth~~ — tonal, chroma, flow seasons (16-season equiv)
+- ~~Conversion~~ — smart paywall, nudge, language picker, referral tracking
+- ~~Beta prep~~ — /stats, day 3/7 feedback, referral deep links
+- ~~12 critical bugs~~ — fixed
+- ~~Alembic migration~~ — 10 new columns
 
-### v1.2 (апрель-май)
-- ЮKassa (после ИП) — карта для RU юзеров
+### v1.3 (апрель-май)
+- ЮKassa для RU юзеров (после ИП)
 - Шоппинг-лист + affiliate (Admitad/Skimlinks)
 - Реферальная программа ("Пригласи подругу = +7 дней")
-- Prometheus + Grafana dashboards
 - A/B test paywall timing
+- Prometheus dashboards
 
 ### v2.0 (июль)
 - Ultra план, семейный аккаунт
 - Маркетинг: TikTok/Reels, Telegram каналы для мам
 - Беременность: триместр в онбординге
-- Папа/бабушка forward
