@@ -175,8 +175,9 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # --- Log Aggregation ---
+  # --- Log Aggregation (start with: docker compose --profile monitoring up -d) ---
   loki:
+    profiles: ["monitoring"]
     image: grafana/loki:3.0.0
     command: -config.file=/etc/loki/local-config.yaml
     # Port 3101 on host (mapped from container's 3100) to avoid conflict
@@ -202,6 +203,7 @@ services:
     restart: unless-stopped
 
   grafana:
+    profiles: ["monitoring"]
     image: grafana/grafana:11.0.0
     ports:
       - "3001:3000"
