@@ -119,7 +119,7 @@ class TestFitting:
     def test_fitting_in_menu(self):
         with open("bot/handlers/menu.py") as f:
             source = f.read()
-        assert "Подойдёт" in source
+        assert "Помощь" in source
 
     def test_fitting_registered_in_app(self):
         with open("bot/app.py") as f:

@@ -176,21 +176,17 @@ class TestSchedulePagination:
         assert ".offset(offset)" in content or ".offset(_t_offset)" in content
 
     def test_no_unbounded_all_users(self):
-        """No list(result.scalars().all()) without LIMIT in schedule_all."""
+        """No list(result.scalars().all()) without LIMIT in _schedule_all_impl."""
         import pathlib
         content = pathlib.Path("worker/tasks/morning_brief.py").read_text()
-        # Find schedule_all function
-        start = content.find("async def schedule_all")
+        # schedule_all delegates to _schedule_all_impl where pagination lives
+        start = content.find("async def _schedule_all_impl")
+        assert start != -1, "_schedule_all_impl must exist"
         # Find next top-level function
         end = content.find("\nasync def ", start + 1)
         if end == -1:
             end = content.find("\n@register", start + 1)
         schedule_fn = content[start:end] if end != -1 else content[start:]
-        # Should not have unbounded .all() — should have .limit()
-        lines_with_all = [
-            l for l in schedule_fn.split("\n")
-            if ".scalars().all()" in l and ".limit(" not in schedule_fn[schedule_fn.find(l)-200:schedule_fn.find(l)]
-        ]
         # Check that limit is used near each .all()
         assert ".limit(_BATCH)" in schedule_fn
 

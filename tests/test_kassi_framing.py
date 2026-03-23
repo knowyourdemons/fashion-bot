@@ -64,16 +64,27 @@ class TestMilestoneTexts:
     """Milestone messages in wardrobe.py must be encouraging."""
 
     def test_milestone_texts_in_source(self):
+        """Milestone texts use i18n t() calls — verify keys exist and texts are positive."""
         with open("bot/handlers/wardrobe.py") as f:
             source = f.read()
-        # All milestone messages should use positive language
-        milestone_markers = [
-            "Мини-образ разблокирован",
-            "Гардероб собран",
-            "классная база",
+        # Verify wardrobe.py uses i18n keys for milestones
+        milestone_keys = [
+            "wardrobe.milestone_3",
+            "wardrobe.milestone_3_mini",
+            "wardrobe.milestone_7",
+            "wardrobe.milestone_done",
         ]
-        for marker in milestone_markers:
-            assert marker in source, f"Expected milestone text '{marker}' in wardrobe.py"
+        for key in milestone_keys:
+            assert key in source, f"Expected i18n key '{key}' in wardrobe.py"
+        # Verify the actual i18n strings contain positive language
+        from services.i18n.ru import STRINGS
+        positive_markers = [
+            ("wardrobe.milestone_3_mini", "Мини-образ разблокирован"),
+            ("wardrobe.milestone_done", "Гардероб собран"),
+            ("wardrobe.milestone_10", "классная база"),
+        ]
+        for key, marker in positive_markers:
+            assert marker in STRINGS[key], f"Expected '{marker}' in STRINGS['{key}']"
 
     def test_no_forbidden_in_milestones(self):
         with open("bot/handlers/wardrobe.py") as f:

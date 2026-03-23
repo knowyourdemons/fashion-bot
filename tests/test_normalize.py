@@ -200,7 +200,7 @@ class TestTypeNormalization:
         ("рюкзак", "bag", 2),
         ("кроссбоди", "bag", 3),
         ("тоут", "bag", 3),
-        ("футболка", "top", None),
+        ("футболка", "top", 2),
     ])
     def test_formality_levels(self, item_type, cg, expected_formality):
         from services.normalize import get_formality

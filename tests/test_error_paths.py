@@ -440,7 +440,7 @@ class TestRedisConnectionLost:
 
 class TestRedisTimeoutDuringReroll:
     async def test_reroll_redis_timeout_propagates(self):
-        """Redis.get raises TimeoutError → propagates since handler has no try/except."""
+        """Redis.incr raises TimeoutError → propagates since handler has no try/except."""
         from bot.handlers.brief import handle_reroll
 
         update = MagicMock()
@@ -462,7 +462,8 @@ class TestRedisTimeoutDuringReroll:
         user.telegram_id = 99999
 
         redis = AsyncMock()
-        redis.get.side_effect = TimeoutError("Redis timeout")
+        # Atomic INCR-then-check pattern: incr is the first Redis call now
+        redis.incr.side_effect = TimeoutError("Redis timeout")
 
         context = MagicMock()
         context.user_data = {"db_user": user}

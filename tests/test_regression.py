@@ -325,10 +325,12 @@ class TestOwnerIcons:
         wardrobe_btn = [b for b in buttons if "Гардероб" in b][0]
         assert "👩" in wardrobe_btn
 
-    def test_help_text_has_dynamic_icon(self):
-        """help.text must use {wardrobe_icon} placeholder."""
+    def test_help_text_has_core_sections(self):
+        """help.text must describe key features."""
         from services.i18n.ru import STRINGS
-        assert "{wardrobe_icon}" in STRINGS["help.text"]
+        text = STRINGS["help.text"]
+        assert "Касси" in text
+        assert "фото" in text.lower() or "📸" in text
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

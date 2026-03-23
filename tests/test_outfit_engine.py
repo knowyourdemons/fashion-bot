@@ -34,6 +34,8 @@ def _item(category_group: str, type_: str, color: str = "белый",
     i.warmth_level = warmth
     i.style_tag = style_tag
     i.rain_ok = rain_ok
+    i.formality_level = None
+    i.owner_id = i.id
     return i
 
 
