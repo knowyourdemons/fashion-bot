@@ -11,25 +11,26 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
       - name: Deploy to server
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: stas
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          command_timeout: 10m
-          debug: true
-          script: |
-            cd ~/fashion-bot
-            git pull origin main
-            docker compose -f docker/docker-compose.yml build app worker
-            docker compose -f docker/docker-compose.yml up -d --no-deps --force-recreate worker
-            sleep 3
-            docker compose -f docker/docker-compose.yml up -d --no-deps --force-recreate app
-            sleep 10
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no stas@${{ secrets.SERVER_HOST }} '
+            cd ~/fashion-bot &&
+            git pull origin main &&
+            docker compose -f docker/docker-compose.yml build app worker &&
+            docker compose -f docker/docker-compose.yml up -d --no-deps --force-recreate worker &&
+            sleep 3 &&
+            docker compose -f docker/docker-compose.yml up -d --no-deps --force-recreate app &&
+            sleep 10 &&
             curl -sf http://localhost:8000/health && echo "✅ Health OK" || echo "❌ Health FAIL"
-            echo "Deploy complete: $(date)"
+          '
+        timeout-minutes: 10
 
       - name: Notify success
         if: success()
