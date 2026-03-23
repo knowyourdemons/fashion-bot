@@ -8,6 +8,7 @@ from telegram.ext import ContextTypes
 
 from db.base import AsyncReadSession, AsyncWriteSession
 from db.crud.children import get_children
+from services.i18n import t, get_user_lang
 
 logger = structlog.get_logger()
 
@@ -93,6 +94,28 @@ async def handle_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except Exception:
         pass
 
+    # Kassi knows you %
+    try:
+        from services.preference_learner import build_user_preferences, calc_kassi_knows_pct
+        _prefs = await build_user_preferences(str(user.id))
+        _w_count = len(_w_items) if '_w_items' in locals() else 0
+        _knows = calc_kassi_knows_pct(
+            _prefs, _w_count,
+            has_style_type=bool(prefs.get("style_type")),
+            has_colortype=bool(user.colortype),
+            has_body_type=bool(user.body_type),
+        )
+        if _knows <= 0:
+            pass  # Don't show anything for brand new users
+        elif _knows < 15:
+            lines.append("\U0001f9e0 Касси только знакомится с тобой...")
+        elif _knows < 50:
+            lines.append(f"\U0001f9e0 Касси знает тебя на {_knows}% — с каждым днём точнее!")
+        else:
+            lines.append(f"\U0001f9e0 Касси знает тебя на {_knows}%")
+    except Exception:
+        pass
+
     # Style type from quiz
     if prefs.get("style_type"):
         from bot.handlers.style_quiz import STYLE_TYPES
@@ -106,9 +129,14 @@ async def handle_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         lines.append(f"\n🎁 Твой реферальный код: `{ref_code}`")
 
     edit_buttons = [
+        [
+            InlineKeyboardButton("👗 Моя капсула", callback_data="capsule:build"),
+            InlineKeyboardButton("🧳 Чемодан", callback_data="travel:start"),
+        ],
         [InlineKeyboardButton("🏙 Изменить город", callback_data="edit_city")],
         [InlineKeyboardButton("🎨 Изменить цветотип", callback_data="edit_colortype")],
         [InlineKeyboardButton("💅 Стиль", callback_data="edit_style_prefs")],
+        [InlineKeyboardButton("🌍 Язык / Language", callback_data="settings:lang")],
         [InlineKeyboardButton("👶 Добавить ребёнка", callback_data="add_child_start")],
     ]
     # Кнопки редактирования детей
@@ -224,7 +252,8 @@ async def handle_set_colortype(update: Update, context: ContextTypes.DEFAULT_TYP
         await session.commit()
     user.colortype = colortype
     label = _COLORTYPE_LABELS.get(colortype, colortype)
-    await query.message.reply_text(f"✅ Цветотип обновлён: {label}")
+    lang = get_user_lang(user)
+    await query.message.reply_text(t("profile.colortype_updated", lang, label=label))
 
 
 async def handle_edit_child_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -272,7 +301,8 @@ async def handle_add_child_start(update: Update, context: ContextTypes.DEFAULT_T
         InlineKeyboardButton("👧 Девочка", callback_data="new_child:girl"),
         InlineKeyboardButton("👦 Мальчик", callback_data="new_child:boy"),
     ]])
-    await query.message.reply_text("Девочка или мальчик? 🎀", reply_markup=keyboard)
+    lang = get_user_lang(user)
+    await query.message.reply_text(t("profile.girl_or_boy", lang), reply_markup=keyboard)
 
 
 async def handle_new_child_gender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -305,7 +335,8 @@ async def _finish_add_child(message, user, context) -> None:
     shoe = adding.get("shoe")
 
     if not name or not birthdate:
-        await message.reply_text("Что-то пошло не так 🤔 Попробуй снова через /profile")
+        lang = get_user_lang(user)
+        await message.reply_text(t("profile.child_error", lang))
         context.user_data.pop("adding_child", None)
         return
 
@@ -340,7 +371,8 @@ async def _finish_add_child(message, user, context) -> None:
         )
         logger.info("add_child.done", user_id=str(user.id), name=name, gender=gender)
     except Exception as e:
-        await message.reply_text("Ошибка при сохранении 😔 Попробуй снова")
+        lang = get_user_lang(user)
+        await message.reply_text(t("profile.save_error", lang))
         logger.error("add_child.error", error=str(e))
         sentry_sdk.capture_exception(e)
     finally:
@@ -455,7 +487,8 @@ async def handle_avoid_pref(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 "Теперь образы будут ещё точнее подобраны под тебя 🎯"
             )
         else:
-            await query.message.reply_text("✅ Настройки сохранены! Образы будут точнее 🎯")
+            lang = get_user_lang(user)
+            await query.message.reply_text(t("profile.prefs_saved", lang))
         return
 
     import sqlalchemy as sa

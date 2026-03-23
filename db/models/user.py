@@ -63,10 +63,19 @@ class User(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Language
+    language: Mapped[str] = mapped_column(String(5), default="ru")
+
     # Onboarding
     onboarding_step: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
     colortype: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    contrast_level: Mapped[Optional[str]] = mapped_column(String(10), nullable=True,
+        comment="HIGH/MEDIUM/LOW — contrast between hair and skin")
+    kibbe_family: Mapped[Optional[str]] = mapped_column(String(20), nullable=True,
+        comment="DRAMATIC/NATURAL/CLASSIC/GAMINE/ROMANTIC")
+    style_essence: Mapped[Optional[str]] = mapped_column(String(20), nullable=True,
+        comment="Primary style essence from face analysis")
     # Style preferences: {"avoid": ["юбки", "каблуки"], "prefer": ["минимализм"],
     #   "style": "casual", "work_days": 5}
     style_preferences: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)

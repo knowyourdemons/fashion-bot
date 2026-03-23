@@ -2,7 +2,7 @@
 import sentry_sdk
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice
 from telegram.ext import ContextTypes
-from services.i18n.ru import t
+from services.i18n import t, get_user_lang
 import structlog
 
 logger = structlog.get_logger()
@@ -130,7 +130,8 @@ async def handle_pay_stars(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     from core.permissions import PRICES
     price = PRICES.get(plan_key)
     if not price:
-        await query.answer("Неизвестный план", show_alert=True)
+        lang = get_user_lang(context.user_data.get("db_user"))
+        await query.answer(t("billing.unknown_plan", lang), show_alert=True)
         return
 
     keyboard = InlineKeyboardMarkup([[
@@ -190,12 +191,13 @@ async def handle_pay_stripe(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     plan_key = query.data.split(":")[1]  # premium_monthly | premium_quarterly | premium_yearly
     user = context.user_data.get("db_user")
     if not user:
-        await query.message.reply_text("Сначала войди через /start")
+        lang = get_user_lang(context.user_data.get("db_user"))
+        await query.message.reply_text(t("billing.need_start", lang))
         return
 
     from config import settings
     if not getattr(settings, "stripe_secret_key", ""):
-        await query.message.reply_text("Оплата картой временно недоступна.")
+        await query.message.reply_text(t("billing.card_unavailable", lang))
         return
 
     # Маппинг ключей в period для StripeProvider
@@ -225,7 +227,7 @@ async def handle_pay_stripe(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
     except Exception as e:
         logger.error("pay_stripe.error", error=str(e))
-        await query.message.reply_text("Ошибка при создании платежа. Попробуй позже.")
+        await query.message.reply_text(t("billing.create_error", lang))
         sentry_sdk.capture_exception(e)
 
 
@@ -257,7 +259,8 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
     user = context.user_data.get("db_user")
     if not user:
         logger.warning("successful_payment.no_db_user")
-        await update.message.reply_text("✅ Оплата получена! Напиши /start для обновления.")
+        lang = get_user_lang(context.user_data.get("db_user"))
+        await update.message.reply_text(t("billing.payment_received_no_user", lang))
         return
 
     from datetime import datetime, timedelta, timezone
@@ -265,15 +268,26 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
     from db.crud.users import update_user_plan, get_by_id
 
     expires_at = datetime.now(timezone.utc) + timedelta(days=30 * months)
-    async with AsyncWriteSession() as session:
-        await update_user_plan(
-            session=session,
-            user_id=user.id,
-            plan=plan,
-            plan_expires_at=expires_at,
-            subscription_id=None,
-            payment_provider="stars",
+    try:
+        async with AsyncWriteSession() as session:
+            await update_user_plan(
+                session=session,
+                user_id=user.id,
+                plan=plan,
+                plan_expires_at=expires_at,
+                subscription_id=None,
+                payment_provider="stars",
+            )
+            await session.commit()
+    except Exception as e:
+        logger.error("stars.payment_db_failed", user_id=str(user.id), plan_key=plan_key, error=str(e))
+        import sentry_sdk
+        sentry_sdk.capture_exception(e)
+        await update.message.reply_text(
+            "✅ Оплата получена, но произошла ошибка активации.\n"
+            "Напиши /start — мы всё исправим. Если проблема сохранится, напиши в поддержку."
         )
+        return
 
     # Reload user from DB to ensure context has fresh data
     async with AsyncReadSession() as session:
@@ -282,10 +296,8 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
             user = refreshed
     context.user_data["db_user"] = user
 
-    await update.message.reply_text(
-        f"✅ Premium активирован на {period_label}!\n"
-        f"Все функции доступны. Добро пожаловать! 🎉"
-    )
+    lang = get_user_lang(user)
+    await update.message.reply_text(t("billing.activated", lang, period=period_label))
     logger.info(
         "stars.payment_activated",
         user_id=str(user.id),
@@ -323,7 +335,8 @@ async def handle_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def handle_stay_free(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Пользователь выбрал остаться на free после trial."""
     query = update.callback_query
-    await query.answer("Хорошо! Ты всегда можешь вернуться к Premium 💎")
+    lang = get_user_lang(context.user_data.get("db_user"))
+    await query.answer(t("billing.stay_free", lang))
 
 
 async def handle_compare_plans(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -11,6 +11,8 @@ from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
+from services.i18n import t, get_user_lang
+
 logger = structlog.get_logger()
 
 
@@ -77,7 +79,8 @@ async def handle_ask_friend(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             pass
 
     if not photo_id:
-        await query.message.reply_text("📤 Перешли картинку выше подруге 👗")
+        lang = get_user_lang(user)
+        await query.message.reply_text(t("ask_friend.share_hint", lang))
         return
 
     bot_username = (await context.bot.get_me()).username
@@ -96,12 +99,12 @@ async def handle_vote_start(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     """Handle deep link: /start vote_XXXX → show collage + vote buttons."""
     redis = context.bot_data.get("redis")
     if not redis:
-        await update.message.reply_text("Голосование недоступно 😔")
+        await update.message.reply_text(t("ask_friend.vote_unavailable"))
         return
 
     raw = await redis.get(f"vote:{vote_id}")
     if not raw:
-        await update.message.reply_text("Голосование завершено 😊")
+        await update.message.reply_text(t("ask_friend.vote_closed"))
         return
 
     data = json.loads(raw if isinstance(raw, str) else raw.decode())
@@ -118,7 +121,7 @@ async def handle_vote_start(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         )
     except Exception as e:
         logger.warning("vote.send_failed", error=str(e))
-        await update.message.reply_text("Не удалось загрузить образ 😔")
+        await update.message.reply_text(t("ask_friend.load_failed"))
 
 
 async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -139,7 +142,7 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     raw = await redis.get(f"vote:{vote_id}")
     if not raw:
         try:
-            await query.edit_message_caption(caption="Голосование завершено 😊")
+            await query.edit_message_caption(caption=t("ask_friend.vote_closed"))
         except Exception:
             pass
         return

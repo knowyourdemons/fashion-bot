@@ -18,10 +18,13 @@ def create_application() -> Application:
     from bot.handlers.onboarding import build_conversation_handler
     from bot.handlers.menu import get_main_menu
     from bot.handlers.profile import handle_profile, handle_edit_city_location
+    from bot.middleware.antibot import AntibotMiddleware
     from bot.middleware.auth import AuthMiddleware
     from bot.middleware.typing import TypingMiddleware
 
-    # Middleware
+    # Middleware (order: antibot → auth → typing)
+    app.add_handler(MessageHandler(filters.ALL, AntibotMiddleware.handle), group=-3)
+    app.add_handler(CallbackQueryHandler(AntibotMiddleware.handle, pattern=".*"), group=-3)
     app.add_handler(MessageHandler(filters.ALL, AuthMiddleware.handle), group=-2)
     app.add_handler(MessageHandler(filters.ALL, TypingMiddleware.handle), group=-1)
 
@@ -135,6 +138,49 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(handle_challenge_start, pattern="^challenge_start$"))
     app.add_handler(CallbackQueryHandler(handle_challenge_later, pattern="^challenge_later$"))
 
+    # Capsule
+    from bot.handlers.capsule import handle_capsule, handle_capsule_ok, handle_capsule_share
+    app.add_handler(CommandHandler("capsule", handle_capsule))
+    app.add_handler(CallbackQueryHandler(handle_capsule, pattern="^capsule:build$"))
+    app.add_handler(CallbackQueryHandler(handle_capsule_ok, pattern="^capsule:ok$"))
+    app.add_handler(CallbackQueryHandler(handle_capsule_share, pattern="^capsule:share$"))
+
+    # Travel
+    from bot.handlers.travel import (
+        handle_travel_start, handle_travel_days,
+        handle_travel_occasion_toggle, handle_travel_build,
+    )
+    app.add_handler(CommandHandler("travel", handle_travel_start))
+    app.add_handler(CallbackQueryHandler(handle_travel_start, pattern="^travel:start$"))
+    app.add_handler(CallbackQueryHandler(handle_travel_days, pattern="^trv:days:"))
+    app.add_handler(CallbackQueryHandler(handle_travel_occasion_toggle, pattern="^trv:occ:"))
+    app.add_handler(CallbackQueryHandler(handle_travel_build, pattern="^trv:build$"))
+
+    # Monthly report callbacks
+    async def _report_ok(update, context):
+        await update.callback_query.answer()
+        try:
+            await update.callback_query.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+    app.add_handler(CallbackQueryHandler(_report_ok, pattern="^report:ok$"))
+    app.add_handler(CallbackQueryHandler(_report_ok, pattern="^report:share$"))
+
+    # Language selection
+    from bot.handlers.settings import handle_lang_callback
+    app.add_handler(CallbackQueryHandler(handle_lang_callback, pattern="^lang:"))
+
+    # Settings:lang → show language picker
+    async def _settings_lang(update, context):
+        await update.callback_query.answer()
+        from bot.handlers.settings import lang_keyboard
+        from services.i18n import t, get_user_lang
+        lang = get_user_lang(context.user_data.get("db_user"))
+        await update.callback_query.message.reply_text(
+            t("lang.choose", lang), reply_markup=lang_keyboard(),
+        )
+    app.add_handler(CallbackQueryHandler(_settings_lang, pattern="^settings:lang$"))
+
     # Ask friend
     from bot.handlers.ask_friend import handle_ask_friend, handle_vote_callback
     app.add_handler(CallbackQueryHandler(handle_ask_friend, pattern="^ask_friend:"))
@@ -163,12 +209,14 @@ def create_application() -> Application:
         except Exception:
             pass
     async def _weekly_reshuffle(update, context):
-        await update.callback_query.answer("🔄 Перемешиваю...")
-        # TODO: regenerate weekly plan
+        await update.callback_query.answer()
         try:
-            await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            await update.callback_query.edit_message_text(
+                update.callback_query.message.text + "\n\n🔄 Новый план придёт завтра утром!",
+                reply_markup=None,
+            )
         except Exception:
-            pass
+            await update.callback_query.answer("🔄 Новый план придёт завтра утром!")
     app.add_handler(CallbackQueryHandler(_weekly_ok, pattern="^weekly_ok$"))
     app.add_handler(CallbackQueryHandler(_weekly_reshuffle, pattern="^weekly_reshuffle$"))
 
@@ -185,6 +233,14 @@ def create_application() -> Application:
 
     # Текстовые сообщения → стилист — group=2 (после меню-хендлеров)
     _menu_texts = filters.Regex("^((👗|👧|👦|👩)\uFE0F? Гардероб|✨ Что надеть|💬 Спросить Касси|🛍 Подойдёт|💪 Как я|👤 Профиль|❓ Помощь)$")
+
+    # Travel city text input (group=1, before stylist chat; checks travel_step inside)
+    from bot.handlers.travel import handle_travel_city
+    app.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & ~_menu_texts,
+        handle_travel_city,
+    ), group=1)
+
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND & ~_menu_texts, text.handle_text),
         group=2,

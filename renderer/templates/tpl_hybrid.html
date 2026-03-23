@@ -82,7 +82,7 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
   {% if weather %}
   <div class="wx">
     {% if weather.icon_morning %}<span class="wx-i">{{ weather.icon_morning }}</span>{% endif %}
-    {% if weather.temp_morning_str %}<span class="wx-t">{{ weather.temp_morning_str }}</span>{% endif %}
+    {% if weather.temp_now_str %}<span class="wx-t">{{ weather.temp_now_str }}</span>{% elif weather.temp_morning_str %}<span class="wx-t">{{ weather.temp_morning_str }}</span>{% endif %}
     {% if weather.temp_evening_str %}
     <span class="wx-a">→</span>
     <span class="wx-t{{ ' w' if weather.evening_warn else '' }}">{{ weather.temp_evening_str }}</span>

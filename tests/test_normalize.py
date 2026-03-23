@@ -172,13 +172,39 @@ class TestTypeNormalization:
         ("манишка", "шарф"),
         ("палантин", "шарф"),
         ("муфта", "перчатки"),
-        ("рюкзак", "сумка"),
-        ("клатч", "сумка"),
     ])
     def test_accessory_variants(self, raw, expected_type):
         norm_type, norm_cg = normalize_type(raw)
         assert norm_type == expected_type
         assert norm_cg == "accessory"
+
+    @pytest.mark.parametrize("raw,expected_type,expected_cg", [
+        ("рюкзак", "рюкзак", "bag"),
+        ("клатч", "клатч", "bag"),
+        ("шопер", "тоут", "bag"),
+        ("кроссбоди", "кроссбоди", "bag"),
+        ("бананка", "поясная сумка", "bag"),
+    ])
+    def test_bag_variants(self, raw, expected_type, expected_cg):
+        norm_type, norm_cg = normalize_type(raw)
+        assert norm_type == expected_type
+        assert norm_cg == expected_cg
+
+    @pytest.mark.parametrize("item_type,cg,expected_formality", [
+        ("лоферы", "footwear", 4),
+        ("кроссовки", "footwear", 2),
+        ("сандалии", "footwear", 1),
+        ("ботинки", "footwear", 3),
+        ("лодочки", "footwear", 5),
+        ("клатч", "bag", 5),
+        ("рюкзак", "bag", 2),
+        ("кроссбоди", "bag", 3),
+        ("тоут", "bag", 3),
+        ("футболка", "top", None),
+    ])
+    def test_formality_levels(self, item_type, cg, expected_formality):
+        from services.normalize import get_formality
+        assert get_formality(item_type, cg) == expected_formality
 
     # ── Baby / Toddler ──
 

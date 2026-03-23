@@ -236,9 +236,16 @@ async def build_shopping_list(
         )
     else:
         system_prompt = "Ты стилист. Помогаешь составить список покупок. Отвечай нумерованным списком на русском."
+
+        # Bag gap hint
+        _bag_hint = ""
+        _has_bags = any(getattr(i, "category_group", "") == "bag" for i in items)
+        if not _has_bags:
+            _bag_hint = "\nВ гардеробе нет сумок — рекомендуй нейтральную на каждый день (кроссбоди или тоут)."
+
         user_prompt = (
             f"{owner_context}{colortype_str}\n"
-            f"Сезон: {season}.\n\n"
+            f"Сезон: {season}.{_bag_hint}\n\n"
             f"Гардероб ({len(sorted_items)} вещей):\n{items_lines}\n\n"
             f"Каких вещей не хватает на этот сезон? Напиши 5-7 вещей с цветом."
         )

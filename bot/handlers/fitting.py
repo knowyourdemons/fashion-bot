@@ -9,6 +9,8 @@ from datetime import date
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
+from services.i18n import t, get_user_lang
+
 logger = structlog.get_logger()
 
 _FITTING_LIMIT = 5  # per month
@@ -66,7 +68,8 @@ async def process_fitting_photo(update, context, user, photo_bytes: bytes) -> bo
     context.user_data.pop("mode", None)
 
     await context.bot.send_chat_action(update.effective_chat.id, "typing")
-    status = await update.message.reply_text("✨ Анализирую...")
+    lang = get_user_lang(user)
+    status = await update.message.reply_text(t("fitting.looking", lang))
 
     try:
         from services.vision import _call_vision

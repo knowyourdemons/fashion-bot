@@ -82,7 +82,7 @@ SEASON_MAP = {
 
 _CAPSULE_SLOTS = {
     "top": 6, "bottom": 4, "outerwear": 3, "footwear": 3,
-    "one_piece": 3, "accessory": 4,
+    "one_piece": 3, "bag": 2, "accessory": 4,
 }
 
 

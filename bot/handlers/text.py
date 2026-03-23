@@ -11,7 +11,7 @@ from core.anthropic_client import get_anthropic_pool
 from db.base import AsyncWriteSession
 from db.models.user import User
 from exceptions import FashionBotError, RateLimitError
-from services.i18n.ru import t
+from services.i18n import t, get_user_lang
 from bot.handlers.menu import get_main_menu
 from core.permissions import get_effective_plan, get_limit, is_trial_just_ended
 
@@ -267,11 +267,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     today = date.today().isoformat()
     chat_key = f"chat_limit:{user.id}:{today}"
     chat_count = 0
+    # Atomic: increment first, check after (prevents race condition)
     if redis:
-        val = await redis.get(chat_key)
-        chat_count = int(val) if val else 0
+        chat_count = await redis.incr(chat_key)
+        await redis.expire(chat_key, 86400)
+    else:
+        chat_count = 1
 
-    if chat_count >= chat_limit and effective_plan != "admin":
+    if chat_count > chat_limit and effective_plan != "admin":
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton("✨ Premium →", callback_data="show_upgrade")
         ]])
@@ -331,6 +334,29 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         except Exception:
             pass  # не критично — отвечаем без контекста
 
+        # Detect explicit preferences → save to Kassi memory
+        _user_text = update.message.text.strip().lower()
+        try:
+            import re
+            _MEM_PATTERNS = [
+                (r"не люблю (.+)", "не любит {0}"),
+                (r"не ношу (.+)", "не носит {0}"),
+                (r"люблю (.+)", "любит {0}"),
+                (r"предпочитаю (.+)", "предпочитает {0}"),
+                (r"аллергия на (.+)", "аллергия на {0}"),
+                (r"ненавижу (.+)", "не любит {0}"),
+            ]
+            for pattern, template in _MEM_PATTERNS:
+                m = re.search(pattern, _user_text)
+                if m:
+                    from services.kassi_memory import save_explicit_memory
+                    fact = template.format(m.group(1).strip()[:50])
+                    await save_explicit_memory(str(user.id), fact)
+                    logger.info("memory.explicit_saved", user_id=str(user.id), fact=fact)
+                    break
+        except Exception:
+            pass
+
         response = await pool.create_message(
             model=HAIKU_MODEL,
             system=system,
@@ -341,7 +367,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         duration_ms = int((time.monotonic() - start) * 1000)
 
         # Суффикс — только когда мало осталось
-        remaining = chat_limit - (chat_count + 1)
+        remaining = chat_limit - chat_count
         if remaining == 0:
             suffix = "\n\n⚠️ Это последний вопрос на сегодня."
         elif remaining <= 2:
@@ -351,21 +377,19 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
         await update.message.reply_text(f"{reply}{suffix}", reply_markup=get_main_menu(context.user_data.get("db_user") if hasattr(context, "user_data") else None, context))
 
-        # Инкремент лимита чата
-        if redis:
-            await redis.incr(chat_key)
-            await redis.expire(chat_key, 86400)
+        # Chat counter already incremented atomically before the AI call
 
-        # Инкремент общего счётчика
-        new_count = user.daily_requests_used + 1
+        # Инкремент общего счётчика (atomic)
         async with AsyncWriteSession() as session:
-            await session.execute(
+            result = await session.execute(
                 sa.update(User)
                 .where(User.id == user.id)
-                .values(daily_requests_used=new_count)
+                .values(daily_requests_used=User.daily_requests_used + 1)
+                .returning(User.daily_requests_used)
             )
             await session.commit()
-        user.daily_requests_used = new_count
+            row = result.first()
+            user.daily_requests_used = row[0] if row else user.daily_requests_used + 1
 
         logger.info(
             "stylist.response",

@@ -241,33 +241,55 @@ TYPE_SYNONYMS: dict[str, tuple[str, str]] = {
     "палантин": ("шарф", "accessory"),
     "платок": ("шарф", "accessory"),
     "шаль": ("шарф", "accessory"),
-    "рюкзак": ("сумка", "accessory"),
-    "клатч": ("сумка", "accessory"),
-    "поясная сумка": ("сумка", "accessory"),
-    "fanny pack": ("сумка", "accessory"),
-    "шопер": ("сумка", "accessory"),
-    "тоут": ("сумка", "accessory"),
-    "кросс-боди": ("сумка", "accessory"),
-    "портфель": ("сумка", "accessory"),
-    "ранец": ("сумка", "accessory"),
-    "косметичка": ("сумка", "accessory"),
-    "часы": ("украшения", "accessory"),
-    "брошь": ("украшения", "accessory"),
-    "ободок": ("украшения", "accessory"),
-    "заколка": ("украшения", "accessory"),
-    "серьги": ("украшения", "accessory"),
-    "сережки": ("украшения", "accessory"),
-    "кольцо": ("украшения", "accessory"),
-    "браслет": ("украшения", "accessory"),
-    "колье": ("украшения", "accessory"),
-    "бусы": ("украшения", "accessory"),
-    "цепочка": ("украшения", "accessory"),
-    "кулон": ("украшения", "accessory"),
-    "подтяжки": ("украшения", "accessory"),
-    "галстук": ("украшения", "accessory"),
-    "бабочка": ("украшения", "accessory"),
-    "ремень": ("украшения", "accessory"),
-    "пояс": ("украшения", "accessory"),
+    # ── BAGS → bag ──
+    "рюкзак": ("рюкзак", "bag"),
+    "клатч": ("клатч", "bag"),
+    "поясная сумка": ("поясная сумка", "bag"),
+    "fanny pack": ("поясная сумка", "bag"),
+    "бананка": ("поясная сумка", "bag"),
+    "шопер": ("тоут", "bag"),
+    "тоут": ("тоут", "bag"),
+    "tote": ("тоут", "bag"),
+    "кросс-боди": ("кроссбоди", "bag"),
+    "кроссбоди": ("кроссбоди", "bag"),
+    "crossbody": ("кроссбоди", "bag"),
+    "через плечо": ("кроссбоди", "bag"),
+    "портфель": ("портфель", "bag"),
+    "ранец": ("рюкзак", "bag"),
+    "на плечо": ("сумка на плечо", "bag"),
+    "хобо": ("хобо", "bag"),
+    "hobo": ("хобо", "bag"),
+    "мини-сумка": ("мини-сумка", "bag"),
+    "mini bag": ("мини-сумка", "bag"),
+    "сумка": ("сумка на плечо", "bag"),
+    "косметичка": ("косметичка", "bag"),
+    # ── JEWELRY ──
+    "серьги": ("серьги", "accessory"),
+    "серёжки": ("серьги", "accessory"),
+    "сережки": ("серьги", "accessory"),
+    "серьги-гвоздики": ("серьги-гвоздики", "accessory"),
+    "серьги-кольца": ("серьги-кольца", "accessory"),
+    "серьги длинные": ("серьги длинные", "accessory"),
+    "клипсы": ("серьги", "accessory"),
+    "кольцо": ("кольцо", "accessory"),
+    "браслет": ("браслет", "accessory"),
+    "часы": ("часы", "accessory"),
+    "колье": ("колье", "accessory"),
+    "ожерелье": ("колье", "accessory"),
+    "бусы": ("колье", "accessory"),
+    "цепочка": ("цепочка", "accessory"),
+    "кулон": ("кулон", "accessory"),
+    "чокер": ("чокер", "accessory"),
+    "подвеска": ("кулон", "accessory"),
+    "брошь": ("брошь", "accessory"),
+    "ободок": ("ободок", "accessory"),
+    "заколка": ("заколка", "accessory"),
+    # ── BELT / TIE ──
+    "ремень": ("ремень", "accessory"),
+    "пояс": ("ремень", "accessory"),
+    "галстук": ("галстук", "accessory"),
+    "бабочка": ("бабочка", "accessory"),
+    "подтяжки": ("подтяжки", "accessory"),
 
     # ── HOME / SLEEPWEAR ──
     "пижама": ("пижама", "home_beach"),
@@ -279,6 +301,100 @@ TYPE_SYNONYMS: dict[str, tuple[str, str]] = {
 # Pre-sorted by key length descending for substring matching
 # (longer matches first to avoid partial matches like "бал" matching "балетки")
 _TYPE_SYNONYMS_SORTED = sorted(TYPE_SYNONYMS.items(), key=lambda x: len(x[0]), reverse=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FORMALITY LEVELS (1-5) for ALL categories
+# 1=super casual (пляж/дом)  2=casual  3=casual smart  4=smart  5=formal
+# ══════════════════════════════════════════════════════════════════════════════
+
+FORMALITY_LEVELS: dict[str, int] = {
+    # ── TOP ──
+    "блузка": 4, "рубашка": 4, "водолазка": 3, "поло": 3,
+    "свитер": 3, "кардиган": 3, "лонгслив": 2, "худи": 2,
+    "свитшот": 2, "футболка": 2, "топ": 2, "майка": 1,
+    "боди": 3, "жилетка": 3, "туника": 2,
+    # ── BOTTOM ──
+    "брюки": 4, "чиносы": 3, "юбка": 3, "юбка-карандаш": 5,
+    "юбка миди": 4, "юбка мини": 3, "широкие брюки": 3,
+    "джинсы": 2, "леггинсы": 1, "шорты": 1,
+    "спортивные штаны": 1, "джоггеры": 1, "штаны": 2,
+    # ── ONE_PIECE ──
+    "платье": 3, "сарафан": 2, "комбинезон": 2, "ромпер": 2,
+    # ── OUTERWEAR ──
+    "пальто": 5, "тренч": 4, "пиджак": 5, "блейзер": 4,
+    "куртка": 3, "ветровка": 2, "пуховик": 2, "бомбер": 2,
+    "плащ": 4, "дождевик": 2, "жилет": 3, "парка": 2, "шуба": 5,
+    # ── FOOTWEAR ──
+    "лодочки": 5, "туфли на каблуке": 5, "шпильки": 5,
+    "лоферы": 4, "оксфорды": 4, "мюли": 4, "слингбэки": 4,
+    "монки": 4, "дерби": 4, "броги": 4, "мери джейн": 4,
+    "ботинки": 3, "ботильоны": 3, "челси": 3, "балетки": 3,
+    "мокасины": 3, "туфли": 3, "сапоги": 3, "слиперы": 3,
+    "кроссовки": 2, "кеды": 2, "эспадрильи": 2, "слипоны": 2,
+    "топсайдеры": 2, "зимние сапоги": 2,
+    "сандалии": 1, "шлёпки": 1, "тапочки": 1, "угги": 1,
+    # ── BAG ──
+    "клатч": 5, "мини-сумка": 4, "сумка на плечо": 4, "портфель": 4,
+    "кроссбоди": 3, "тоут": 3,
+    "хобо": 2, "рюкзак": 2, "поясная сумка": 2, "косметичка": 1,
+    # ── JEWELRY ──
+    "серьги-гвоздики": 3, "серьги-кольца": 3, "серьги длинные": 4,
+    "серьги": 3, "кольцо": 3, "браслет": 3, "часы": 3,
+    "колье": 4, "чокер": 4, "цепочка": 3, "кулон": 3, "брошь": 4,
+    # ── BELT / TIE ──
+    "ремень": 3, "галстук": 5, "бабочка": 5,
+}
+
+# Defaults by category_group (if type not found in lookup)
+_FORMALITY_DEFAULTS = {
+    "top": 2, "bottom": 2, "one_piece": 3, "outerwear": 3,
+    "footwear": 2, "bag": 3, "accessory": 3,
+}
+
+# Backward-compatible aliases
+FOOTWEAR_FORMALITY = {k: v for k, v in FORMALITY_LEVELS.items()
+                       if k in {"лодочки", "шпильки", "лоферы", "оксфорды", "мюли",
+                                "ботинки", "челси", "балетки", "кроссовки", "кеды",
+                                "сандалии", "шлёпки", "тапочки", "угги", "сапоги", "туфли"}}
+BAG_FORMALITY = {k: v for k, v in FORMALITY_LEVELS.items()
+                  if k in {"клатч", "мини-сумка", "сумка на плечо", "кроссбоди",
+                           "тоут", "рюкзак", "поясная сумка", "портфель", "хобо"}}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# METAL TONE detection for jewelry
+# ══════════════════════════════════════════════════════════════════════════════
+
+METAL_TONE_HINTS: dict[str, str] = {
+    "золот": "gold", "gold": "gold", "жёлт": "gold", "rose gold": "rose_gold",
+    "серебр": "silver", "silver": "silver", "хром": "silver", "стальн": "silver",
+    "чёрн": "none", "кож": "none", "текстиль": "none",
+}
+
+
+def detect_metal_tone(color: str, item_type: str) -> str | None:
+    """Detect metal tone from color/type description. Returns gold/silver/rose_gold/mixed/none."""
+    text = f"{color} {item_type}".lower()
+    for pattern, tone in METAL_TONE_HINTS.items():
+        if pattern in text:
+            return tone
+    return None
+
+
+def get_formality(item_type: str, category_group: str = "") -> int | None:
+    """Get formality level (1-5) for any item. None only for underwear/base_layer."""
+    if category_group in ("underwear", "base_layer", "home_beach"):
+        return None
+    t = (item_type or "").lower().strip()
+    # Exact match
+    if t in FORMALITY_LEVELS:
+        return FORMALITY_LEVELS[t]
+    # Substring match (longer keys first for precision)
+    for key in sorted(FORMALITY_LEVELS, key=len, reverse=True):
+        if key in t:
+            return FORMALITY_LEVELS[key]
+    # Category default
+    return _FORMALITY_DEFAULTS.get(category_group)
 
 
 def normalize_type(raw_type: str, raw_category_group: str = "") -> tuple[str, str]:

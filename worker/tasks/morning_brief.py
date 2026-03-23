@@ -36,6 +36,16 @@ logger = structlog.get_logger()
 
 async def schedule_all() -> None:
     """Каждый час отбирает юзеров у кого сейчас 07:00 → пушит generate_brief."""
+    try:
+        async with asyncio.timeout(120):  # 2 min max — prevent APScheduler stall
+            await _schedule_all_impl()
+    except asyncio.TimeoutError:
+        logger.error("morning_brief.schedule_all.timeout", msg="schedule_all exceeded 120s")
+    except Exception as e:
+        logger.error("morning_brief.schedule_all.error", error=str(e))
+
+
+async def _schedule_all_impl() -> None:
     from sqlalchemy import select
     from db.base import AsyncReadSession
     from db.models.user import User
@@ -175,7 +185,10 @@ async def schedule_all() -> None:
 
     # ── 19:00 cold user reminders (day 1/2/3/5 after onboarding, 0 photos) ──
     try:
-        await _send_cold_reminders(redis_client)
+        async with asyncio.timeout(30):  # 30s max for cold reminders
+            await _send_cold_reminders(redis_client)
+    except asyncio.TimeoutError:
+        logger.warning("morning_brief.cold_reminders.timeout")
     except asyncio.CancelledError:
         logger.info("morning_brief.cold_reminders.cancelled")
     except Exception as e:
@@ -531,19 +544,46 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
     else:
         greeting = "Добрый вечер"
 
+    # Streak text for adult brief
+    _streak_line_adult = ""
+    try:
+        from services.streak import get_streak, get_streak_text
+        _streak_data_adult = await get_streak(str(user.id))
+        _streak_line_adult = get_streak_text(_streak_data_adult)
+    except Exception:
+        pass
+
     brief_text = f"🌅 {greeting}, {user.name}!\n"
+    if _streak_line_adult:
+        brief_text += f"{_streak_line_adult}\n"
     if weather_line:
         brief_text += f"{weather_line}\n"
     if _evening_banner:
         brief_text += f"\n{_evening_banner}\n"
     brief_text += f"\n💡 Идея на сегодня:\n{stylist_advice}"
+
+    # Simple jewelry/accessory hint for adults (no_kids segment only)
+    if items and getattr(user, "segment", "") == "no_kids":
+        _outfit_cgs = {i.category_group for i in items}
+        if "accessory" not in _outfit_cgs or not any(
+            i.category_group == "accessory" and i.type in ("серьги", "браслет", "часы", "колье", "кольцо", "брошь")
+            for i in items[:10]  # top-scored items used in outfit
+        ):
+            _JEWELRY_TYPES = {"серьги", "браслет", "часы", "колье", "кольцо", "брошь"}
+            _jewelry = [i for i in items if i.category_group == "accessory" and i.type in _JEWELRY_TYPES]
+            if _jewelry:
+                import random
+                _j = random.choice(_jewelry)
+                _j_color = f"{_j.color} " if _j.color else ""
+                brief_text += f"\n💍 {_j_color}{_j.type} добавят завершённости!"
+
     if not items:
         brief_text += "\n\n📸 Добавь вещи в гардероб — буду подбирать образы каждое утро!"
 
     # Коллаж из вещей пользователя
     outfit_slots: list[dict] = []
     if items:
-        slot_order = ["outerwear", "top", "bottom", "one_piece", "footwear"]
+        slot_order = ["outerwear", "top", "bottom", "one_piece", "footwear", "bag"]
         seen_cg: set = set()
         outfit: dict = {}
         for item in sorted(items, key=lambda x: float(x.score_item or 0), reverse=True):
@@ -683,6 +723,7 @@ async def generate_brief(payload: dict) -> dict:
     season = _SEASONS[today.month]
     day_type = "садик" if today.weekday() < 5 else "прогулка"
 
+    temp_now_child = weather.get("temp_now")
     temp_m = weather.get("temp_morning")
     temp_e = weather.get("temp_evening")
     precip_e = weather.get("precip_evening", 0)
@@ -762,6 +803,7 @@ async def generate_brief(payload: dict) -> dict:
                 precip_max=precip_max,
                 advice_text=advice,
                 items_count=len(items),
+                temp_now=temp_now_child,
             )
 
             # Текстовый бриф для Mode B
@@ -839,6 +881,7 @@ async def generate_brief(payload: dict) -> dict:
                 precip_max=precip_max,
                 advice_text=advice,
                 items_count=len(items),
+                temp_now=temp_now_child,
             )
 
             child_briefs[-1] = (
@@ -889,6 +932,7 @@ async def generate_brief(payload: dict) -> dict:
             day_type=day_type,
             body_type=getattr(user, "body_type", None),
             redis=redis_client,
+            user_id=str(user.id),
         )
 
         outfit = _engine_result.outfit
@@ -969,7 +1013,18 @@ async def generate_brief(payload: dict) -> dict:
     _first_child_name = children[0].name if children else ""
     weather_emoji_line = format_weather_line(weather) if weather else ""
 
+    # Streak text for child brief
+    _streak_line_child = ""
+    try:
+        from services.streak import get_streak as _get_streak_c, get_streak_text as _get_streak_text_c
+        _streak_data_child = await _get_streak_c(str(user.id))
+        _streak_line_child = _get_streak_text_c(_streak_data_child)
+    except Exception:
+        pass
+
     header = f"<b>{_date_str}</b>\n<b>{_first_child_name}</b>, {day_type}\n"
+    if _streak_line_child:
+        header += f"{_streak_line_child}\n"
     if weather_emoji_line:
         header += f"{weather_emoji_line}\n"
 

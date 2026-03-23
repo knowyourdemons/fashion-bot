@@ -48,7 +48,9 @@ body{width:440px;font-family:'N',sans-serif;padding:16px}
 <div class="wx">
   <div class="wx-icon">{{ weather.icon_day|default('☀️') }}</div>
   <div class="wx-row">
-    {% if weather.temp_morning is defined and weather.temp_morning is not none %}
+    {% if weather.temp_now is defined and weather.temp_now is not none %}
+    <div class="wx-item"><div class="wx-temp">{{ weather.temp_now_str }}</div><div class="wx-lbl">сейчас</div></div>
+    {% elif weather.temp_morning is defined and weather.temp_morning is not none %}
     <div class="wx-item"><div class="wx-temp">{{ weather.temp_morning_str }}</div><div class="wx-lbl">утро</div></div>
     {% endif %}
     {% if weather.temp_day is defined and weather.temp_day is not none %}

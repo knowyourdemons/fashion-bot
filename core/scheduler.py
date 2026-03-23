@@ -57,6 +57,8 @@ class Scheduler:
             CronTrigger(hour="*", minute=0),
             id="morning_brief",
             replace_existing=True,
+            misfire_grace_time=300,
+            max_instances=2,
         )
 
         # evening_brief — 20:00 по timezone юзера (каждый час :30, фильтрует внутри)
@@ -129,5 +131,52 @@ class Scheduler:
             growth_alert.run,
             CronTrigger(day=1, hour=8, minute=30),
             id="growth_alert",
+            replace_existing=True,
+        )
+
+        # capsule_season — 1-е число сезона (Mar/Jun/Sep/Dec), 09:30 UTC
+        from worker.tasks import capsule_season
+        self._scheduler.add_job(
+            capsule_season.run,
+            CronTrigger(day=1, hour=9, minute=30),
+            id="capsule_season",
+            replace_existing=True,
+        )
+
+        # monthly_report — перенесён в analytics_report, 1-е число 08:00 UTC (уже зарегистрирован)
+
+        # wardrobe_analysis — еженедельно пн 06:00 UTC
+        from worker.tasks import wardrobe_analysis
+        self._scheduler.add_job(
+            wardrobe_analysis.run,
+            CronTrigger(day_of_week="mon", hour=6, minute=0),
+            id="wardrobe_analysis",
+            replace_existing=True,
+        )
+
+        # declutter — 15-е число каждого месяца 10:00 UTC
+        from worker.tasks import declutter
+        self._scheduler.add_job(
+            declutter.run,
+            CronTrigger(day=15, hour=10, minute=0),
+            id="declutter",
+            replace_existing=True,
+        )
+
+        # taxonomy_review — ежедневно 04:00 UTC
+        from worker.tasks import taxonomy_review
+        self._scheduler.add_job(
+            taxonomy_review.run,
+            CronTrigger(hour=4, minute=0),
+            id="taxonomy_review",
+            replace_existing=True,
+        )
+
+        # unknown_items_report — 1-е число 07:00 UTC (admin report)
+        from worker.tasks import unknown_items_report
+        self._scheduler.add_job(
+            unknown_items_report.run,
+            CronTrigger(day=1, hour=7, minute=0),
+            id="unknown_items_report",
             replace_existing=True,
         )

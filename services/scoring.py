@@ -118,6 +118,8 @@ _COMBINABLE_PAIRS_RAW = [
     ("outerwear", "bottom"), ("outerwear", "one_piece"),
     ("footwear", "bottom"), ("footwear", "one_piece"), ("footwear", "top"),
     ("accessory", "top"), ("accessory", "outerwear"), ("accessory", "bottom"),
+    ("bag", "top"), ("bag", "bottom"), ("bag", "one_piece"),
+    ("bag", "outerwear"), ("bag", "footwear"),
 ]
 # Normalize pairs alphabetically for consistent lookup
 _COMBINABLE_PAIRS = set()

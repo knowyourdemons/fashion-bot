@@ -137,6 +137,51 @@ def _check_style_compatibility(slot_items: dict, segment: str) -> bool:
     return True
 
 
+def _check_formality_coherence(
+    slot_items: dict, style_preferences: dict | None = None,
+) -> tuple[bool, str]:
+    """Check that formality spread between all items is ≤ 1 (or ≤ 2 for creative styles)."""
+    levels = []
+    item_names = []
+    for slot, item in slot_items.items():
+        fl = getattr(item, "formality_level", None)
+        if fl is not None:
+            levels.append(fl)
+            item_names.append((getattr(item, "type", "?"), fl))
+    if len(levels) < 2:
+        return True, ""
+
+    spread = max(levels) - min(levels)
+
+    # Creative/street styles allow wider spread (±2)
+    max_spread = 1
+    prefs = style_preferences or {}
+    style_type = prefs.get("style_type", "")
+    if style_type in ("street_casual", "bold_creative"):
+        max_spread = 2
+
+    if spread > max_spread:
+        highest = max(item_names, key=lambda x: x[1])
+        lowest = min(item_names, key=lambda x: x[1])
+        return False, f"{highest[0]}(f={highest[1]}) + {lowest[0]}(f={lowest[1]})"
+    return True, ""
+
+
+def _count_statement_pieces(slot_items: dict) -> int:
+    """Count statement-level accessories in outfit.
+
+    Statement pieces are accessories/bags with formality >= 4.
+    Used by evaluator scoring to penalize over-accessorized outfits.
+    """
+    count = 0
+    for item in slot_items.values():
+        if getattr(item, "category_group", "") in ("accessory", "bag"):
+            fl = getattr(item, "formality_level", 3)
+            if fl is not None and fl >= 4:  # statement = formality 4-5
+                count += 1
+    return count
+
+
 def _get_missing_warmth_cta(items: list, regime: str) -> str | None:
     """If items exist but none match warmth requirements, give specific CTA."""
     reqs = WARMTH_REQUIREMENTS.get(regime, {})
@@ -287,10 +332,18 @@ _SYSTEM_WOMAN = """Ты Касси — подруга-стилист. Говор
 
 ПРАВИЛА для женского образа:
 - Главное: СТИЛЬНО, неожиданные сочетания которые женщина не подумала бы сама.
-- Аксессуары (сумка, шарф) = завершение образа, включи если есть.
 - Платье — приветствуется для офиса/свидания.
 - При ре-ролле дай ДРУГОЕ настроение, не просто другую кофту.
 - При холодной погоде: предпочитай более тёплые вещи (warmth 3-4).
+
+ПРАВИЛА ОБУВИ И СУМОК:
+- Обувь ВСЕГДА подбирай по формальности ±1 от одежды (f=формальность в кандидатах).
+  Блуза(4) + кроссовки(2) = плохо. Блуза(4) + лоферы(4) = отлично.
+- Каблук (f=5) НЕ для прогулки/садика. Только вечер/офис/событие.
+- Сумка: если есть в кандидатах (cg=bag) — подбери подходящую. НЕ обязательный слот.
+  Клатч(f=5) = вечер. Тоут(f=3) = офис/день. Рюкзак(f=2) ≠ офис formal.
+  Тональность обуви и сумки совпадает: тёплые цвета вместе, холодные вместе.
+- Max 1 яркий аксессуар (обувь ИЛИ сумка ИЛИ шарф). Остальное — нейтральное.
 
 ПРАВИЛА ЦВЕТА (обязательно):
 - Правило 60-30-10: 60% доминантный цвет (низ/платье), 30% вторичный (верх/куртка), 10% акцент (аксессуар/обувь).
@@ -298,6 +351,18 @@ _SYSTEM_WOMAN = """Ты Касси — подруга-стилист. Говор
 - Схемы: monochrome (один цвет, разные оттенки), analogous (соседние: синий+бирюзовый), complementary (контрастные: синий+оранжевый).
 - ИЗБЕГАЙ: два ярких рядом (красный+оранжевый), принт+принт, три акцентных цвета.
 - Если есть вещи в палитре цветотипа — ПРЕДПОЧИТАЙ их.
+
+### Украшения (текстовая рекомендация, НЕ слот в items):
+- Если в кандидатах есть украшения — добавь 1 строку jewelry_hint в comment.
+- ONE STATEMENT RULE: макс 1 statement piece (серьги длинные ИЛИ колье ИЛИ крупный браслет). Не всё сразу.
+- Neckline + necklace: V-neck → кулон/цепочка. Круглый вырез → чокер или без. Водолазка → серьги, не ожерелье.
+- Metal matching: gold + gold или silver + silver. Rose gold = с обоими ок.
+- Пример: "💍 Золотые серьги-гвоздики добавят тепла" или "💍 Серебряная цепочка завершит образ"
+
+### Ремень:
+- rectangle body → "Ремень подчеркнёт талию"
+- С платьем/блузкой навыпуск → "Ремень структурирует образ"
+- Не упоминай если не нужен
 
 ТОН КОММЕНТАРИЯ:
 - ЗАПРЕЩЁННЫЕ слова: критически, обязательно, срочно, не хватает, нужно, должна, нельзя.
@@ -307,12 +372,13 @@ _SYSTEM_WOMAN = """Ты Касси — подруга-стилист. Говор
 
 ФОРМАТ ОТВЕТА — строго JSON:
 {
-  "items": {"top": "uuid", "bottom": "uuid", "outerwear": "uuid", "footwear": "uuid"},
+  "items": {"top": "uuid", "bottom": "uuid", "outerwear": "uuid", "footwear": "uuid", "bag": "uuid"},
   "comment": "1-2 предложения: почему это сочетание классно. Про цвет, стиль, настроение.",
   "is_wow": false
 }
 
 - Включай ТОЛЬКО слоты для которых выбрал вещь из списка.
+- bag — опционально. Включай если есть подходящая сумка в кандидатах.
 - UUID бери ТОЛЬКО из списка кандидатов. НИКОГДА не пиши текст вместо UUID.
 - Если для слота нет подходящей вещи — ПРОПУСТИ этот слот, не включай его.
 - comment = стилистический разбор. НЕ упоминай числовой скор.
@@ -338,7 +404,8 @@ _MAX_PER_GROUP = 15
 # Slot categories the AI can pick from (visual slots only)
 _AI_SLOTS = frozenset([
     "outerwear", "top", "bottom", "one_piece", "footwear",
-    "accessory",  # hat, scarf, gloves, bag
+    "accessory",  # hat, scarf, gloves
+    "bag",
 ])
 
 
@@ -357,6 +424,9 @@ def _serialize_item(item) -> dict:
         d["warmth"] = wl
     if getattr(item, "rain_ok", False):
         d["rain"] = True
+    fl = getattr(item, "formality_level", None)
+    if fl is not None:
+        d["f"] = fl  # formality 1-5
     return d
 
 
@@ -440,6 +510,7 @@ def _build_candidates_text(candidates: dict[str, list[dict]]) -> str:
         "bottom": "НИЗ",
         "one_piece": "ПЛАТЬЯ/КОМБИНЕЗОНЫ",
         "footwear": "ОБУВЬ",
+        "bag": "СУМКИ",
         "accessory": "АКСЕССУАРЫ",
         "sportswear": "СПОРТ",
     }
@@ -451,6 +522,8 @@ def _build_candidates_text(candidates: dict[str, list[dict]]) -> str:
             s = f'{it["id"][:8]}.. {it["type"]} {it["color"]}'
             if it.get("style"):
                 s += f' ({it["style"]})'
+            if it.get("f"):
+                s += f' f={it["f"]}'
             item_strs.append(s)
         lines.append(f"{name}:\n" + "\n".join(f"  - {s}" for s in item_strs))
     return "\n\n".join(lines)
@@ -841,6 +914,7 @@ async def select_outfit_ai(
     body_type: str | None = None,
     style_preferences: dict | None = None,
     redis=None,
+    user_id: str | None = None,
 ) -> OutfitResult:
     """AI-powered outfit selection. Returns OutfitResult with outfit + comment.
 
@@ -880,9 +954,65 @@ async def select_outfit_ai(
     is_mom = segment in ("mom_girl", "mom_boy")
     system_prompt = _get_mom_system_prompt(child_age) if is_mom else _SYSTEM_WOMAN
 
-    # Colortype addition
-    if colortype and colortype != "default":
-        system_prompt += f"\n\nЦветотип: {colortype}. Учитывай при выборе вещей."
+    # Professional styling context (colortype + contrast + Kibbe + essence + body type)
+    _styling_user = None
+    if user_id:
+        try:
+            from db.base import AsyncReadSession
+            from db.models.user import User as _UserModel
+            from sqlalchemy import select as _sel
+            import uuid as _uuid
+            async with AsyncReadSession() as _s:
+                _r = await _s.execute(_sel(_UserModel).where(_UserModel.id == _uuid.UUID(user_id)))
+                _styling_user = _r.scalar_one_or_none()
+        except Exception:
+            pass
+
+    if _styling_user:
+        from services.body_type import build_full_styling_context
+        _ctx = build_full_styling_context(_styling_user)
+        if _ctx:
+            system_prompt += f"\n\n{_ctx}"
+    else:
+        # Fallback: use passed colortype and body_type
+        if colortype and colortype != "default":
+            system_prompt += f"\n\nЦветотип: {colortype}. Учитывай при выборе вещей."
+        if body_type:
+            from services.body_type import get_body_type_prompt
+            bt_prompt = get_body_type_prompt(body_type)
+            if bt_prompt:
+                system_prompt += bt_prompt
+
+    # Preference learning from feedback history
+    if user_id:
+        try:
+            from services.preference_learner import build_user_preferences, get_preference_context
+            prefs = await build_user_preferences(user_id)
+            pref_text = get_preference_context(prefs)
+            if pref_text:
+                system_prompt += f"\n\nПредпочтения юзера (из истории):\n{pref_text}"
+        except Exception:
+            pass
+
+    # Mood context
+    from services.mood import detect_mood, get_mood_prompt
+    _mood = detect_mood(
+        weather={"temp_now": temp, "wmo_morning": 0},  # basic weather
+        weekday=today.weekday(),
+        occasion=day_type,
+    )
+    _mood_text = get_mood_prompt(_mood)
+    if _mood_text:
+        system_prompt += f"\n\n{_mood_text}"
+
+    # Kassi memory
+    try:
+        from services.kassi_memory import get_memory_for_prompt
+        _mem_text = await get_memory_for_prompt(str(items[0].owner_id) if items else "")
+        if _mem_text:
+            system_prompt += f"\n\n{_mem_text}"
+    except Exception:
+        pass
 
     # User prompt
     user_prompt = _build_user_prompt(
@@ -956,6 +1086,15 @@ async def select_outfit_ai(
     # Post-validation: style compatibility (women only)
     if not _check_style_compatibility(slot_items, segment):
         logger.warning("outfit_engine.style_clash", segment=segment)
+        return _fallback_result(items, season, today, temp, temp_eve, precip_evening,
+                                segment, child_name)
+
+    # Post-validation: formality coherence (±1 between all items)
+    _formality_ok, _formality_msg = _check_formality_coherence(
+        slot_items, style_preferences,
+    )
+    if not _formality_ok:
+        logger.warning("outfit_engine.formality_clash", msg=_formality_msg)
         return _fallback_result(items, season, today, temp, temp_eve, precip_evening,
                                 segment, child_name)
 

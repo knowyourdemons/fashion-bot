@@ -7,7 +7,7 @@ from telegram.ext import ContextTypes
 from db.base import AsyncWriteSession
 from db.crud.brief_log import get_log, update_feedback
 from db.crud.wardrobe import update_wear_count
-from services.i18n.ru import t
+from services.i18n import t, get_user_lang
 logger = structlog.get_logger()
 async def handle_brief_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Callback pattern: ^brief_feedback: -> brief_feedback:up:{brief_id} / brief_feedback:down:{brief_id}"""
@@ -79,6 +79,38 @@ async def handle_brief_feedback(update: Update, context: ContextTypes.DEFAULT_TY
             user_id=str(user.id) if user else "unknown",
             feedback=vote,
         )
+        # ── Preference + streak updates ──
+        if user:
+            try:
+                from services.preference_learner import invalidate_preferences
+                await invalidate_preferences(str(user.id))
+            except Exception:
+                pass
+            try:
+                from services.streak import update_streak, check_milestone
+                streak = await update_streak(str(user.id))
+                knows_pct = 0
+                if streak.get("current", 0) == 14:
+                    try:
+                        from services.preference_learner import build_user_preferences, calc_kassi_knows_pct
+                        from db.crud.wardrobe import get_owner_items_count
+                        from db.base import AsyncReadSession
+                        _prefs = await build_user_preferences(str(user.id))
+                        async with AsyncReadSession() as _s:
+                            _wsize = await get_owner_items_count(_s, user.id, "user")
+                        knows_pct = calc_kassi_knows_pct(
+                            _prefs, _wsize,
+                            has_style_type=bool(getattr(user, "style_preferences", None)),
+                            has_colortype=bool(getattr(user, "colortype", None)),
+                            has_body_type=bool(getattr(user, "body_type", None)),
+                        )
+                    except Exception:
+                        knows_pct = 50
+                milestone_msg = check_milestone(streak, knows_pct=knows_pct)
+                if milestone_msg:
+                    await query.message.reply_text(milestone_msg)
+            except Exception:
+                pass
     except Exception as e:
         await query.message.reply_text(t("error.generic"))
         logger.error("brief.feedback.error", error=str(e))
@@ -214,12 +246,14 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     from datetime import date as _date
     today = _date.today().isoformat()
     reroll_key = f"reroll_count:{user.id}:{today}"
-    count = 0
+    # Atomic: increment first, check after (prevents race condition)
     if redis:
-        val = await redis.get(reroll_key)
-        count = int(val) if val else 0
+        count = await redis.incr(reroll_key)
+        await redis.expire(reroll_key, 86400)
+    else:
+        count = 1
 
-    if count >= reroll_limit:
+    if count > reroll_limit:
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton(
                 "✨ Подписка →", callback_data="show_upgrade",
@@ -240,9 +274,7 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             pass
         await _reroll_adult_advice(query.message, user)
 
-        if redis:
-            await redis.incr(reroll_key)
-            await redis.expire(reroll_key, 86400)
+        # Reroll counter already incremented atomically before the check
 
         logger.info("reroll.adult_advice.done", user_id=str(user.id))
         return
@@ -288,10 +320,12 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # Show loading state on text message (buttons are on text, not photo)
     old_message = query.message
     try:
-        await query.edit_message_text(text="🔄 Подбираю другой вариант...")
+        lang = get_user_lang(user)
+        await query.edit_message_text(text=t("brief.rerolling", lang))
     except Exception:
         try:
-            await query.edit_message_caption(caption="🔄 Подбираю другой вариант...")
+            lang = get_user_lang(user)
+            await query.edit_message_caption(caption=t("brief.rerolling", lang))
         except Exception:
             pass
 
@@ -299,9 +333,7 @@ async def handle_reroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     from bot.handlers.wardrobe import _generate_outfit_for_user
     await _generate_outfit_for_user(old_message, user, context, exclude_ids=exclude_ids, silent_status=True)
 
-    if redis:
-        await redis.incr(reroll_key)
-        await redis.expire(reroll_key, 86400)
+    # Reroll counter already incremented atomically before the check
 
     # Delete old photo message (split delivery: photo is a separate message)
     if redis and brief_id_str:
@@ -333,7 +365,8 @@ async def handle_share(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     parts = query.data.split(":", 1)
     brief_id_str = parts[1] if len(parts) > 1 else None
     if not brief_id_str:
-        await query.message.reply_text("📤 Перешли картинку выше — на ней всё написано 👗")
+        lang = get_user_lang(context.user_data.get("db_user"))
+        await query.message.reply_text(t("brief.share_hint", lang))
         return
 
     try:
@@ -362,9 +395,9 @@ async def handle_share(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 caption=caption,
             )
         else:
-            await query.message.reply_text(
-                "📤 Перешли картинку выше — на ней всё написано 👗"
-            )
+            lang = get_user_lang(context.user_data.get("db_user"))
+            await query.message.reply_text(t("brief.share_hint", lang))
     except Exception as e:
         logger.error("brief.share.error", error=str(e))
-        await query.message.reply_text("📤 Перешли картинку выше 👗")
+        lang = get_user_lang(context.user_data.get("db_user"))
+        await query.message.reply_text(t("brief.share_hint_short", lang))

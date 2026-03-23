@@ -4,7 +4,7 @@ MAIN_MENU = ReplyKeyboardMarkup(
     [
         [KeyboardButton("✨ Что надеть")],
         [KeyboardButton("👗 Гардероб"), KeyboardButton("💬 Спросить Касси")],
-        [KeyboardButton("🛍 Подойдёт?"), KeyboardButton("👤 Профиль")],
+        [KeyboardButton("👤 Профиль"), KeyboardButton("❓ Помощь")],
     ],
     resize_keyboard=True,
     is_persistent=True,
@@ -32,7 +32,7 @@ def get_main_menu(user=None, context=None) -> ReplyKeyboardMarkup:
         [
             [KeyboardButton("✨ Что надеть")],
             [KeyboardButton(f"{wardrobe_icon} Гардероб"), KeyboardButton("💬 Спросить Касси")],
-            [KeyboardButton("🛍 Подойдёт?"), KeyboardButton("👤 Профиль")],
+            [KeyboardButton("👤 Профиль"), KeyboardButton("❓ Помощь")],
         ],
         resize_keyboard=True,
         is_persistent=True,

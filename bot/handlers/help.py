@@ -11,7 +11,7 @@ async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     _eff = get_effective_limits(user) if user else {}
     chat_limit = _eff.get("chat_per_day", get_limit("chat_per_day", plan))
 
-    from services.i18n.ru import t
+    from services.i18n import t, get_user_lang
     # Dynamic wardrobe icon based on active owner
     _owner_type = context.user_data.get("active_owner_type", "child")
     _owner_gender = context.user_data.get("active_owner_gender", "girl")

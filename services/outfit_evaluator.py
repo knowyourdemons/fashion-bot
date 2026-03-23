@@ -23,24 +23,26 @@ logger = structlog.get_logger()
 # ── Evaluation dimensions (professional stylist framework) ────────────────
 
 EVAL_DIMENSIONS = {
+    # === CORE (60%) ===
     "color_harmony": {
-        "weight": 25,
+        "weight": 20,
         "label": "Цветовая гармония",
         "criteria": [
-            "Цвета сочетаются (monochrome/analogous/complementary/accent)?",
-            "Не больше 3 цветов (правило 60-30-10)?",
-            "Цвета у лица подходят к тону кожи/волос/глаз?",
-            "Контраст образа соответствует контрасту внешности?",
+            "Цвета сочетаются (monochrome/analogous/complementary)?",
+            "Правило 60-30-10: max 3 цвета + 1 accent?",
+            "Цвета подходят цветотипу?",
+            "Metal consistency (gold+gold или silver+silver)?",
         ],
     },
     "proportions": {
-        "weight": 25,
+        "weight": 20,
         "label": "Пропорции и силуэт",
         "criteria": [
             "Баланс объёмов (свободное + облегающее)?",
-            "Правило третей (1/3 верх + 2/3 низ или наоборот)?",
-            "Длины на выгодных точках (не режут на широком месте)?",
-            "Силуэт удлиняет, не сжимает?",
+            "Правило третей (1/3 + 2/3)?",
+            "Силуэт подходит типу фигуры?",
+            "Пропорция обуви (каблук + длина юбки)?",
+            "Размер сумки пропорционален росту?",
         ],
     },
     "style_coherence": {
@@ -48,38 +50,91 @@ EVAL_DIMENSIONS = {
         "label": "Стилевое единство",
         "criteria": [
             "Все вещи в одном стилистическом ключе?",
-            "Нет конфликта формальностей (спорт + офис)?",
+            "Формальность ±1 между ВСЕМИ элементами (одежда + обувь + сумка)?",
             "Текстуры дополняют друг друга?",
-            "Образ рассказывает 'историю' или настроение?",
+            "Нет случайного mix (спортивное + вечернее)?",
         ],
     },
+    # === CONTEXT (25%) ===
     "occasion_fit": {
         "weight": 15,
         "label": "Уместность",
         "criteria": [
             "Формальность подходит для ситуации?",
+            "Обувь соответствует occasion (каблуки ≠ прогулка)?",
+            "Сумка соответствует (clutch = вечер, рюкзак ≠ офис formal)?",
             "Сезонность и погода учтены?",
-            "Практичность для активности?",
+        ],
+    },
+    "accessory_completeness": {
+        "weight": 10,
+        "label": "Завершённость образа",
+        "criteria": [
+            "Обувь есть и подходит?",
+            "Сумка дополняет образ (бонус)?",
+            "Не больше 1 statement piece?",
+            "Образ выглядит 'finished'?",
+        ],
+    },
+    # === REFINEMENT (15%) ===
+    "shoe_bag_harmony": {
+        "weight": 5,
+        "label": "Обувь-сумка гармония",
+        "criteria": [
+            "Тональность (warm/cool) совпадает?",
+            "Формальность обуви ≈ формальность сумки?",
         ],
     },
     "details_polish": {
-        "weight": 10,
-        "label": "Детали и завершённость",
+        "weight": 5,
+        "label": "Детали и финишинг",
         "criteria": [
-            "Аксессуары дополняют (не перегружают)?",
-            "Обувь подходит по стилю и цвету?",
-            "Есть focal point (одна точка внимания)?",
+            "Tucking, layering, rolled cuffs — осознанный стайлинг?",
+            "Neckline + jewelry match (V-neck + pendant)?",
+            "Focal point (одна точка внимания)?",
         ],
     },
     "creativity": {
         "weight": 5,
         "label": "Индивидуальность",
         "criteria": [
-            "Есть интересный или неожиданный элемент?",
-            "Личность просвечивает через образ?",
+            "Есть неожиданный элемент который РАБОТАЕТ?",
+            "Личность просвечивает?",
         ],
     },
 }
+
+# ── Segment weight overrides ──────────────────────────────────────────────
+SEGMENT_WEIGHT_OVERRIDES: dict[str, dict[str, int]] = {
+    "no_kids": {
+        "accessory_completeness": 12,  # аксессуары важнее
+        "creativity": 7,               # креативность выше
+        "proportions": 18,             # -2%
+        "details_polish": 3,           # -2%
+    },
+    "mom_girl": {
+        "occasion_fit": 18,            # практичность важнее
+        "accessory_completeness": 7,   # мама без серёжек = ок
+        "creativity": 3,
+        "style_coherence": 22,         # не выглядеть нелепо
+    },
+    "mom_boy": {
+        "occasion_fit": 18,
+        "accessory_completeness": 7,
+        "creativity": 3,
+        "style_coherence": 22,
+    },
+}
+
+
+def get_eval_dimensions(segment: str = "") -> dict:
+    """Return EVAL_DIMENSIONS with segment-specific weight overrides applied."""
+    dims = {k: dict(v) for k, v in EVAL_DIMENSIONS.items()}
+    overrides = SEGMENT_WEIGHT_OVERRIDES.get(segment, {})
+    for dim_key, new_weight in overrides.items():
+        if dim_key in dims:
+            dims[dim_key]["weight"] = new_weight
+    return dims
 
 
 # ── Score tiers ──────────────────────────────────────────────────────────
@@ -191,8 +246,9 @@ def build_eval_prompt(
         if segment_label:
             persona += f" (сегмент: {segment_label})"
 
+        _dims = get_eval_dimensions(segment or "")
         dim_text = "\n".join(
-            f"  - {v['label']} ({v['weight']}%)" for v in EVAL_DIMENSIONS.values()
+            f"  - {v['label']} ({v['weight']}%)" for v in _dims.values()
         )
 
     # Occasion hint

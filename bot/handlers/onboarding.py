@@ -50,7 +50,7 @@ from telegram.ext import (
 from db.base import AsyncWriteSession, AsyncReadSession
 from db.models.user import User
 from db.crud.children import create_child, get_children
-from services.i18n.ru import t
+from services.i18n import t, get_user_lang
 
 logger = structlog.get_logger()
 
@@ -297,6 +297,16 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             reply_markup=keyboard,
         )
         return RESUME_CONFIRM
+
+    # Language picker for non-RU/non-EN users
+    tg_lang = (update.effective_user.language_code or "").lower()
+    if not tg_lang.startswith(("ru", "en")) and not getattr(user, "language", ""):
+        from bot.handlers.settings import lang_keyboard
+        await update.effective_message.reply_text(
+            "🌍 Choose language / Выбери язык:",
+            reply_markup=lang_keyboard(),
+        )
+        return WHO_FOR  # Wait for language selection, then re-enter via /start
 
     # Новый пользователь → приветствие Касси
     pb = progress_bar(0)

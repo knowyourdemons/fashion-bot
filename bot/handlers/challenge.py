@@ -15,6 +15,7 @@ from telegram.ext import ContextTypes
 from db.base import AsyncReadSession
 from db.crud.wardrobe import get_owner_items
 from services.scoring import calc_item_versatility
+from services.i18n import t, get_user_lang
 
 logger = structlog.get_logger()
 
@@ -121,8 +122,10 @@ async def handle_challenge_start(update: Update, context: ContextTypes.DEFAULT_T
 async def handle_challenge_later(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
+    user = context.user_data.get("db_user")
+    lang = get_user_lang(user)
     try:
-        await query.edit_message_text("Ок, challenge подождёт! Напомню позже 💪")
+        await query.edit_message_text(t("challenge.later", lang))
     except Exception:
         pass
 

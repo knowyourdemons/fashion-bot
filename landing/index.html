@@ -87,27 +87,14 @@ body { font-family: 'Nunito', sans-serif; color: var(--text); background: var(--
 .hero-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 30px rgba(91,58,74,0.35); }
 .hero-note { margin-top: 12px; font-size: 13px; color: var(--text-light); }
 
-/* Phone mockup */
+/* Phone mockup - hero uses direct image */
 .hero-visual { flex-shrink: 0; width: 300px; position: relative; }
-.phone-mockup {
-  width: 280px; height: 560px;
-  background: #1a1a1a; border-radius: 36px;
-  padding: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+.hero-phone-img {
+  width: 280px;
+  border-radius: 32px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  display: block;
 }
-.phone-screen {
-  width: 100%; height: 100%;
-  border-radius: 24px; overflow: hidden;
-  background: linear-gradient(180deg, var(--warm) 0%, #F0E8E4 100%);
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  padding: 20px; text-align: center;
-}
-.phone-screen .placeholder-text {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 18px; color: var(--accent); opacity: 0.4; line-height: 1.4;
-}
-/* Когда добавите скриншот:
-.phone-screen img { width:100%; height:100%; object-fit:cover; border-radius:24px; } */
 .phone-float-1 {
   position: absolute; top: -20px; right: -30px;
   width: 80px; height: 80px;
@@ -193,24 +180,14 @@ body { font-family: 'Nunito', sans-serif; color: var(--text); background: var(--
   margin: 0 auto; justify-content: center; flex-wrap: wrap;
 }
 .look-item {
-  width: 240px; text-align: center;
+  width: 220px; text-align: center;
 }
-.look-phone {
-  width: 200px; height: 360px;
-  background: #1a1a1a; border-radius: 28px;
-  padding: 8px; margin: 0 auto 12px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.12);
-}
-.look-screen {
-  width: 100%; height: 100%;
-  border-radius: 20px; overflow: hidden;
-  background: linear-gradient(180deg, var(--warm) 0%, #F0E8E4 100%);
-  display: flex; align-items: center; justify-content: center;
-  padding: 12px;
-}
-.look-screen .placeholder-text {
-  font-size: 13px; color: var(--accent); opacity: 0.35;
-  font-family: 'Cormorant Garamond', serif;
+.look-img {
+  width: 100%;
+  border-radius: 20px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+  margin-bottom: 12px;
+  display: block;
 }
 .look-label {
   font-size: 14px; font-weight: 600; color: var(--accent);
@@ -331,7 +308,7 @@ footer { text-align: center; padding: 24px; font-size: 13px; color: var(--text-l
   .hero-inner { flex-direction: column; text-align: center; gap: 40px; }
   .hero-sub { margin: 0 auto 32px; }
   .hero-visual { width: 240px; }
-  .phone-mockup { width: 220px; height: 440px; }
+  .hero-phone-img { width: 220px; }
   .phone-float-1 { top: -10px; right: -15px; width: 60px; height: 60px; font-size: 24px; }
   .phone-float-2 { bottom: 30px; left: -20px; width: 55px; height: 55px; font-size: 22px; }
   .plan.featured { transform: none; }
@@ -367,20 +344,14 @@ footer { text-align: center; padding: 24px; font-size: 13px; color: var(--text-l
 <section class="hero">
   <div class="hero-inner">
     <div class="hero-text">
-      <div class="hero-badge">✨ AI-стилист в Telegram</div>
-      <h1 class="hero-title">Одно решение<br>меньше <em>каждое утро</em></h1>
-      <p class="hero-sub">Касси знает твой гардероб, стиль и погоду. К 7 утра образ уже в телефоне — из твоих вещей, с объяснением почему это красиво. Как стилист за $200, только $9.</p>
+      <div class="hero-badge">✨ Стилист в Telegram</div>
+      <h1 class="hero-title">Стилист который<br><em>учится на тебе</em></h1>
+      <p class="hero-sub">Касси запоминает каждое «надела» и «переодень». Через неделю — как подруга. Через месяц — как личный стилист.</p>
       <a href="https://t.me/fashion_castle_bot" class="hero-cta">Попробовать бесплатно →</a>
       <p class="hero-note">14 дней бесплатно · Без карты · Отмена в один клик</p>
     </div>
     <div class="hero-visual">
-      <div class="phone-mockup">
-        <div class="phone-screen">
-          <!-- TODO: заменить на скриншот коллажа -->
-          <!-- <img src="collage.png" alt="Пример коллажа" style="width:100%;height:100%;object-fit:cover;border-radius:24px"> -->
-          <div class="placeholder-text">Скриншот<br>коллажа</div>
-        </div>
-      </div>
+      <img src="img/hero_adult.jpg" alt="Утренний образ от Касси" class="hero-phone-img">
       <div class="phone-float-1">👗</div>
       <div class="phone-float-2">☀️</div>
     </div>
@@ -395,12 +366,12 @@ footer { text-align: center; padding: 24px; font-size: 13px; color: var(--text-l
     <div class="usp-card usp-1">
       <div class="usp-icon">🔔</div>
       <h3>Образ приходит сам</h3>
-      <p>Push в 7 утра. Не надо ничего открывать, листать, выбирать. Просто оденься и иди.</p>
+      <p>Push в 7 утра — по погоде, из твоих вещей. Не надо открывать, листать, выбирать. Просто оденься и иди.</p>
     </div>
     <div class="usp-card usp-2">
       <div class="usp-icon">🧠</div>
-      <h3>Знает тебя</h3>
-      <p>Стиль, цветотип, погода, случай — 5 слоёв контекста. Не generic «наденьте куртку», а конкретная куртка из твоего шкафа.</p>
+      <h3>Учится на тебе</h3>
+      <p>Запоминает каждое «надела» и «переодень». Через неделю знает что нравится. Через месяц — как подруга-стилист.</p>
     </div>
     <div class="usp-card usp-3">
       <div class="usp-icon">👧</div>
@@ -453,32 +424,17 @@ footer { text-align: center; padding: 24px; font-size: 13px; color: var(--text-l
   <p class="section-sub">Вот что вы увидите каждое утро в Telegram</p>
   <div class="looks-grid">
     <div class="look-item">
-      <div class="look-phone">
-        <div class="look-screen">
-          <!-- TODO: скриншот детского коллажа -->
-          <div class="placeholder-text">Детский<br>образ</div>
-        </div>
-      </div>
+      <img src="img/child_brief.jpg" alt="Детский образ" class="look-img">
       <div class="look-label">Алиса · +4° · садик</div>
       <div class="look-desc">Тёплый образ для прогулки</div>
     </div>
     <div class="look-item">
-      <div class="look-phone">
-        <div class="look-screen">
-          <!-- TODO: скриншот взрослого коллажа -->
-          <div class="placeholder-text">Взрослый<br>образ</div>
-        </div>
-      </div>
+      <img src="img/adult_brief.jpg" alt="Взрослый образ" class="look-img">
       <div class="look-label">Лена · +14° · офис</div>
       <div class="look-desc">Элегантный кэжуал на среду</div>
     </div>
     <div class="look-item">
-      <div class="look-phone">
-        <div class="look-screen">
-          <!-- TODO: скриншот стиль-паспорта -->
-          <div class="placeholder-text">Стиль-<br>паспорт</div>
-        </div>
-      </div>
+      <img src="img/style_passport.jpg" alt="Стиль-паспорт" class="look-img">
       <div class="look-label">Стиль-паспорт</div>
       <div class="look-desc">Узнай свой тип за 30 сек</div>
     </div>
@@ -583,15 +539,7 @@ footer { text-align: center; padding: 24px; font-size: 13px; color: var(--text-l
 </section>
 
 <footer>
-  Касси — AI-стилист в Telegram · 2026 · <a href="mailto:hello@fashioncastle.app" style="color:inherit">hello@fashioncastle.app</a>
+  Касси — AI-стилист в Telegram · 2026 · <a href="/cdn-cgi/l/email-protection#4c24292020230c2a2d3f242523222f2d3f382029622d3c3c" style="color:inherit"><span class="__cf_email__" data-cfemail="c1a9a4adadae81a7a0b2a9a8aeafa2a0b2b5ada4efa0b1b1">[email&#160;protected]</span></a>
 </footer>
 
-<script>
-document.querySelectorAll('.faq-item').forEach(item => {
-  item.querySelector('.faq-q').addEventListener('click', () => {
-    item.classList.toggle('open');
-  });
-});
-</script>
-</body>
-</html>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728

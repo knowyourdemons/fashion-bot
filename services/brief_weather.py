@@ -83,7 +83,7 @@ async def _geocode_city(city: str) -> tuple[float, float] | None:
     return None
 
 
-_EMPTY_WEATHER = {"temp_now": None, "temp_morning": None, "temp_day": None, "temp_evening": None, "precip_evening": 0, "precip_max": 0, "wmo_morning": 0, "wmo_day": 0, "wmo_evening": 0}
+_EMPTY_WEATHER = {"temp_now": None, "temp_morning": None, "temp_day": None, "temp_evening": None, "precip_evening": 0, "precip_max": 0, "wmo_morning": 0, "wmo_day": 0, "wmo_evening": 0, "uv_max": 0}
 
 
 async def _get_weather(lat: float, lon: float, tz: str) -> dict:
@@ -106,7 +106,7 @@ async def _get_weather(lat: float, lon: float, tz: str) -> dict:
                 params={
                     "latitude": lat,
                     "longitude": lon,
-                    "hourly": "temperature_2m,precipitation_probability,weather_code",
+                    "hourly": "temperature_2m,precipitation_probability,weather_code,uv_index",
                     "current": "temperature_2m,weather_code",
                     "timezone": tz,
                     "forecast_days": 1,
@@ -129,6 +129,7 @@ async def _get_weather(lat: float, lon: float, tz: str) -> dict:
                 "wmo_morning": wmo_codes[7] if len(wmo_codes) > 7 else 0,
                 "wmo_day": wmo_codes[14] if len(wmo_codes) > 14 else 0,
                 "wmo_evening": wmo_codes[18] if len(wmo_codes) > 18 else 0,
+                "uv_max": max(hourly.get("uv_index", [0])[:18] or [0]),
             }
             # Cache 15 min
             try:

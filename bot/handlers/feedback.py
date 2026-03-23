@@ -4,7 +4,7 @@ import structlog
 from telegram import Update
 from telegram.ext import ContextTypes
 from exceptions import FashionBotError
-from services.i18n.ru import t
+from services.i18n import t, get_user_lang
 
 logger = structlog.get_logger()
 

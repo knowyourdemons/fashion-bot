@@ -29,7 +29,7 @@ from db.base import AsyncWriteSession, AsyncReadSession
 from db.crud.wardrobe import create, get_owner_items
 from db.models.user import User
 from exceptions import FashionBotError, RateLimitError
-from services.i18n.ru import t
+from services.i18n import t, get_user_lang
 from bot.handlers.menu import get_main_menu
 from services.scoring import ScoringService, matrix_name_for_owner, calc_item_score
 from services.usage import get_limit_exceeded_msg, get_usage_str
@@ -126,8 +126,8 @@ async def _safe_edit_text(message, text: str, **kwargs) -> None:
     except Exception:
         try:
             await message.reply_text(text, **kwargs)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("wardrobe.safe_edit.fallback_reply_failed", error=str(e))
 
 
 # ── Owner helpers ──────────────────────────────────────────────────────────
@@ -154,12 +154,12 @@ async def _get_owner(user, context) -> tuple:
                             _c = next((c for c in _ch if c.id == child_id), None)
                             if _c:
                                 context.user_data["active_owner_gender"] = _c.gender
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("wardrobe.get_active_owner.fetch_child_gender_failed", error=str(e))
                     context.user_data["active_owner_type"] = "child"
                     return (child_id, "child")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("wardrobe.get_active_owner.parse_mode_failed", error=str(e))
 
     async with AsyncReadSession() as session:
         from db.crud.children import get_children
@@ -239,10 +239,11 @@ async def check_milestones(user, item_count: int, message, owner_id, owner_type,
             _hour_ms = _dt_ms.now(_tz_ms).hour
         except Exception:
             _hour_ms = 12
+        _lang = get_user_lang(user)
         if 17 <= _hour_ms < 23:
-            await message.reply_text("🎉 3 вещи есть! Собираю образ на завтра — секунду...")
+            await message.reply_text(t("wardrobe.milestone_3", _lang))
         else:
-            await message.reply_text("🎉 Мини-образ разблокирован! Собираю...")
+            await message.reply_text(t("wardrobe.milestone_3_mini", _lang))
         # Generate collage via worker queue
         try:
             _redis = context.bot_data.get("redis") if context else None
@@ -268,7 +269,7 @@ async def check_milestones(user, item_count: int, message, owner_id, owner_type,
             [InlineKeyboardButton("Потом", callback_data="selfie_colortype_later")],
         ])
         await message.reply_text(
-            "🎉 5 вещей! Хочешь точнее подбирать цвета? Пришли селфи!",
+            t("wardrobe.milestone_5", get_user_lang(user)),
             reply_markup=keyboard,
         )
 
@@ -276,7 +277,7 @@ async def check_milestones(user, item_count: int, message, owner_id, owner_type,
     segment = getattr(user, "segment", "no_kids") or "no_kids"
     if item_count >= 8 and segment in ("mom_girl", "mom_boy") and "full_outfit" not in reached:
         new_milestones.append("full_outfit")
-        await message.reply_text("🎉 Первый полный образ!")
+        await message.reply_text(t("wardrobe.milestone_7", get_user_lang(user)))
         try:
             _redis = context.bot_data.get("redis") if context else None
             if _redis:
@@ -301,22 +302,20 @@ async def check_milestones(user, item_count: int, message, owner_id, owner_type,
         if _redis_quiz and not _quiz_done:
             try:
                 _quiz_declined = bool(await _redis_quiz.get(f"quiz_declined:{user.id}"))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("wardrobe.milestone.check_quiz_declined_failed", error=str(e))
         if segment == "no_kids" and not _quiz_done and not _quiz_declined:
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("👗 Давай!", callback_data="quiz_start")],
                 [InlineKeyboardButton("Потом", callback_data="quiz_later")],
             ])
             await message.reply_text(
-                "🎉 10 вещей — классная база!\n\n"
+                t("wardrobe.milestone_10", get_user_lang(user)) + "\n\n"
                 "Хочешь узнать свой стиль? 30 секунд — и буду подбирать образы ещё точнее ✨",
                 reply_markup=keyboard,
             )
         else:
-            await message.reply_text(
-                "🎉 Гардероб собран! Завтра утром — первый образ."
-            )
+            await message.reply_text(t("wardrobe.milestone_done", get_user_lang(user)))
 
     # Save new milestones
     if new_milestones:
@@ -452,7 +451,29 @@ async def _analyze_selfie_colortype(photo_bytes: bytes) -> dict:
         "- Light Summer, True Summer, Soft Summer\n"
         "- Soft Autumn, True Autumn, Deep Autumn\n"
         "- Deep Winter, True Winter, Bright Winter\n\n"
-        'Ответь JSON: {"sub_season": "True Summer", "confidence": 0.8}\n'
+        "Дополнительно определи:\n\n"
+        "## Contrast level\n"
+        "Разница между самым тёмным и светлым элементом (волосы vs кожа):\n"
+        "- HIGH: сильный контраст (тёмные волосы + светлая кожа)\n"
+        "- MEDIUM: умеренный\n"
+        "- LOW: слабый (блондинка + светлая кожа, или тёмная кожа + тёмные волосы)\n\n"
+        "## Kibbe family (тип силуэта)\n"
+        "По видимым чертам:\n"
+        "- DRAMATIC: sharp, angular, длинная вертикаль, узкий\n"
+        "- NATURAL: broad, blunt, расслабленный, moderate\n"
+        "- CLASSIC: симметричный, сбалансированный\n"
+        "- GAMINE: компактный, микс sharp+soft, юношеская энергия\n"
+        "- ROMANTIC: округлый, soft, curvy, деликатный\n\n"
+        "## Style essence (по лицу)\n"
+        "- DRAMATIC: striking, intense\n"
+        "- NATURAL: warm, approachable\n"
+        "- CLASSIC: refined, elegant\n"
+        "- GAMINE: playful, animated\n"
+        "- ROMANTIC: soft, feminine\n\n"
+        'Ответь JSON: {"sub_season": "True Summer", "confidence": 0.8, '
+        '"contrast_level": "HIGH/MEDIUM/LOW", '
+        '"kibbe_family": "DRAMATIC/NATURAL/CLASSIC/GAMINE/ROMANTIC", '
+        '"style_essence": "DRAMATIC/NATURAL/CLASSIC/GAMINE/ROMANTIC"}\n'
         "Только JSON, без пояснений."
     )
     try:
@@ -473,7 +494,7 @@ async def _analyze_selfie_colortype(photo_bytes: bytes) -> dict:
                 ],
             }],
             system="Ты эксперт по 12-сезонному цветотипированию. Отвечай только JSON.",
-            max_tokens=100,
+            max_tokens=200,
         )
         text = response.content[0].text.strip()
         import re as _re
@@ -495,6 +516,9 @@ async def _analyze_selfie_colortype(photo_bytes: bytes) -> dict:
                 "colortype": base,
                 "sub_season": sub_season,
                 "confidence": float(result.get("confidence", 0.5)),
+                "contrast_level": result.get("contrast_level"),
+                "kibbe_family": result.get("kibbe_family"),
+                "style_essence": result.get("style_essence"),
             }
         return {"colortype": "Лето", "sub_season": "True Summer", "confidence": 0.0}
     except Exception as e:
@@ -572,7 +596,7 @@ async def _handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYP
     if not user:
         return True
 
-    await update.message.reply_text("🔍 Анализирую цветотип...")
+    await update.message.reply_text(t("wardrobe.colortype_looking", get_user_lang(user)))
 
     # Download photo
     if update.message.photo:
@@ -580,7 +604,7 @@ async def _handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYP
     elif update.message.document:
         file_id = update.message.document.file_id
     else:
-        await update.message.reply_text("Отправь фото, а не файл 📸")
+        await update.message.reply_text(t("wardrobe.photo_send_file", get_user_lang(user)))
         context.user_data["awaiting_selfie"] = True
         return True
 
@@ -591,15 +615,18 @@ async def _handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYP
         photo_bytes = bytes(photo_ba)
     except Exception as e:
         logger.warning("selfie.download_failed", error=str(e))
-        await update.message.reply_text("Не удалось загрузить фото. Попробуй ещё раз 📸")
+        await update.message.reply_text(t("wardrobe.photo_send_fail", get_user_lang(user)))
         context.user_data["awaiting_selfie"] = True
         return True
 
-    # Analyze (12-season)
+    # Analyze (12-season + contrast/Kibbe/essence)
     result = await _analyze_selfie_colortype(photo_bytes)
     colortype = result["colortype"]
     sub_season = result.get("sub_season", "")
     confidence = result["confidence"]
+    contrast_level = result.get("contrast_level")
+    kibbe_family = result.get("kibbe_family")
+    style_essence = result.get("style_essence")
 
     # Use sub_season as colortype for palette matching (if recognized)
     from worker.tasks.style_config import COLORTYPE_PALETTES
@@ -635,6 +662,26 @@ async def _handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYP
                 await session.commit()
         else:
             await _save_colortype_to_user(user, effective_colortype)
+
+        # Save styling depth axes (contrast, Kibbe, essence) for adult users
+        if segment not in ("mom_girl", "mom_boy"):
+            _styling_updates = {}
+            if contrast_level and contrast_level in ("HIGH", "MEDIUM", "LOW"):
+                _styling_updates["contrast_level"] = contrast_level
+                user.contrast_level = contrast_level
+            if kibbe_family and kibbe_family in ("DRAMATIC", "NATURAL", "CLASSIC", "GAMINE", "ROMANTIC"):
+                _styling_updates["kibbe_family"] = kibbe_family
+                user.kibbe_family = kibbe_family
+            if style_essence and style_essence in ("DRAMATIC", "NATURAL", "CLASSIC", "GAMINE", "ROMANTIC"):
+                _styling_updates["style_essence"] = style_essence
+                user.style_essence = style_essence
+            if _styling_updates:
+                async with AsyncWriteSession() as session:
+                    await session.execute(
+                        sa.update(User).where(User.id == user.id)
+                        .values(**_styling_updates)
+                    )
+                    await session.commit()
 
         # Use base season for card rendering (card has 4 styles)
         ct_label = _COLORTYPE_NAMES_RU.get(colortype, colortype)
@@ -816,6 +863,20 @@ async def _save_one(
         except (ValueError, TypeError):
             _warmth = 3
 
+    # Formality level: from Vision or infer from normalize.py
+    _formality = data.get("formality_level")
+    if _formality is not None:
+        try:
+            _formality = int(_formality)
+            _formality = max(1, min(5, _formality))
+        except (ValueError, TypeError):
+            _formality = None
+    if _formality is None:
+        from services.normalize import get_formality
+        _formality = get_formality(data.get("type") or "", category_group)
+
+    _metal_tone = data.get("metal_tone")
+
     async def _do_create(s):
         return await create(
             s,
@@ -842,6 +903,8 @@ async def _save_one(
             warmth_level=_warmth,
             style_tag=_style_tag,
             rain_ok=bool(data.get("rain_ok", False)),
+            formality_level=_formality,
+            metal_tone=_metal_tone,
             bbox=data.get("bbox"),
             score_item=score_item,
             score_breakdown=score_breakdown,
@@ -986,8 +1049,8 @@ async def _analyze_and_save(
                         await redis.delete(f"cold_reminder:{_ch}")
                 else:
                     await redis.delete(f"cold_reminder:{owner_id}")
-        except Exception:
-            pass
+        except Exception as _cold_e:
+            logger.warning("wardrobe.cold_reminder_cleanup_failed", error=str(_cold_e))
 
     # Enqueue background removal tasks (after commit, so items exist)
     if rmbg_queue and redis:
@@ -1046,8 +1109,8 @@ async def _rate_photos(
                 _child = _res.scalar_one_or_none()
                 if _child and _child.birthdate:
                     child_age = (_rate_date.today() - _child.birthdate).days // 365
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("wardrobe.rate_item.fetch_child_age_failed", error=str(e))
 
     rate_kwargs = dict(
         owner_id=owner_id,
@@ -1079,7 +1142,7 @@ async def _rate_photos(
                 result = await _call_rate_vision([photo_bytes], **rate_kwargs)
                 await message.reply_text(f"📷 Фото {i}:\n{result}", reply_markup=get_main_menu(db_user))
     except Exception as e:
-        await message.reply_text("Не удалось оценить образ. Попробуй ещё раз.", reply_markup=get_main_menu(db_user))
+        await message.reply_text(t("wardrobe.eval_failed", get_user_lang(db_user)), reply_markup=get_main_menu(db_user))
         logger.error("rate_photos.error", error=str(e))
         sentry_sdk.capture_exception(e)
 
@@ -1121,7 +1184,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     if not user.onboarding_completed:
-        await update.message.reply_text("Сначала пройди настройку: /start")
+        await update.message.reply_text(t("wardrobe.need_start", get_user_lang(user)))
         return
 
     # Fitting mode: photo → fit check, not wardrobe add
@@ -1160,8 +1223,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if _stale_id and _stale_chat:
         try:
             await context.bot.delete_message(chat_id=_stale_chat, message_id=_stale_id)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("wardrobe.photo.delete_stale_msg_failed", error=str(e))
 
     # Selfie colortype detection mode
     if context.user_data.get("awaiting_selfie"):
@@ -1354,24 +1417,32 @@ async def _handle_single_photo(
                 if _coords_vc:
                     _w_vc = await _get_weather(_coords_vc[0], _coords_vc[1], user.timezone or "Europe/Vilnius")
                     _vc["temp"] = _w_vc.get("temp_morning") or _w_vc.get("temp_now")
-        except Exception:
-            pass
+        except Exception as _vc_e:
+            logger.warning("wardrobe.vision_context_failed", error=str(_vc_e))
 
         added = await _analyze_and_save(
             photo_id, owner_id, owner_type, context.bot, matrix, redis=redis,
             vision_context=_vc,
         )
 
-        new_count = user.daily_requests_used + 1
         async with AsyncWriteSession() as session:
-            await session.execute(
+            result = await session.execute(
                 sa.update(User).where(User.id == user.id)
-                .values(daily_requests_used=new_count)
+                .values(daily_requests_used=User.daily_requests_used + 1)
+                .returning(User.daily_requests_used)
             )
             await session.commit()
-        user.daily_requests_used = new_count
+            row = result.first()
+            user.daily_requests_used = row[0] if row else user.daily_requests_used + 1
 
         duration_ms = int((time.monotonic() - start) * 1000)
+
+        # Increment daily photo counter in Redis
+        if added and redis:
+            from datetime import date as _date_incr
+            _photo_incr_key = f"photos_day:{user.id}:{_date_incr.today().isoformat()}"
+            await redis.incr(_photo_incr_key)
+            await redis.expire(_photo_incr_key, 86400)
 
         lines = []
         if added:
@@ -1410,55 +1481,6 @@ async def _handle_single_photo(
                 lines.append("\n💡 Для лучшего качества коллажа — фоткай по одной вещи")
 
         await update.message.reply_text("\n".join(lines))
-
-        # Комментарий стилиста — skip for now, the main message is enough
-        # (reduces chat clutter from 3 messages to 1)
-        if False and added:
-            try:
-                from datetime import date
-                from services.scoring_comment import generate_item_comment
-                from services.scoring import classify_role
-                first = added[0]
-                _item_type = first.get("type") or "вещь"
-                _item_color = first.get("color") or ""
-                _role = classify_role(_item_type, _item_color)
-                _pool = get_anthropic_pool()
-                # Тон из матрицы
-                _tone = ""
-                if matrix and hasattr(matrix, "criteria"):
-                    _tone = matrix.criteria.get("_tone") or ""
-                # Информация о ребёнке/пользователе
-                _child_name = _child_gender = _child_age = None
-                if owner_type == "child":
-                    try:
-                        from db.crud.children import get_children
-                        async with AsyncReadSession() as _cs:
-                            _children = await get_children(_cs, user.id)
-                        _ch = next((c for c in _children if c.id == owner_id), None)
-                        if _ch:
-                            _child_name = _ch.name
-                            _child_gender = getattr(_ch, "gender", None)
-                            _child_age = (date.today() - _ch.birthdate).days // 365 if _ch.birthdate else None
-                    except Exception:
-                        pass
-                _colortype = getattr(user, "colortype", None)
-                _comment = await generate_item_comment(
-                    pool=_pool,
-                    item_type=_item_type,
-                    item_color=_item_color,
-                    score=0.0,
-                    role=_role,
-                    colortype=_colortype,
-                    colortype_match=True,
-                    wardrobe_summary="",
-                    gender=_child_gender,
-                    age=_child_age,
-                    child_name=_child_name,
-                    tone=_tone,
-                )
-                await update.message.reply_text(f"💬 {_comment}")
-            except Exception as _e:
-                logger.warning("wardrobe.item_comment_failed", error=str(_e))
 
         # ── Milestone rewards ──────────────────────────────────────────────
         if added and user.onboarding_completed:
@@ -1502,8 +1524,18 @@ async def _handle_single_photo(
 
     except (RateLimitError, FashionBotError) as e:
         await update.message.reply_text(str(e))
+    except asyncio.TimeoutError:
+        await update.message.reply_text("⏱ Анализ занял слишком долго. Попробуй отправить фото ещё раз.")
+        logger.warning("wardrobe.photo.timeout", user_id=str(user.id))
     except Exception as e:
-        await update.message.reply_text(t("error.generic"))
+        err_str = str(e).lower()
+        if "connect" in err_str or "timeout" in err_str or "network" in err_str:
+            msg = "🌐 Проблема с сетью. Попробуй через минуту."
+        elif "overloaded" in err_str or "rate" in err_str:
+            msg = "⏳ Касси сейчас занята. Попробуй через пару минут."
+        else:
+            msg = "😔 Не удалось проанализировать фото. Попробуй переснять на светлом фоне."
+        await update.message.reply_text(msg)
         logger.error("wardrobe.photo.error", error=str(e), user_id=str(user.id))
         sentry_sdk.capture_exception(e)
 
@@ -1523,7 +1555,7 @@ async def handle_photo_action(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     redis = context.bot_data.get("redis")
     if not redis:
-        await query.edit_message_text("Сервис временно недоступен")
+        await query.edit_message_text("Касси сейчас отдыхает. Попробуй чуть позже!")
         return
 
     raw = await redis.get(f"photo_pending:{group_id}")
@@ -1539,8 +1571,8 @@ async def handle_photo_action(update: Update, context: ContextTypes.DEFAULT_TYPE
         if limit != 9999 and user.daily_requests_used >= limit:
             await query.edit_message_text(get_limit_exceeded_msg(user))
             return
-        # Progressive: immediately show "Анализирую" before Vision starts
-        await query.edit_message_text("✨ Анализирую фото...")
+        # Progressive: immediately show status before Vision starts
+        await query.edit_message_text("✨ Смотрю что тут...")
         _track_task(
             _process_media_group(
                 file_ids=file_ids,
@@ -1625,7 +1657,7 @@ async def _process_media_group(
     """Process photo(s) for wardrobe with progressive status messages.
 
     Single photo flow:
-      1. "✨ Анализирую фото..." (already shown by caller)
+      1. "✨ Смотрю что тут..." (already shown by caller)
       2. "👚 Кофта розовая! Сохраняю..."
       3. "✅ Кофта розовая добавлена! (3/8)" + CTA
 
@@ -1639,7 +1671,7 @@ async def _process_media_group(
         return
 
     is_single = total_received == 1
-    # For single photo, `message` is the already-sent "✨ Анализирую фото..." msg
+    # For single photo, `message` is the already-sent "✨ Смотрю что тут..." msg
     # that we will progressively edit.
     # For multi-photo, we need to create a new progress message.
     progress_msg = message if is_single else None
@@ -1681,13 +1713,13 @@ async def _process_media_group(
         if total_received > 10:
             await _safe_edit_text(
                 message,
-                f"✨ Получила {total_received} фото — обработаю первые {total}. Анализирую...",
+                f"✨ Получила {total_received} фото — возьму первые {total}. Уже смотрю...",
             )
             progress_msg = message
         else:
             await _safe_edit_text(
                 message,
-                f"✨ Получила {total_received} фото. Анализирую...",
+                f"✨ Получила {total_received} фото. Уже смотрю...",
             )
             progress_msg = message
 
@@ -1713,8 +1745,8 @@ async def _process_media_group(
             if _coords_vb:
                 _w_vb = await _get_weather(_coords_vb[0], _coords_vb[1], user.timezone or "Europe/Vilnius")
                 _vc_bulk["temp"] = _w_vb.get("temp_morning") or _w_vb.get("temp_now")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("wardrobe.upload.weather_fetch_failed", error=str(e))
 
     photo_lines: list[str] = []
     all_added_items: list[dict] = []  # track all added items for final message
@@ -1729,7 +1761,7 @@ async def _process_media_group(
             if not is_single and total > 1:
                 await _safe_edit_text(
                     progress_msg,
-                    f"✨ Анализирую фото {i + 1} из {total}...",
+                    f"✨ Смотрю фото {i + 1} из {total}...",
                 )
 
             logger.info("wardrobe.vision_start", index=i)
@@ -1740,7 +1772,7 @@ async def _process_media_group(
             from services.photo_quality import preprocess_for_vision
             photo_for_vision, _pq = preprocess_for_vision(photo_bytes)
             if not _pq.is_usable:
-                photo_results.append(f"📷 Фото {i + 1}: {_pq.tip_text()}")
+                photo_lines.append(f"📷 Фото {i + 1}: {_pq.tip_text()}")
                 continue
 
             items_data = await _call_vision(
@@ -1877,12 +1909,22 @@ async def _process_media_group(
         except Exception as e:
             logger.error("media_group.counter_update_failed", error=str(e))
 
+    # Increment daily photo counter in Redis (bulk path)
+    if total_added > 0 and _redis:
+        try:
+            from datetime import date as _date_incr_bulk
+            _photo_incr_key = f"photos_day:{user.id}:{_date_incr_bulk.today().isoformat()}"
+            await _redis.incrby(_photo_incr_key, total_added)
+            await _redis.expire(_photo_incr_key, 86400)
+        except Exception as e:
+            logger.warning("media_group.photo_counter_incr_failed", error=str(e))
+
     # Инвалидировать кеш wardrobe summary (after all commits)
     if total_added > 0 and _redis:
         try:
             await _redis.delete(f"wardrobe_summary:{owner_id}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("wardrobe.upload.invalidate_summary_cache_failed", error=str(e))
 
     # ── Final progress message ─────────────────────────────────────────
     _current_count = 0
@@ -1892,8 +1934,8 @@ async def _process_media_group(
             async with AsyncReadSession() as _cnt_sess2:
                 _all_items_now = await get_owner_items(_cnt_sess2, owner_id, owner_type)
             _current_count = len(_all_items_now)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("wardrobe.upload.count_items_failed", error=str(e))
 
     if is_single:
         # Single photo: final edit with result + count + CTA
@@ -1943,14 +1985,14 @@ async def _process_media_group(
                     from sqlalchemy import select as _sel_m
                     _res_m = await _ms.execute(_sel_m(User).where(User.id == uid))
                     _menu_user = _res_m.scalar_one_or_none()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("wardrobe.upload.fetch_menu_user_failed", error=str(e))
             await message.reply_text(
                 "📸 Ещё фото или нажми «Что надеть»",
                 reply_markup=get_main_menu(_menu_user, context),
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("wardrobe.upload.restore_menu_failed", error=str(e))
 
     if total_added > 0:
         if _current_count > 0:
@@ -2127,8 +2169,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         if redis and _gen_lock:
             try:
                 await redis.delete(_gen_lock)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("wardrobe.outfit.release_lock_failed", error=str(e))
 
     today = _date.today().isoformat()
     limit_key = f"outfit_req:{user.id}:{today}"
@@ -2155,7 +2197,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
     await context.bot.send_chat_action(message.chat_id, "typing")
     status_msg = None
     if not silent_status:
-        status_msg = await message.reply_text("✨ Подбираю образ...")
+        status_msg = await message.reply_text(t("wardrobe.outfit_picking", get_user_lang(context.user_data.get("db_user"))))
 
     try:
         from services.weather import WeatherService
@@ -2170,8 +2212,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         if not children and not is_no_kids:
             try:
                 await status_msg.delete() if status_msg else None
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("wardrobe.outfit.delete_status_no_children_failed", error=str(e))
             await message.reply_text(
                 "Добавь ребёнка в профиле чтобы получать образы 👧",
                 reply_markup=get_main_menu(context.user_data.get("db_user"), context),
@@ -2213,8 +2255,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         if not items:
             try:
                 await status_msg.delete() if status_msg else None
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("wardrobe.outfit.delete_status_no_items_failed", error=str(e))
 
             # For women: generate style formula advice even without wardrobe
             is_no_kids = getattr(user, "segment", None) == "no_kids"
@@ -2253,8 +2295,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                             "📸 Сфоткай вещи — подберу конкретный образ из твоего гардероба!",
                             reply_markup=get_main_menu(context.user_data.get("db_user"), context),
                         )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("wardrobe.outfit.style_formula_failed", error=str(e))
 
             if not _cta_msg:
                 _cta_msg = await message.reply_text(
@@ -2281,10 +2323,10 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                 for raw in raw_shown:
                     try:
                         accumulated_ids.add(_uuid.UUID(raw.decode() if isinstance(raw, bytes) else raw))
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+                    except Exception as e:
+                        logger.warning("wardrobe.outfit.parse_shown_uuid_failed", error=str(e))
+            except Exception as e:
+                logger.warning("wardrobe.outfit.fetch_shown_items_failed", error=str(e))
 
         # Исключить ранее показанные. Сброс если осталось < половины гардероба.
         if accumulated_ids:
@@ -2294,8 +2336,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                 if redis:
                     try:
                         await redis.delete(shown_key)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("wardrobe.outfit.reset_shown_key_failed", error=str(e))
                 items_shuffled = list(items)
         else:
             items_shuffled = list(items)
@@ -2335,8 +2377,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         if not has_minimum_wardrobe(items):
             try:
                 await status_msg.delete() if status_msg else None
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("wardrobe.outfit.delete_status_min_wardrobe_failed", error=str(e))
             _has_top = any(i.category_group == "top" for i in items)
             _has_bottom = any(i.category_group == "bottom" for i in items)
             if not _has_top and not _has_bottom:
@@ -2387,8 +2429,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             from db.crud.brief_log import get_recent_outfit_item_ids
             async with AsyncReadSession() as _s_rot:
                 _recent_ids = await get_recent_outfit_item_ids(_s_rot, user.id, days=5)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("wardrobe.outfit.fetch_rotation_history_failed", error=str(e))
 
         child_name_str = child.name if child else None
         _child_age = None
@@ -2413,6 +2455,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             body_type=getattr(user, "body_type", None),
             style_preferences=getattr(user, "style_preferences", None),
             redis=redis,
+            user_id=str(user.id),
         )
 
         outfit = result.outfit
@@ -2422,8 +2465,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         if not has_minimum_outfit(outfit):
             try:
                 await status_msg.delete() if status_msg else None
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("wardrobe.outfit.delete_status_min_outfit_failed", error=str(e))
             await message.reply_text(
                 f"Мало вещей для полного образа. {comment}\nСфоткай ещё вещей! 📸",
                 reply_markup=get_main_menu(context.user_data.get("db_user"), context),
@@ -2447,8 +2490,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         if redis:
             try:
                 await redis.set(f"last_kassi_comment:{user.id}", comment, ex=86400)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("wardrobe.outfit.save_kassi_comment_failed", error=str(e))
 
         caption = ""  # всё на карточке
 
@@ -2492,8 +2535,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                 if shown_item_ids:
                     await redis.sadd(shown_key, *shown_item_ids)
                     await redis.expire(shown_key, 86400)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("wardrobe.outfit.save_shown_items_failed", error=str(e))
 
         # Кнопки по сегменту и количеству фото
         real_photos = sum(1 for s in all_slots if s.get("has_item") and (s.get("photo_url") or s.get("photo_id")))
@@ -2527,8 +2570,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         # Delete status message before sending result
         try:
             await status_msg.delete() if status_msg else None
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("wardrobe.outfit.delete_status_msg_failed", error=str(e))
 
         if collage_bytes:
             # Split delivery: фото без caption, текст + кнопки отдельно
@@ -2550,23 +2593,52 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                         f"photo_msg:{message.chat_id}:{_outfit_brief_id}",
                         str(_photo_msg.message_id), ex=86400,
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("wardrobe.outfit.save_photo_msg_id_failed", error=str(e))
         else:
             await message.reply_text(
                 f"💬 {comment}" if comment else "Не удалось собрать коллаж. Попробуй позже.",
                 reply_markup=_outfit_markup,
             )
 
+        # ── Wardrobe diversity nudge — encourage adding more items ──
+        try:
+            from services.wardrobe_math import calc_wardrobe_combos
+            async with AsyncReadSession() as _ns:
+                _ni = await get_owner_items(_ns, owner_id_for_outfit, owner_type_for_outfit)
+            _vis = len([i for i in _ni if getattr(i, "category_group", "") not in ("underwear", "base_layer")])
+            _combos = calc_wardrobe_combos(_ni)
+            if _vis < 8 and _combos > 0:
+                _est = _combos * 3  # conservative 3x with 3 more items
+                _lang = get_user_lang(context.user_data.get("db_user"))
+                await message.reply_text(
+                    t("nudge.add_more_items", _lang,
+                      count=str(_vis), combos=str(_combos),
+                      target=str(_vis + 3), estimate=str(_est))
+                )
+        except Exception as _nudge_err:
+            logger.warning("wardrobe.nudge_failed", error=str(_nudge_err))
+
+    except asyncio.TimeoutError:
+        logger.warning("outfit_request.timeout")
+        try:
+            await status_msg.edit_text("⏱ Подбор образа занял слишком долго. Попробуй ещё раз!") if status_msg else None
+        except Exception:
+            await message.reply_text("⏱ Подбор образа занял слишком долго. Попробуй ещё раз!")
     except Exception as e:
         logger.error("outfit_request.failed", error=str(e))
         import sentry_sdk as _sentry
         _sentry.capture_exception(e)
+        err_str = str(e).lower()
+        if "overloaded" in err_str or "rate" in err_str:
+            err_msg = "⏳ Касси сейчас занята. Попробуй через пару минут!"
+        else:
+            err_msg = "😔 Не получилось собрать образ. Попробуй ещё раз!"
         try:
-            await status_msg.edit_text("😔 Не получилось собрать образ. Попробуй ещё раз!") if status_msg else None
+            await status_msg.edit_text(err_msg) if status_msg else None
         except Exception:
             await message.reply_text(
-                "Не удалось собрать образ. Попробуй позже.",
+                err_msg,
                 reply_markup=get_main_menu(context.user_data.get("db_user"), context),
             )
     finally:
@@ -2774,7 +2846,8 @@ async def handle_gap_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
-    await query.message.reply_text("📋 Анализирую гардероб...")
+    lang = get_user_lang(user)
+    await query.message.reply_text(t("wardrobe.gap_analyzing", lang))
 
     redis = context.bot_data.get("redis")
     owner_id, owner_type = await _get_owner(user, context)
@@ -2783,7 +2856,6 @@ async def handle_gap_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE
         items = await get_owner_items(session, owner_id, owner_type)
 
     from services.gap_analysis import build_shopping_list, _get_current_season
-    from services.i18n.ru import t
     from core.redis import get_redis
 
     result = await build_shopping_list(user, items, get_redis())
@@ -2793,9 +2865,9 @@ async def handle_gap_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE
             "📸 Добавь больше вещей в гардероб — нужно минимум 5 для анализа!"
         )
     elif result == "lock":
-        await query.message.reply_text("⏳ Анализ уже выполняется, подожди немного...")
+        await query.message.reply_text(t("wardrobe.gap_running", lang))
     elif result == "":
-        await query.message.reply_text("✅ Гардероб укомплектован на этот сезон!")
+        await query.message.reply_text(t("wardrobe.gap_complete", lang))
     else:
         season = _get_current_season(user.timezone or "Europe/Vilnius")
-        await query.message.reply_text(t("shopping.header", season=season, list=result))
+        await query.message.reply_text(t("shopping.header", lang, season=season, list=result))

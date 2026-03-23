@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from core.permissions import get_effective_plan, can_gap_analysis
-from services.i18n.ru import t
+from services.i18n import t, get_user_lang
 from services.gap_analysis import build_shopping_list, _get_current_season
 
 logger = structlog.get_logger()
@@ -15,11 +15,12 @@ async def handle_shopping(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not user:
         return
 
+    lang = get_user_lang(user)
     effective_plan = get_effective_plan(user)
     redis = context.bot_data["redis"]
 
     if not can_gap_analysis(effective_plan):
-        await update.message.reply_text(t("shopping.premium_only"))
+        await update.message.reply_text(t("shopping.premium_only", lang))
         return
 
     child = None
@@ -38,10 +39,10 @@ async def handle_shopping(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         child = next((c for c in children if c.id == owner_id), None)
 
     if len(items) < 5:
-        await update.message.reply_text(t("shopping.too_few_items"))
+        await update.message.reply_text(t("shopping.too_few_items", lang))
         return
 
-    generating_msg = await update.message.reply_text(t("shopping.generating"))
+    generating_msg = await update.message.reply_text(t("shopping.generating", lang))
 
     result = await build_shopping_list(user, items, redis, child=child)
 
@@ -51,11 +52,11 @@ async def handle_shopping(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         pass
 
     if result == "lock":
-        await update.message.reply_text("Уже анализирую, подожди немного...")
+        await update.message.reply_text(t("shopping.already_running", lang))
     elif result is None:
-        await update.message.reply_text(t("shopping.error"))
+        await update.message.reply_text(t("shopping.error", lang))
     elif result == "":
-        await update.message.reply_text(t("shopping.empty_result"))
+        await update.message.reply_text(t("shopping.empty_result", lang))
     else:
         season = _get_current_season(user.timezone or "Europe/Vilnius")
         _oid = str(child.id) if child else str(user.id)
@@ -67,7 +68,7 @@ async def handle_shopping(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             season=season,
             is_cached=is_cached,
         )
-        header_text = t("shopping.header", season=season, list=result)
+        header_text = t("shopping.header", lang, season=season, list=result)
         if child:
             header_text = f"🛍 Что стоит купить {child.name} {season}:\n\n{result}"
         await update.message.reply_text(header_text)

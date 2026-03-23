@@ -16,7 +16,7 @@ async def run() -> None:
     from db.crud.children import get_children
     from core.permissions import get_effective_plan, can_gap_analysis
     from services.gap_analysis import build_shopping_list, _get_current_season
-    from services.i18n.ru import t
+    from services.i18n import t, get_user_lang
     from telegram import Bot
     from core.redis import get_redis
     from sqlalchemy import select

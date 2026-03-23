@@ -65,10 +65,29 @@ async def run() -> None:
             brief_count = await _count_briefs(user.id)
             name = (user.name or "").split()[0] or ""
 
-            text = (
-                f"Пробный период заканчивается через 2 дня.\n"
-                f"За это время Касси подобрала {brief_count} образов!\n"
-            )
+            # Smart paywall: value proof with real usage stats
+            _trial_days = 12
+            _item_count = 0
+            try:
+                from db.base import AsyncReadSession as _ARS
+                from db.crud.wardrobe import get_owner_items as _goi
+                async with _ARS() as _ws:
+                    _wi = await _goi(_ws, user.id, "user")
+                _item_count = len(_wi)
+            except Exception:
+                pass
+
+            if brief_count > 0 and _item_count > 0:
+                from services.i18n import t as _t
+                _lang = getattr(user, "language", None) or "ru"
+                text = _t("paywall.value_proof", _lang,
+                          days=str(_trial_days), outfits=str(brief_count),
+                          items=str(_item_count))
+            else:
+                text = (
+                    f"Пробный период заканчивается через 2 дня.\n"
+                    f"За это время Касси подобрала {brief_count} образов!\n"
+                )
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("Продолжить $9/мес", callback_data="pay_stars:premium_monthly")],
                 [InlineKeyboardButton("Посмотреть планы", callback_data="show_upgrade")],
@@ -119,11 +138,20 @@ async def run() -> None:
             except Exception:
                 pass
 
-            text = (
-                "Пробный период завершён! Спасибо \U0001f495\n"
-                "Бесплатный план: образ вт/чт, 3 сообщения/день.\n"
-                "Каждый день?"
-            )
+            # Smart paywall: loss aversion with personalization %
+            _brief_count_d14 = await _count_briefs(user.id)
+            _knows_pct = min(95, 30 + _brief_count_d14 * 5)  # grows with usage
+            _lang_d14 = getattr(user, "language", None) or "ru"
+            if _brief_count_d14 > 2:
+                from services.i18n import t as _t_d14
+                text = _t_d14("paywall.loss_aversion", _lang_d14,
+                              knows_pct=str(_knows_pct))
+            else:
+                text = (
+                    "Пробный период завершён! Спасибо \U0001f495\n"
+                    "Бесплатный план: образ вт/чт, 3 сообщения/день.\n"
+                    "Каждый день?"
+                )
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("Premium $9/мес", callback_data="pay_stars:premium_monthly")],
                 [InlineKeyboardButton("Посмотреть планы", callback_data="show_upgrade")],
@@ -154,13 +182,33 @@ async def notify_single_user_trial_expiry(telegram_id: int) -> None:
     """Отправить уведомление об окончании trial одному пользователю (для теста)."""
     from config import settings
     from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton
+    from services.i18n import t as _t_single
 
     bot = Bot(token=settings.telegram_bot_token)
-    text = (
-        "Пробный период завершён! Спасибо \U0001f495\n"
-        "Бесплатный план: образ вт/чт, 3 сообщения/день.\n"
-        "Каждый день?"
-    )
+
+    # Try to get user stats for smart paywall
+    _brief_count = 0
+    try:
+        from db.base import AsyncReadSession as _ARS2
+        from db.models.user import User as _U2
+        from sqlalchemy import select as _sel2
+        async with _ARS2() as _s2:
+            _r2 = await _s2.execute(_sel2(_U2).where(_U2.telegram_id == telegram_id))
+            _u2 = _r2.scalar()
+        if _u2:
+            _brief_count = await _count_briefs(_u2.id)
+    except Exception:
+        pass
+
+    if _brief_count > 2:
+        _knows_pct = min(95, 30 + _brief_count * 5)
+        text = _t_single("paywall.loss_aversion", "ru", knows_pct=str(_knows_pct))
+    else:
+        text = (
+            "Пробный период завершён! Спасибо \U0001f495\n"
+            "Бесплатный план: образ вт/чт, 3 сообщения/день.\n"
+            "Каждый день?"
+        )
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Premium $9/мес", callback_data="pay_stars:premium_monthly")],
         [InlineKeyboardButton("Посмотреть планы", callback_data="show_upgrade")],

@@ -207,6 +207,7 @@ def prepare_weather_data(weather: dict) -> dict:
 
     from services.brief_weather import wmo_to_emoji
 
+    temp_now = weather.get("temp_now")
     temp_m = weather.get("temp_morning")
     temp_d = weather.get("temp_day")
     temp_e = weather.get("temp_evening")
@@ -214,16 +215,20 @@ def prepare_weather_data(weather: dict) -> dict:
     wmo_d = weather.get("wmo_day", wmo_m)
     wmo_e = weather.get("wmo_evening", wmo_m)
 
+    # Use current temp as the "morning" reference if available
+    ref_temp = temp_now if temp_now is not None else temp_m
     evening_warn = (
-        temp_m is not None
+        ref_temp is not None
         and temp_e is not None
-        and temp_e < temp_m - 3
+        and temp_e < ref_temp - 3
     )
 
     return {
+        "temp_now": temp_now,
         "temp_morning": temp_m,
         "temp_day": temp_d,
         "temp_evening": temp_e,
+        "temp_now_str": format_temp(temp_now),
         "temp_morning_str": format_temp(temp_m),
         "temp_day_str": format_temp(temp_d),
         "temp_evening_str": format_temp(temp_e),

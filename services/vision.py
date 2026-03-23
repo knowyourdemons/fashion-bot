@@ -33,7 +33,8 @@ bbox должен включать ВЕЩЬ, не бирку рядом.
   "type": "название строчными",
   "color": "цвет строчными",
   "style": "повседневный/спортивный/нарядный/домашний",
-  "category_group": "outerwear/top/bottom/one_piece/footwear/accessory/base_layer/underwear/sportswear/home_beach",
+  "category_group": "outerwear/top/bottom/one_piece/footwear/accessory/bag/base_layer/underwear/sportswear/home_beach",
+  "formality_level": null,
   "category_code": "english_code",
   "season": ["winter/spring/summer/autumn"],
   "occasion": ["everyday/sport/formal/home/outdoor"],
@@ -72,10 +73,20 @@ BASE_LAYER (термобельё, базовый слой):
   колготки, термоштаны, термофутболка, тельняшка, боди без рукавов
 
 ACCESSORY (аксессуары):
-  шапка, шарф, перчатки, варежки, панама, кепка, ремень, рюкзак, сумка
+  Головные уборы: шапка, шарф, перчатки, варежки, панама, кепка
+  Украшения: серьги-гвоздики, серьги-кольца, серьги длинные, колье, чокер, цепочка, кулон, браслет, кольцо, часы, брошь
+  Ремень/пояс
+  Для украшений определи metal_tone: gold / silver / rose_gold / mixed / none
+
+BAG (сумки):
+  рюкзак, сумка, клатч, тоут/шоппер, кроссбоди, портфель, поясная сумка, мини-сумка
+  → category_group = "bag" (НЕ accessory!)
 
 FOOTWEAR (обувь):
-  кроссовки, ботинки, сапоги, туфли, сандалии, угги
+  кроссовки, ботинки, сапоги, туфли, сандалии, угги, лоферы, балетки, ботильоны
+  → formality_level: 5=formal (лодочки, шпильки), 4=smart (лоферы, оксфорды),
+    3=casual smart (ботинки, челси, балетки), 2=casual (кроссовки, кеды),
+    1=super casual (сандалии, шлёпки)
 
 UNDERWEAR (нижнее бельё):
   трусики, майка, бюстгальтер, носки, гольфы

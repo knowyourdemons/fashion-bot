@@ -8,6 +8,7 @@ from telegram.ext import ContextTypes
 
 from db.base import AsyncWriteSession
 from db.models.user import User
+from services.i18n import t, get_user_lang
 import sqlalchemy as sa
 
 logger = structlog.get_logger()
@@ -280,7 +281,7 @@ async def _show_quiz_result(query, context, scores: dict) -> None:
 
     # Show loading
     try:
-        await query.edit_message_caption(caption="✨ Анализирую твои ответы...")
+        await query.edit_message_caption(caption="✨ Уже определяю твой стиль...")
     except Exception:
         pass
     await context.bot.send_chat_action(query.message.chat_id, "typing")
@@ -351,8 +352,9 @@ async def handle_quiz_later(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         except Exception:
             pass
 
+    lang = get_user_lang(user)
     try:
-        await query.edit_message_text("Ок, квиз подождёт! Напомню через пару дней \U0001f60a")
+        await query.edit_message_text(t("quiz.later", lang))
     except Exception:
         pass
 

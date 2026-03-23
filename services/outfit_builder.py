@@ -128,7 +128,7 @@ def get_collage_params(
 
 _SLOT_ORDER = [
     "outerwear", "top", "removable_layer", "bottom", "one_piece",
-    "footwear", "hat", "scarf", "gloves", "tights",
+    "footwear", "bag", "hat", "scarf", "gloves", "tights",
 ]
 
 # ── Base layer items: NEVER show as photos in collage, only in text line ────
@@ -362,6 +362,7 @@ _WARDROBE_GROUP_NAMES: dict[str, str] = {
     "bottom": "Низ",
     "one_piece": "Платья/комбинезоны",
     "footwear": "Обувь",
+    "bag": "Сумки",
     "accessory": "Аксессуары",
     "underwear": "Бельё",
     "base_layer": "Базовый слой",

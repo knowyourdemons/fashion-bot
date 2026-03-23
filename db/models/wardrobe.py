@@ -86,6 +86,16 @@ class WardrobeItem(Base):
         comment="True if waterproof/water-resistant",
     )
 
+    # Formality & accessory metadata
+    formality_level: Mapped[Optional[int]] = mapped_column(
+        SmallInteger, nullable=True,
+        comment="1=super casual, 2=casual, 3=casual smart, 4=smart, 5=formal",
+    )
+    metal_tone: Mapped[Optional[str]] = mapped_column(
+        String(10), nullable=True,
+        comment="gold/silver/mixed/none — for jewelry and accessories",
+    )
+
     # Bbox for cropping individual item from multi-item photo
     bbox: Mapped[Optional[dict]] = mapped_column(
         JSONB, nullable=True,

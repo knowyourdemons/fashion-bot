@@ -494,41 +494,113 @@ docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
 - Parametrize-интенсивные: test_wardrobe_optimizer (33 функций → ~470 кейсов), test_normalize (24 → ~175)
 - Обновлены: test_outfit_engine, test_core2, test_regression
 
+## Что сделано (23 марта 2026)
+
+### Инфра: Morning Brief фикс + Deploy система
+- **Бриф не приходил**: `schedule_all` зависала (cold_reminders без timeout) → `asyncio.timeout(120)` + `misfire_grace_time=300` + `max_instances=2`
+- **Погода "сейчас"**: Open-Meteo `temp_now` вместо `temp_morning` (прогноз на 07:00 отличался от реальности)
+- **Deploy скрипт**: `./scripts/deploy.sh` — build image → recreate containers (вместо docker cp). `--quick` без тестов, `--hotfix` для emergency
+
+### UI подключение: Capsule, Travel, Monthly Report, EN
+- **Capsule** (`bot/handlers/capsule.py`): /capsule + кнопка в профиле, premium gate, Satori PNG карточка
+- **Travel** (`bot/handlers/travel.py`): 3-step inline flow (город → дни → occasions multi-select)
+- **Monthly Report** (`worker/tasks/analytics_report.py`): cron 1-е число, PNG карточка premium, тизер free
+- **EN localization**: `language` колонка, auto-detect из Telegram, language picker для unknown locale
+- **i18n 100%**: 80+ ключей RU+EN, все хендлеры используют `t(key, lang)`
+
+### Аксессуары Phase 1+2
+- **category_group "bag"**: 21 тип сумок (рюкзак, клатч, кроссбоди, тоут, хобо, мини-сумка...)
+- **Formality 1-5** для ВСЕХ категорий: 60+ типов в `FORMALITY_LEVELS` dict
+- **Formality coherence check**: post-validation в outfit_engine (±1, creative styles ±2)
+- **Jewelry**: 20 типов (серьги-гвоздики, колье, чокер, кулон...), `detect_metal_tone()`
+- **Belt**: body-type aware, neckline+necklace rules в AI prompt
+- **One statement rule** + `_count_statement_pieces()`
+- **Gap analysis**: "нет сумок → рекомендуй кроссбоди"
+
+### Скоринг v3: 8 измерений
+- `color_harmony` (20%), `proportions` (20%), `style_coherence` (20%), `occasion_fit` (15%), `accessory_completeness` (10%, NEW), `shoe_bag_harmony` (5%, NEW), `details_polish` (5%), `creativity` (5%)
+- **Segment overrides**: mom → occasion важнее; no_kids → accessories важнее
+- **Body type** (`services/body_type.py`): 5 типов × clothing/shoes/bags правила
+
+### Professional Styling: Contrast + Kibbe + Essence
+- **Contrast level** (HIGH/MEDIUM/LOW) из селфи → outfit contrast matching
+- **Kibbe family** (DRAMATIC/NATURAL/CLASSIC/GAMINE/ROMANTIC) → силуэт + ткани
+- **Style essence** → настроение образа
+- `build_full_styling_context()` — единая функция для AI prompt
+- `fabric_kibbe_score()` — совместимость ткани с типом тела
+- Всё из ТОГО ЖЕ селфи ($0 extra API cost)
+
+### USP Features: Progressive Learning + Streak + Memory + Mood
+- **Preference Learner** (`services/preference_learner.py`): implicit learning из BriefLog feedback, liked/disliked colors+types, avoid items, wore_rate. Cache Redis 24h
+- **Streak** (`services/streak.py`): daily streak, freeze 1/week, milestones 3-100 дней, "Касси знает тебя на X%"
+- **Kassi Memory** (`services/kassi_memory.py`): автофакты + explicit memory из чата ("не люблю жёлтый")
+- **Mood** (`services/mood.py`): weather + weekday → outfit mood (дождь=warm, пятница=bright)
+- **Landing**: "Стилист который учится на тебе" (repositioning)
+
+### Conversion Optimization
+- **Wardrobe nudge**: при < 8 вещей → "5 вещей → 4 combo. С 8 будет ~12!"
+- **Smart paywall**: value_proof (реальные цифры use) + loss_aversion ("Касси знает на 47%")
+- **Language picker**: non-RU/EN юзеры видят выбор на /start
+
+### Критические баги — исправлены
+- `photo_results` NameError → `photo_lines`
+- `daily_requests_used` race condition → atomic INCR с RETURNING
+- Payment без try/catch → transaction safety + Sentry + honest error message
+- Photo counter не инкрементился → `redis.incr(photos_day:...)` после upload
+- Chat/reroll limit race → atomic INCR-then-check
+- Redis `aclose()` в worker tasks → убрано (singleton)
+- `{knows_pct}` raw placeholder → formatted
+- Mood energy string comparison → numeric `_max_energy()`
+- N+1 query в preference_learner → batch query
+
+### Техдолг
+- 25 silent `except Exception: pass` → `logger.warning()` с контекстом
+- Позиционирование Касси: 11 "AI/Анализирую" → подруга-тон
+- Контекстные ошибки: timeout / сеть / перегрузка (не generic)
+- Dead code `if False` block удалён
+- **Antibot** (`bot/middleware/antibot.py`): per-user rate limiting + temp ban
+- **Loki+Grafana**: сервисы в docker-compose (json-file logging, plugin optional)
+- **4 worker tasks**: wardrobe_analysis, declutter, taxonomy_review, unknown_items_report
+- **UV sunglasses**: "☀️ UV высокий — не забудь очки!" при UV≥6
+
+### Тесты: 101 в test_e2e_flows.py
+- Payment (9), Photo Pipeline (14), i18n Coverage (7), Scoring v3 (15), Phase 2 Accessories (5), Phase 3 (4), Preference Learner (4), Streak (7), Mood (7), Memory (4), Conversion (6), Language (1), Comprehensive Flows (11), Professional Styling (10)
+
 ## Документация
-- **WORKFLOW.md** — методология защитного проектирования (7 линз, 5 итераций, Three-Pass)
-- **claude_code_smart_brief.md** — спецификация умного брифа: два режима + погода + палитра
+- **WORKFLOW.md** — методология защитного проектирования
+- **claude_code_smart_brief.md** — спецификация умного брифа
+- **docs/simulation_1000_users.md** — симуляция 1000 юзеров, unit economics, breakeven
 
 ## Роадмап
 
-### v1.0 remaining (до запуска жене)
-- Онбординг UX (Касси, fuzzy дата, "Для обоих", прогресс-бар)
-- Visual polish: центрирование, иконки, контекст
-- ~~Умный бриф~~ — ГОТОВО
-- ~~Текстовые фиксы~~ — ГОТОВО
-- ~~Sentry, CI/CD~~ — ГОТОВО
-- ~~Удаление фона: RMBG-1.4~~ — ГОТОВО
+### v1.0 ✅ ГОТОВО (запуск жене)
+- ~~Все базовые фичи~~ — онбординг, бриф, photo upload, outfit, profile
+- ~~Sentry, CI/CD, watchdog~~ — мониторинг
+- ~~Deploy скрипт~~ — `./scripts/deploy.sh`
 
-### v1.1 (апрель)
-- ~~Контекстный чат~~ — ГОТОВО
-- ~~Re-roll~~ — ГОТОВО (детский + взрослый)
-- ~~Вечерний образ 20:00~~ — ГОТОВО
-- ~~Trial отключение дни 12-14~~ — ГОТОВО
-- ~~rembg~~ — ГОТОВО (RMBG-1.4 quantized)
-- ~~Sentry, CI/CD~~ — ГОТОВО
-- ~~Профессиональная стилистика~~ — ГОТОВО (12-season, color harmony, body type, capsule)
-- ~~Нормализация вещей/цветов~~ — ГОТОВО (250+ типов, 150+ цветов)
-- ~~Pre-Vision photo quality~~ — ГОТОВО (brightness, blur, contrast, auto-correction)
-- ~~profile + add_child~~ — ГОТОВО (+ style prefs через профиль)
-- ~~Оценка образа по фото~~ — ГОТОВО (6 измерений, cross-validation, 89 тестов)
-- ~~Gap analysis + growth alert~~ — ГОТОВО (capsule scoring + AI shopping list)
-- ~~Тизеры, engagement push~~ — ГОТОВО
+### v1.1 ✅ ГОТОВО
+- ~~i18n 100%~~ — RU + EN, 80+ ключей
+- ~~Docker deploy~~ — единый image build
+- ~~Интеграционные тесты~~ — 101 e2e тест
+- ~~Capsule, Travel, Monthly Report~~ — UI подключение
+- ~~Аксессуары Phase 1+2~~ — bags, jewelry, belt, formality, metal tone
+- ~~Скоринг v3~~ — 8 измерений, segment overrides
+- ~~Professional styling~~ — contrast, Kibbe, essence
+- ~~USP features~~ — preference learning, streak, memory, mood
+- ~~Conversion optimization~~ — nudge, smart paywall, language picker
+- ~~Критические баги~~ — 9 исправлено
+- ~~Антибот~~ — rate limiting + temp ban
+- ~~4 worker tasks~~ — wardrobe_analysis, declutter, taxonomy_review, unknown_items_report
 
-### v1.2 (май)
-- Шоппинг-лист + affiliate (Admitad/Skimlinks, H&M, Lamoda)
-- ЮKassa (после ИП), Paddle
-- Антибот, реферальная программа
+### v1.2 (апрель-май)
+- ЮKassa (после ИП) — карта для RU юзеров
+- Шоппинг-лист + affiliate (Admitad/Skimlinks)
+- Реферальная программа ("Пригласи подругу = +7 дней")
 - Prometheus + Grafana dashboards
-- Loki log aggregation (шаблон готов в docker-compose)
+- A/B test paywall timing
 
 ### v2.0 (июль)
-- Ultra план, семейный аккаунт, EN, маркетинг
+- Ultra план, семейный аккаунт
+- Маркетинг: TikTok/Reels, Telegram каналы для мам
+- Беременность: триместр в онбординге
+- Папа/бабушка forward

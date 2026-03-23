@@ -8,6 +8,8 @@ from datetime import date
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
+from services.i18n import t, get_user_lang
+
 logger = structlog.get_logger()
 
 
@@ -51,7 +53,8 @@ async def process_boost_photo(update, context, user, photo_bytes: bytes) -> bool
     context.user_data.pop("mode", None)
 
     await context.bot.send_chat_action(update.effective_chat.id, "typing")
-    status = await update.message.reply_text("✨ Оцениваю образ...")
+    lang = get_user_lang(user)
+    status = await update.message.reply_text(t("boost.evaluating", lang))
 
     try:
         import base64

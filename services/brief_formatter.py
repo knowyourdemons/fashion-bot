@@ -23,22 +23,30 @@ def _format_item(item) -> str:
 
 
 def format_weather_line(weather: dict) -> str:
-    """Погода утро→день→вечер с эмодзи: ☀️ +4° утро → 🌤 +7° день → 🌧 +2° вечер"""
+    """Погода сейчас→день→вечер: ☀️ +1° сейчас → 🌤 +7° день → 🌧 +2° вечер"""
     parts = []
-    tm = weather.get("temp_morning")
+    tn = weather.get("temp_now")
     td = weather.get("temp_day")
     te = weather.get("temp_evening")
     wm = weather.get("wmo_morning", 0)
     wd = weather.get("wmo_day", 0)
     we = weather.get("wmo_evening", 0)
 
-    if tm is not None:
+    if tn is not None:
+        parts.append(f"{wmo_to_emoji(wm)} {_sign(tn)}{round(tn)}° сейчас")
+    elif weather.get("temp_morning") is not None:
+        tm = weather["temp_morning"]
         parts.append(f"{wmo_to_emoji(wm)} {_sign(tm)}{round(tm)}° утро")
     if td is not None:
         parts.append(f"{wmo_to_emoji(wd)} {_sign(td)}{round(td)}° день")
     if te is not None:
         parts.append(f"{wmo_to_emoji(we)} {_sign(te)}{round(te)}° вечер")
-    return " → ".join(parts)
+    line = " → ".join(parts)
+    # UV hint
+    uv = weather.get("uv_max", 0)
+    if uv and uv >= 6:
+        line += "\n☀️ UV высокий — не забудь очки!"
+    return line
 
 
 def _format_child_block(
