@@ -17,11 +17,16 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: stas
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 10m
           script: |
             cd ~/fashion-bot
             git pull origin main
-            docker compose -f docker/docker-compose.yml up --build -d
-            sleep 15
+            docker compose -f docker/docker-compose.yml build app worker
+            docker compose -f docker/docker-compose.yml up -d --no-deps --force-recreate worker
+            sleep 3
+            docker compose -f docker/docker-compose.yml up -d --no-deps --force-recreate app
+            sleep 10
+            curl -sf http://localhost:8000/health && echo "✅ Health OK" || echo "❌ Health FAIL"
             echo "Deploy complete: $(date)"
 
       - name: Notify success
