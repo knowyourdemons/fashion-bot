@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Тест бота-стилиста</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:wght@600;700&display=swap');
+
+  :root {
+    --rose: #E8B4B8;
+    --rose-light: #FFF0F3;
+    --deep: #5B3A4A;
+    --accent: #C97B8B;
+    --warm: #FFF8F5;
+    --text: #2D2D2D;
+    --muted: #888;
+    --light-gray: #F5F0ED;
+    --green: #6BBF6B;
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--warm);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 16px 100px;
+  }
+
+  /* === SCREENS === */
+  .screen { display: none; }
+  .screen.active { display: block; animation: fadeIn 0.3s ease; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* === HEADER === */
+  .hero {
+    text-align: center;
+    padding: 40px 0 24px;
+  }
+  .hero-emoji { font-size: 48px; margin-bottom: 8px; }
+  .hero h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 32px; font-weight: 700;
+    color: var(--deep);
+    margin-bottom: 12px;
+  }
+  .hero p {
+    font-size: 15px; color: var(--muted);
+    max-width: 320px; margin: 0 auto;
+  }
+
+  /* === PROGRESS BAR === */
+  .progress-bar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: 4px; background: var(--light-gray);
+    z-index: 100;
+  }
+  .progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--accent), var(--deep));
+    transition: width 0.4s ease;
+    border-radius: 0 2px 2px 0;
+  }
+
+  /* === STEP INDICATOR === */
+  .step-indicator {
+    text-align: center;
+    padding: 20px 0 8px;
+    font-size: 12px; color: var(--muted);
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+
+  /* === SECTION === */
+  .section-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 24px; font-weight: 700;
+    color: var(--deep);
+    margin: 16px 0 8px;
+  }
+  .section-desc {
+    font-size: 14px; color: var(--muted);
+    margin-bottom: 20px;
+  }
+
+  /* === QUESTION CARD === */
+  .q-card {
+    background: white;
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 12px rgba(91,58,74,0.06);
+  }
+  .q-card .q-label {
+    font-size: 15px; font-weight: 600;
+    color: var(--deep);
+    margin-bottom: 12px;
+    line-height: 1.4;
+  }
+
+  /* === RADIO / CHECKBOX OPTIONS === */
+  .options { display: flex; flex-direction: column; gap: 8px; }
+  .options.horizontal { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+
+  .opt {
+    display: flex; align-items: center;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 2px solid var(--light-gray);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .opt:active { transform: scale(0.97); }
+  .opt.selected {
+    border-color: var(--accent);
+    background: var(--rose-light);
+  }
+  .opt .dot {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--muted);
+    margin-right: 10px;
+    flex-shrink: 0;
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .opt.selected .dot {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+  .opt.selected .dot::after {
+    content: '';
+    width: 8px; height: 8px;
+    background: white;
+    border-radius: 50%;
+  }
+
+  .options.horizontal .opt {
+    flex: 0 0 auto;
+    padding: 10px 16px;
+  }
+
+  /* === EMOJI SCALE === */
+  .emoji-scale {
+    display: flex; justify-content: center; gap: 12px;
+  }
+  .emoji-btn {
+    font-size: 32px;
+    padding: 8px;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .emoji-btn:active { transform: scale(0.9); }
+  .emoji-btn.selected {
+    border-color: var(--accent);
+    background: var(--rose-light);
+    transform: scale(1.15);
+  }
+
+  /* === NUMBER SCALE === */
+  .number-scale {
+    display: flex; justify-content: space-between; gap: 4px;
+    margin-top: 4px;
+  }
+  .num-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 2px solid var(--light-gray);
+    background: white;
+    font-size: 13px; font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .num-btn:active { transform: scale(0.9); }
+  .num-btn.selected {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: white;
+  }
+
+  /* === STAR RATING === */
+  .star-rating { display: flex; gap: 8px; justify-content: center; }
+  .star-btn {
+    font-size: 28px; cursor: pointer;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    filter: grayscale(1) opacity(0.3);
+    background: none; border: none; padding: 4px;
+  }
+  .star-btn.active {
+    filter: none;
+    transform: scale(1.1);
+  }
+
+  /* === TEXT INPUT === */
+  .text-input {
+    width: 100%;
+    border: 2px solid var(--light-gray);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    resize: vertical;
+    min-height: 60px;
+    transition: border-color 0.2s;
+    background: white;
+    color: var(--text);
+  }
+  .text-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .text-input::placeholder { color: #ccc; }
+
+  /* === PHOTO LOG TABLE === */
+  .photo-log { display: flex; flex-direction: column; gap: 10px; }
+  .photo-row {
+    background: white;
+    border-radius: 10px;
+    padding: 14px 16px;
+    border: 2px solid var(--light-gray);
+  }
+  .photo-row .pr-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px;
+  }
+  .photo-row .pr-num {
+    font-weight: 700; color: var(--accent);
+    font-size: 14px;
+  }
+  .photo-row .pr-emoji { display: flex; gap: 8px; }
+  .photo-row .pr-emoji button {
+    font-size: 22px; background: none; border: none;
+    cursor: pointer; opacity: 0.3; transition: all 0.2s;
+    padding: 2px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .photo-row .pr-emoji button.sel { opacity: 1; transform: scale(1.2); }
+  .photo-row input {
+    width: 100%; border: none; border-bottom: 1px solid var(--light-gray);
+    font-size: 13px; padding: 4px 0;
+    font-family: 'Inter', sans-serif; color: var(--text);
+  }
+  .photo-row input:focus { outline: none; border-color: var(--accent); }
+  .photo-row input::placeholder { color: #ccc; }
+
+  /* === INFO BOX === */
+  .info-box {
+    background: var(--rose-light);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 16px;
+    margin: 16px 0;
+    font-size: 14px;
+    color: var(--deep);
+    line-height: 1.5;
+  }
+
+  /* === PREP CHECKLIST === */
+  .checklist { display: flex; flex-direction: column; gap: 10px; }
+  .check-item {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .check-box {
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    border: 2px solid var(--light-gray);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+    font-size: 14px; color: white;
+  }
+  .check-item.checked .check-box {
+    background: var(--green);
+    border-color: var(--green);
+  }
+  .check-item.checked .check-box::after { content: '✓'; }
+
+  /* === NAV BUTTONS === */
+  .nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: white;
+    border-top: 1px solid var(--light-gray);
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    display: flex; gap: 10px;
+    justify-content: center;
+    z-index: 100;
+  }
+  .btn {
+    padding: 14px 32px;
+    border-radius: 50px;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: 'Inter', sans-serif;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary {
+    background: var(--deep);
+    color: white;
+    flex: 1;
+    max-width: 280px;
+  }
+  .btn-secondary {
+    background: var(--light-gray);
+    color: var(--text);
+  }
+
+  /* === THANK YOU === */
+  .thank-you {
+    text-align: center;
+    padding: 60px 0;
+  }
+  .thank-you .big-emoji { font-size: 64px; margin-bottom: 16px; }
+  .thank-you h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 28px; color: var(--deep);
+    margin-bottom: 12px;
+  }
+  .thank-you p { font-size: 15px; color: var(--muted); }
+
+  .copy-result {
+    margin-top: 20px;
+    padding: 16px;
+    background: white;
+    border-radius: var(--radius);
+    border: 2px dashed var(--accent);
+    font-size: 12px;
+    color: var(--muted);
+    max-height: 200px;
+    overflow-y: auto;
+    text-align: left;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .btn-copy {
+    margin-top: 12px;
+    padding: 12px 24px;
+    background: var(--accent);
+    color: white;
+    border: none; border-radius: 50px;
+    font-size: 14px; font-weight: 600;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* === DIVIDER === */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--rose), transparent);
+    margin: 24px 0;
+  }
+
+  /* === MORNING BADGE === */
+  .morning-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #FFE4B5, #FFD700);
+    color: #8B6914;
+    font-size: 11px; font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 20px;
+    margin-bottom: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+
+<div class="container">
+
+  <!-- ===== SCREEN 0: WELCOME ===== -->
+  <div class="screen active" id="screen0">
+    <div class="hero">
+      <div class="hero-emoji">✨</div>
+      <h1>Привет!</h1>
+      <p>Стас делает бота-стилиста и просит тебя его попробовать. Без подглядывания — просто пользуйся и отмечай впечатления.</p>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section-title">Что нужно сделать</div>
+    <div class="info-box">
+      1. Включи запись экрана на телефоне<br>
+      2. Открой ссылку на бота (Стас пришлёт)<br>
+      3. Пользуйся как обычным ботом<br>
+      4. Отвечай тут по ходу — тапай кнопки<br>
+      5. Завтра утром — заполни последнюю часть<br>
+      6. Отправь результаты Стасу
+    </div>
+
+    <div class="section-title">Подготовь заранее</div>
+    <div class="checklist" id="prepChecklist">
+      <div class="check-item" onclick="this.classList.toggle('checked')">
+        <div class="check-box"></div>
+        <span>8-10 вещей ребёнка разложены</span>
+      </div>
+      <div class="check-item" onclick="this.classList.toggle('checked')">
+        <div class="check-box"></div>
+        <span>Хорошее освещение</span>
+      </div>
+      <div class="check-item" onclick="this.classList.toggle('checked')">
+        <div class="check-box"></div>
+        <span>Светлый фон для фото</span>
+      </div>
+      <div class="check-item" onclick="this.classList.toggle('checked')">
+        <div class="check-box"></div>
+        <span>Запись экрана включена</span>
+      </div>
+    </div>
+
+    <div class="info-box" style="margin-top:20px;">
+      <b>Важно:</b> Нет правильных ответов. Если что-то непонятно в боте — это проблема бота, не твоя. Всё займёт ~20 мин сегодня и ~5 мин завтра утром.
+    </div>
+  </div>
+
+  <!-- ===== SCREEN 1: FIRST MESSAGE ===== -->
+  <div class="screen" id="screen1">
+    <div class="step-indicator">Шаг 1 из 7</div>
+    <div class="section-title">Первое сообщение</div>
+    <div class="section-desc">Открой бота и нажми Start. Прочитай приветствие.</div>
+
+    <div class="q-card">
+      <div class="q-label">Понятно ли что это за бот и зачем он?</div>
+      <div class="options" data-name="q_welcome_clarity">
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Сразу понятно</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Более-менее</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Не очень понятно</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Вообще не поняла</div>
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Что бы изменила в приветствии?</div>
+      <textarea class="text-input" data-name="q_welcome_improve" placeholder="Любые мысли..."></textarea>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN 2: SETUP ===== -->
+  <div class="screen" id="screen2">
+    <div class="step-indicator">Шаг 2 из 7</div>
+    <div class="section-title">Настройка</div>
+    <div class="section-desc">Выбери для кого образы, заполни что просит бот.</div>
+
+    <div class="q-card">
+      <div class="q-label">Все шаги понятны?</div>
+      <div class="options" data-name="q_setup_clarity">
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Да, всё ясно</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Почти, но задумалась</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Запуталась</div>
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Где задумалась / что непонятно?</div>
+      <textarea class="text-input" data-name="q_setup_issues" placeholder="Если всё ок — оставь пустым"></textarea>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN 3: FIRST PHOTO ===== -->
+  <div class="screen" id="screen3">
+    <div class="step-indicator">Шаг 3 из 7</div>
+    <div class="section-title">Первое фото</div>
+    <div class="section-desc">Бот попросит сфоткать вещь. Фоткай как считаешь нужным.</div>
+
+    <div class="q-card">
+      <div class="q-label">Понятно ли было КАК фоткать?</div>
+      <div class="options" data-name="q_photo_howto">
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Да, всё ясно</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Примерно</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Нет, не хватало инструкции</div>
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Чего не хватало? (можно несколько)</div>
+      <div class="options" data-name="q_photo_missing" data-multi="true">
+        <div class="opt" onclick="toggleOpt(this)"><div class="dot"></div>Примера фото</div>
+        <div class="opt" onclick="toggleOpt(this)"><div class="dot"></div>Подсказки про фон</div>
+        <div class="opt" onclick="toggleOpt(this)"><div class="dot"></div>Видео-инструкции</div>
+        <div class="opt" onclick="toggleOpt(this)"><div class="dot"></div>Всего хватало</div>
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Ответ бота после фото — что почувствовала?</div>
+      <div class="emoji-scale" data-name="q_photo_reaction">
+        <button class="emoji-btn" onclick="selectEmoji(this)" data-val="wow">🤩</button>
+        <button class="emoji-btn" onclick="selectEmoji(this)" data-val="nice">😊</button>
+        <button class="emoji-btn" onclick="selectEmoji(this)" data-val="ok">😐</button>
+        <button class="emoji-btn" onclick="selectEmoji(this)" data-val="boring">😒</button>
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Удаление фона (если заметила)</div>
+      <div class="options" data-name="q_rmbg">
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Вау, круто!</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Неплохо</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Не заметила</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Плохо получилось</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN 4: PHOTOS 2-8 ===== -->
+  <div class="screen" id="screen4">
+    <div class="step-indicator">Шаг 4 из 7</div>
+    <div class="section-title">Фотографируем дальше</div>
+    <div class="section-desc">Отмечай настроение после каждого фото. Если хочешь остановиться — остановись!</div>
+
+    <div class="photo-log" id="photoLog">
+    </div>
+
+    <div class="q-card" style="margin-top:16px;">
+      <div class="q-label">На каком фото захотелось остановиться?</div>
+      <div class="options" data-name="q_fatigue_point">
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Не хотелось, норм</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>После 3-го</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>После 5-го</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Сразу после 1-го</div>
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Сколько вещей реалистично сфоткать за раз?</div>
+      <div class="options" data-name="q_realistic_count">
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>3-5</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>5-8</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>8-12</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Зависит от настроения</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN 5: IMPRESSIONS ===== -->
+  <div class="screen" id="screen5">
+    <div class="step-indicator">Шаг 5 из 7</div>
+    <div class="section-title">Общее впечатление</div>
+
+    <div class="q-card">
+      <div class="q-label">Касси ощущается как...</div>
+      <div class="options" data-name="q_kassi_tone">
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Подруга</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Консультант</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Робот</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Продавец</div>
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Понятность</div>
+      <div class="star-rating" data-name="q_rate_clarity"></div>
+    </div>
+    <div class="q-card">
+      <div class="q-label">Удобство фотографирования</div>
+      <div class="star-rating" data-name="q_rate_photo"></div>
+    </div>
+    <div class="q-card">
+      <div class="q-label">Приятность общения</div>
+      <div class="star-rating" data-name="q_rate_tone"></div>
+    </div>
+    <div class="q-card">
+      <div class="q-label">Хочу продолжить завтра?</div>
+      <div class="star-rating" data-name="q_rate_continue"></div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Что бесило / мешало / было непонятно?</div>
+      <textarea class="text-input" data-name="q_pain_points" placeholder="Всё что не понравилось..."></textarea>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Что понравилось / удивило?</div>
+      <textarea class="text-input" data-name="q_liked" placeholder="Может что-то порадовало?"></textarea>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN 6: MORNING BRIEF ===== -->
+  <div class="screen" id="screen6">
+    <div class="step-indicator">Шаг 6 из 7</div>
+    <div class="morning-badge">☀️ Заполни утром</div>
+    <div class="section-title">Утренний образ</div>
+    <div class="section-desc">Когда бот пришлёт образ утром — заполни эту часть. Если до 9:00 ничего нет — тоже отметь.</div>
+
+    <div class="q-card">
+      <div class="q-label">Пришло ли утреннее сообщение?</div>
+      <div class="options" data-name="q_brief_arrived">
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Да, пришло</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Нет, ничего не было</div>
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Через сколько открыла?</div>
+      <div class="options" data-name="q_brief_open_time">
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Сразу (1-2 мин)</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>5-10 мин</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>30+ мин</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Не открыла</div>
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Первая реакция на образ</div>
+      <div class="emoji-scale" data-name="q_brief_reaction">
+        <button class="emoji-btn" onclick="selectEmoji(this)" data-val="love">😍</button>
+        <button class="emoji-btn" onclick="selectEmoji(this)" data-val="nice">😊</button>
+        <button class="emoji-btn" onclick="selectEmoji(this)" data-val="meh">😐</button>
+        <button class="emoji-btn" onclick="selectEmoji(this)" data-val="bad">😕</button>
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Образ подходит для реального утра?</div>
+      <div class="options" data-name="q_brief_fit">
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Да, одела бы так!</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Почти, но кое-что заменила бы</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Нет, не подходит</div>
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Что бы заменила и почему?</div>
+      <textarea class="text-input" data-name="q_brief_change" placeholder="Если всё подошло — пропусти"></textarea>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Реально одела ребёнка по предложению бота?</div>
+      <div class="options" data-name="q_brief_used">
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Да, полностью</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Частично</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Нет</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN 7: FINAL ===== -->
+  <div class="screen" id="screen7">
+    <div class="step-indicator">Шаг 7 из 7</div>
+    <div class="section-title">Финальные вопросы</div>
+
+    <div class="q-card">
+      <div class="q-label">Как бы описала бота подруге в одном предложении?</div>
+      <textarea class="text-input" data-name="q_describe_friend" placeholder="Это бот который..."></textarea>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Будешь пользоваться дальше?</div>
+      <div class="options" data-name="q_will_continue">
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Да, хочу!</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Может быть</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Скорее нет</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Точно нет</div>
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">$9/месяц — платила бы?</div>
+      <div class="options" data-name="q_would_pay">
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Да</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Если станет лучше</div>
+        <div class="opt" onclick="selectOpt(this)"><div class="dot"></div>Нет</div>
+      </div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Что должно измениться чтобы платить?</div>
+      <textarea class="text-input" data-name="q_pay_condition" placeholder="Если уже готова — напиши 'всё ок'"></textarea>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">Порекомендуешь подруге? (0 — нет, 10 — точно да)</div>
+      <div class="number-scale" data-name="q_nps"></div>
+    </div>
+
+    <div class="q-card">
+      <div class="q-label">3 вещи которые изменила бы</div>
+      <textarea class="text-input" data-name="q_changes" placeholder="1. ...&#10;2. ...&#10;3. ..." style="min-height:100px;"></textarea>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN 8: THANK YOU ===== -->
+  <div class="screen" id="screen8">
+    <div class="thank-you">
+      <div class="big-emoji">💛</div>
+      <h2>Спасибо!</h2>
+      <p>Ты очень помогла. Не забудь отправить запись экрана!</p>
+      <div class="copy-result" id="resultText"></div>
+      <button class="btn-copy" onclick="copyResults()">📋 Скопировать результаты</button>
+      <p style="margin-top:12px; font-size:12px; color:var(--muted);">Скопируй и отправь Стасу в Telegram</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- NAV -->
+<div class="nav" id="navBar">
+  <button class="btn btn-secondary" id="btnPrev" onclick="prevScreen()" style="display:none;">← Назад</button>
+  <button class="btn btn-primary" id="btnNext" onclick="nextScreen()">Начать →</button>
+</div>
+
+<script>
+  let currentScreen = 0;
+  const totalScreens = 9; // 0-8
+  const data = {};
+
+  // Init star ratings
+  document.querySelectorAll('.star-rating').forEach(container => {
+    for (let i = 1; i <= 5; i++) {
+      const btn = document.createElement('button');
+      btn.className = 'star-btn';
+      btn.textContent = '⭐';
+      btn.dataset.val = i;
+      btn.onclick = function() { selectStar(this); };
+      container.appendChild(btn);
+    }
+  });
+
+  // Init NPS scale
+  document.querySelectorAll('.number-scale').forEach(container => {
+    for (let i = 0; i <= 10; i++) {
+      const btn = document.createElement('button');
+      btn.className = 'num-btn';
+      btn.textContent = i;
+      btn.dataset.val = i;
+      btn.onclick = function() { selectNum(this); };
+      container.appendChild(btn);
+    }
+  });
+
+  // Init photo log
+  const photoLog = document.getElementById('photoLog');
+  for (let i = 2; i <= 8; i++) {
+    const row = document.createElement('div');
+    row.className = 'photo-row';
+    row.innerHTML = `
+      <div class="pr-head">
+        <span class="pr-num">Фото #${i}</span>
+        <div class="pr-emoji">
+          <button onclick="selPhotoMood(this,${i},'good')" data-photo="${i}" data-mood="good">😊</button>
+          <button onclick="selPhotoMood(this,${i},'ok')" data-photo="${i}" data-mood="ok">😐</button>
+          <button onclick="selPhotoMood(this,${i},'tired')" data-photo="${i}" data-mood="tired">😩</button>
+          <button onclick="selPhotoMood(this,${i},'skip')" data-photo="${i}" data-mood="skip">⏭️</button>
+        </div>
+      </div>
+      <input type="text" placeholder="Что сфоткала? Проблемы?" data-name="photo_${i}_note">
+    `;
+    photoLog.appendChild(row);
+  }
+
+  function selectOpt(el) {
+    const parent = el.closest('.options');
+    parent.querySelectorAll('.opt').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    const name = parent.dataset.name;
+    data[name] = el.textContent.trim();
+  }
+
+  function toggleOpt(el) {
+    el.classList.toggle('selected');
+    const parent = el.closest('.options');
+    const name = parent.dataset.name;
+    const vals = [];
+    parent.querySelectorAll('.opt.selected').forEach(o => vals.push(o.textContent.trim()));
+    data[name] = vals.join(', ');
+  }
+
+  function selectEmoji(el) {
+    const parent = el.closest('.emoji-scale');
+    parent.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('selected'));
+    el.classList.add('selected');
+    data[parent.dataset.name] = el.dataset.val;
+  }
+
+  function selectStar(el) {
+    const parent = el.closest('.star-rating');
+    const val = parseInt(el.dataset.val);
+    parent.querySelectorAll('.star-btn').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.val) <= val);
+    });
+    data[parent.dataset.name] = val;
+  }
+
+  function selectNum(el) {
+    const parent = el.closest('.number-scale');
+    parent.querySelectorAll('.num-btn').forEach(b => b.classList.remove('selected'));
+    el.classList.add('selected');
+    data[parent.dataset.name] = parseInt(el.dataset.val);
+  }
+
+  function selPhotoMood(el, num, mood) {
+    const row = el.closest('.photo-row');
+    row.querySelectorAll('.pr-emoji button').forEach(b => b.classList.remove('sel'));
+    el.classList.add('sel');
+    data[`photo_${num}_mood`] = mood;
+  }
+
+  function collectTextInputs() {
+    document.querySelectorAll('.text-input, .photo-row input').forEach(el => {
+      if (el.value.trim()) {
+        data[el.dataset.name] = el.value.trim();
+      }
+    });
+  }
+
+  function showScreen(n) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(`screen${n}`).classList.add('active');
+    currentScreen = n;
+
+    // Progress
+    const pct = Math.round((n / (totalScreens - 1)) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+
+    // Nav buttons
+    const prev = document.getElementById('btnPrev');
+    const next = document.getElementById('btnNext');
+    prev.style.display = n > 0 && n < 8 ? '' : 'none';
+
+    if (n === 0) {
+      next.textContent = 'Начать →';
+    } else if (n === 5) {
+      next.textContent = 'Завтра утром →';
+    } else if (n === 7) {
+      next.textContent = 'Готово ✓';
+    } else if (n === 8) {
+      document.getElementById('navBar').style.display = 'none';
+    } else {
+      next.textContent = 'Дальше →';
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function nextScreen() {
+    collectTextInputs();
+    if (currentScreen === 7) {
+      // Generate results
+      collectTextInputs();
+      generateResults();
+      showScreen(8);
+    } else {
+      showScreen(currentScreen + 1);
+    }
+  }
+
+  function prevScreen() {
+    if (currentScreen > 0) showScreen(currentScreen - 1);
+  }
+
+  function generateResults() {
+    const lines = [];
+    lines.push('=== РЕЗУЛЬТАТЫ ТЕСТА БОТА ===');
+    lines.push('Дата: ' + new Date().toLocaleDateString('ru-RU'));
+    lines.push('');
+
+    const labels = {
+      q_welcome_clarity: 'Понятность приветствия',
+      q_welcome_improve: 'Улучшить в приветствии',
+      q_setup_clarity: 'Понятность настройки',
+      q_setup_issues: 'Проблемы настройки',
+      q_photo_howto: 'Понятность фото',
+      q_photo_missing: 'Не хватало',
+      q_photo_reaction: 'Реакция на ответ бота',
+      q_rmbg: 'Удаление фона',
+      q_fatigue_point: 'Усталость на фото',
+      q_realistic_count: 'Реалистичное кол-во фото',
+      q_kassi_tone: 'Тон Касси',
+      q_rate_clarity: 'Оценка: понятность',
+      q_rate_photo: 'Оценка: удобство фото',
+      q_rate_tone: 'Оценка: приятность',
+      q_rate_continue: 'Оценка: хочу продолжить',
+      q_pain_points: 'Что бесило',
+      q_liked: 'Что понравилось',
+      q_brief_arrived: 'Бриф пришёл',
+      q_brief_open_time: 'Открыла через',
+      q_brief_reaction: 'Реакция на бриф',
+      q_brief_fit: 'Образ подходит',
+      q_brief_change: 'Что заменила бы',
+      q_brief_used: 'Одела по предложению',
+      q_describe_friend: 'Описание подруге',
+      q_will_continue: 'Продолжит',
+      q_would_pay: 'Готова платить',
+      q_pay_condition: 'Условие оплаты',
+      q_nps: 'NPS (0-10)',
+      q_changes: 'Что изменить',
+    };
+
+    for (const [key, label] of Object.entries(labels)) {
+      if (data[key] !== undefined && data[key] !== '') {
+        lines.push(`${label}: ${data[key]}`);
+      }
+    }
+
+    lines.push('');
+    lines.push('--- Фото лог ---');
+    for (let i = 2; i <= 8; i++) {
+      const mood = data[`photo_${i}_mood`] || '—';
+      const note = data[`photo_${i}_note`] || '';
+      if (mood !== '—' || note) {
+        lines.push(`Фото #${i}: ${mood}${note ? ' | ' + note : ''}`);
+      }
+    }
+
+    const text = lines.join('\n');
+    document.getElementById('resultText').textContent = text;
+  }
+
+  function copyResults() {
+    const text = document.getElementById('resultText').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.querySelector('.btn-copy');
+      btn.textContent = '✅ Скопировано!';
+      setTimeout(() => { btn.textContent = '📋 Скопировать результаты'; }, 2000);
+    }).catch(() => {
+      // Fallback: select text
+      const el = document.getElementById('resultText');
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+    });
+  }
+
+  // Save progress to localStorage
+  function saveProgress() {
+    collectTextInputs();
+    try {
+      localStorage.setItem('kassi_test_data', JSON.stringify(data));
+      localStorage.setItem('kassi_test_screen', currentScreen);
+    } catch(e) {}
+  }
+
+  function loadProgress() {
+    try {
+      const saved = localStorage.getItem('kassi_test_data');
+      const screen = localStorage.getItem('kassi_test_screen');
+      if (saved) {
+        Object.assign(data, JSON.parse(saved));
+        // Could restore UI state here if needed
+      }
+      if (screen && parseInt(screen) > 0) {
+        if (confirm('Продолжить с прошлого места?')) {
+          showScreen(parseInt(screen));
+        }
+      }
+    } catch(e) {}
+  }
+
+  // Auto-save every 10 sec
+  setInterval(saveProgress, 10000);
+  window.addEventListener('beforeunload', saveProgress);
+
+  // Init
+  loadProgress();
+</script>
+
+</body>
+</html>

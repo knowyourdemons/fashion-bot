@@ -80,6 +80,14 @@ def create_app() -> FastAPI:
         async def landing():
             return FileResponse(landing_dir / "index.html")
 
+        @app.get("/test.html")
+        async def test_page():
+            path = landing_dir / "test.html"
+            if path.exists():
+                return FileResponse(path)
+            from fastapi.responses import PlainTextResponse
+            return PlainTextResponse("Not found", status_code=404)
+
         app.mount("/static", StaticFiles(directory=str(landing_dir)), name="landing")
 
     return app
