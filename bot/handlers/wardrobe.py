@@ -209,7 +209,7 @@ async def _load_existing_set(owner_id: uuid.UUID, owner_type: str = "user") -> s
 
 # ── Progress bar + personalized reaction ──────────────────────────────────
 
-_PHOTO_TARGET = 5  # minimum photos for first brief
+from core.permissions import PHOTO_TARGET as _PHOTO_TARGET
 
 _COLOR_REACTIONS = {
     "синий": "базовый цвет", "белый": "must-have", "чёрный": "классика",
@@ -606,6 +606,19 @@ async def _handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYP
 
 # ── Brief trigger ──────────────────────────────────────────────────────────
 
+
+def _plural(n: int, one: str, few: str, many: str) -> str:
+    """Russian plural: 1 вещь, 2 вещи, 5 вещей."""
+    if 11 <= n % 100 <= 19:
+        return many
+    mod10 = n % 10
+    if mod10 == 1:
+        return one
+    if 2 <= mod10 <= 4:
+        return few
+    return many
+
+
 async def _maybe_trigger_first_brief(user, owner_id, owner_type, message, context, redis) -> None:
     """Триггер первого брифа ровно на 5-й вещи. Работает для ВСЕХ планов."""
     if redis is None:
@@ -633,11 +646,12 @@ async def _maybe_trigger_first_brief(user, owner_id, owner_type, message, contex
         queue = RedisQueue(redis)
         await queue.push(
             "generate_brief",
-            {"user_id": str(user.id)},
+            {"user_id": str(user.id), "first_brief": True},
             priority=QueuePriority.HIGH,
         )
         await message.reply_text(
-            "✨ У тебя уже 5 вещей! Собираю первый образ — подожди пару секунд..."
+            f"✨ У тебя уже {wardrobe_count} {_plural(wardrobe_count, 'вещь', 'вещи', 'вещей')}! "
+            "Собираю первый образ — подожди пару секунд..."
         )
         logger.info("wardrobe.first_brief_triggered", user_id=str(user.id), count=wardrobe_count)
     except Exception as e:
@@ -1193,10 +1207,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 InlineKeyboardButton("✨ Расширить гардероб →", callback_data="show_upgrade")
             ]])
             if _effective_plan == "free":
+                from core.permissions import TRIAL_DAYS, get_limit
                 msg = t(
                     "wardrobe.full.free",
                     used=str(len(_existing_items)),
                     max=str(_wardrobe_limit),
+                    premium_wardrobe=str(get_limit("wardrobe_size", "premium")),
+                    trial_days=str(TRIAL_DAYS),
                 )
             else:
                 msg = t(
@@ -1211,18 +1228,19 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not getattr(user, "trial_started_at", None):
         from datetime import datetime as _dt, timezone as _tz, timedelta as _td
         from sqlalchemy import update as _sa_update
+        from core.permissions import TRIAL_DAYS
         _now = _dt.now(_tz.utc)
         async with AsyncWriteSession() as _ts:
             _res = await _ts.execute(
                 _sa_update(User)
                 .where(User.id == user.id)
                 .where(User.trial_started_at.is_(None))
-                .values(trial_started_at=_now, trial_ends_at=_now + _td(days=14))
+                .values(trial_started_at=_now, trial_ends_at=_now + _td(days=TRIAL_DAYS))
             )
             await _ts.commit()
         if _res.rowcount > 0:
             user.trial_started_at = _now
-            user.trial_ends_at = _now + _td(days=14)
+            user.trial_ends_at = _now + _td(days=TRIAL_DAYS)
             logger.info("trial.activated", user_id=str(user.id))
             # Trial info will be included in the photo response, not separate message
 
@@ -2493,7 +2511,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                 _ni = await get_owner_items(_ns, owner_id_for_outfit, owner_type_for_outfit)
             _vis = len([i for i in _ni if getattr(i, "category_group", "") not in ("underwear", "base_layer")])
             _combos = calc_wardrobe_combos(_ni)
-            if _vis < 8 and _combos > 0:
+            from core.permissions import NUDGE_THRESHOLD
+            if _vis < NUDGE_THRESHOLD and _combos > 0:
                 _est = _combos * 3  # conservative 3x with 3 more items
                 _lang = get_user_lang(context.user_data.get("db_user"))
                 await message.reply_text(
@@ -2660,16 +2679,17 @@ async def handle_show_upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Показать экран выбора плана."""
     query = update.callback_query
     await query.answer()
-    from core.permissions import PRICES, ULTRA_FEATURES
+    from core.permissions import PRICES, ULTRA_FEATURES, premium_features_text
+    _pf = premium_features_text()
 
     text = (
         "✨ Касси Premium\n\n"
         "📅 Бриф каждый день\n"
         "👗 Образ дня без ограничений\n"
-        "📸 30 фото в день\n"
-        "⭐ 20 оценок образа\n"
-        "💬 20 вопросов стилисту\n"
-        "👧 До 3 детей\n\n"
+        f"📸 {_pf['photos']} фото в день\n"
+        f"⭐ {_pf['rate']} оценок образа\n"
+        f"💬 {_pf['chat']} вопросов стилисту\n"
+        f"👧 До {_pf['children']} детей\n\n"
         "Выбери план:\n"
     )
     keyboard = InlineKeyboardMarkup([
@@ -2747,7 +2767,7 @@ async def handle_gap_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if result is None:
         await query.message.reply_text(
-            "📸 Добавь больше вещей в гардероб — нужно минимум 5 для анализа!"
+            f"📸 Добавь больше вещей в гардероб — нужно минимум {_PHOTO_TARGET} для анализа!"
         )
     elif result == "lock":
         await query.message.reply_text(t("wardrobe.gap_running", lang))

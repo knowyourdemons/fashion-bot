@@ -286,7 +286,8 @@ def test_trial_strings_exist():
 
 def test_wardrobe_full_free_string():
     from services.i18n.ru import t
-    text = t("wardrobe.full.free", used="30", max="30")
+    text = t("wardrobe.full.free", used="30", max="30",
+             premium_wardrobe="500", trial_days="14")
     assert "30" in text
     assert "500" in text
     assert "/subscribe" in text

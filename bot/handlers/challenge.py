@@ -19,6 +19,10 @@ from services.i18n import t, get_user_lang
 
 logger = structlog.get_logger()
 
+_CHALLENGE_CAPSULE = 15   # capsule size
+_CHALLENGE_OUTFITS = 5    # target outfits
+_CHALLENGE_DAYS = 10      # deadline days
+
 
 def select_capsule(items: list, size: int = 15) -> list:
     """Select 15 items with max versatility and color diversity."""
@@ -81,14 +85,14 @@ async def handle_challenge_start(update: Update, context: ContextTypes.DEFAULT_T
         items = await get_owner_items(session, user.id, "user")
 
     visual = [i for i in items if getattr(i, "category_group", "") not in ("underwear", "base_layer")]
-    if len(visual) < 15:
+    if len(visual) < _CHALLENGE_CAPSULE:
         await query.message.reply_text(
-            f"🏆 Для challenge нужно минимум 15 вещей. У тебя {len(visual)}.\n"
-            f"📸 Добавь ещё {15 - len(visual)} — и начнём!"
+            f"🏆 Для challenge нужно минимум {_CHALLENGE_CAPSULE} вещей. У тебя {len(visual)}.\n"
+            f"📸 Добавь ещё {_CHALLENGE_CAPSULE - len(visual)} — и начнём!"
         )
         return
 
-    capsule = select_capsule(visual, 15)
+    capsule = select_capsule(visual, _CHALLENGE_CAPSULE)
     from services.wardrobe_math import calc_wardrobe_combos
     combos = calc_wardrobe_combos(capsule)
 
@@ -97,17 +101,17 @@ async def handle_challenge_start(update: Update, context: ContextTypes.DEFAULT_T
         "completed": 0,
         "outfits_shown": [],
         "started_at": date.today().isoformat(),
-        "deadline": (date.today() + timedelta(days=10)).isoformat(),
+        "deadline": (date.today() + timedelta(days=_CHALLENGE_DAYS)).isoformat(),
     }
-    await redis.set(f"challenge:{user.id}", json.dumps(challenge_data), ex=11 * 86400)
+    await redis.set(f"challenge:{user.id}", json.dumps(challenge_data), ex=(_CHALLENGE_DAYS + 1) * 86400)
     await redis.incr(month_key)
     await redis.expire(month_key, 32 * 86400)
 
     capsule_names = ", ".join(f"{i.type} {i.color}" for i in capsule[:8])
     await query.message.reply_text(
         f"🏆 Challenge начался!\n\n"
-        f"Твоя капсула: 15 вещей → {combos} комбинаций!\n"
-        f"5 образов за 10 дней. Темп — твой.\n\n"
+        f"Твоя капсула: {_CHALLENGE_CAPSULE} вещей → {combos} комбинаций!\n"
+        f"{_CHALLENGE_OUTFITS} образов за {_CHALLENGE_DAYS} дней. Темп — твой.\n\n"
         f"Вещи: {capsule_names}...\n\n"
         f"Первый образ придёт в утреннем брифе! ✨"
     )

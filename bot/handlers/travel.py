@@ -195,8 +195,9 @@ async def handle_travel_build(update: Update, context: ContextTypes.DEFAULT_TYPE
         async with AsyncReadSession() as session:
             items = await get_owner_items(session, user.id, "user")
 
-        if len(items) < 5:
-            await query.edit_message_text(t("capsule.too_few", lang))
+        from core.permissions import MIN_ITEMS_GAP_ANALYSIS
+        if len(items) < MIN_ITEMS_GAP_ANALYSIS:
+            await query.edit_message_text(t("capsule.too_few", lang, min=str(MIN_ITEMS_GAP_ANALYSIS)))
             _cleanup_travel(context)
             return
 

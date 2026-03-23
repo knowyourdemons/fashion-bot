@@ -773,8 +773,9 @@ async def handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
     # Bridge message: prompt for clothing photos
+    from core.permissions import PHOTO_TARGET
     await message.reply_text(
-        "\U0001f4f8 Сфоткай 5 вещей — и утром получишь первый образ, "
+        f"\U0001f4f8 Сфоткай {PHOTO_TARGET} вещей — и утром получишь первый образ, "
         "подобранный под твой архетип!"
     )
 
@@ -1036,21 +1037,22 @@ async def _finish_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE)
         _tz = _pytz.timezone(timezone)
         _hour = _dt.now(_tz).hour
 
+        from core.permissions import PHOTO_TARGET as _PT
         _gallery_hint = "\n💡 Подойдёт фото с камеры или из галереи!"
         if 17 <= _hour < 23:
-            _cta = f"Сфоткай 3 вещи прямо сейчас — через 5 мин покажу образ! 📸{_gallery_hint}"
+            _cta = f"Сфоткай {_PT} вещей прямо сейчас — через пару минут покажу образ! 📸{_gallery_hint}"
             _btn_text = "📸 Сфоткать сейчас"
             _later_text = "Потом"
         elif 6 <= _hour < 12:
-            _cta = f"Одень так! А вечером сфоткай 3 вещи — завтра подберу из ваших 📸{_gallery_hint}"
+            _cta = f"Одень так! А вечером сфоткай {_PT} вещей — завтра подберу из ваших 📸{_gallery_hint}"
             _btn_text = "📸 Сфоткать"
             _later_text = "Завтра вечером"
         elif 12 <= _hour < 17:
-            _cta = f"Вечером дома сфоткай 3 вещи — завтра утром пришлю готовый образ! 📸{_gallery_hint}"
+            _cta = f"Вечером дома сфоткай {_PT} вещей — завтра утром пришлю готовый образ! 📸{_gallery_hint}"
             _btn_text = "📸 Сфоткать"
             _later_text = "Завтра вечером"
         else:  # 23-06
-            _cta = f"Завтра утром в 07:00 пришлю погоду! А когда будет минутка — сфоткай вещи 📸{_gallery_hint}"
+            _cta = f"Завтра утром пришлю погоду! А когда будет минутка — сфоткай вещи 📸{_gallery_hint}"
             _btn_text = "📸 Сфоткать"
             _later_text = "Потом"
 

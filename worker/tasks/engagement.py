@@ -2,8 +2,12 @@
 import structlog
 from datetime import date
 from worker.slow_worker import register
+from core.permissions import get_limit
 
 logger = structlog.get_logger()
+
+_free_chat = get_limit("chat_per_day", "free")
+_prem_chat = get_limit("chat_per_day", "premium")
 
 _ENGAGEMENT_SCHEDULE = {
     3: {
@@ -24,16 +28,16 @@ _ENGAGEMENT_SCHEDULE = {
                 "За это время ты получила:\n"
                 "✨ {brief_count} образов\n"
                 "💬 {chat_count} советов\n\n"
-                "Всё это за $9/мес — дешевле одной чашки кофе ☕",
+                "Всё это за {price} — дешевле одной чашки кофе ☕",
         "condition": "is_trial",
     },
     11: {
-        "text": "Осталось 3 дня Premium! 😱\n\n"
-                "После окончания:\n"
-                "• Образы только вт/чт (сейчас каждый день)\n"
-                "• Без переодеваний\n"
-                "• 1 вопрос в день (сейчас 20)\n\n"
-                "Сохранить все возможности?",
+        "text": f"Осталось 3 дня Premium! 😱\n\n"
+                f"После окончания:\n"
+                f"• Образы только вт/чт (сейчас каждый день)\n"
+                f"• Без переодеваний\n"
+                f"• {_free_chat} вопрос в день (сейчас {_prem_chat})\n\n"
+                f"Сохранить все возможности?",
         "condition": "is_trial",
         "button": ("✨ Продолжить Premium", "show_upgrade"),
     },
@@ -131,11 +135,14 @@ async def check_engagement(payload: dict) -> dict:
             ]])
         else:
             chat_count = brief_count * 2  # приблизительно
+            from core.permissions import PRICES
+            _price_label = PRICES["premium_monthly"]["label_usd"]
             text = config["text"].format(
                 count=wardrobe_count,
                 child_name=child_name,
                 brief_count=brief_count,
                 chat_count=chat_count,
+                price=_price_label,
             )
             markup = None
             if "button" in config:

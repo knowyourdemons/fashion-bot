@@ -19,7 +19,7 @@ STRINGS: dict[str, str] = {
     "onboarding.child_birthdate_error": "Не поняла 🤔 Напиши дату (15.03.2023) или просто возраст цифрой",
     "onboarding.city": "В каком городе живёте? 🏙\n\nНужно для прогноза погоды",
     "onboarding.city_error": "Не нашла такой город 🤔 Попробуй написать по-другому",
-    "onboarding.done": "🎉 Отлично!\n\nТеперь самое интересное — пришли 5 любимых вещей {target} и я соберу первый образ!\n\n📸 Фотографируй по одной вещи на светлом фоне",
+    "onboarding.done": "🎉 Отлично!\n\nТеперь самое интересное — пришли {photo_target} любимых вещей {target} и я соберу первый образ!\n\n📸 Фотографируй по одной вещи на светлом фоне",
 
     # Гардероб
     "wardrobe.add.prompt": "Пришли фото вещи 📸",
@@ -29,8 +29,8 @@ STRINGS: dict[str, str] = {
     "wardrobe.full": "Гардероб заполнен ({used}/{max} вещей).",
     "wardrobe.full.free": (
         "👗 Гардероб заполнен — {used}/{max} вещей.\n\n"
-        "✨ Premium открывает до 500 вещей + безлимит фото в день.\n"
-        "👉 /subscribe — 14 дней бесплатно"
+        "✨ Premium открывает до {premium_wardrobe} вещей + безлимит фото в день.\n"
+        "👉 /subscribe — {trial_days} дней бесплатно"
     ),
     "wardrobe.empty": "Гардероб пуст. Пришли фото вещи для начала.",
 
@@ -48,11 +48,11 @@ STRINGS: dict[str, str] = {
 
     # Trial
     "trial.activated": (
-        "🎁 14 дней Premium — бесплатно!\n\n"
+        "🎁 {trial_days} дней Premium — бесплатно!\n\n"
         "Все функции уже доступны:\n"
         "📅 Morning Brief каждый день\n"
-        "📸 30 фото в гардероб\n"
-        "💬 20 вопросов стилисту\n\n"
+        "📸 {photos} фото в гардероб\n"
+        "💬 {chat} вопросов стилисту\n\n"
         "Наслаждайся! 🌟"
     ),
     "trial.expired": (
@@ -66,9 +66,9 @@ STRINGS: dict[str, str] = {
         "🛍 Шоппинг-лист доступен на Premium.\n\n"
         "Касси проанализирует гардероб и скажет что купить "
         "с учётом сезона и цветотипа.\n\n"
-        "👉 /subscribe — 14 дней бесплатно"
+        "👉 /subscribe — {trial_days} дней бесплатно"
     ),
-    "shopping.too_few_items": "Добавь хотя бы 5 вещей в гардероб, и я смогу сделать анализ 📸",
+    "shopping.too_few_items": "Добавь хотя бы {min} вещей в гардероб, и я смогу сделать анализ 📸",
     "shopping.generating": "🔍 Смотрю твой гардероб...",
     "shopping.header": "🛍 Что стоит купить {season}:\n\n{list}",
     "shopping.empty_result": "Гардероб выглядит хорошо — пока ничего срочного докупать не нужно 👍",
@@ -97,7 +97,7 @@ STRINGS: dict[str, str] = {
     "referral.info": (
         "🎁 Пригласи подругу!\n\n"
         "Твой код: {code}\n"
-        "Поделись ссылкой — подруга получит 14 дней Premium бесплатно."
+        "Поделись ссылкой — подруга получит {trial_days} дней Premium бесплатно."
     ),
 
     # ── Wardrobe (photo upload, milestones) ──
@@ -208,9 +208,9 @@ STRINGS: dict[str, str] = {
     "capsule.premium_gate": (
         "👗 Сезонная капсула — фича Premium!\n\n"
         "Касси выберет лучшие вещи на сезон и покажет сколько образов можно собрать.\n\n"
-        "👉 /subscribe — 14 дней бесплатно"
+        "👉 /subscribe — {trial_days} дней бесплатно"
     ),
-    "capsule.too_few": "Добавь хотя бы 5 вещей в гардероб — и я соберу капсулу 📸",
+    "capsule.too_few": "Добавь хотя бы {min} вещей в гардероб — и я соберу капсулу 📸",
     "capsule.result": "👗 Капсула на {season}: {count} вещей → {combos} комбинаций!\n\nУбери остальное в коробку — и наслаждайся ✨",
     "capsule.title": "Капсула на",
     "capsule.your": "Твоя",
@@ -225,7 +225,7 @@ STRINGS: dict[str, str] = {
     "travel.premium_gate": (
         "🧳 Сборщик чемодана — фича Premium!\n\n"
         "Скажи куда едешь — соберу компактный чемодан из твоих вещей.\n\n"
-        "👉 /subscribe — 14 дней бесплатно"
+        "👉 /subscribe — {trial_days} дней бесплатно"
     ),
     "travel.ask_city": "🧳 Собираем чемодан!\n\nКуда едешь?",
     "travel.city_placeholder": "Город, напр. Барселона",
@@ -277,6 +277,10 @@ STRINGS: dict[str, str] = {
 
 
 def t(key: str, **kwargs: str) -> str:
-    """Возвращает строку по ключу с подстановкой параметров."""
+    """Возвращает строку по ключу с подстановкой параметров.
+
+    NOTE: prefer services.i18n.t() which auto-injects common vars (trial_days, etc.).
+    This local version requires all template vars to be passed explicitly.
+    """
     template = STRINGS.get(key, key)
     return template.format(**kwargs) if kwargs else template

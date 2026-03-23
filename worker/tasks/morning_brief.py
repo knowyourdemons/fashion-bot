@@ -274,16 +274,18 @@ async def _send_cold_reminders(redis_client) -> None:
                     continue
 
                 # Build day-specific message
+                from core.permissions import PHOTO_TARGET
                 _name = _child_name or getattr(_user_r, "name", "") or ""
+                _pt = PHOTO_TARGET
                 if _days_since == 1:
                     _text = (
-                        f"Дома? Сфоткай 3 вещи{' ' + _name if _name else ''} — 2 минуты!\n"
+                        f"Дома? Сфоткай {_pt} вещей{' ' + _name if _name else ''} — 2 минуты!\n"
                         "Завтра утром в 07:00 покажу готовый образ 📸"
                     )
                 elif _days_since == 2:
                     _text = (
                         f"Привет! Вчера мы познакомились 👋\n"
-                        f"Сфоткай 3 вещи{' ' + _name if _name else ''} — завтра утром покажу образ!"
+                        f"Сфоткай {_pt} вещей{' ' + _name if _name else ''} — завтра утром покажу образ!"
                     )
                 elif _days_since == 3:
                     # Get weather for personalized message
@@ -307,7 +309,7 @@ async def _send_cold_reminders(redis_client) -> None:
                 else:  # day 5
                     _text = (
                         "Касси скучает! 😊\n"
-                        "Одна минута + 3 фото = образы каждый день.\n"
+                        f"Одна минута + {_pt} фото = образы каждый день.\n"
                         "📸 Сфоткай вещь или отправь фото из галереи!"
                     )
 
@@ -721,13 +723,15 @@ async def generate_brief(payload: dict) -> dict:
         logger.warning("brief.generate.user_not_found", user_id=str(user_id))
         return {}
 
-    # Проверить должен ли прийти бриф сегодня
-    from core.permissions import get_effective_plan, is_brief_day as _is_brief_day
-    _effective_plan = get_effective_plan(user)
-    if not _is_brief_day(_effective_plan, user.timezone or "Europe/Vilnius"):
-        logger.info("brief.skipped_not_brief_day",
-            user_id=str(user_id), plan=_effective_plan)
-        return {}
+    # Проверить должен ли прийти бриф сегодня (skip for first_brief trigger)
+    is_first_brief = payload.get("first_brief", False)
+    if not is_first_brief:
+        from core.permissions import get_effective_plan, is_brief_day as _is_brief_day
+        _effective_plan = get_effective_plan(user)
+        if not _is_brief_day(_effective_plan, user.timezone or "Europe/Vilnius"):
+            logger.info("brief.skipped_not_brief_day",
+                user_id=str(user_id), plan=_effective_plan)
+            return {}
 
     is_adult_brief = user.segment not in ("mom_girl", "mom_boy")
 
@@ -1094,9 +1098,9 @@ async def generate_brief(payload: dict) -> dict:
     _days_left = _gtdl(user)
     if _days_left is not None:
         if _days_left == 3:
-            _trial_notice = "\n\n⏰ Осталось 3 дня Premium! Потом образы только вт/чт"
+            _trial_notice = f"\n\n⏰ Осталось {_days_left} дня Premium! Потом образы только вт/чт"
         elif _days_left == 2:
-            _trial_notice = "\n\n⏰ Осталось 2 дня! Re-roll скоро станет недоступен"
+            _trial_notice = f"\n\n⏰ Осталось {_days_left} дня! Re-roll скоро станет недоступен"
         elif _days_left == 1:
             _trial_notice = "\n\n⏰ Последний день Premium — завтра базовый план"
         elif _days_left == 0:

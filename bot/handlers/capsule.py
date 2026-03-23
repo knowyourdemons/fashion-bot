@@ -67,8 +67,9 @@ async def handle_capsule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         async with AsyncReadSession() as session:
             items = await get_owner_items(session, user.id, "user")
 
-        if len(items) < 5:
-            text = t("capsule.too_few", lang)
+        from core.permissions import MIN_ITEMS_GAP_ANALYSIS
+        if len(items) < MIN_ITEMS_GAP_ANALYSIS:
+            text = t("capsule.too_few", lang, min=str(MIN_ITEMS_GAP_ANALYSIS))
             if update.callback_query:
                 await update.callback_query.message.reply_text(text)
             else:

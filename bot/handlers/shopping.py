@@ -38,8 +38,9 @@ async def handle_shopping(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             children = await get_children(session, user.id)
         child = next((c for c in children if c.id == owner_id), None)
 
-    if len(items) < 5:
-        await update.message.reply_text(t("shopping.too_few_items", lang))
+    from core.permissions import MIN_ITEMS_GAP_ANALYSIS
+    if len(items) < MIN_ITEMS_GAP_ANALYSIS:
+        await update.message.reply_text(t("shopping.too_few_items", lang, min=str(MIN_ITEMS_GAP_ANALYSIS)))
         return
 
     generating_msg = await update.message.reply_text(t("shopping.generating", lang))

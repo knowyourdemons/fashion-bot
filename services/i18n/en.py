@@ -15,8 +15,8 @@ STRINGS: dict[str, str] = {
     "wardrobe.full": "Wardrobe full ({used}/{max} items).",
     "wardrobe.full.free": (
         "👗 Wardrobe full — {used}/{max} items.\n\n"
-        "✨ Premium unlocks up to 500 items + unlimited daily photos.\n"
-        "👉 /subscribe — 14 days free"
+        "✨ Premium unlocks up to {premium_wardrobe} items + unlimited daily photos.\n"
+        "👉 /subscribe — {trial_days} days free"
     ),
 
     # Feedback
@@ -33,11 +33,11 @@ STRINGS: dict[str, str] = {
 
     # Trial
     "trial.activated": (
-        "🎁 14 days Premium — free!\n\n"
+        "🎁 {trial_days} days Premium — free!\n\n"
         "All features unlocked:\n"
         "📅 Morning Brief every day\n"
-        "📸 30 photos to wardrobe\n"
-        "💬 20 stylist questions\n\n"
+        "📸 {premium_photos} photos to wardrobe\n"
+        "💬 {premium_chat} stylist questions\n\n"
         "Enjoy! 🌟"
     ),
     "trial.expired": (
@@ -51,9 +51,9 @@ STRINGS: dict[str, str] = {
         "🛍 Shopping list is a Premium feature.\n\n"
         "Kassi will analyze your wardrobe and suggest what to buy "
         "based on season and color type.\n\n"
-        "👉 /subscribe — 14 days free"
+        "👉 /subscribe — {trial_days} days free"
     ),
-    "shopping.too_few_items": "Add at least 5 items to your wardrobe first 📸",
+    "shopping.too_few_items": "Add at least {min_items} items to your wardrobe first 📸",
     "shopping.generating": "🔍 Looking at your wardrobe...",
     "shopping.header": "🛍 What to buy for {season}:\n\n{list}",
     "shopping.empty_result": "Your wardrobe looks great — nothing urgent to buy 👍",
@@ -63,7 +63,7 @@ STRINGS: dict[str, str] = {
     "referral.info": (
         "🎁 Invite a friend!\n\n"
         "Your code: {code}\n"
-        "Share the link — your friend gets 14 days Premium free."
+        "Share the link — your friend gets {trial_days} days Premium free."
     ),
 
     # Onboarding
@@ -251,9 +251,9 @@ STRINGS: dict[str, str] = {
     "capsule.premium_gate": (
         "👗 Seasonal capsule is a Premium feature!\n\n"
         "Kassi picks the best items for the season and shows how many outfits you can make.\n\n"
-        "👉 /subscribe — 14 days free trial"
+        "👉 /subscribe — {trial_days} days free trial"
     ),
-    "capsule.too_few": "Add at least 5 items to your wardrobe first 📸",
+    "capsule.too_few": "Add at least {min_items} items to your wardrobe first 📸",
     "capsule.result": "👗 {season} capsule: {count} items → {combos} combinations!\n\nPut the rest in a box — and enjoy! ✨",
     "capsule.title": "Capsule for",
     "capsule.your": "Your",
@@ -268,7 +268,7 @@ STRINGS: dict[str, str] = {
     "travel.premium_gate": (
         "🧳 Travel packing is a Premium feature!\n\n"
         "Tell me where you're going — I'll pack a compact suitcase from your wardrobe.\n\n"
-        "👉 /subscribe — 14 days free trial"
+        "👉 /subscribe — {trial_days} days free trial"
     ),
     "travel.ask_city": "🧳 Let's pack your suitcase!\n\nWhere are you going?",
     "travel.city_placeholder": "City, e.g. Barcelona",

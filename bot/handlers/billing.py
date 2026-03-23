@@ -106,15 +106,17 @@ async def handle_subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     else:
         status = ""
 
+    from core.permissions import premium_features_text
+    _pf = premium_features_text()
     text = (
         f"{status}"
         f"✨ Касси Premium\n\n"
         f"📅 Бриф каждый день (включая выходные)\n"
         f"👗 Образ дня без ограничений\n"
-        f"📸 30 фото в день в гардероб\n"
-        f"⭐ 20 оценок образа в день\n"
-        f"💬 20 вопросов стилисту в день\n"
-        f"👧 До 3 детей\n\n"
+        f"📸 {_pf['photos']} фото в день в гардероб\n"
+        f"⭐ {_pf['rate']} оценок образа в день\n"
+        f"💬 {_pf['chat']} вопросов стилисту в день\n"
+        f"👧 До {_pf['children']} детей\n\n"
         f"Выбери план:"
     )
     await update.message.reply_text(text, reply_markup=_subscribe_keyboard())
@@ -343,18 +345,24 @@ async def handle_compare_plans(update: Update, context: ContextTypes.DEFAULT_TYP
     """Callback: compare_plans → таблица Free vs Premium."""
     query = update.callback_query
     await query.answer()
+    from core.permissions import get_limit, PRICES
+    _fc = get_limit("chat_per_day", "free")
+    _pc = get_limit("chat_per_day", "premium")
+    _pr = get_limit("reroll", "premium")
+    _stars = PRICES["premium_monthly"]["stars"]
+    _usd_label = PRICES["premium_monthly"]["label_usd"]
     text = (
         "📊 Free vs Premium\n\n"
         "Free:\n"
         "  Образы: вт/чт\n"
         "  Переодень: —\n"
         "  Вечерний образ: —\n"
-        "  Чат: 1/день\n\n"
-        "Premium (700⭐ / $9/мес):\n"
+        f"  Чат: {_fc}/день\n\n"
+        f"Premium ({_stars}⭐ / {_usd_label}):\n"
         "  Образы: каждый день\n"
-        "  Переодень: 3/день\n"
+        f"  Переодень: {_pr}/день\n"
         "  Вечерний образ: ✅\n"
-        "  Чат: 20/день\n"
+        f"  Чат: {_pc}/день\n"
     )
     from telegram import InlineKeyboardMarkup, InlineKeyboardButton
     markup = InlineKeyboardMarkup([[

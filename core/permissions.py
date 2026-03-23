@@ -96,6 +96,26 @@ PRICES: dict[str, dict[str, Any]] = {
     },
 }
 
+# ── Константы (единый источник для сообщений и логики) ─────────────────────
+
+TRIAL_DAYS = 14
+PHOTO_TARGET = 5          # минимум вещей для первого брифа
+MIN_ITEMS_GAP_ANALYSIS = 5  # минимум для анализа гардероба/капсулы
+NUDGE_THRESHOLD = 8       # ниже этого — nudge "добавь ещё"
+
+
+def premium_features_text() -> dict[str, str]:
+    """Возвращает словарь фича→текст для Premium, из LIMITS."""
+    p = LIMITS["premium"]
+    return {
+        "photos":   str(p["photos_per_day"]),
+        "rate":     str(p["rate_per_day"]),
+        "chat":     str(p["chat_per_day"]),
+        "children": str(p["children_max"]),
+        "wardrobe": str(p["wardrobe_size"]),
+    }
+
+
 # ── Ultra фичи (заглушки для promote) ────────────────────────────────────────
 
 ULTRA_FEATURES = [

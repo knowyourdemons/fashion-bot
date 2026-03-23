@@ -147,13 +147,17 @@ async def run() -> None:
                 text = _t_d14("paywall.loss_aversion", _lang_d14,
                               knows_pct=str(_knows_pct))
             else:
+                from core.permissions import get_limit as _gl
+                _fc = _gl("chat_per_day", "free")
                 text = (
                     "Пробный период завершён! Спасибо \U0001f495\n"
-                    "Бесплатный план: образ вт/чт, 3 сообщения/день.\n"
+                    f"Бесплатный план: образ вт/чт, {_fc} сообщения/день.\n"
                     "Каждый день?"
                 )
+            from core.permissions import PRICES as _PR
+            _btn_label = _PR["premium_monthly"]["label_usd"]
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Premium $9/мес", callback_data="pay_stars:premium_monthly")],
+                [InlineKeyboardButton(f"Premium {_btn_label}", callback_data="pay_stars:premium_monthly")],
                 [InlineKeyboardButton("Посмотреть планы", callback_data="show_upgrade")],
             ])
             await bot.send_message(
@@ -204,13 +208,17 @@ async def notify_single_user_trial_expiry(telegram_id: int) -> None:
         _knows_pct = min(95, 30 + _brief_count * 5)
         text = _t_single("paywall.loss_aversion", "ru", knows_pct=str(_knows_pct))
     else:
+        from core.permissions import get_limit as _gl2
+        _fc2 = _gl2("chat_per_day", "free")
         text = (
             "Пробный период завершён! Спасибо \U0001f495\n"
-            "Бесплатный план: образ вт/чт, 3 сообщения/день.\n"
+            f"Бесплатный план: образ вт/чт, {_fc2} сообщения/день.\n"
             "Каждый день?"
         )
+    from core.permissions import PRICES as _PR2
+    _btn2 = _PR2["premium_monthly"]["label_usd"]
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Premium $9/мес", callback_data="pay_stars:premium_monthly")],
+        [InlineKeyboardButton(f"Premium {_btn2}", callback_data="pay_stars:premium_monthly")],
         [InlineKeyboardButton("Посмотреть планы", callback_data="show_upgrade")],
     ])
     await bot.send_message(chat_id=telegram_id, text=text, reply_markup=keyboard)

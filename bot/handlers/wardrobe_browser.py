@@ -287,6 +287,9 @@ def _build_overview_text(items: list, owner_name: str, season: str = None) -> st
 
     if not any(groups.values()):
         lines.append("Пока пусто. Пришли фото одежды!")
+    else:
+        lines.append("")
+        lines.append("📷 Чтобы добавить — просто пришли фото")
 
     return "\n".join(lines)
 
