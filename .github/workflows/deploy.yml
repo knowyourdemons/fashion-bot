@@ -17,7 +17,9 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: stas
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
           command_timeout: 10m
+          debug: true
           script: |
             cd ~/fashion-bot
             git pull origin main
