@@ -57,7 +57,7 @@ def create_application() -> Application:
                 "Отправь селфи или зайди в 👤 Профиль → 🎨 Цветотип"
             )
             return
-        from bot.handlers.wardrobe import _send_style_passport
+        from services.selfie_analysis import _send_style_passport
         from services.i18n import get_user_lang
         await _send_style_passport(update.message, user, get_user_lang(user))
     app.add_handler(CommandHandler("style_passport", _style_passport_cmd))
@@ -144,6 +144,18 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(handle_add_child_start, pattern="^add_child_start$"))
     app.add_handler(CallbackQueryHandler(handle_new_child_gender, pattern="^new_child:"))
     app.add_handler(CallbackQueryHandler(handle_edit_child_size, pattern="^edit_child_size:"))
+
+    # Redo selfie (from profile)
+    async def _redo_selfie(update, context):
+        await update.callback_query.answer()
+        await update.callback_query.message.reply_text(
+            "📸 Отправь новое селфи при дневном свете:\n"
+            "• Лицо и плечи в кадре\n"
+            "• Без фильтров\n\n"
+            "Касси обновит твой стилевой профиль!"
+        )
+        context.user_data["awaiting_selfie"] = True
+    app.add_handler(CallbackQueryHandler(_redo_selfie, pattern="^redo_selfie$"))
 
     # Brief share
     app.add_handler(CallbackQueryHandler(brief.handle_share, pattern="^share:"))

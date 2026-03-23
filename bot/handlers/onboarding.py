@@ -646,7 +646,7 @@ async def handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Analyze selfie (reuse existing function from wardrobe.py)
     try:
-        from bot.handlers.wardrobe import (
+        from services.selfie_analysis import (
             _analyze_selfie_colortype,
             _build_colortype_card,
             _save_colortype_to_user,

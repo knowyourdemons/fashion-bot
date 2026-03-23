@@ -139,6 +139,10 @@ async def handle_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         [InlineKeyboardButton("🌍 Язык / Language", callback_data="settings:lang")],
         [InlineKeyboardButton("👶 Добавить ребёнка", callback_data="add_child_start")],
     ]
+    if getattr(user, "colortype", None):
+        edit_buttons.append([
+            InlineKeyboardButton("📸 Переснять селфи", callback_data="redo_selfie"),
+        ])
     # Кнопки редактирования детей
     try:
         async with AsyncReadSession() as _s2:

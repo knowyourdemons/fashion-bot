@@ -455,11 +455,25 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
         get_placeholder_label, get_temp_regime, COLORTYPE_PALETTES, _needs_tights,
     )
 
-    # Погода
-    coords = await _geocode_city(user.city or "")
+    # Try pre-generated weather cache
     weather = {}
-    if coords:
-        weather = await _get_weather(coords[0], coords[1], user.timezone or "Europe/Vilnius")
+    try:
+        _pg_redis = get_redis()
+        _pg_key = f"prebrief:{str(user.id)}:{date.today().isoformat()}"
+        _pg_raw = await _pg_redis.get(_pg_key)
+        if _pg_raw:
+            import json as _json_pg
+            _pg = _json_pg.loads(_pg_raw if isinstance(_pg_raw, str) else _pg_raw.decode())
+            weather = _pg.get("weather", {})
+            logger.info("brief.weather_from_cache", user_id=str(user.id))
+    except Exception:
+        pass
+
+    # Fetch fresh weather if no cache
+    if not weather:
+        coords = await _geocode_city(user.city or "")
+        if coords:
+            weather = await _get_weather(coords[0], coords[1], user.timezone or "Europe/Vilnius")
 
     today = date.today()
     temp_m = weather.get("temp_morning") or 10.0
@@ -562,20 +576,30 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
         brief_text += f"\n{_evening_banner}\n"
     brief_text += f"\n💡 Идея на сегодня:\n{stylist_advice}"
 
-    # Simple jewelry/accessory hint for adults (no_kids segment only)
-    if items and getattr(user, "segment", "") == "no_kids":
+    # Jewelry/accessory hint — different types per segment
+    _segment = getattr(user, "segment", "") or ""
+    if _segment == "no_kids":
+        _jewelry_types = ("серьги", "браслет", "часы", "колье", "кольцо", "брошь")
+    elif _segment in ("mom_girl", "mom_boy"):
+        _jewelry_types = ("заколка", "ободок", "бантик", "резинка")
+    else:
+        _jewelry_types = ()
+
+    if items and _jewelry_types:
         _outfit_cgs = {i.category_group for i in items}
         if "accessory" not in _outfit_cgs or not any(
-            i.category_group == "accessory" and i.type in ("серьги", "браслет", "часы", "колье", "кольцо", "брошь")
+            i.category_group == "accessory" and i.type in _jewelry_types
             for i in items[:10]  # top-scored items used in outfit
         ):
-            _JEWELRY_TYPES = {"серьги", "браслет", "часы", "колье", "кольцо", "брошь"}
-            _jewelry = [i for i in items if i.category_group == "accessory" and i.type in _JEWELRY_TYPES]
+            _jewelry = [i for i in items if i.category_group == "accessory" and i.type in _jewelry_types]
             if _jewelry:
                 import random
                 _j = random.choice(_jewelry)
                 _j_color = f"{_j.color} " if _j.color else ""
-                brief_text += f"\n💍 {_j_color}{_j.type} добавят завершённости!"
+                if _segment in ("mom_girl", "mom_boy"):
+                    brief_text += f"\n🎀 {_j_color}{_j.type} дополнит образ!"
+                else:
+                    brief_text += f"\n💍 {_j_color}{_j.type} добавят завершённости!"
 
     if not items:
         brief_text += "\n\n📸 Добавь вещи в гардероб — буду подбирать образы каждое утро!"
@@ -713,11 +737,25 @@ async def generate_brief(payload: dict) -> dict:
         logger.info("brief.generate.no_children", user_id=str(user_id))
         return {}
 
-    # Погода
-    coords = await _geocode_city(user.city or "")
+    # Try pre-generated weather cache
+    redis_client = get_redis()
     weather = {}
-    if coords:
-        weather = await _get_weather(coords[0], coords[1], user.timezone or "Europe/Vilnius")
+    try:
+        _pg_key = f"prebrief:{str(user.id)}:{date.today().isoformat()}"
+        _pg_raw = await redis_client.get(_pg_key)
+        if _pg_raw:
+            import json as _json_pg
+            _pg = _json_pg.loads(_pg_raw if isinstance(_pg_raw, str) else _pg_raw.decode())
+            weather = _pg.get("weather", {})
+            logger.info("brief.weather_from_cache", user_id=str(user.id))
+    except Exception:
+        pass
+
+    # Fetch fresh weather if no cache
+    if not weather:
+        coords = await _geocode_city(user.city or "")
+        if coords:
+            weather = await _get_weather(coords[0], coords[1], user.timezone or "Europe/Vilnius")
 
     today = date.today()
     season = _SEASONS[today.month]
