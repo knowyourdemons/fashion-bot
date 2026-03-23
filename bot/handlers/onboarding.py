@@ -22,6 +22,7 @@ States:
   10. CHILD_BIRTHDATE — legacy (mapped to CHILD_AGE)
   11. PREGNANT_TRIMESTER — legacy
 """
+import asyncio
 import re
 import structlog
 import sentry_sdk
@@ -68,7 +69,8 @@ logger = structlog.get_logger()
     DONE_BUTTONS,
     CHILD_BIRTHDATE,      # legacy alias → CHILD_AGE
     PREGNANT_TRIMESTER,    # legacy, not used in new flow
-) = range(12)
+    SELFIE_STEP,           # selfie-first flow for no_kids/pregnant
+) = range(13)
 
 # Backward compat aliases
 SEGMENT = WHO_FOR
@@ -82,6 +84,7 @@ _STEP_TO_STATE: dict[str, int] = {
     "child_birthdate":      CHILD_AGE,  # legacy mapping
     "self_name":            SELF_NAME,
     "city":                 CITY,
+    "selfie":               SELFIE_STEP,
     "pregnant_trimester":   CITY,  # legacy: skip trimester, go to city
 }
 
@@ -506,12 +509,42 @@ async def handle_pregnant_trimester(update: Update, context: ContextTypes.DEFAUL
 
 # ── Шаг 2: Город ──────────────────────────────────────────────────────────
 
+async def _after_city(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """After city is saved, fork: selfie-first for no_kids/pregnant, or finish for moms."""
+    user = context.user_data.get("db_user")
+    segment = context.user_data.get("segment") or getattr(user, "segment", "no_kids") or "no_kids"
+
+    if segment in ("no_kids", "pregnant"):
+        # Save city + mark selfie step
+        city = context.user_data.get("city", "")
+        timezone = context.user_data.get("timezone", "Europe/Vilnius")
+        await _save_user_fields(user, city=city, timezone=timezone, onboarding_step="selfie")
+
+        message = update.effective_message
+        await message.reply_text(
+            "Отлично! Давай узнаем твой стилевой архетип \U0001fa84\n\n"
+            "Отправь селфи при дневном свете:\n"
+            "\u2022 Лицо и плечи в кадре\n"
+            "\u2022 Без фильтров\n"
+            "\u2022 Волосы видны\n\n"
+            "Касси определит цветотип и архетип за 10 секунд!",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("\u23ed Позже", callback_data="skip_onboarding_selfie"),
+        ]])
+        await message.reply_text("Или пропусти — добавишь селфи позже", reply_markup=kb)
+        return SELFIE_STEP
+    else:
+        return await _finish_onboarding(update, context)
+
+
 async def handle_city_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     loc = update.message.location
     city, timezone = await _reverse_geocode(loc.latitude, loc.longitude)
     context.user_data["city"] = city
     context.user_data["timezone"] = timezone
-    return await _finish_onboarding(update, context)
+    return await _after_city(update, context)
 
 
 async def handle_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -538,7 +571,7 @@ async def handle_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         city, timezone = _extract_city_tz(results[0])
         context.user_data["city"] = city
         context.user_data["timezone"] = timezone
-        return await _finish_onboarding(update, context)
+        return await _after_city(update, context)
 
     context.user_data["city_candidates"] = results
     keyboard = InlineKeyboardMarkup([
@@ -565,7 +598,191 @@ async def handle_city_suggest(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["timezone"] = timezone
 
     await query.message.edit_reply_markup(reply_markup=None)
+    return await _after_city(update, context)
+
+
+# ── Selfie step (no_kids / pregnant) ──────────────────────────────────────
+
+async def handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle selfie photo during onboarding: analyze colortype + style archetype."""
+    user = context.user_data.get("db_user")
+    if not user:
+        return ConversationHandler.END
+
+    message = update.message
+    if message.photo:
+        file_id = message.photo[-1].file_id
+    elif message.document:
+        file_id = message.document.file_id
+    else:
+        await message.reply_text(
+            "Отправь фото (селфи), а не текст. Или нажми «Позже» выше."
+        )
+        return SELFIE_STEP
+
+    # Download selfie
+    try:
+        photo_file = await context.bot.get_file(file_id)
+        photo_ba = bytearray()
+        await photo_file.download_as_bytearray(photo_ba)
+        photo_bytes = bytes(photo_ba)
+    except Exception as e:
+        logger.warning("onboarding.selfie.download_failed", error=str(e))
+        await message.reply_text("Не получилось загрузить фото, попробуй ещё раз")
+        return SELFIE_STEP
+
+    # Animated status
+    status = await message.reply_text("\U0001f52e Определяю цветотип...")
+    await asyncio.sleep(3)
+    try:
+        await status.edit_text("\u2728 Анализирую черты лица...")
+    except Exception:
+        pass
+    await asyncio.sleep(3)
+    try:
+        await status.edit_text("\U0001f3a8 Формирую палитру...")
+    except Exception:
+        pass
+
+    # Analyze selfie (reuse existing function from wardrobe.py)
+    try:
+        from bot.handlers.wardrobe import (
+            _analyze_selfie_colortype,
+            _build_colortype_card,
+            _save_colortype_to_user,
+            _COLORTYPE_NAMES_RU,
+        )
+        from worker.tasks.style_config import COLORTYPE_PALETTES
+
+        result = await _analyze_selfie_colortype(photo_bytes)
+        colortype = result["colortype"]
+        sub_season = result.get("sub_season", "")
+        confidence = result["confidence"]
+
+        effective_colortype = sub_season if sub_season in COLORTYPE_PALETTES else colortype
+
+        logger.info("onboarding.selfie.result",
+            user_id=str(user.id),
+            colortype=colortype,
+            sub_season=sub_season,
+            confidence=confidence,
+        )
+
+        if confidence >= 0.6:
+            await _save_colortype_to_user(user, effective_colortype)
+
+            # Save styling depth axes for adult users
+            contrast_level = result.get("contrast_level")
+            kibbe_family = result.get("kibbe_family")
+            style_essence = result.get("style_essence")
+            tonal_depth = result.get("tonal_depth")
+            chroma = result.get("chroma")
+            flow_to = result.get("flow_to")
+            flow_strength = result.get("flow_strength")
+
+            _styling_updates = {}
+            if contrast_level and contrast_level in ("HIGH", "MEDIUM", "LOW"):
+                _styling_updates["contrast_level"] = contrast_level
+            if kibbe_family and kibbe_family in ("DRAMATIC", "NATURAL", "CLASSIC", "GAMINE", "ROMANTIC"):
+                _styling_updates["kibbe_family"] = kibbe_family
+            if style_essence and style_essence in ("DRAMATIC", "NATURAL", "CLASSIC", "GAMINE", "ROMANTIC"):
+                _styling_updates["style_essence"] = style_essence
+            if tonal_depth and tonal_depth in ("LIGHT", "MEDIUM-LIGHT", "MEDIUM", "MEDIUM-DEEP", "DEEP"):
+                _styling_updates["tonal_depth"] = tonal_depth
+            if chroma and chroma in ("BRIGHT", "MODERATE", "MUTED"):
+                _styling_updates["chroma"] = chroma
+            if flow_to and isinstance(flow_to, str) and len(flow_to) <= 30:
+                _styling_updates["color_flow_to"] = flow_to
+            if flow_strength is not None:
+                try:
+                    _fs = float(flow_strength)
+                    if 0.0 <= _fs <= 0.4:
+                        _styling_updates["color_flow_strength"] = _fs
+                except (TypeError, ValueError):
+                    pass
+            if _styling_updates:
+                async with AsyncWriteSession() as session:
+                    await session.execute(
+                        sa.update(User).where(User.id == user.id)
+                        .values(**_styling_updates)
+                    )
+                    await session.commit()
+
+            # Build and send style passport card
+            target_name = user.name or "Style"
+            ct_label = _COLORTYPE_NAMES_RU.get(colortype, colortype)
+            if sub_season and sub_season != colortype:
+                _SUB_LABELS = {
+                    "Bright Spring": "Яркая Весна", "True Spring": "Тёплая Весна", "Light Spring": "Светлая Весна",
+                    "Light Summer": "Светлое Лето", "True Summer": "Настоящее Лето", "Soft Summer": "Мягкое Лето",
+                    "Soft Autumn": "Мягкая Осень", "True Autumn": "Настоящая Осень", "Deep Autumn": "Тёмная Осень",
+                    "Deep Winter": "Тёмная Зима", "True Winter": "Настоящая Зима", "Bright Winter": "Яркая Зима",
+                }
+                ct_label = _SUB_LABELS.get(sub_season, ct_label)
+
+            try:
+                await status.edit_text(f"\u2728 {target_name} — {ct_label}")
+            except Exception:
+                pass
+
+            card_bytes = await _build_colortype_card(target_name, colortype)
+            if card_bytes:
+                from io import BytesIO
+                await message.reply_photo(
+                    photo=BytesIO(card_bytes),
+                    caption=f"\u2728 {target_name} — {ct_label}\nТеперь буду подбирать цвета под твой цветотип!",
+                )
+            else:
+                await message.reply_text(
+                    f"\u2728 {target_name} — {ct_label}\nТеперь буду подбирать цвета под твой цветотип!"
+                )
+        else:
+            # Low confidence — still save best guess and continue
+            await _save_colortype_to_user(user, effective_colortype)
+            try:
+                await status.edit_text("\u2728 Готово!")
+            except Exception:
+                pass
+            await message.reply_text(
+                "Определила приблизительно, уточним позже! "
+                "Можешь отправить селфи ещё раз через профиль."
+            )
+
+    except Exception as e:
+        logger.error("onboarding.selfie.analysis_failed", error=str(e))
+        sentry_sdk.capture_exception(e)
+        try:
+            await status.edit_text("\u2728 Готово!")
+        except Exception:
+            pass
+        await message.reply_text(
+            "Не удалось проанализировать фото. Ничего страшного — "
+            "добавишь селфи позже через профиль!"
+        )
+
+    # Bridge message: prompt for clothing photos
+    await message.reply_text(
+        "\U0001f4f8 Сфоткай 5 вещей — и утром получишь первый образ, "
+        "подобранный под твой архетип!"
+    )
+
     return await _finish_onboarding(update, context)
+
+
+async def handle_selfie_skip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Skip selfie during onboarding — go straight to finish."""
+    query = update.callback_query
+    await query.answer()
+    await query.message.edit_reply_markup(reply_markup=None)
+    return await _finish_onboarding(update, context)
+
+
+async def handle_selfie_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle text input during selfie step — remind to send photo."""
+    await update.message.reply_text(
+        "Отправь селфи-фото, а не текст. Или нажми «Позже» выше."
+    )
+    return SELFIE_STEP
 
 
 # ── Resume ─────────────────────────────────────────────────────────────────
@@ -649,6 +866,20 @@ async def _resume_step(update: Update, context: ContextTypes.DEFAULT_TYPE, user:
             f"{pb}\n\nСколько лет?", reply_markup=ReplyKeyboardRemove()
         )
         return CHILD_AGE
+    if step == "selfie":
+        message = update.effective_message
+        await message.reply_text(
+            "Отправь селфи при дневном свете:\n"
+            "\u2022 Лицо и плечи в кадре\n"
+            "\u2022 Без фильтров\n"
+            "\u2022 Волосы видны",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("\u23ed Позже", callback_data="skip_onboarding_selfie"),
+        ]])
+        await message.reply_text("Или пропусти — добавишь селфи позже", reply_markup=kb)
+        return SELFIE_STEP
     if step == "pregnant_trimester":
         # Legacy: skip trimester, go to city
         await _ask_city(update, step_num=2)
@@ -949,6 +1180,11 @@ def build_conversation_handler() -> ConversationHandler:
             ],
             DONE_BUTTONS: [
                 CallbackQueryHandler(handle_done_buttons, pattern="^onboard_done:"),
+            ],
+            SELFIE_STEP: [
+                MessageHandler(filters.PHOTO | filters.Document.IMAGE, handle_selfie_photo),
+                CallbackQueryHandler(handle_selfie_skip, pattern="^skip_onboarding_selfie$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_selfie_text),
             ],
             PREGNANT_TRIMESTER: [
                 CallbackQueryHandler(handle_pregnant_trimester, pattern="^trimester:"),

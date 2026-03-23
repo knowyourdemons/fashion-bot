@@ -787,6 +787,140 @@ async def _handle_selfie_photo(update: Update, context: ContextTypes.DEFAULT_TYP
     return True
 
 
+# ── Style passport (Stories card) ──────────────────────────────────────────
+
+# Hex lookup for palette color names → hex values
+_PASSPORT_HEX: dict[str, str] = {
+    "белый": "#F5F5F5", "чёрный": "#2C2C2C", "серый": "#9E9E9E",
+    "бежевый": "#D4C5A9", "синий": "#1565C0", "голубой": "#64B5F6",
+    "красный": "#D32F2F", "розовый": "#F48FB1", "зелёный": "#388E3C",
+    "коричневый": "#795548", "бордовый": "#800020", "хаки": "#827717",
+    "лавандовый": "#B39DDB", "мятный": "#80CBC4", "персиковый": "#FFAB91",
+    "горчичный": "#F9A825", "терракотовый": "#BF360C", "navy": "#1A237E",
+    "изумрудный": "#00695C", "коралловый": "#FF7043", "сливовый": "#6A1B9A",
+    "золотистый": "#FFD54F", "абрикосовый": "#FFCC80", "кремовый": "#FFF8E1",
+    "пудровый": "#F8BBD0", "серо-голубой": "#90A4AE", "тёплый розовый": "#EF9A9A",
+    "нежно-розовый": "#F8BBD0", "светло-голубой": "#B3E5FC", "лимонный": "#FFF9C4",
+    "бирюзовый": "#4DB6AC", "дымчато-розовый": "#CE93D8",
+}
+
+_PASSPORT_CONTRAST_MAP = {"HIGH": 8, "MEDIUM": 5, "LOW": 3}
+
+_PASSPORT_KIBBE_DESC: dict[str, str] = {
+    "DRAMATIC": "структурные линии, выразительность",
+    "NATURAL": "расслабленный силуэт, текстура",
+    "CLASSIC": "сбалансированный силуэт, элегантность",
+    "GAMINE": "компактный крой, смелые детали",
+    "ROMANTIC": "мягкие линии, женственность",
+}
+
+_PASSPORT_ESSENCE_LABELS: dict[str, str] = {
+    "DRAMATIC": "Bold Presence",
+    "NATURAL": "Effortless Warmth",
+    "CLASSIC": "Refined Elegance",
+    "GAMINE": "Playful Edge",
+    "ROMANTIC": "Soft Femininity",
+}
+
+_DEFAULT_PASSPORT_PALETTE = [
+    "#B39DDB", "#64B5F6", "#80CBC4", "#F48FB1", "#FFAB91", "#FFF59D",
+]
+
+
+def _build_passport_palette(user) -> list[str]:
+    """Extract up to 6 hex colors from user's colortype palette."""
+    from worker.tasks.style_config import COLORTYPE_PALETTES
+
+    colortype = getattr(user, "colortype", "") or ""
+    palette_raw = COLORTYPE_PALETTES.get(colortype, {})
+    if not palette_raw:
+        return list(_DEFAULT_PASSPORT_PALETTE)
+
+    palette_hex: list[str] = []
+    for slot_colors in list(palette_raw.values())[:3]:
+        for c in (slot_colors or [])[:3]:
+            # Strip gender suffixes for lookup: "коралловая" → "коралловый"
+            c_base = c.lower()
+            for suffix in ("ая", "ое", "ый", "ий", "ые", "ие"):
+                if c_base.endswith(suffix):
+                    c_base = c_base[:-len(suffix)]
+                    break
+            # Try exact, then base form with common endings
+            hex_val = _PASSPORT_HEX.get(c.lower())
+            if not hex_val:
+                for key, val in _PASSPORT_HEX.items():
+                    if key.startswith(c_base) or c_base.startswith(key.rstrip("ый").rstrip("ий")):
+                        hex_val = val
+                        break
+            hex_val = hex_val or "#BDBDBD"
+            if hex_val not in palette_hex:
+                palette_hex.append(hex_val)
+            if len(palette_hex) >= 6:
+                break
+        if len(palette_hex) >= 6:
+            break
+
+    return palette_hex[:6] if len(palette_hex) >= 3 else list(_DEFAULT_PASSPORT_PALETTE)
+
+
+async def _send_style_passport(message, user, lang: str = "ru") -> None:
+    """Send style passport as Stories-ready photo (1080x1920)."""
+    from services.brief_renderer import render_style_passport
+
+    palette_hex = _build_passport_palette(user)
+
+    kf = getattr(user, "kibbe_family", "") or ""
+    ks = getattr(user, "kibbe_secondary", "") or ""
+    se = getattr(user, "style_essence", "") or ""
+
+    contrast_level = getattr(user, "contrast_level", "") or ""
+    contrast_filled = _PASSPORT_CONTRAST_MAP.get(contrast_level, 5)
+
+    png = await render_style_passport(
+        name=user.name or "---",
+        lang=lang,
+        sub_season=getattr(user, "colortype", "") or "",
+        palette=palette_hex,
+        contrast_level=contrast_level,
+        contrast_filled=contrast_filled,
+        kibbe_primary=kf,
+        kibbe_secondary=ks,
+        kibbe_desc=_PASSPORT_KIBBE_DESC.get(kf, ""),
+        essence_label=_PASSPORT_ESSENCE_LABELS.get(se, ""),
+        tonal_depth=getattr(user, "tonal_depth", "") or "",
+        chroma=getattr(user, "chroma", "") or "",
+    )
+
+    if not png:
+        logger.warning("style_passport.render_failed", user_id=str(user.id))
+        return
+
+    caption_parts = [f"Стилевой профиль: {user.name}"]
+    if user.colortype:
+        caption_parts.append(f"\nЦветотип: {user.colortype}")
+    if kf:
+        arch = kf + (f" / {ks}" if ks else "")
+        caption_parts.append(f"Архетип: {arch}")
+    if se:
+        caption_parts.append(f"Сущность: {_PASSPORT_ESSENCE_LABELS.get(se, se)}")
+    caption_parts.append("\nСохрани в Stories -- пусть подруги тоже узнают свой тип!")
+    caption = "\n".join(caption_parts)
+
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton(
+            "Поделиться",
+            switch_inline_query="Мой стиль от Касси! Узнай свой: t.me/fashioncastle_bot",
+        )],
+        [
+            InlineKeyboardButton("Сохранить", callback_data="noop"),
+            InlineKeyboardButton("Подобрать образы", callback_data="start_wardrobe"),
+        ],
+    ])
+
+    from io import BytesIO
+    await message.reply_photo(photo=BytesIO(png), caption=caption, reply_markup=kb)
+
+
 # ── Brief trigger ──────────────────────────────────────────────────────────
 
 async def _maybe_trigger_first_brief(user, owner_id, owner_type, message, context, redis) -> None:

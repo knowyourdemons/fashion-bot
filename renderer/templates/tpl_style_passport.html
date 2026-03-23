@@ -1,0 +1,115 @@
+{# Style Passport — Stories format 1080x1920
+   Vars: name, lang, sub_season, palette, contrast_level, contrast_filled,
+         kibbe_primary, kibbe_secondary, kibbe_desc, essence_label,
+         tonal_depth, chroma #}
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face{font-family:'N';src:url('/usr/share/fonts/custom/Nunito-Regular.ttf');font-weight:400}
+@font-face{font-family:'N';src:url('/usr/share/fonts/custom/Nunito-Bold.ttf');font-weight:700}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  width:1080px;height:1920px;
+  font-family:'N',sans-serif;
+  background:linear-gradient(160deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:60px 80px;color:#fff;
+}
+.header{font-size:28px;color:rgba(255,255,255,0.5);letter-spacing:3px;text-transform:uppercase;margin-bottom:24px}
+.card{
+  background:rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:24px;
+  padding:48px 56px;
+  width:100%;
+  display:flex;flex-direction:column;gap:28px;
+}
+.name{font-size:52px;font-weight:700;color:#e2b96f;text-align:center}
+.divider{height:1px;background:rgba(255,255,255,0.12);width:100%}
+.section{display:flex;flex-direction:column;gap:8px}
+.label{font-size:13px;color:rgba(255,255,255,0.35);letter-spacing:2px;text-transform:uppercase}
+.value{font-size:26px;font-weight:600;color:#fff}
+.value-sm{font-size:20px;color:rgba(255,255,255,0.7)}
+.palette{display:flex;gap:12px;margin-top:4px}
+.dot{width:32px;height:32px;border-radius:50%;border:2px solid rgba(255,255,255,0.2)}
+.bar{display:flex;gap:4px;margin-top:4px}
+.bar-fill{width:28px;height:10px;border-radius:3px;background:#e2b96f}
+.bar-empty{width:28px;height:10px;border-radius:3px;background:rgba(255,255,255,0.1)}
+.two-col{display:flex;gap:48px}
+.col{display:flex;flex-direction:column;gap:6px;flex:1}
+.footer{margin-top:32px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.cta{font-size:16px;color:rgba(255,255,255,0.4);letter-spacing:1px}
+.bot{font-size:20px;color:rgba(255,255,255,0.6);font-weight:600}
+.url{font-size:13px;color:rgba(255,255,255,0.25)}
+.brand{font-size:11px;color:rgba(255,255,255,0.2);letter-spacing:4px;text-transform:uppercase;margin-top:16px}
+</style>
+</head>
+<body>
+
+<div class="header">{% if lang == 'en' %}style profile{% else %}стилевой профиль{% endif %}</div>
+
+<div class="card">
+  <div class="name">{{ name }}</div>
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="label">{% if lang == 'en' %}color type{% else %}цветотип{% endif %}</div>
+    <div class="value">{{ sub_season }}</div>
+    <div class="palette">
+      {% for hex in palette[:6] %}
+      <div class="dot" style="background:{{ hex }}"></div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="label">{% if lang == 'en' %}contrast{% else %}контраст{% endif %}</div>
+    <div class="value">{{ contrast_level }}</div>
+    <div class="bar">
+      {% for i in range(10) %}
+        {% if i < contrast_filled %}<div class="bar-fill"></div>{% else %}<div class="bar-empty"></div>{% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="label">{% if lang == 'en' %}archetype{% else %}архетип{% endif %}</div>
+    <div class="value">{{ kibbe_primary }}{% if kibbe_secondary %} · {{ kibbe_secondary }}{% endif %}</div>
+    {% if kibbe_desc %}<div class="value-sm">{{ kibbe_desc }}</div>{% endif %}
+  </div>
+
+  <div class="section">
+    <div class="label">{% if lang == 'en' %}essence{% else %}сущность{% endif %}</div>
+    <div class="value">{{ essence_label }}</div>
+  </div>
+
+  {% if tonal_depth or chroma %}
+  <div class="two-col">
+    {% if chroma %}
+    <div class="col">
+      <div class="label">{% if lang == 'en' %}brightness{% else %}яркость{% endif %}</div>
+      <div class="value-sm">{{ chroma }}</div>
+    </div>
+    {% endif %}
+    {% if tonal_depth %}
+    <div class="col">
+      <div class="label">{% if lang == 'en' %}depth{% else %}глубина{% endif %}</div>
+      <div class="value-sm">{{ tonal_depth }}</div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="footer">
+  <div class="cta">{% if lang == 'en' %}discover your archetype{% else %}узнай свой архетип{% endif %}</div>
+  <div class="bot">@fashioncastle_bot</div>
+  <div class="url">fashioncastle.app</div>
+</div>
+
+<div class="brand">КАССИ</div>
+
+</body>
+</html>

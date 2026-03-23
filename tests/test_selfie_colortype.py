@@ -87,11 +87,11 @@ class TestOnboardingStates:
         assert '"pregnant"' in content  # handler still processes pregnant choice
 
     def test_city_transitions_to_finish(self):
-        """City handlers should go to _finish_onboarding, not selfie/colortype."""
+        """City handlers should route to _after_city (which handles selfie or finish)."""
         content = pathlib.Path("bot/handlers/onboarding.py").read_text()
         for fn in ["handle_city_location", "handle_city_text", "handle_city_suggest"]:
             start = content.find(f"async def {fn}")
             end = content.find("\nasync def ", start + 1)
             fn_body = content[start:end] if end > start else content[start:start + 500]
-            assert "_finish_onboarding" in fn_body, \
-                f"{fn} should call _finish_onboarding"
+            assert "_after_city" in fn_body or "_finish_onboarding" in fn_body, \
+                f"{fn} should call _after_city or _finish_onboarding"

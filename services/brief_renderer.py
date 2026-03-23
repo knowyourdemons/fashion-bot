@@ -493,3 +493,36 @@ def render_template(template_name: str, **kwargs) -> str:
     """Render a Jinja2 template to HTML string."""
     tpl = _jinja_env.get_template(template_name)
     return tpl.render(**kwargs)
+
+
+async def render_style_passport(
+    name: str,
+    lang: str = "ru",
+    sub_season: str = "",
+    palette: list[str] | None = None,
+    contrast_level: str = "",
+    contrast_filled: int = 5,
+    kibbe_primary: str = "",
+    kibbe_secondary: str = "",
+    kibbe_desc: str = "",
+    essence_label: str = "",
+    tonal_depth: str = "",
+    chroma: str = "",
+) -> Optional[bytes]:
+    """Render style passport as 1080x1920 PNG for Stories."""
+    html = render_template(
+        "tpl_style_passport.html",
+        name=name,
+        lang=lang,
+        sub_season=sub_season,
+        palette=palette or [],
+        contrast_level=contrast_level,
+        contrast_filled=contrast_filled,
+        kibbe_primary=kibbe_primary,
+        kibbe_secondary=kibbe_secondary,
+        kibbe_desc=kibbe_desc,
+        essence_label=essence_label,
+        tonal_depth=tonal_depth,
+        chroma=chroma,
+    )
+    return await render_html_to_png(html, width=1080)

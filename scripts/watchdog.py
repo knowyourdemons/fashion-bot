@@ -125,6 +125,67 @@ def failed_components(body: dict) -> list[str]:
     return failed
 
 
+# State for restart loop detection
+container_restart_alerted: set[str] = set()
+
+
+def check_container_health() -> None:
+    """Check if any containers are in a restart loop and alert."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}} {{.Status}}"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        log(f"WARN: docker ps failed: {e}")
+        return
+
+    if result.returncode != 0:
+        log(f"WARN: docker ps returned {result.returncode}")
+        return
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    current_restarting: set[str] = set()
+
+    for line in result.stdout.strip().split("\n"):
+        if not line.strip():
+            continue
+        if "Restarting" in line:
+            container = line.split()[0]
+            current_restarting.add(container)
+
+            if container not in container_restart_alerted:
+                # Get last 5 lines of logs for context
+                try:
+                    logs = subprocess.run(
+                        ["docker", "logs", "--tail", "5", container],
+                        capture_output=True, text=True, timeout=10,
+                    )
+                    log_tail = (logs.stderr or logs.stdout or "")[-200:]
+                except Exception:
+                    log_tail = "(could not fetch logs)"
+
+                alert_text = (
+                    f"\U0001f504 <b>{container}</b> в restart loop!\n\n"
+                    f"Последние логи:\n<pre>{log_tail}</pre>\n"
+                    f"Time: {now}"
+                )
+                send_telegram(alert_text)
+                container_restart_alerted.add(container)
+                log(f"Container {container}: RESTARTING — alert sent")
+
+    # Recovery: container was restarting but is no longer
+    recovered = container_restart_alerted - current_restarting
+    for container in recovered:
+        send_telegram(
+            f"\u2705 <b>{container}</b> recovered from restart loop!\n"
+            f"Time: {now}"
+        )
+        container_restart_alerted.discard(container)
+        log(f"Container {container}: recovered from restart loop")
+
+
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
@@ -169,6 +230,9 @@ def run() -> None:
                     f"Time: {now}"
                 )
                 alert_sent = True
+
+        # --- Container restart loop detection ---
+        check_container_health()
 
         # --- Worker heartbeats ---
         heartbeats = check_worker_heartbeats()
