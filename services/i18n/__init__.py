@@ -27,6 +27,12 @@ def _common_vars() -> dict[str, str]:
 _COMMON: dict[str, str] | None = None
 
 
+class _SafeDict(dict):
+    """Dict that returns '{key}' for missing keys — safe for partial format."""
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
 def t(key: str, lang: str = "ru", **kwargs) -> str:
     """Get localized string by key. Falls back to Russian."""
     global _COMMON
@@ -41,8 +47,8 @@ def t(key: str, lang: str = "ru", **kwargs) -> str:
         text = _random.choice(text)
     if not kwargs and not _COMMON:
         return text
-    merged = {**_COMMON, **kwargs}  # explicit kwargs override defaults
-    return text.format(**merged) if merged else text
+    merged = _SafeDict({**_COMMON, **kwargs})  # explicit kwargs override defaults
+    return text.format_map(merged) if merged else text
 
 
 def get_user_lang(user) -> str:
