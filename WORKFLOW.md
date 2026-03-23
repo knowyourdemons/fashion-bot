@@ -161,3 +161,23 @@ PASS 3 — ВЗГЛЯД ДЖУНА
 - Меняется `redis.py` или `queue.py` → проверить все consumers
 - Меняется `docker-compose.yml` → memory limits, volumes, networks
 - Меняется `config.py` → проверить .env в контейнерах
+- Меняется `normalize.py` → пересортировать `_TYPE_SYNONYMS_SORTED`
+- Новый `category_group` → ALTER TYPE enum + модель + Vision prompt + outfit_builder
+
+---
+
+## Deploy
+
+```bash
+# Стандартный (build + recreate + health check):
+./scripts/deploy.sh
+
+# Быстрый (без тестов):
+./scripts/deploy.sh --quick
+
+# Экстренный (docker cp, не рекомендуется):
+./scripts/deploy.sh --hotfix file1.py file2.py
+```
+
+**Правило**: всегда `deploy.sh`, никогда ручной `docker cp` + `docker restart`.
+Deploy script строит ОДНУ image для app + worker — гарантирует синхронизацию.
