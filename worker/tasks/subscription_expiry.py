@@ -88,8 +88,10 @@ async def run() -> None:
                     f"Пробный период заканчивается через 2 дня.\n"
                     f"За это время Касси подобрала {brief_count} образов!\n"
                 )
+            from core.permissions import PRICES as _PR_warn
+            _btn_warn = _PR_warn["premium_monthly"]["label_usd"]
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Продолжить $9/мес", callback_data="pay_stars:premium_monthly")],
+                [InlineKeyboardButton(f"Продолжить {_btn_warn}", callback_data="pay_stars:premium_monthly")],
                 [InlineKeyboardButton("Посмотреть планы", callback_data="show_upgrade")],
             ])
             await bot.send_message(

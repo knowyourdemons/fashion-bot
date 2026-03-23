@@ -281,9 +281,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         if is_trial_just_ended(user):
             msg = t("trial.expired")
         else:
+            from core.permissions import get_limit
+            _pc = get_limit("chat_per_day", "premium")
             msg = (
                 "Касси ответит завтра! 💬\n"
-                "Premium = 20 вопросов/день."
+                f"Premium = {_pc} вопросов/день."
             )
         await update.message.reply_text(msg, reply_markup=keyboard)
         return

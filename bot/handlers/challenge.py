@@ -176,8 +176,8 @@ async def record_challenge_outfit(user_id, outfit_item_ids: list[str], redis) ->
             await redis.delete(f"challenge:{user_id}")
             return (
                 f"🏆 Challenge пройден!\n\n"
-                f"5 образов · 15 вещей · 0 покупок\n"
-                f"Использовано {len(used_items)} из 15 ({usage_pct:.0f}%)\n\n"
+                f"{_CHALLENGE_OUTFITS} образов · {_CHALLENGE_CAPSULE} вещей · 0 покупок\n"
+                f"Использовано {len(used_items)} из {_CHALLENGE_CAPSULE} ({usage_pct:.0f}%)\n\n"
                 f"Твой шкаф мощнее чем кажется! ✨"
             )
         else:
