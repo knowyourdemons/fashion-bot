@@ -1292,6 +1292,7 @@ async def select_outfit_ai(
             "outfit_engine.ai_response",
             raw_len=len(raw),
             segment=segment,
+            raw_preview=raw[:300],
         )
 
     except Exception as e:
@@ -1405,6 +1406,10 @@ async def select_outfit_ai(
     _wind_warnings = _check_wind_outerwear(outfit, wind_kmph)
     if _wind_warnings:
         outfit["warnings"].extend(_wind_warnings)
+
+    # ── NEW: Missing outerwear for cold weather ──
+    if temp <= 15 and not outfit.get("outerwear"):
+        outfit["warnings"].append("🧥 На улице прохладно — не забудь куртку!")
 
     return OutfitResult(
         outfit=outfit,

@@ -300,6 +300,21 @@ def _select_outfit(
                         result[slot_key] = warmer[0]
                     break
 
+    # ── Slot exclusions (same as AI path) ──
+    if result["one_piece"]:
+        if result["top"]:
+            result["top"] = None
+        if result["bottom"]:
+            result["bottom"] = None
+
+    # ── Missing outerwear warning for children (<15°C) ──
+    if temp <= 15 and not result["outerwear"]:
+        warnings.append("🧥 На улице прохладно — не забудь куртку! Сфоткай её и добавь в гардероб.")
+
+    # ── Missing footwear warning ──
+    if not result["footwear"]:
+        warnings.append("👟 Сфоткай обувь — подберу к образу!")
+
     # Все вещи для скоринга
     all_items = []
     for key in ("thermal_top", "thermal_bottom", "one_piece", "top", "bottom",
