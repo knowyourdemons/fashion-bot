@@ -87,28 +87,47 @@ async def process_rmbg(payload: dict) -> dict:
         enhanced_crop = _apply_clahe(crop_bytes)
         png_bytes = None
 
-        # Try cloth-seg first (trained on clothing → removes floor/carpet)
+        # Run both models — we may need the intersection
+        cloth_result = None
+        rmbg_result = None
+
         try:
-            png_bytes = _run_cloth_seg(enhanced_crop)
-            png_bytes = _postprocess_mask(png_bytes)
-            if not _check_mask_quality_v2(png_bytes):
-                logger.info("rmbg_process.cloth_seg_quality_fail")
-                png_bytes = None
-            else:
-                logger.info("rmbg_process.model_ok", model="cloth_seg")
+            cloth_result = _run_cloth_seg(enhanced_crop)
+            cloth_result = _postprocess_mask(cloth_result)
         except Exception as e:
             logger.warning("rmbg_process.cloth_seg_failed", error=str(e))
-            png_bytes = None
 
-        # Fallback to RMBG
-        if not png_bytes:
-            try:
-                png_bytes = _run_rmbg14(enhanced_crop)
-                png_bytes = _postprocess_mask(png_bytes)
-                logger.info("rmbg_process.model_ok", model="rmbg14_fallback")
-            except Exception as e:
-                logger.warning("rmbg_process.rmbg14_failed", error=str(e))
-                png_bytes = crop_bytes  # last resort: original crop
+        try:
+            rmbg_result = _run_rmbg14(enhanced_crop)
+            rmbg_result = _postprocess_mask(rmbg_result)
+        except Exception as e:
+            logger.warning("rmbg_process.rmbg14_failed", error=str(e))
+
+        # Strategy selection:
+        # 1. cloth-seg alone if quality ok (best for removing floor)
+        # 2. Intersection of both masks (cloth-seg knowledge + RMBG edges)
+        # 3. RMBG alone as last resort
+        if cloth_result and _check_mask_quality_v2(cloth_result):
+            png_bytes = cloth_result
+            logger.info("rmbg_process.model_ok", model="cloth_seg")
+        elif cloth_result and rmbg_result:
+            # Intersection: keeps only pixels where BOTH models agree = foreground
+            # cloth-seg removes floor, RMBG provides sharp edges
+            from services.image_processor import _intersect_masks
+            intersected = _intersect_masks(rmbg_result, cloth_result)
+            intersected = _postprocess_mask(intersected)
+            if _check_mask_quality_v2(intersected):
+                png_bytes = intersected
+                logger.info("rmbg_process.model_ok", model="intersect")
+            else:
+                # Intersection too aggressive → use cloth-seg alone (even if imperfect)
+                png_bytes = cloth_result
+                logger.info("rmbg_process.model_ok", model="cloth_seg_loose")
+        elif rmbg_result:
+            png_bytes = rmbg_result
+            logger.info("rmbg_process.model_ok", model="rmbg14_fallback")
+        else:
+            png_bytes = crop_bytes
 
         try:
             png_bytes = soften_edges(png_bytes, radius=1.5)

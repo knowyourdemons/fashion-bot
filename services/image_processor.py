@@ -528,6 +528,34 @@ def _postprocess_mask(png_bytes: bytes) -> bytes:
         return png_bytes
 
 
+def _intersect_masks(png_a: bytes, png_b: bytes) -> bytes:
+    """Intersect two RGBA masks: keep pixels where BOTH have high alpha.
+
+    Combines RMBG (sharp edges, keeps floor) with cloth-seg (knows clothing,
+    rough edges) — intersection removes floor while preserving garment shape.
+    """
+    img_a = Image.open(io.BytesIO(png_a)).convert("RGBA")
+    img_b = Image.open(io.BytesIO(png_b)).convert("RGBA")
+
+    # Resize B to match A if needed
+    if img_b.size != img_a.size:
+        img_b = img_b.resize(img_a.size, Image.LANCZOS)
+
+    alpha_a = np.array(img_a.split()[3], dtype=np.float32)
+    alpha_b = np.array(img_b.split()[3], dtype=np.float32)
+
+    # Min of both alphas = intersection
+    combined = np.minimum(alpha_a, alpha_b).astype(np.uint8)
+
+    # Use RGB from the image with better edges (A = RMBG typically)
+    result = img_a.copy()
+    result.putalpha(Image.fromarray(combined))
+
+    buf = io.BytesIO()
+    result.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def _check_mask_quality_v2(png_bytes: bytes) -> bool:
     """Improved quality check: alpha ratio + region compactness + single dominant region.
 
