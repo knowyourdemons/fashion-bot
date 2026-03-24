@@ -533,24 +533,15 @@ def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) ->
         if img_check.mode not in ("RGBA", "LA", "PA"):
             # Auto-brightness BEFORE bg removal (helps with dark photos)
             result = auto_brightness(result)
-            # Fallback chain: remove.bg API → ISNet → RMBG-1.4 → original
+            # Fallback chain: RMBG-1.4 (best for clothing) → silueta → original
             rembg_result = None
-            import os as _os
             try:
-                rembg_result = _run_removebg_api(result)
+                rembg_result = _run_rmbg14(result)
             except Exception:
-                pass
-            if not rembg_result:
                 try:
-                    if _os.path.exists(_ISNET_PATH):
-                        rembg_result = _run_isnet(result)
-                    else:
-                        rembg_result = _run_rmbg14(result)
+                    rembg_result = _run_silueta(result)
                 except Exception:
-                    try:
-                        rembg_result = _run_rmbg14(result)
-                    except Exception:
-                        pass
+                    pass
 
             # Quality check: if rembg failed (too much/too little removed), use original
             if rembg_result and _check_rembg_quality(rembg_result):
