@@ -2102,6 +2102,20 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
     if not silent_status:
         status_msg = await message.reply_text(t("wardrobe.outfit_picking", get_user_lang(context.user_data.get("db_user"))))
 
+    # Keep typing indicator alive during long generation (RMBG ~7s × N thumbnails)
+    _typing_active = True
+
+    async def _keep_typing():
+        while _typing_active:
+            await asyncio.sleep(4)
+            if _typing_active:
+                try:
+                    await context.bot.send_chat_action(message.chat_id, "typing")
+                except Exception:
+                    break
+
+    _typing_task = _track_task(_keep_typing(), name="typing_indicator")
+
     try:
         from services.weather import WeatherService
 
@@ -2546,6 +2560,8 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                 reply_markup=get_main_menu(context.user_data.get("db_user"), context),
             )
     finally:
+        _typing_active = False
+        _typing_task.cancel()
         await _release_lock()
 
 

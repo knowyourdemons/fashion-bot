@@ -291,6 +291,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     try:
+        await update.message.chat.send_action("typing")
         start = time.monotonic()
         pool = get_anthropic_pool()
 
