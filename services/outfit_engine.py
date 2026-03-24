@@ -182,6 +182,168 @@ def _count_statement_pieces(slot_items: dict) -> int:
     return count
 
 
+def _check_color_harmony(slot_items: dict) -> tuple[bool, list[str]]:
+    """Check outfit color compatibility using HSL matrix.
+    Returns (ok, warnings). ok=False if score < 3/10."""
+    warnings: list[str] = []
+    try:
+        from services.color_harmony import score_outfit_colors, color_compatibility
+        items_list = [i for i in slot_items.values() if i is not None]
+        if len(items_list) < 2:
+            return True, []
+        score = score_outfit_colors(items_list)
+        if score < 3.0:
+            # Find the worst pair
+            worst_pair = ("", "")
+            worst_score = 10.0
+            for i, a in enumerate(items_list):
+                for b in items_list[i + 1:]:
+                    ca = getattr(a, "color", "") or ""
+                    cb = getattr(b, "color", "") or ""
+                    if ca and cb:
+                        cs = color_compatibility(ca, cb)
+                        if cs < worst_score:
+                            worst_score = cs
+                            worst_pair = (ca, cb)
+            warnings.append(f"Цвета {worst_pair[0]} + {worst_pair[1]} плохо сочетаются")
+            return False, warnings
+        if score < 5.0:
+            warnings.append("Цветовая гармония средняя — можно лучше")
+    except Exception:
+        pass
+    return True, warnings
+
+
+def _check_colortype_compliance(
+    slot_items: dict, colortype: str | None,
+) -> list[str]:
+    """Check if selected items match user's colortype palette.
+    Returns list of warnings (empty = OK)."""
+    if not colortype or colortype == "default":
+        return []
+    warnings: list[str] = []
+    try:
+        from worker.tasks.style_config import COLORTYPE_PALETTES
+        palette = COLORTYPE_PALETTES.get(colortype, {})
+        if not palette:
+            return []
+
+        # Map slot names to palette keys
+        _slot_to_palette = {
+            "top": "top", "bottom": "bottom", "outerwear": "outerwear",
+            "footwear": "footwear", "one_piece": "one_piece",
+            "hat": "hat", "scarf": "accessory", "gloves": "accessory",
+        }
+        for slot_name, item in slot_items.items():
+            if item is None:
+                continue
+            palette_key = _slot_to_palette.get(slot_name)
+            if not palette_key:
+                continue
+            recommended = palette.get(palette_key, [])
+            if not recommended:
+                continue
+            item_color = (getattr(item, "color", "") or "").lower().strip()
+            if not item_color:
+                continue
+            # Check if item color matches any recommended color (fuzzy)
+            match = any(rc.lower() in item_color or item_color in rc.lower()
+                        for rc in recommended)
+            if not match:
+                # Check if it's a neutral (always OK)
+                from services.color_harmony import is_neutral
+                if not is_neutral(item_color):
+                    warnings.append(
+                        f"{getattr(item, 'type', '?')} ({item_color}) — "
+                        f"не в палитре {colortype}"
+                    )
+    except Exception:
+        pass
+    return warnings
+
+
+def _check_accessories_coherence(
+    slot_items: dict, segment: str,
+) -> list[str]:
+    """Check statement piece limit, bag-shoes formality, metal tone."""
+    if segment in ("mom_girl", "mom_boy"):
+        return []  # Not enforced for children
+    warnings: list[str] = []
+
+    # 1. Statement piece limit (max 1)
+    statement_count = _count_statement_pieces(slot_items)
+    if statement_count > 1:
+        warnings.append(f"Слишком много акцентных аксессуаров ({statement_count}), макс 1")
+
+    # 2. Bag-shoes formality check (±1)
+    bag = slot_items.get("bag")
+    shoes = slot_items.get("footwear")
+    if bag and shoes:
+        bf = getattr(bag, "formality_level", None)
+        sf = getattr(shoes, "formality_level", None)
+        if bf is not None and sf is not None and abs(bf - sf) > 1:
+            warnings.append(
+                f"Сумка ({getattr(bag, 'type', '?')} f={bf}) и "
+                f"обувь ({getattr(shoes, 'type', '?')} f={sf}) — разный уровень формальности"
+            )
+
+    # 3. Metal tone consistency
+    metals: set[str] = set()
+    for item in slot_items.values():
+        if item is None:
+            continue
+        if getattr(item, "category_group", "") not in ("accessory", "bag"):
+            continue
+        color = (getattr(item, "color", "") or "").lower()
+        if "золот" in color or "gold" in color:
+            metals.add("gold")
+        elif "серебр" in color or "silver" in color:
+            metals.add("silver")
+        elif "розовое золот" in color or "rose gold" in color:
+            metals.add("rose_gold")
+    if len(metals) > 1 and "rose_gold" not in metals:
+        warnings.append("Смешаны разные металлы (золото + серебро)")
+
+    return warnings
+
+
+def _check_tights_needed(outfit: dict, temp: float) -> list[str]:
+    """Check if tights/socks are needed but missing."""
+    warnings: list[str] = []
+    has_skirt_or_dress = (
+        outfit.get("one_piece") or
+        (outfit.get("bottom") and "юбк" in (getattr(outfit["bottom"], "type", "") or "").lower())
+    )
+    if has_skirt_or_dress and temp < 15 and not outfit.get("tights"):
+        warnings.append("Юбка/платье при {:.0f}°C — нужны колготки".format(temp))
+    return warnings
+
+
+def _check_occasion_formality(slot_items: dict, day_type: str) -> list[str]:
+    """Check that items match occasion formality expectations."""
+    warnings: list[str] = []
+    # Casual occasions shouldn't have formal items
+    _casual_occasions = {"садик", "прогулка", "kindergarten", "playground"}
+    _formal_occasions = {"офис", "событие", "office", "event", "ужин"}
+    if day_type in _casual_occasions:
+        for slot, item in slot_items.items():
+            if item is None:
+                continue
+            fl = getattr(item, "formality_level", None)
+            if fl is not None and fl >= 4:
+                warnings.append(
+                    f"{getattr(item, 'type', '?')} (f={fl}) слишком формальный для {day_type}"
+                )
+    return warnings
+
+
+def _check_wind_outerwear(outfit: dict, wind_kmph: float) -> list[str]:
+    """Check that outerwear is present when windy."""
+    if wind_kmph >= 15 and not outfit.get("outerwear"):
+        return ["Ветер {:.0f} км/ч — нужна куртка/ветровка".format(wind_kmph)]
+    return []
+
+
 def _get_missing_warmth_cta(items: list, regime: str) -> str | None:
     """If items exist but none match warmth requirements, give specific CTA."""
     reqs = WARMTH_REQUIREMENTS.get(regime, {})
@@ -931,6 +1093,7 @@ async def select_outfit_ai(
     style_preferences: dict | None = None,
     redis=None,
     user_id: str | None = None,
+    wind_kmph: float = 0,
 ) -> OutfitResult:
     """AI-powered outfit selection. Returns OutfitResult with outfit + comment.
 
@@ -1153,6 +1316,43 @@ async def select_outfit_ai(
                 logger.info("outfit_engine.rain_swap", from_type=ow.type, to_type=rain_coat.type)
             else:
                 outfit["warnings"].append("☂️ Дождь — возьми зонт!")
+
+    # ── NEW: Color harmony validation ──
+    _color_ok, _color_warnings = _check_color_harmony(slot_items)
+    if not _color_ok:
+        logger.warning("outfit_engine.color_clash", warnings=_color_warnings)
+        return _fallback_result(items, season, today, temp, temp_eve, precip_evening,
+                                segment, child_name)
+
+    # ── NEW: Colortype compliance (warnings, no reject) ──
+    _ct_warnings = _check_colortype_compliance(slot_items, colortype)
+    if _ct_warnings:
+        logger.info("outfit_engine.colortype_mismatch", warnings=_ct_warnings)
+        # Don't reject — small wardrobe may have no matching items
+        # But add to outfit warnings for comment adjustment
+        outfit["warnings"].extend(_ct_warnings[:2])
+
+    # ── NEW: Accessory coherence (statement pieces, bag-shoes, metals) ──
+    _acc_warnings = _check_accessories_coherence(slot_items, segment)
+    if _acc_warnings:
+        logger.info("outfit_engine.accessory_issues", warnings=_acc_warnings)
+        outfit["warnings"].extend(_acc_warnings[:2])
+
+    # ── NEW: Tights needed check ──
+    _tights_warnings = _check_tights_needed(outfit, temp)
+    if _tights_warnings:
+        outfit["warnings"].extend(_tights_warnings)
+
+    # ── NEW: Occasion-formality alignment ──
+    _occ_warnings = _check_occasion_formality(slot_items, day_type)
+    if _occ_warnings:
+        logger.info("outfit_engine.occasion_formality", warnings=_occ_warnings)
+        outfit["warnings"].extend(_occ_warnings[:2])
+
+    # ── NEW: Wind outerwear check ──
+    _wind_warnings = _check_wind_outerwear(outfit, wind_kmph)
+    if _wind_warnings:
+        outfit["warnings"].extend(_wind_warnings)
 
     return OutfitResult(
         outfit=outfit,
