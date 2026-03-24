@@ -33,6 +33,10 @@ _rmbg_lock = threading.Lock()
 _isnet_session: Optional[ort.InferenceSession] = None
 _isnet_lock = threading.Lock()
 
+_CLOTH_SEG_PATH = "/root/.u2net/cloth_seg_u2net.onnx"
+_cloth_seg_session: Optional[ort.InferenceSession] = None
+_cloth_seg_lock = threading.Lock()
+
 # Limit concurrent RMBG inferences to prevent OOM (each peak ~600MB)
 _rmbg_semaphore = asyncio.Semaphore(1)
 
@@ -79,6 +83,21 @@ def _get_isnet_session() -> ort.InferenceSession:
                     _ISNET_PATH, opts, providers=["CPUExecutionProvider"]
                 )
     return _isnet_session
+
+
+def _get_cloth_seg_session() -> ort.InferenceSession:
+    """Thread-safe singleton for cloth-segmentation U2Net ONNX model (clothing-specific)."""
+    global _cloth_seg_session
+    if _cloth_seg_session is None:
+        with _cloth_seg_lock:
+            if _cloth_seg_session is None:
+                opts = ort.SessionOptions()
+                opts.intra_op_num_threads = 2
+                opts.inter_op_num_threads = 1
+                _cloth_seg_session = ort.InferenceSession(
+                    _CLOTH_SEG_PATH, opts, providers=["CPUExecutionProvider"]
+                )
+    return _cloth_seg_session
 
 
 def _run_removebg_api(image_bytes: bytes) -> bytes | None:
@@ -439,6 +458,191 @@ def _run_grabcut(image_bytes: bytes) -> bytes | None:
         return None
 
 
+def _apply_clahe(image_bytes: bytes) -> bytes:
+    """Apply CLAHE to L channel to boost local contrast between garment and textured background.
+
+    Helps RMBG/cloth-seg distinguish clothing from couches, carpets, wood floors
+    by enhancing local contrast differences invisible in raw photos.
+    """
+    try:
+        import cv2
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        arr = np.array(img)
+        lab = cv2.cvtColor(arr, cv2.COLOR_RGB2LAB)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        lab[:, :, 0] = clahe.apply(lab[:, :, 0])
+        result = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+        img_out = Image.fromarray(result)
+        buf = io.BytesIO()
+        img_out.save(buf, format="JPEG", quality=92)
+        return buf.getvalue()
+    except Exception:
+        return image_bytes
+
+
+def _postprocess_mask(png_bytes: bytes) -> bytes:
+    """Post-process bg-removed image: keep largest connected component, morphological cleanup.
+
+    Removes disconnected background fragments (couch corners, carpet pieces)
+    that the model incorrectly classified as foreground.
+    """
+    try:
+        import cv2
+        img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+        r, g, b, a = img.split()
+        alpha = np.array(a)
+
+        # Binarize for connected component analysis
+        binary = (alpha > 128).astype(np.uint8)
+        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+
+        if num_labels <= 2:
+            # 0=background, 1=single foreground — nothing to filter
+            return png_bytes
+
+        # Find the largest foreground component (label 0 is always background)
+        largest_label = 1
+        largest_area = 0
+        for label_idx in range(1, num_labels):
+            area = stats[label_idx, cv2.CC_STAT_AREA]
+            if area > largest_area:
+                largest_area = area
+                largest_label = label_idx
+
+        # Zero out all components except the largest
+        cleaned = np.zeros_like(alpha)
+        cleaned[labels == largest_label] = alpha[labels == largest_label]
+
+        # Morphological close to fill small holes in the main component
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel, iterations=1)
+
+        # Gentle blur to smooth edges
+        cleaned = cv2.GaussianBlur(cleaned, (3, 3), 0)
+
+        img.putalpha(Image.fromarray(cleaned))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+    except Exception:
+        return png_bytes
+
+
+def _check_mask_quality_v2(png_bytes: bytes) -> bool:
+    """Improved quality check: alpha ratio + region compactness + single dominant region.
+
+    Returns False if:
+    - Alpha ratio outside 8-80% (too much or too little removed)
+    - >15% semi-transparent (dirty mask)
+    - Largest component < 70% of total foreground (fragmented mask = background leaked)
+    - Foreground bounding box covers >90% of image (model kept everything)
+    """
+    try:
+        import cv2
+        img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+        alpha = np.array(img.split()[3])
+        total = alpha.shape[0] * alpha.shape[1]
+
+        opaque = int(np.sum(alpha > 128))
+        ratio = opaque / total if total > 0 else 0
+        if not (0.08 <= ratio <= 0.80):
+            return False
+
+        semi_transparent = int(np.sum((alpha > 30) & (alpha < 225)))
+        if semi_transparent / total > 0.15:
+            return False
+
+        # Check region dominance: largest component should be most of the foreground
+        binary = (alpha > 128).astype(np.uint8)
+        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+        if num_labels > 1:
+            areas = [stats[i, cv2.CC_STAT_AREA] for i in range(1, num_labels)]
+            if areas:
+                largest = max(areas)
+                total_fg = sum(areas)
+                if total_fg > 0 and largest / total_fg < 0.70:
+                    return False  # fragmented — background leaked into multiple regions
+
+        # Check that foreground bbox doesn't cover almost the entire image
+        fg_coords = np.argwhere(binary > 0)
+        if len(fg_coords) > 0:
+            y_min, x_min = fg_coords.min(axis=0)
+            y_max, x_max = fg_coords.max(axis=0)
+            bbox_area = (y_max - y_min) * (x_max - x_min)
+            if bbox_area / total > 0.92:
+                return False  # foreground bbox covers almost entire image — model kept bg
+
+        return True
+    except Exception:
+        return True
+
+
+def _run_cloth_seg(image_bytes: bytes) -> bytes:
+    """Run cloth-segmentation U2Net: clothing-specific bg removal.
+
+    Trained on iMaterialist fashion dataset (45k images).
+    4-class output: 0=background, 1=upper-body, 2=lower-body, 3=full-body.
+    Much better than generic RMBG on textured backgrounds (couches, carpets).
+
+    Preprocessing: normalize to [-1, 1] (mean=0.5, std=0.5).
+    Input: 768×768 (training resolution).
+    """
+    import structlog
+    _logger = structlog.get_logger()
+
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    orig_w, orig_h = img.size
+
+    # Pad to square then resize to 320×320 (ONNX export fixed size)
+    side = max(orig_w, orig_h)
+    padded = Image.new("RGB", (side, side), (128, 128, 128))
+    padded.paste(img, ((side - orig_w) // 2, (side - orig_h) // 2))
+    resized = padded.resize((320, 320), Image.BILINEAR)
+
+    # Normalize: (pixel/255 - 0.5) / 0.5 = pixel/127.5 - 1.0
+    arr = np.array(resized, dtype=np.float32) / 255.0
+    arr = (arr - 0.5) / 0.5
+    arr = arr.transpose(2, 0, 1)[np.newaxis, ...]  # (1, 3, 320, 320)
+
+    sess = _get_cloth_seg_session()
+    input_name = sess.get_inputs()[0].name
+    outputs = sess.run(None, {input_name: arr})
+
+    # U2Net side outputs: 7 × [1, 1, 320, 320]. First output (d0) is the fused main mask.
+    # Model trained on iMaterialist clothing → salient = clothing, background = 0.
+    mask = outputs[0].squeeze()  # (320, 320)
+
+    # Sigmoid to convert logits to probability
+    mask = 1.0 / (1.0 + np.exp(-mask))
+
+    # Scale to 0-255
+    mask = (mask * 255).astype(np.uint8)
+
+    # Threshold + cleanup
+    mask[mask < 30] = 0
+    mask[mask > 225] = 255
+
+    from PIL import ImageFilter
+    mask_pil = Image.fromarray(mask)
+    mask_pil = mask_pil.filter(ImageFilter.MaxFilter(3))
+    mask_pil = mask_pil.filter(ImageFilter.MinFilter(3))
+    mask_pil = mask_pil.filter(ImageFilter.GaussianBlur(radius=1))
+
+    # Un-pad: resize mask to square then crop to original aspect ratio
+    mask_square = mask_pil.resize((side, side), Image.BILINEAR)
+    left = (side - orig_w) // 2
+    top_pad = (side - orig_h) // 2
+    mask_cropped = mask_square.crop((left, top_pad, left + orig_w, top_pad + orig_h))
+
+    img_rgba = img.copy().convert("RGBA")
+    img_rgba.putalpha(mask_cropped)
+
+    buf = io.BytesIO()
+    img_rgba.save(buf, format="PNG")
+    _logger.info("rmbg.cloth_seg_done", orig_size=f"{orig_w}x{orig_h}")
+    return buf.getvalue()
+
+
 def _auto_rotate_to_vertical(img: Image.Image) -> Image.Image:
     """Rotate garment to vertical orientation using contour analysis.
 
@@ -572,21 +776,25 @@ def _check_rembg_quality(png_bytes: bytes) -> bool:
     Returns False if:
     - >80% pixels opaque (removed too little — background still visible)
     - <10% pixels opaque (removed too much — garment lost)
-    Also checks for "dirty edges" — semi-transparent pixels that indicate
-    poor mask quality (background bleeding through).
+    - >15% semi-transparent pixels (dirty mask — background bleeding through)
     """
     try:
         img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
         alpha = img.split()[3]
         total = alpha.size[0] * alpha.size[1]
-        # Count opaque pixels (alpha > 128 = solid foreground)
         alpha_data = list(alpha.getdata())
         opaque = sum(1 for a in alpha_data if a > 128)
         ratio = opaque / total if total > 0 else 0
         # Clothing on a photo typically occupies 15-75% of the frame
-        # <10% = model removed the garment (too aggressive)
-        # >80% = model kept background (sofa, floor, etc.)
-        return 0.10 <= ratio <= 0.80
+        if not (0.10 <= ratio <= 0.80):
+            return False
+        # Dirty mask check: too many semi-transparent pixels = noisy edges
+        # Clean masks have mostly 0 (transparent) or 255 (opaque) alpha
+        semi_transparent = sum(1 for a in alpha_data if 30 < a < 225)
+        semi_ratio = semi_transparent / total if total > 0 else 0
+        if semi_ratio > 0.15:
+            return False
+        return True
     except Exception:
         return True  # fallback — don't block
 
@@ -651,26 +859,51 @@ def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) ->
     if needs_bg_removal:
         img_check = Image.open(io.BytesIO(result))
         if img_check.mode not in ("RGBA", "LA", "PA"):
+            import structlog as _sl
+            _log = _sl.get_logger()
+
             # Auto-brightness BEFORE bg removal (helps with dark photos)
             result = auto_brightness(result)
-            # Fallback chain: GrabCut (best for home photos) → RMBG-1.4 → original
-            rembg_result = None
-            # Try GrabCut first (handles carpets, wood floors, bedsheets)
-            rembg_result = _run_grabcut(result)
-            if not rembg_result or not _check_rembg_quality(rembg_result):
-                # GrabCut failed → try RMBG-1.4
-                rembg_result = None
-                try:
-                    rembg_result = _run_rmbg14(result)
-                except Exception:
-                    try:
-                        rembg_result = _run_silueta(result)
-                    except Exception:
-                        pass
+            # CLAHE preprocessing: boosts local contrast to separate garment from
+            # textured backgrounds (couches, carpets, wood floors)
+            enhanced = _apply_clahe(result)
 
-            # Quality check: if rembg failed (too much/too little removed), use original
-            if rembg_result and _check_rembg_quality(rembg_result):
+            # Optimized fallback chain:
+            # RMBG-1.4 + postprocess → cloth-segmentation → GrabCut → original
+            rembg_result = None
+
+            # Step 1: RMBG-1.4 (general salient object) + largest component filter
+            try:
+                rembg_result = _run_rmbg14(enhanced)
+                rembg_result = _postprocess_mask(rembg_result)
+            except Exception:
+                pass
+            if rembg_result and _check_mask_quality_v2(rembg_result):
+                _log.info("rmbg.pipeline_ok", model="rmbg14")
                 result = rembg_result
+                rembg_result = "done"
+
+            # Step 2: cloth-segmentation (clothing-specific, trained on fashion data)
+            if rembg_result != "done":
+                try:
+                    rembg_result = _run_cloth_seg(enhanced)
+                    rembg_result = _postprocess_mask(rembg_result)
+                except Exception as e:
+                    _log.warning("rmbg.cloth_seg_failed", error=str(e))
+                    rembg_result = None
+                if rembg_result and _check_mask_quality_v2(rembg_result):
+                    _log.info("rmbg.pipeline_ok", model="cloth_seg")
+                    result = rembg_result
+                    rembg_result = "done"
+
+            # Step 3: GrabCut (graph-cut, works on textured backgrounds)
+            if rembg_result != "done":
+                rembg_result = _run_grabcut(enhanced)
+                if rembg_result and _check_mask_quality_v2(rembg_result):
+                    _log.info("rmbg.pipeline_ok", model="grabcut")
+                    result = rembg_result
+                else:
+                    _log.warning("rmbg.pipeline_all_failed")
             # else: keep brightness-corrected original (no bg removal)
 
     # 3. Edge softening (only if has alpha)
@@ -784,46 +1017,71 @@ def _get_bg_removal_model() -> str:
 
 
 async def remove_background(image_bytes: bytes, redis=None) -> bytes:
-    """
-    Удаляет фон: local ONNX (rmbg14 or silueta) → remove.bg API fallback → оригинал.
-    Model selection: BG_REMOVAL_MODEL env var ("rmbg14" or "silueta", default: silueta).
+    """Remove background using optimized pipeline.
+
+    Chain: CLAHE → RMBG-1.4 + postprocess → cloth-segmentation → GrabCut
+           → remove.bg API → original.
     Возвращает PNG bytes с прозрачностью.
     """
     import structlog
 
     log = structlog.get_logger()
 
-    model = _get_bg_removal_model()
+    # CLAHE preprocessing: boost garment/background contrast
+    enhanced = _apply_clahe(image_bytes)
 
-    # 1. Try local ONNX inference (primary model)
+    # 1. RMBG-1.4 + largest component postprocessing
+    result = None
     try:
-        if model == "rmbg14":
-            result = _run_rmbg14(image_bytes)
-        else:
-            result = _run_silueta(image_bytes)
+        result = _run_rmbg14(enhanced)
+        result = _postprocess_mask(result)
+    except Exception as e:
+        log.warning("remove_background.rmbg14_failed", error=str(e))
+        result = None
+
+    if result and _check_mask_quality_v2(result):
         if redis is not None:
             try:
-                await redis.incr(f"rembg:local:{model}:ok")
+                await redis.incr("rembg:local:rmbg14:ok")
             except Exception:
                 pass
         return result
+    log.info("remove_background.rmbg14_quality_fail")
+
+    # 2. cloth-segmentation (clothing-specific U2Net)
+    try:
+        result = _run_cloth_seg(enhanced)
+        result = _postprocess_mask(result)
     except Exception as e:
-        log.warning("remove_background.local_failed", model=model, error=str(e))
+        log.warning("remove_background.cloth_seg_failed", error=str(e))
+        result = None
 
-    # 1b. Fallback to silueta if rmbg14 was primary and failed
-    if model == "rmbg14":
-        try:
-            result = _run_silueta(image_bytes)
-            if redis is not None:
-                try:
-                    await redis.incr("rembg:local:silueta_fallback:ok")
-                except Exception:
-                    pass
-            return result
-        except Exception as e:
-            log.warning("remove_background.silueta_fallback_failed", error=str(e))
+    if result and _check_mask_quality_v2(result):
+        if redis is not None:
+            try:
+                await redis.incr("rembg:local:cloth_seg:ok")
+            except Exception:
+                pass
+        return result
+    log.info("remove_background.cloth_seg_quality_fail")
 
-    # 2. Fallback: remove.bg API
+    # 3. GrabCut (graph-cut, good on textured backgrounds)
+    try:
+        result = _run_grabcut(enhanced)
+    except Exception as e:
+        log.warning("remove_background.grabcut_failed", error=str(e))
+        result = None
+
+    if result and _check_mask_quality_v2(result):
+        if redis is not None:
+            try:
+                await redis.incr("rembg:local:grabcut:ok")
+            except Exception:
+                pass
+        return result
+    log.info("remove_background.grabcut_quality_fail")
+
+    # 4. Fallback: remove.bg API
     import httpx
     from config import settings
 
