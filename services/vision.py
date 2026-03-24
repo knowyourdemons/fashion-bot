@@ -411,6 +411,117 @@ def _resolve_bbox_overlaps(items: list[dict]) -> list[dict]:
     return items
 
 
+def _refine_bbox_by_color(image_bytes: bytes, items: list[dict]) -> list[dict]:
+    """Refine bbox boundaries using texture + gradient analysis.
+
+    Scans from each bbox edge inward. Where the gradient magnitude (texture)
+    changes sharply compared to the center, shrinks the bbox — cutting off
+    neighboring garments or floor that leaked into the bbox.
+
+    Uses Sobel gradient magnitude which captures texture boundaries
+    (fabric weave vs wood grain) even when colors are similar.
+    """
+    try:
+        import cv2
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        arr = np.array(img)
+        gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+        # Compute gradient magnitude (texture signal)
+        gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+        gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+        grad = np.sqrt(gx ** 2 + gy ** 2)
+        # Also use LAB color for combined signal
+        lab = cv2.cvtColor(arr, cv2.COLOR_RGB2LAB).astype(np.float32)
+        ih, iw = arr.shape[:2]
+
+        for item in items:
+            bbox = item.get("bbox")
+            if not bbox:
+                continue
+            x, y = float(bbox.get("x", 0)), float(bbox.get("y", 0))
+            w, h = float(bbox.get("w", 1)), float(bbox.get("h", 1))
+
+            # Skip single-item photos
+            if w * h > 0.5:
+                continue
+
+            # Center region: compute reference texture + color signature
+            cx1 = int((x + w * 0.3) * iw)
+            cy1 = int((y + h * 0.3) * ih)
+            cx2 = int((x + w * 0.7) * iw)
+            cy2 = int((y + h * 0.7) * ih)
+            cx1, cy1 = max(0, cx1), max(0, cy1)
+            cx2, cy2 = min(iw, cx2), min(ih, cy2)
+            if cx2 <= cx1 or cy2 <= cy1:
+                continue
+
+            center_grad_mean = grad[cy1:cy2, cx1:cx2].mean()
+            center_grad_std = grad[cy1:cy2, cx1:cx2].std()
+            center_color = lab[cy1:cy2, cx1:cx2].mean(axis=(0, 1))
+
+            px_x, px_y = int(x * iw), int(y * ih)
+            px_r, px_b = int((x + w) * iw), int((y + h) * ih)
+            strip_w = max(3, int(w * iw * 0.04))
+            strip_h = max(3, int(h * ih * 0.04))
+
+            def _is_different(strip_region):
+                """Check if a strip has significantly different texture+color vs center."""
+                y1, y2, x1, x2 = strip_region
+                if y2 <= y1 or x2 <= x1:
+                    return False
+                # Gradient-based texture difference
+                sg = grad[y1:y2, x1:x2]
+                if sg.size == 0:
+                    return False
+                grad_diff = abs(sg.mean() - center_grad_mean) / (center_grad_std + 1e-5)
+                # Color difference (LAB delta_E)
+                sc = lab[y1:y2, x1:x2]
+                color_diff = np.sqrt(np.sum((sc.mean(axis=(0, 1)) - center_color) ** 2))
+                # Combined: texture OR color significantly different
+                return grad_diff > 2.0 or color_diff > 20.0
+
+            # Scan from each edge inward (up to 5 steps)
+            for step in range(5):
+                lx = px_x + step * strip_w
+                if lx + strip_w >= cx1:
+                    break
+                if _is_different((max(0, px_y), min(ih, px_b), lx, lx + strip_w)):
+                    bbox["x"] = (lx + strip_w) / iw
+                    bbox["w"] = max(0.08, (x + w) - bbox["x"])
+                    break
+
+            for step in range(5):
+                rx = px_r - (step + 1) * strip_w
+                if rx <= cx2:
+                    break
+                if _is_different((max(0, px_y), min(ih, px_b), rx, rx + strip_w)):
+                    bbox["w"] = max(0.08, rx / iw - float(bbox["x"]))
+                    break
+
+            for step in range(5):
+                ty = px_y + step * strip_h
+                if ty + strip_h >= cy1:
+                    break
+                if _is_different((ty, ty + strip_h, max(0, px_x), min(iw, px_r))):
+                    bbox["y"] = (ty + strip_h) / ih
+                    bbox["h"] = max(0.08, (y + h) - bbox["y"])
+                    break
+
+            for step in range(5):
+                by = px_b - (step + 1) * strip_h
+                if by <= cy2:
+                    break
+                if _is_different((by, by + strip_h, max(0, px_x), min(iw, px_r))):
+                    bbox["h"] = max(0.08, by / ih - float(bbox["y"]))
+                    break
+
+    except Exception as e:
+        import structlog
+        structlog.get_logger().warning("bbox.texture_refine_failed", error=str(e))
+
+    return items
+
+
 def _default_score() -> tuple[dict, float]:
     breakdown = {
         "safety": 1, "practicality": 1, "durability": 1,
