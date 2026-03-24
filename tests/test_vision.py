@@ -76,10 +76,11 @@ class TestFixBbox:
         from services.vision import _fix_bbox
         data = {
             "type": "кофта", "category_group": "top",
-            "bbox": {"x": 0.0, "y": 0.0, "w": 0.9, "h": 0.9},
+            "bbox": {"x": 0.0, "y": 0.0, "w": 0.95, "h": 0.95},
         }
         result = _fix_bbox(data)
-        assert result["bbox"]["w"] < 0.55
+        # max_dim=0.92 for tops, so 0.95 is oversized → shrunk
+        assert result["bbox"]["w"] < 0.92
 
     def test_no_bbox(self):
         from services.vision import _fix_bbox
@@ -94,8 +95,8 @@ class TestFixBbox:
             "bbox": {"x": 0.1, "y": 0.1, "w": 0.5, "h": 0.5},
         }
         result = _fix_bbox(data)
-        # base_layer max_dim=0.25, so 0.5 is oversized
-        assert result["bbox"]["w"] < 0.25
+        # base_layer max_dim=0.45, so 0.5 is oversized
+        assert result["bbox"]["w"] < 0.45
 
     def test_outerwear_lenient_limit(self):
         from services.vision import _fix_bbox
@@ -104,8 +105,19 @@ class TestFixBbox:
             "bbox": {"x": 0.05, "y": 0.05, "w": 0.7, "h": 0.7},
         }
         result = _fix_bbox(data)
-        # outerwear max_dim=0.75, so 0.7 is fine
+        # outerwear max_dim=0.92, so 0.7 is fine
         assert result["bbox"]["w"] == 0.7
+
+    def test_normal_large_top_not_shrunk(self):
+        """Вещь занимает 70% кадра — это нормально, не ужимать."""
+        from services.vision import _fix_bbox
+        data = {
+            "type": "лонгслив", "category_group": "top",
+            "bbox": {"x": 0.1, "y": 0.1, "w": 0.7, "h": 0.8},
+        }
+        result = _fix_bbox(data)
+        assert result["bbox"]["w"] == 0.7
+        assert result["bbox"]["h"] == 0.8
 
 
 class TestDefaultScore:

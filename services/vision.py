@@ -261,7 +261,12 @@ def _item_label(data: dict) -> str:
 
 
 def _fix_bbox(data: dict) -> dict:
-    """Центрирует и ужимает bbox если он слишком велик для данного типа вещи."""
+    """Центрирует и ужимает bbox только если он занимает почти весь кадр.
+
+    Одиночные фото вещей: вещь нормально занимает 60-80% кадра.
+    Ужимаем только truly full-frame bbox (>92%), где Vision не смог
+    определить точные границы.
+    """
     bbox = data.get("bbox")
     if not bbox:
         return data
@@ -270,14 +275,14 @@ def _fix_bbox(data: dict) -> dict:
     item_type = (data.get("type") or "").lower()
     cg = data.get("category_group", "top")
 
+    # Мелкие вещи (носки, трусики) не должны занимать полкадра
     if cg in ("base_layer", "underwear") or any(
         w in item_type for w in ["носки", "трусик", "шапка", "повязка"]
     ):
-        max_dim = 0.25
-    elif cg in ("outerwear", "one_piece"):
-        max_dim = 0.75
+        max_dim = 0.45
     else:
-        max_dim = 0.55
+        # Для остальных вещей: кроп только если bbox ≈ 100% кадра
+        max_dim = 0.92
 
     if bw > max_dim or bh > max_dim:
         logger.warning(
@@ -288,7 +293,7 @@ def _fix_bbox(data: dict) -> dict:
         )
         cx = float(bbox.get("x", 0.1)) + bw / 2
         cy = float(bbox.get("y", 0.1)) + bh / 2
-        new_dim = max_dim * 0.8
+        new_dim = max_dim * 0.9
         data["bbox"] = {
             "x": max(0.0, min(1.0 - new_dim, cx - new_dim / 2)),
             "y": max(0.0, min(1.0 - new_dim, cy - new_dim / 2)),

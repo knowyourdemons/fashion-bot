@@ -35,8 +35,8 @@ class TestFixBbox:
             "bbox": {"x": 0.0, "y": 0.0, "w": 0.9, "h": 0.9},
         }
         result = _fix_bbox(data)
-        assert result["bbox"]["w"] <= 0.25
-        assert result["bbox"]["h"] <= 0.25
+        assert result["bbox"]["w"] <= 0.45
+        assert result["bbox"]["h"] <= 0.45
 
     def test_куртка_нормальный_bbox_не_меняется(self):
         from bot.handlers.wardrobe import _fix_bbox
