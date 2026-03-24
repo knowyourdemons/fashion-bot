@@ -96,10 +96,20 @@ async def process_rmbg(payload: dict) -> dict:
                 from PIL import ImageDraw
                 draw = ImageDraw.Draw(img)
                 for sb in sibling_bboxes:
-                    sx = max(0, int(float(sb.get("x", 0)) * iw))
-                    sy = max(0, int(float(sb.get("y", 0)) * ih))
-                    sw = int(float(sb.get("w", 0)) * iw)
-                    sh = int(float(sb.get("h", 0)) * ih)
+                    # Expand sibling bbox by 5% to cover crop padding overlap
+                    sbx = float(sb.get("x", 0))
+                    sby = float(sb.get("y", 0))
+                    sbw = float(sb.get("w", 0))
+                    sbh = float(sb.get("h", 0))
+                    expand = 0.05
+                    sbx = max(0, sbx - sbw * expand)
+                    sby = max(0, sby - sbh * expand)
+                    sbw = min(1.0 - sbx, sbw * (1 + 2 * expand))
+                    sbh = min(1.0 - sby, sbh * (1 + 2 * expand))
+                    sx = int(sbx * iw)
+                    sy = int(sby * ih)
+                    sw = int(sbw * iw)
+                    sh = int(sbh * ih)
                     draw.rectangle([sx, sy, sx + sw, sy + sh], fill=bg_color)
                 buf = io.BytesIO()
                 img.save(buf, format="JPEG", quality=90)

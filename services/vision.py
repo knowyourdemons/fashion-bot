@@ -366,10 +366,10 @@ def _resolve_bbox_overlaps(items: list[dict]) -> list[dict]:
             area_b = b["w"] * b["h"]
             small, large = (b, a) if area_b < area_a else (a, b)
 
-            # Skip if overlap is tiny (<15% of smaller bbox) — not worth shrinking
+            # Skip if overlap is truly negligible (<3% of smaller bbox)
             overlap_area = ox * oy
             small_area = small["w"] * small["h"]
-            if small_area > 0 and overlap_area / small_area < 0.15:
+            if small_area > 0 and overlap_area / small_area < 0.03:
                 continue
 
             # Save original dims — don't shrink below 50% of original
