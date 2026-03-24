@@ -22,7 +22,15 @@ async def get_log(session: AsyncSession, log_id: uuid.UUID) -> Optional[BriefLog
     return result.scalar_one_or_none()
 
 
+VALID_FEEDBACK = frozenset({"up", "down", "wore", "надели", "надела", "reroll", "другой"})
+
+
 async def update_feedback(session: AsyncSession, log_id: uuid.UUID, feedback: str) -> None:
+    if feedback not in VALID_FEEDBACK:
+        import structlog
+        structlog.get_logger().warning("brief_log.invalid_feedback",
+                                        log_id=str(log_id), feedback=feedback)
+        return
     await session.execute(
         update(BriefLog).where(BriefLog.id == log_id).values(feedback=feedback)
     )

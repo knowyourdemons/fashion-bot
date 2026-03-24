@@ -88,6 +88,11 @@ async def get_memory_for_prompt(user_id: str) -> str:
 
 async def save_explicit_memory(user_id: str, fact: str):
     """Save an explicit fact from user chat (e.g., 'не люблю жёлтый')."""
+    # Sanitize: strip control chars, limit length
+    fact = fact.replace("\n", " ").replace("\r", " ").replace("\x00", "").strip()
+    if not fact or len(fact) > 200:
+        return
+    fact = fact[:200]
     redis = get_redis()
     key = f"memory:{user_id}"
     raw = await redis.get(key)

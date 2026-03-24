@@ -176,9 +176,14 @@ def get_effective_plan(user) -> str:
 
 
 def get_limit(key: str, plan: str) -> int:
-    """Получить числовой лимит для плана. Неизвестный план → free лимиты."""
+    """Получить числовой лимит для плана. Неизвестный план → free лимиты + warning."""
     resolved = _PLAN_ALIAS.get(plan, plan)
-    plan_limits = LIMITS.get(resolved, LIMITS["free"])
+    plan_limits = LIMITS.get(resolved)
+    if plan_limits is None:
+        import structlog
+        structlog.get_logger().warning("permissions.unknown_plan",
+                                        plan=plan, resolved=resolved, fallback="free")
+        plan_limits = LIMITS["free"]
     return int(plan_limits.get(key, 0))
 
 

@@ -42,16 +42,25 @@ class ShareService:
         data = await self._redis.get(key)
         return json.loads(data) if data else None
 
-    async def vote(self, token: str, vote: str) -> dict[str, int] | None:
-        """vote: 'up' или 'down'. Возвращает текущие голоса."""
+    async def vote(self, token: str, vote: str, voter_id: str = "") -> dict[str, int] | None:
+        """vote: 'up' или 'down'. Deduplicates by voter_id."""
         key = f"share:outfit:{token}"
         data = await self._redis.get(key)
         if not data:
             return None
 
         payload = json.loads(data)
-        if vote in ("up", "down"):
-            payload["votes"][vote] += 1
+        if vote not in ("up", "down"):
+            return payload.get("votes")
+
+        # Deduplicate: track voters in set
+        voters = set(payload.get("_voters", []))
+        if voter_id and voter_id in voters:
+            return payload["votes"]  # Already voted
+        if voter_id:
+            voters.add(voter_id)
+        payload["_voters"] = list(voters)
+        payload["votes"][vote] += 1
 
         # Сохраняем с тем же TTL (не сбрасываем)
         ttl = await self._redis.ttl(key)

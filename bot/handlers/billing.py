@@ -268,8 +268,33 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
     from datetime import datetime, timedelta, timezone
     from db.base import AsyncWriteSession, AsyncReadSession
     from db.crud.users import update_user_plan, get_by_id
+    from core.redis import get_redis as _get_redis_billing
 
-    expires_at = datetime.now(timezone.utc) + timedelta(days=30 * months)
+    # Idempotency: prevent double-charge on Telegram webhook retry
+    _payment_id = payment.telegram_payment_charge_id if hasattr(payment, "telegram_payment_charge_id") else ""
+    if _payment_id:
+        _redis_b = _get_redis_billing()
+        _dedup_key = f"payment_processed:{_payment_id}"
+        if await _redis_b.set(_dedup_key, "1", ex=86400 * 7, nx=True) is None:
+            logger.warning("stars.duplicate_payment", payment_id=_payment_id, user_id=str(user.id))
+            await update.message.reply_text("✅ Оплата уже обработана!")
+            return
+
+    # Extend from existing expiry if user has active plan (don't lose paid days)
+    existing_expiry = getattr(user, "plan_expires_at", None)
+    now = datetime.now(timezone.utc)
+    if existing_expiry:
+        if hasattr(existing_expiry, "tzinfo") and existing_expiry.tzinfo is None:
+            existing_expiry = existing_expiry.replace(tzinfo=timezone.utc)
+        if existing_expiry > now:
+            expires_at = existing_expiry + timedelta(days=30 * months)
+            logger.info("stars.extending_from_prior", prior=existing_expiry.isoformat(),
+                        new=expires_at.isoformat())
+        else:
+            expires_at = now + timedelta(days=30 * months)
+    else:
+        expires_at = now + timedelta(days=30 * months)
+
     try:
         async with AsyncWriteSession() as session:
             await update_user_plan(
