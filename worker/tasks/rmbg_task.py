@@ -75,7 +75,7 @@ async def process_rmbg(payload: dict) -> dict:
         # RMBG fallback. Tight crop (2% padding) to minimize neighbor bleed.
         from services.vision import _crop_bbox, _check_crop_quality
         from services.image_processor import (
-            _apply_clahe, _run_cloth_seg, _run_rmbg14,
+            _run_cloth_seg, _run_rmbg14,
             _postprocess_mask, _check_mask_quality_v2, pad_square_resize,
         )
         try:
@@ -84,7 +84,9 @@ async def process_rmbg(payload: dict) -> dict:
             logger.warning("rmbg_process.crop_failed", item_id=str(item_id), error=str(e))
             crop_bytes = photo_bytes
 
-        enhanced_crop = _apply_clahe(crop_bytes)
+        # No CLAHE here — remove_background() in single-item path already applies it,
+        # and for multi-item the crop is already from the original photo.
+        # Double CLAHE washes out contrast between garment and floor.
         png_bytes = None
 
         # Run both models — we may need the intersection or GrabCut refinement
@@ -92,7 +94,7 @@ async def process_rmbg(payload: dict) -> dict:
         rmbg_result = None
 
         try:
-            cloth_result = _run_cloth_seg(enhanced_crop)
+            cloth_result = _run_cloth_seg(crop_bytes)
             cloth_result = _postprocess_mask(cloth_result)
 
             # If cloth-seg has excess background (55-75%), refine with GrabCut
@@ -108,7 +110,7 @@ async def process_rmbg(payload: dict) -> dict:
             logger.warning("rmbg_process.cloth_seg_failed", error=str(e))
 
         try:
-            rmbg_result = _run_rmbg14(enhanced_crop)
+            rmbg_result = _run_rmbg14(crop_bytes)
             rmbg_result = _postprocess_mask(rmbg_result)
         except Exception as e:
             logger.warning("rmbg_process.rmbg14_failed", error=str(e))
