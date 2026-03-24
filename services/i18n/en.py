@@ -204,6 +204,11 @@ STRINGS: dict[str, str] = {
     "onboarding.age_error": "Didn't get that 🤔 Write age as a number (e.g. 3)",
     "onboarding.enter_city": "Enter city name:",
     "onboarding.refine_city": "Which city exactly?",
+    "onboarding.child_birthdate": "When was {name} born? (e.g., 15.03.2022 or 3 years)",
+    "onboarding.child_birthdate_boy": "When was {name} born?",
+    "onboarding.child_birthdate_error": "Didn't understand the date. Try: 15.03.2022 or '2 years'",
+    "onboarding.city_error": "Couldn't find that city. Try a different spelling.",
+    "onboarding.done": "All set! Let's get started!",
 
     # ── Ask friend ──
     "ask_friend.share_hint": "📤 Forward the image to a friend 👗",

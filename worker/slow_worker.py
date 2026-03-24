@@ -52,7 +52,11 @@ class SlowWorker:
         while not shutdown.is_set():
             try:
                 await self._sem.acquire()
-                msg = await self._queue.pop(self.QUEUES, timeout=5)
+                try:
+                    msg = await self._queue.pop(self.QUEUES, timeout=5)
+                except Exception:
+                    self._sem.release()
+                    raise
                 if msg:
                     task = asyncio.create_task(self._process_and_release(msg))
                     self._tasks.add(task)
@@ -61,7 +65,6 @@ class SlowWorker:
                     self._sem.release()
                 await self._heartbeat()
             except Exception as e:
-                self._sem.release()
                 sentry_sdk.capture_exception(e)
                 logger.error("slow_worker.loop_error", error=str(e))
 
@@ -84,10 +87,19 @@ class SlowWorker:
             return
 
         try:
-            result = await handler(msg.payload)
+            async with asyncio.timeout(300):
+                result = await handler(msg.payload)
             await self._queue.ack(msg)
             await self._queue.store_result(msg.task_id, result or {})
             logger.info("slow_worker.task_done", task_id=msg.task_id, task_type=msg.task_type)
+        except TimeoutError:
+            logger.error(
+                "slow_worker.task_timeout",
+                task_id=msg.task_id,
+                task_type=msg.task_type,
+                timeout=300,
+            )
+            await self._queue.move_to_dead(msg, "timeout after 300s")
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.error(

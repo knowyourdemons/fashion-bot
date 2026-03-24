@@ -171,6 +171,7 @@ async def generate_outfit_comment(
     segment: str | None = None,
     redis=None,
     item_count: int | None = None,
+    user_id: str | None = None,
 ) -> str:
     """Генерирует текстовый комментарий об образе для брифа (Haiku, ~$0.003).
 
@@ -244,6 +245,6 @@ async def generate_outfit_comment(
         # Variable reward: use segment-specific template with dedup
         _seg = segment or "no_kids"
         try:
-            return await _pick_unique_template(redis, "fallback", _seg)
+            return await _pick_unique_template(redis, user_id or "fallback", _seg)
         except Exception:
             return f"Образ подобран под погоду {weather}. Хорошего дня! ✨"

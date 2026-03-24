@@ -88,8 +88,6 @@ async def run() -> None:
 
         await asyncio.sleep(0.3)
 
-    await redis_client.aclose()
-
     logger.info(
         "gap_analysis.run",
         eligible=len(eligible),

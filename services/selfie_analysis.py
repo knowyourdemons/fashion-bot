@@ -46,6 +46,10 @@ async def _analyze_selfie_colortype(photo_bytes: bytes) -> dict:
     Returns {colortype, sub_season, confidence}.
     colortype: one of 4 base seasons (backward compat)
     sub_season: one of 12 sub-seasons for precise palette selection
+
+    LIMITATION: Does not detect group photos — if multiple people are in the
+    selfie, Vision will analyze the most prominent face. A future improvement
+    would add face-count detection and ask the user to retake with one person.
     """
     pool = get_anthropic_pool()
     prompt = (

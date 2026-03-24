@@ -93,16 +93,28 @@ class RedisQueue:
         for q in queues:
             raw = await self._redis.rpoplpush(q.value, _PROCESSING_KEY)
             if raw is not None:
-                return TaskMessage.from_json(raw)
+                try:
+                    return TaskMessage.from_json(raw)
+                except (json.JSONDecodeError, KeyError, TypeError) as e:
+                    logger.warning("queue.pop.corrupted_json", error=str(e), raw=str(raw)[:200])
+                    # Ack the corrupted message to prevent infinite retry
+                    await self._redis.lrem(_PROCESSING_KEY, 1, raw)
+                    continue
         # If no messages in any queue, block-wait on highest priority
         keys = [q.value for q in queues]
         result = await self._redis.blpop(keys, timeout=timeout)
         if result is None:
             return None
         _, data = result
-        # Move to processing list
-        await self._redis.lpush(_PROCESSING_KEY, data)
-        return TaskMessage.from_json(data)
+        try:
+            # Move to processing list
+            await self._redis.lpush(_PROCESSING_KEY, data)
+            return TaskMessage.from_json(data)
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            logger.warning("queue.pop.corrupted_json", error=str(e), raw=str(data)[:200])
+            # Remove corrupted message from processing list
+            await self._redis.lrem(_PROCESSING_KEY, 1, data)
+            return None
 
     async def ack(self, msg: TaskMessage) -> None:
         """Acknowledge: remove from processing list after successful handling."""
@@ -160,3 +172,15 @@ class RedisQueue:
         key = f"task:result:{task_id}"
         data = await self._redis.get(key)
         return json.loads(data) if data else None
+
+    async def cleanup_dead_queue(self, max_keep: int = 100) -> int:
+        """Trim the dead letter queue to the last max_keep entries using LTRIM.
+        Returns number of entries removed."""
+        length = await self._redis.llen(QueuePriority.DEAD.value)
+        if length <= max_keep:
+            return 0
+        # Keep the newest max_keep entries (left side = newest since we LPUSH)
+        await self._redis.ltrim(QueuePriority.DEAD.value, 0, max_keep - 1)
+        removed = length - max_keep
+        logger.info("queue.dead_cleanup", removed=removed, kept=max_keep)
+        return removed

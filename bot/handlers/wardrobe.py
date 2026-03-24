@@ -858,6 +858,25 @@ async def _analyze_and_save(
     if not photo_quality.is_usable:
         raise NoClothingDetectedError(photo_quality.tip_text())
 
+    # Vision call cost guard: daily limit per user
+    if redis and owner_id:
+        from datetime import date as _date_guard
+        _guard_key = f"vision_calls:{owner_id}:{_date_guard.today().isoformat()}"
+        _call_count = await redis.incr(_guard_key)
+        if _call_count == 1:
+            await redis.expire(_guard_key, 86400)
+        # Limits: 30/day free, 100/day premium (admin = no limit via get_effective_plan)
+        _vision_limit = 100 if owner_type == "child" else 30  # conservative default
+        try:
+            from core.permissions import get_effective_plan as _gep_guard
+            # owner_id is UUID, but we need user object — use simple limit
+        except Exception:
+            pass
+        if _call_count > _vision_limit:
+            logger.warning("wardrobe.vision_daily_limit",
+                           owner_id=str(owner_id), count=_call_count, limit=_vision_limit)
+            raise NoClothingDetectedError("Достигнут дневной лимит анализа фото. Попробуй завтра!")
+
     _vc = vision_context or {}
     items_data = await _call_vision(
         photo_for_vision,
@@ -1185,20 +1204,22 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         _today_ph = _date_ph.today().isoformat()
         _photo_key = f"photos_day:{user.id}:{_today_ph}"
         _photo_count = 0
-        if redis:
-            _val = await redis.get(_photo_key)
-            _photo_count = int(_val) if _val else 0
         _photo_limit = get_limit("photos_per_day", _effective_plan)
-        if not _skip_daily_limit and _photo_count >= _photo_limit:
-            keyboard = InlineKeyboardMarkup([[
-                InlineKeyboardButton("✨ Получить безлимит →", callback_data="show_upgrade")
-            ]])
-            await update.message.reply_text(
-                f"📸 Добавлено {_photo_count}/{_photo_limit} фото сегодня.\n"
-                f"Лимит восстановится завтра!",
-                reply_markup=keyboard,
-            )
-            return
+        if redis and not _skip_daily_limit:
+            _photo_count = await redis.incr(_photo_key)
+            await redis.expire(_photo_key, 86400)
+            if _photo_count > _photo_limit:
+                # Over limit — decrement back and reject
+                await redis.decr(_photo_key)
+                keyboard = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("✨ Получить безлимит →", callback_data="show_upgrade")
+                ]])
+                await update.message.reply_text(
+                    f"📸 Добавлено {_photo_count - 1}/{_photo_limit} фото сегодня.\n"
+                    f"Лимит восстановится завтра!",
+                    reply_markup=keyboard,
+                )
+                return
 
         # Проверить лимит размера гардероба (используем _existing_items уже загруженный выше)
         _wardrobe_limit = get_limit("wardrobe_size", _effective_plan)

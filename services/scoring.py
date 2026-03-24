@@ -50,6 +50,8 @@ def calc_item_score(breakdown: dict, matrix: ScoringMatrix) -> float:
 
     Формула: sum(value_i × weight_i) / max_score × 10
     """
+    if not matrix.criteria or not matrix.max_score:
+        return 5.0
     total = 0
     for criterion, weight_info in matrix.criteria.items():
         if criterion.startswith("_"):
@@ -248,7 +250,7 @@ OUTFIT_SCORE_WEIGHTS_ADULT = {
     },
 }
 
-OUTFIT_MAX_ADULT = 26  # updated with new criteria
+OUTFIT_MAX_ADULT = 28  # updated with new criteria
 WOW_THRESHOLD = {"transformation": 3, "unexpected_combination": 2}
 
 OUTFIT_SCORE_WEIGHTS_CHILD = {
@@ -351,7 +353,7 @@ class ScoringService:
         total += accessory_bonus
         breakdown["accessory_bonus"] = accessory_bonus
 
-        normalized = round(Decimal(total) / Decimal(OUTFIT_MAX_ADULT) * 10, 2)
+        normalized = min(Decimal("10.0"), round(Decimal(total) / Decimal(OUTFIT_MAX_ADULT) * 10, 2))
         breakdown["_total"] = total
 
         is_wow = (

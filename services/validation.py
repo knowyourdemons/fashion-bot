@@ -62,7 +62,11 @@ def validate_vision_item(data: dict) -> dict:
         valid = [s for s in season if s in VALID_SEASONS]
         if len(valid) != len(season):
             logger.warning("validation.invalid_season",
-                           got=season, valid=valid)
+                           got=season, valid=valid,
+                           item_type=data.get("type"))
+        if not valid:
+            logger.warning("validation.all_seasons_invalid",
+                           got=season, item_type=data.get("type"))
         data["season"] = valid if valid else None
 
     # Occasion array

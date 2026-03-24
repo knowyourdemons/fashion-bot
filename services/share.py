@@ -3,6 +3,7 @@
 Share token хранится в Redis TTL=86400.
 """
 import json
+import secrets
 import uuid
 from typing import Any
 
@@ -54,16 +55,20 @@ class ShareService:
             return payload.get("votes")
 
         # Deduplicate: track voters in set
+        if not voter_id:
+            voter_id = f"anon_{secrets.token_hex(8)}"
         voters = set(payload.get("_voters", []))
-        if voter_id and voter_id in voters:
+        if voter_id in voters:
             return payload["votes"]  # Already voted
-        if voter_id:
-            voters.add(voter_id)
+        voters.add(voter_id)
         payload["_voters"] = list(voters)
         payload["votes"][vote] += 1
 
         # Сохраняем с тем же TTL (не сбрасываем)
         ttl = await self._redis.ttl(key)
+        if ttl <= 0:
+            # Key expired or doesn't exist — don't re-save
+            return payload["votes"]
         await self._redis.set(key, json.dumps(payload), ex=max(ttl, 1))
         return payload["votes"]
 

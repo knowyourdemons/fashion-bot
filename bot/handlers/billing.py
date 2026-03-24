@@ -305,6 +305,14 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
                 subscription_id=None,
                 payment_provider="stars",
             )
+            # Clear trial fields — user is now a paying customer
+            from sqlalchemy import update as sa_update
+            from db.models.user import User
+            await session.execute(
+                sa_update(User)
+                .where(User.id == user.id)
+                .values(trial_ends_at=None, trial_started_at=None)
+            )
             await session.commit()
     except Exception as e:
         logger.error("stars.payment_db_failed", user_id=str(user.id), plan_key=plan_key, error=str(e))

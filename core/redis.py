@@ -14,22 +14,29 @@ Usage:
     # At shutdown:
     await close_redis()
 """
+import asyncio
+
 import redis.asyncio as aioredis
 
 from config import settings
 
 _client: aioredis.Redis | None = None
+_init_lock = asyncio.Lock()
 
 
 async def init_redis() -> aioredis.Redis:
     """Create the shared Redis connection pool. Call once at startup."""
     global _client
-    if _client is None:
-        _client = aioredis.from_url(
-            settings.redis_url,
-            decode_responses=False,
-            max_connections=32,
-        )
+    if _client is not None:
+        return _client
+    async with _init_lock:
+        # Double-check after acquiring lock
+        if _client is None:
+            _client = aioredis.from_url(
+                settings.redis_url,
+                decode_responses=False,
+                max_connections=32,
+            )
     return _client
 
 

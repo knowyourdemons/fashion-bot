@@ -1,4 +1,5 @@
 """Vision API и обработка фото — вынесено из bot/handlers/wardrobe.py."""
+import asyncio
 import base64
 import io
 import json
@@ -315,20 +316,23 @@ def _default_score() -> tuple[dict, float]:
 
 def _crop_bbox(image_bytes: bytes, bbox: dict) -> bytes:
     """Вырезает вещь из фото по нормализованным координатам bbox."""
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    iw, ih = img.size
-    x = max(0.0, min(1.0, float(bbox.get("x", 0.0))))
-    y = max(0.0, min(1.0, float(bbox.get("y", 0.0))))
-    w = max(0.01, min(1.0 - x, float(bbox.get("w", 1.0))))
-    h = max(0.01, min(1.0 - y, float(bbox.get("h", 1.0))))
-    left = int(x * iw)
-    top = int(y * ih)
-    right = int((x + w) * iw)
-    bottom = int((y + h) * ih)
-    cropped = img.crop((left, top, right, bottom))
-    buf = io.BytesIO()
-    cropped.save(buf, format="JPEG", quality=90)
-    return buf.getvalue()
+    try:
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        iw, ih = img.size
+        x = max(0.0, min(1.0, float(bbox.get("x", 0.0))))
+        y = max(0.0, min(1.0, float(bbox.get("y", 0.0))))
+        w = max(0.01, min(1.0 - x, float(bbox.get("w", 1.0))))
+        h = max(0.01, min(1.0 - y, float(bbox.get("h", 1.0))))
+        left = int(x * iw)
+        top = int(y * ih)
+        right = int((x + w) * iw)
+        bottom = int((y + h) * ih)
+        cropped = img.crop((left, top, right, bottom))
+        buf = io.BytesIO()
+        cropped.save(buf, format="JPEG", quality=90)
+        return buf.getvalue()
+    except (ValueError, TypeError):
+        return image_bytes
 
 
 def _check_crop_quality(png_bytes: bytes, min_ratio: float = 0.15) -> bool:
@@ -398,6 +402,28 @@ def _post_validate_vision(
             if item.get("season"):
                 item["season"] = ["spring", "summer", "autumn", "winter"]
 
+        # Heavy outerwear in hot weather → reduce warmth_level
+        warmth = item.get("warmth_level", 3)
+        if cg == "outerwear" and isinstance(warmth, (int, float)) and warmth >= 4 and temp > 25:
+            logger.info(
+                "vision.post_validate.warmth_reduced",
+                from_type=item["type"],
+                warmth_from=warmth,
+                warmth_to=2,
+                reason=f"heavy_outerwear_at_{temp}C",
+            )
+            item["warmth_level"] = 2
+
+        # Gloves/scarf in warm weather → warning only (don't reclassify)
+        if cg == "accessory" and temp > 20:
+            if any(w in item_type for w in ["перчатк", "варежк", "шарф"]):
+                logger.warning(
+                    "vision.post_validate.warm_weather_accessory",
+                    item_type=item["type"],
+                    temp=temp,
+                    reason="winter_accessory_in_warm_weather",
+                )
+
     return items
 
 
@@ -439,25 +465,26 @@ async def _call_vision(
     if context_parts:
         user_text = " ".join(context_parts) + "\n" + user_text
 
-    response = await pool.create_message(
-        model="claude-sonnet-4-6",
-        system=_VISION_SYSTEM,
-        messages=[{
-            "role": "user",
-            "content": [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/jpeg",
-                        "data": base64.standard_b64encode(photo_bytes).decode(),
+    async with asyncio.timeout(60):
+        response = await pool.create_message(
+            model="claude-sonnet-4-6",
+            system=_VISION_SYSTEM,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": base64.standard_b64encode(photo_bytes).decode(),
+                        },
                     },
-                },
-                {"type": "text", "text": user_text},
-            ],
-        }],
-        max_tokens=4096,
-    )
+                    {"type": "text", "text": user_text},
+                ],
+            }],
+            max_tokens=4096,
+        )
 
     raw = response.content[0].text.strip() if response.content else "[]"
     if raw.startswith("```"):
@@ -489,6 +516,11 @@ async def _call_vision(
 
     if not validated and parsed:
         logger.warning("vision.all_items_invalid", original_count=len(parsed))
+
+    # Cap at 8 items per photo to prevent abuse / hallucination
+    if len(validated) > 8:
+        logger.warning("vision.too_many_items", count=len(validated), capped=8)
+        validated = validated[:8]
 
     # Post-validation: fix misclassifications using weather context
     validated = _post_validate_vision(validated, temp=temp, season=season)

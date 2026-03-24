@@ -229,7 +229,8 @@ async def _send_cold_reminders(redis_client) -> None:
                     continue
                 import json as _json
                 _data = _json.loads(_raw.decode() if isinstance(_raw, bytes) else _raw)
-                _uid = uuid.UUID(_data["user_id"])
+                import uuid as _uuid_rem
+                _uid = _uuid_rem.UUID(_data["user_id"])
                 _onboarded = date.fromisoformat(_data["onboarded_date"])
                 _child_name = _data.get("child_name", "")
                 _days_since = (date.today() - _onboarded).days
@@ -398,6 +399,10 @@ async def _check_evening_brief(user, today_weather: dict) -> dict | None:
     now_wmo = today_weather.get("wmo_morning", 0)
 
     temp_delta = abs((now_temp_m or 0) - (eve_temp_m or 0))
+    if temp_delta > 15:
+        logger.warning("evening_brief.unreasonable_weather_delta",
+                        eve_temp=eve_temp_m, now_temp=now_temp_m,
+                        delta=temp_delta)
     # Precipitation changed = one has precip WMO code and other doesn't
     eve_has_precip = eve_wmo in _WMO_PRECIP_CODES or eve_precip > 30
     now_has_precip = now_wmo in _WMO_PRECIP_CODES or now_precip > 30
@@ -632,15 +637,18 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
 
     if outfit_slots or not items:
         try:
-            brief_card_bytes = await build_brief_card(
-                user=user,
-                child=None,
-                outfit={},
-                weather=weather,
-                outfit_slots=outfit_slots,
-                advice_text=stylist_advice,
-                colortype=getattr(user, "colortype", "") or "",
-            )
+            async with asyncio.timeout(30):
+                brief_card_bytes = await build_brief_card(
+                    user=user,
+                    child=None,
+                    outfit={},
+                    weather=weather,
+                    outfit_slots=outfit_slots,
+                    advice_text=stylist_advice,
+                    colortype=getattr(user, "colortype", "") or "",
+                )
+        except TimeoutError:
+            logger.warning("brief.adult.brief_card_timeout", user_id=str(user.id))
         except Exception as e:
             logger.warning("brief.adult.brief_card_failed", error=str(e))
 
@@ -748,8 +756,8 @@ async def generate_brief(payload: dict) -> dict:
 
     children = [c for c in (user.children or []) if c.deleted_at is None]
     if not children:
-        logger.info("brief.generate.no_children", user_id=str(user_id))
-        return {}
+        logger.info("brief.generate.no_children_fallback_adult", user_id=str(user_id))
+        return await _generate_adult_brief(user, payload)
 
     # Try pre-generated weather cache
     redis_client = get_redis()
@@ -770,6 +778,9 @@ async def generate_brief(payload: dict) -> dict:
         coords = await _geocode_city(user.city or "")
         if coords:
             weather = await _get_weather(coords[0], coords[1], user.timezone or "Europe/Vilnius")
+
+    if not weather and user.city:
+        logger.warning("brief.child.weather_empty_with_city", user_id=str(user.id), city=user.city)
 
     today = date.today()
     season = _SEASONS[today.month]
@@ -1105,10 +1116,15 @@ async def generate_brief(payload: dict) -> dict:
     from core.permissions import get_trial_days_left as _gtdl
     _days_left = _gtdl(user)
     if _days_left is not None:
-        if _days_left == 3:
-            _trial_notice = f"\n\n⏰ Осталось {_days_left} дня Premium! Потом образы только вт/чт"
-        elif _days_left == 2:
-            _trial_notice = f"\n\n⏰ Осталось {_days_left} дня! Re-roll скоро станет недоступен"
+        def _days_word(n):
+            if n % 10 == 1 and n % 100 != 11:
+                return "день"
+            elif n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14):
+                return "дня"
+            return "дней"
+
+        if _days_left >= 2:
+            _trial_notice = f"\n\n⏰ Осталось {_days_left} {_days_word(_days_left)} Premium! Потом образы только вт/чт"
         elif _days_left == 1:
             _trial_notice = "\n\n⏰ Последний день Premium — завтра базовый план"
         elif _days_left == 0:
@@ -1201,17 +1217,20 @@ async def generate_brief(payload: dict) -> dict:
 
     try:
         _ct = getattr(_first_child, "colortype", "") if _first_child else getattr(user, "colortype", "")
-        _brief_card_bytes = await build_brief_card(
-            user=user,
-            child=_first_child,
-            outfit=_first_outfit,
-            weather=weather,
-            outfit_slots=all_outfit_slots,
-            advice_text=_advice_for_card,
-            colortype=_ct or "",
-        )
+        async with asyncio.timeout(30):
+            _brief_card_bytes = await build_brief_card(
+                user=user,
+                child=_first_child,
+                outfit=_first_outfit,
+                weather=weather,
+                outfit_slots=all_outfit_slots,
+                advice_text=_advice_for_card,
+                colortype=_ct or "",
+            )
         if _brief_card_bytes:
             logger.info("morning_brief.brief_card_ok", size=len(_brief_card_bytes))
+    except TimeoutError:
+        logger.warning("morning_brief.brief_card_timeout", user_id=str(user.id))
     except Exception as _bc_err:
         logger.warning("morning_brief.brief_card_failed", error=str(_bc_err))
 
@@ -1529,7 +1548,13 @@ async def send_morning_brief(payload: dict) -> dict:
 
         return {"sent": True}
     except Exception as e:
-        logger.error("morning_brief.send_failed", telegram_id=telegram_id, error=str(e))
+        logger.error(
+            "morning_brief.send_failed",
+            telegram_id=telegram_id,
+            brief_id=brief_id,
+            error=str(e),
+            note="BriefLog already created but Telegram send failed",
+        )
         return {"sent": False, "error": str(e)}
 
 

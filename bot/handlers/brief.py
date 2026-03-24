@@ -40,6 +40,12 @@ async def handle_brief_feedback(update: Update, context: ContextTypes.DEFAULT_TY
                 item_ids = [uuid.UUID(i) for i in (log.outfit_items or [])]
                 await update_wear_count(session, item_ids)
             await session.commit()
+        # Invalidate preference cache so learner picks up new feedback
+        try:
+            from services.preference_learner import invalidate_preferences
+            await invalidate_preferences(str(log.user_id))
+        except Exception:
+            pass
         # Clean UX: edit text message (buttons are on text, not photo)
         if vote == "up":
             try:

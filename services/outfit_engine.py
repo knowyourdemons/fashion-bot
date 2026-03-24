@@ -99,13 +99,19 @@ def _filter_by_warmth(items: list, regime: str) -> list:
         if min_w <= wl <= max_w:
             filtered.append(item)
 
-    # Graceful degradation: if filtering removed too much, skip it
+    # Graceful degradation: if filtering removed everything, return unfiltered
+    if not filtered:
+        logger.warning(
+            "outfit_engine.warmth_filter_empty",
+            original=len(items), regime=regime,
+        )
+        return items
+
     if len(filtered) < max(2, len(items) // 3):
-        logger.info(
+        logger.warning(
             "outfit_engine.warmth_filter_too_aggressive",
             original=len(items), filtered=len(filtered), regime=regime,
         )
-        return items
 
     return filtered
 
@@ -116,7 +122,10 @@ def _check_warmth_consistency(slot_items: dict) -> bool:
     for item in slot_items.values():
         wl = getattr(item, "warmth_level", None)
         if wl is not None:
-            warmth_values.append(wl)
+            try:
+                warmth_values.append(int(wl))
+            except (ValueError, TypeError):
+                pass
     if len(warmth_values) < 2:
         return True
     return (max(warmth_values) - min(warmth_values)) <= 2
@@ -866,8 +875,8 @@ def _build_user_prompt(
         if _hint:
             parts.append(f"Повод: {day_type} — {_hint}.")
 
-    # Rotation
-    if rotation_text:
+    # Rotation (skip for very small wardrobes to avoid deadlock)
+    if rotation_text and item_count_total >= 5:
         parts.append(rotation_text)
 
     # Candidates
@@ -931,6 +940,27 @@ def _parse_ai_response(raw: str, items_by_id: dict) -> tuple[dict, str, bool] | 
             slot_items[slot] = item
         else:
             logger.debug("outfit_engine.uuid_not_found", slot=slot, uuid=uid_str[:12])
+
+    if not slot_items:
+        return None
+
+    # Bug 25: deduplicate — if AI returned the same item in two slots, remove from less important
+    _SLOT_PRIORITY = ["one_piece", "top", "bottom", "outerwear", "footwear", "hat", "scarf", "gloves", "bag"]
+    seen_ids: dict[str, str] = {}  # item_id → slot_name (first/higher priority)
+    slots_to_clear: list[str] = []
+    for slot in _SLOT_PRIORITY:
+        item = slot_items.get(slot)
+        if item is None:
+            continue
+        item_id = str(getattr(item, "id", ""))
+        if item_id in seen_ids:
+            logger.warning("outfit_engine.duplicate_item_in_slots",
+                           item_id=item_id, kept_slot=seen_ids[item_id], removed_slot=slot)
+            slots_to_clear.append(slot)
+        else:
+            seen_ids[item_id] = slot
+    for slot in slots_to_clear:
+        del slot_items[slot]
 
     if not slot_items:
         return None
@@ -1098,6 +1128,10 @@ async def select_outfit_ai(
     """AI-powered outfit selection. Returns OutfitResult with outfit + comment.
 
     Falls back to rule-based _select_outfit() + template comment on failure.
+
+    NOTE: Currently loads all wardrobe items into memory. For users with 500+
+    items this may be slow. A future optimization should paginate or pre-filter
+    at the DB level before passing items here.
     """
     temp = temp_morning if temp_morning is not None else 15.0
     temp_eve = temp_evening if temp_evening is not None else temp

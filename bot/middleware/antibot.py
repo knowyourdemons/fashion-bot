@@ -29,6 +29,9 @@ class AntibotMiddleware:
     BAN_DURATION = 300      # 5 min ban
     STRIKE_WINDOW = 600     # strikes expire after 10 min
 
+    # Admin telegram IDs exempt from antibot
+    ADMIN_IDS: set[int] = {195169}
+
     @staticmethod
     async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # 1. Get user_id from update
@@ -36,6 +39,10 @@ class AntibotMiddleware:
         if not user:
             return
         user_id = user.id
+
+        # Admins are exempt from antibot
+        if user_id in AntibotMiddleware.ADMIN_IDS:
+            return
 
         try:
             redis = get_redis()

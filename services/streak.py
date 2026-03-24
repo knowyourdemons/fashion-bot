@@ -34,6 +34,9 @@ async def update_streak(user_id: str) -> dict:
     else:
         streak = {"current": 0, "best": 0, "last_date": "", "freezes_left": 1}
 
+    # Clamp freezes_left to valid range [0, 1]
+    streak["freezes_left"] = max(0, min(1, streak.get("freezes_left", 1)))
+
     if streak["last_date"] == today:
         return streak  # Already counted today
 

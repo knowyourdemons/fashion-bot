@@ -364,8 +364,11 @@ def _validate_eval(data: dict) -> dict:
     score = float(data.get("score", 5.0))
     data["score"] = max(1.0, min(10.0, round(score, 1)))
 
-    # Clamp dimensions
+    # Clamp dimensions and ensure all required keys have defaults
     dims = data.get("dimensions", {})
+    for key in EVAL_DIMENSIONS:
+        if key not in dims:
+            dims[key] = 5  # neutral default for missing dimensions
     for key in dims:
         dims[key] = max(1, min(10, int(dims.get(key, 5))))
     data["dimensions"] = dims

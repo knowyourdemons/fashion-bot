@@ -1247,9 +1247,9 @@ async def handle_delete_yes(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     except Exception:
         _today_brief = None
 
-    # Soft delete
+    # Soft delete (with owner check to prevent cross-user deletion)
     async with AsyncWriteSession() as session:
-        await soft_delete(session, item_id)
+        await soft_delete(session, item_id, owner_id=owner_id, owner_type=owner_type)
         await session.commit()
 
     logger.info("wb.deleted", item_id=full_id_str, user_id=str(user.id),

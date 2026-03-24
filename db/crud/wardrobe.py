@@ -25,14 +25,17 @@ async def get_owner_items(
 
 
 async def get_by_id(
-    session: AsyncSession, item_id: uuid.UUID
+    session: AsyncSession,
+    item_id: uuid.UUID,
+    owner_id: Optional[uuid.UUID] = None,
 ) -> Optional[WardrobeItem]:
-    result = await session.execute(
-        select(WardrobeItem).where(
-            WardrobeItem.id == item_id,
-            WardrobeItem.deleted_at == None,
-        )
+    q = select(WardrobeItem).where(
+        WardrobeItem.id == item_id,
+        WardrobeItem.deleted_at == None,
     )
+    if owner_id is not None:
+        q = q.where(WardrobeItem.owner_id == owner_id)
+    result = await session.execute(q)
     return result.scalar_one_or_none()
 
 
@@ -106,10 +109,20 @@ async def get_owner_items_count(
     return result.scalar() or 0
 
 
-async def soft_delete(session: AsyncSession, item_id: uuid.UUID) -> None:
+async def soft_delete(
+    session: AsyncSession,
+    item_id: uuid.UUID,
+    owner_id: Optional[uuid.UUID] = None,
+    owner_type: Optional[str] = None,
+) -> None:
     from datetime import datetime
+    conditions = [WardrobeItem.id == item_id]
+    if owner_id is not None:
+        conditions.append(WardrobeItem.owner_id == owner_id)
+    if owner_type is not None:
+        conditions.append(WardrobeItem.owner_type == owner_type)
     await session.execute(
         update(WardrobeItem)
-        .where(WardrobeItem.id == item_id)
+        .where(*conditions)
         .values(deleted_at=datetime.utcnow())
     )

@@ -37,155 +37,100 @@ class Scheduler:
         key = f"lock:cron:{task}:{user_id}"
         await self._redis.delete(key)
 
+    def _add_job_safe(self, job_id: str, func, trigger, **kwargs) -> None:
+        """Add a scheduler job, logging errors instead of crashing startup."""
+        try:
+            self._scheduler.add_job(func, trigger, id=job_id, replace_existing=True, **kwargs)
+        except Exception as e:
+            logger.error("scheduler.job_setup_failed", job_id=job_id, error=str(e))
+
     def _setup_jobs(self) -> None:
-        from worker.tasks import morning_brief, gap_analysis
-        from worker.tasks import subscription_expiry, reminders, analytics_report
-        from worker.tasks import evening_push, weekly_plan
-        from worker.tasks import daily_reset, cleanup_r2
+        try:
+            from worker.tasks import morning_brief, gap_analysis
+            from worker.tasks import subscription_expiry, reminders, analytics_report
+            from worker.tasks import evening_push, weekly_plan
+            from worker.tasks import daily_reset, cleanup_r2
+        except Exception as e:
+            logger.error("scheduler.core_imports_failed", error=str(e))
+            return
 
-        # daily_reset — каждый час, фильтрует юзеров у кого сейчас 00:xx по local timezone
-        self._scheduler.add_job(
-            daily_reset.reset_daily_limits,
+        self._add_job_safe("daily_reset", daily_reset.reset_daily_limits,
+            CronTrigger(hour="*", minute=0))
+
+        self._add_job_safe("morning_brief", morning_brief.schedule_all,
             CronTrigger(hour="*", minute=0),
-            id="daily_reset",
-            replace_existing=True,
-        )
+            misfire_grace_time=300, max_instances=2)
 
-        # morning_brief — 07:00 по timezone юзера (запускается каждый час, фильтрует внутри)
-        self._scheduler.add_job(
-            morning_brief.schedule_all,
-            CronTrigger(hour="*", minute=0),
-            id="morning_brief",
-            replace_existing=True,
-            misfire_grace_time=300,
-            max_instances=2,
-        )
+        self._add_job_safe("evening_brief", morning_brief.schedule_evening,
+            CronTrigger(hour="*", minute=30))
 
-        # evening_brief — 20:00 по timezone юзера (каждый час :30, фильтрует внутри)
-        self._scheduler.add_job(
-            morning_brief.schedule_evening,
-            CronTrigger(hour="*", minute=30),
-            id="evening_brief",
-            replace_existing=True,
-        )
+        self._add_job_safe("gap_analysis", gap_analysis.run,
+            CronTrigger(day=1, hour=9, minute=0))
 
-        # gap_analysis — 1-е число 09:00 UTC
-        self._scheduler.add_job(
-            gap_analysis.run,
-            CronTrigger(day=1, hour=9, minute=0),
-            id="gap_analysis",
-            replace_existing=True,
-        )
+        self._add_job_safe("subscription_expiry", subscription_expiry.run,
+            CronTrigger(hour=9, minute=0))
 
-        # subscription_expiry — ежедневно 09:00 UTC
-        self._scheduler.add_job(
-            subscription_expiry.run,
-            CronTrigger(hour=9, minute=0),
-            id="subscription_expiry",
-            replace_existing=True,
-        )
+        self._add_job_safe("evening_push", evening_push.run,
+            CronTrigger(hour="*", minute=45))
 
-        # evening_push — каждый час :45, фильтрует по timezone юзера (local 20:xx)
-        self._scheduler.add_job(
-            evening_push.run,
-            CronTrigger(hour="*", minute=45),
-            id="evening_push",
-            replace_existing=True,
-        )
+        self._add_job_safe("weekly_plan", weekly_plan.schedule_weekly,
+            CronTrigger(hour="*", minute=15))
 
-        # weekly_plan — каждый час :15, фильтрует по timezone (вс 19:00 local)
-        self._scheduler.add_job(
-            weekly_plan.schedule_weekly,
-            CronTrigger(hour="*", minute=15),
-            id="weekly_plan",
-            replace_existing=True,
-        )
+        self._add_job_safe("reminders", reminders.run,
+            CronTrigger(hour=10, minute=0))
 
-        # reminders — ежедневно 10:00 UTC
-        self._scheduler.add_job(
-            reminders.run,
-            CronTrigger(hour=10, minute=0),
-            id="reminders",
-            replace_existing=True,
-        )
+        self._add_job_safe("analytics_report", analytics_report.run,
+            CronTrigger(hour=8, minute=0))
 
-        # analytics_report — ежедневно 08:00 UTC
-        self._scheduler.add_job(
-            analytics_report.run,
-            CronTrigger(hour=8, minute=0),
-            id="analytics_report",
-            replace_existing=True,
-        )
+        self._add_job_safe("cleanup_r2", cleanup_r2.run,
+            CronTrigger(hour=3, minute=0))
 
-        # cleanup_r2 — ежедневно 03:00 UTC
-        self._scheduler.add_job(
-            cleanup_r2.run,
-            CronTrigger(hour=3, minute=0),
-            id="cleanup_r2",
-            replace_existing=True,
-        )
+        # Optional tasks — each import wrapped individually
+        try:
+            from worker.tasks import growth_alert
+            self._add_job_safe("growth_alert", growth_alert.run,
+                CronTrigger(day=1, hour=8, minute=30))
+        except Exception as e:
+            logger.error("scheduler.import_failed", task="growth_alert", error=str(e))
 
-        # growth_alert — 1-е число каждого месяца 08:30 UTC
-        from worker.tasks import growth_alert
-        self._scheduler.add_job(
-            growth_alert.run,
-            CronTrigger(day=1, hour=8, minute=30),
-            id="growth_alert",
-            replace_existing=True,
-        )
+        try:
+            from worker.tasks import capsule_season
+            self._add_job_safe("capsule_season", capsule_season.run,
+                CronTrigger(day=1, hour=9, minute=30))
+        except Exception as e:
+            logger.error("scheduler.import_failed", task="capsule_season", error=str(e))
 
-        # capsule_season — 1-е число сезона (Mar/Jun/Sep/Dec), 09:30 UTC
-        from worker.tasks import capsule_season
-        self._scheduler.add_job(
-            capsule_season.run,
-            CronTrigger(day=1, hour=9, minute=30),
-            id="capsule_season",
-            replace_existing=True,
-        )
+        try:
+            from worker.tasks import wardrobe_analysis
+            self._add_job_safe("wardrobe_analysis", wardrobe_analysis.run,
+                CronTrigger(day_of_week="mon", hour=6, minute=0))
+        except Exception as e:
+            logger.error("scheduler.import_failed", task="wardrobe_analysis", error=str(e))
 
-        # monthly_report — перенесён в analytics_report, 1-е число 08:00 UTC (уже зарегистрирован)
+        try:
+            from worker.tasks import declutter
+            self._add_job_safe("declutter", declutter.run,
+                CronTrigger(day=15, hour=10, minute=0))
+        except Exception as e:
+            logger.error("scheduler.import_failed", task="declutter", error=str(e))
 
-        # wardrobe_analysis — еженедельно пн 06:00 UTC
-        from worker.tasks import wardrobe_analysis
-        self._scheduler.add_job(
-            wardrobe_analysis.run,
-            CronTrigger(day_of_week="mon", hour=6, minute=0),
-            id="wardrobe_analysis",
-            replace_existing=True,
-        )
+        try:
+            from worker.tasks import taxonomy_review
+            self._add_job_safe("taxonomy_review", taxonomy_review.run,
+                CronTrigger(hour=4, minute=0))
+        except Exception as e:
+            logger.error("scheduler.import_failed", task="taxonomy_review", error=str(e))
 
-        # declutter — 15-е число каждого месяца 10:00 UTC
-        from worker.tasks import declutter
-        self._scheduler.add_job(
-            declutter.run,
-            CronTrigger(day=15, hour=10, minute=0),
-            id="declutter",
-            replace_existing=True,
-        )
+        try:
+            from worker.tasks import unknown_items_report
+            self._add_job_safe("unknown_items_report", unknown_items_report.run,
+                CronTrigger(day=1, hour=7, minute=0))
+        except Exception as e:
+            logger.error("scheduler.import_failed", task="unknown_items_report", error=str(e))
 
-        # taxonomy_review — ежедневно 04:00 UTC
-        from worker.tasks import taxonomy_review
-        self._scheduler.add_job(
-            taxonomy_review.run,
-            CronTrigger(hour=4, minute=0),
-            id="taxonomy_review",
-            replace_existing=True,
-        )
-
-        # unknown_items_report — 1-е число 07:00 UTC (admin report)
-        from worker.tasks import unknown_items_report
-        self._scheduler.add_job(
-            unknown_items_report.run,
-            CronTrigger(day=1, hour=7, minute=0),
-            id="unknown_items_report",
-            replace_existing=True,
-        )
-
-        # pre_generate_brief — каждый час :45 (проверяет local 02:00)
-        from worker.tasks import pre_generate_brief
-        self._scheduler.add_job(
-            pre_generate_brief.run,
-            CronTrigger(hour="*", minute=45),
-            id="pre_generate_brief",
-            replace_existing=True,
-        )
+        try:
+            from worker.tasks import pre_generate_brief
+            self._add_job_safe("pre_generate_brief", pre_generate_brief.run,
+                CronTrigger(hour="*", minute=45))
+        except Exception as e:
+            logger.error("scheduler.import_failed", task="pre_generate_brief", error=str(e))
