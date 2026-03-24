@@ -609,24 +609,20 @@ def _run_cloth_seg(image_bytes: bytes) -> bytes:
     outputs = sess.run(None, {input_name: arr})
 
     # U2Net side outputs: 7 × [1, 1, 320, 320]. First output (d0) is the fused main mask.
-    # Model trained on iMaterialist clothing → salient = clothing, background = 0.
+    # Model trained on iMaterialist clothing → output already in [0, 1] range.
+    # Do NOT apply sigmoid — values are already probabilities.
     mask = outputs[0].squeeze()  # (320, 320)
+    mask = np.clip(mask, 0.0, 1.0)
 
-    # Sigmoid to convert logits to probability
-    mask = 1.0 / (1.0 + np.exp(-mask))
+    # Binarize: clothing > 0.5, floor/background < 0.5
+    mask = np.where(mask > 0.5, 255, 0).astype(np.uint8)
 
-    # Scale to 0-255
-    mask = (mask * 255).astype(np.uint8)
-
-    # Threshold + cleanup
-    mask[mask < 30] = 0
-    mask[mask > 225] = 255
-
+    # Morphological cleanup
     from PIL import ImageFilter
     mask_pil = Image.fromarray(mask)
-    mask_pil = mask_pil.filter(ImageFilter.MaxFilter(3))
-    mask_pil = mask_pil.filter(ImageFilter.MinFilter(3))
-    mask_pil = mask_pil.filter(ImageFilter.GaussianBlur(radius=1))
+    mask_pil = mask_pil.filter(ImageFilter.MaxFilter(3))  # dilate: fill small holes
+    mask_pil = mask_pil.filter(ImageFilter.MinFilter(3))  # erode: remove noise
+    mask_pil = mask_pil.filter(ImageFilter.GaussianBlur(radius=1.5))  # smooth edges
 
     # Un-pad: resize mask to square then crop to original aspect ratio
     mask_square = mask_pil.resize((side, side), Image.BILINEAR)
