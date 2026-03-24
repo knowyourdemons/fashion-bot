@@ -667,6 +667,67 @@ def _run_cloth_seg(image_bytes: bytes) -> bytes:
     return buf.getvalue()
 
 
+def _refine_mask_grabcut(image_bytes: bytes, mask_bytes: bytes, iterations: int = 3) -> bytes:
+    """Refine a rough mask using GrabCut seeded by the initial mask.
+
+    GrabCut learns local color models (GMM) for foreground vs background,
+    then iteratively refines the boundary. This helps when cloth-seg knows
+    WHERE the garment is but the edge is imprecise (e.g., pink on wood).
+
+    Args:
+        image_bytes: original RGB image (JPEG/PNG)
+        mask_bytes: initial mask as RGBA PNG (from cloth-seg or RMBG)
+        iterations: GrabCut iterations (more = better but slower)
+    Returns:
+        Refined RGBA PNG
+    """
+    try:
+        import cv2
+        orig = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        mask_img = Image.open(io.BytesIO(mask_bytes)).convert("RGBA")
+
+        # Resize mask to match original if needed
+        if mask_img.size != orig.size:
+            mask_img = mask_img.resize(orig.size, Image.LANCZOS)
+
+        alpha = np.array(mask_img.split()[3])
+        arr = np.array(orig)
+
+        # Build GrabCut mask from alpha:
+        # 0=GC_BGD (sure bg), 1=GC_FGD (sure fg), 2=GC_PR_BGD, 3=GC_PR_FGD
+        gc_mask = np.full(alpha.shape, cv2.GC_PR_BGD, dtype=np.uint8)
+        gc_mask[alpha > 200] = cv2.GC_FGD      # confident foreground
+        gc_mask[alpha > 100] = cv2.GC_PR_FGD    # probable foreground
+        gc_mask[alpha < 30] = cv2.GC_BGD        # confident background
+
+        bgd_model = np.zeros((1, 65), np.float64)
+        fgd_model = np.zeros((1, 65), np.float64)
+
+        cv2.grabCut(arr, gc_mask, None, bgd_model, fgd_model,
+                    iterations, cv2.GC_INIT_WITH_MASK)
+
+        # Extract refined mask
+        refined = np.where((gc_mask == cv2.GC_FGD) | (gc_mask == cv2.GC_PR_FGD),
+                          255, 0).astype(np.uint8)
+
+        # Smooth edges
+        refined = cv2.GaussianBlur(refined, (3, 3), 0)
+
+        result = orig.copy().convert("RGBA")
+        result.putalpha(Image.fromarray(refined))
+
+        buf = io.BytesIO()
+        result.save(buf, format="PNG")
+
+        import structlog
+        structlog.get_logger().info("rmbg.grabcut_refine_done")
+        return buf.getvalue()
+    except Exception as e:
+        import structlog
+        structlog.get_logger().warning("rmbg.grabcut_refine_failed", error=str(e))
+        return mask_bytes  # return original mask on failure
+
+
 def _auto_rotate_to_vertical(img: Image.Image) -> Image.Image:
     """Rotate garment to vertical orientation using contour analysis.
 

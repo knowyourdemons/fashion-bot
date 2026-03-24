@@ -60,6 +60,7 @@ async def main():
     from services.image_processor import (
         _apply_clahe, _run_rmbg14, _run_cloth_seg,
         _postprocess_mask, _check_mask_quality_v2, _intersect_masks,
+        _refine_mask_grabcut,
         exif_rotate, soften_edges, pad_square_resize,
     )
     from services.vision import _crop_bbox
@@ -95,6 +96,13 @@ async def main():
             try:
                 cloth_r = _run_cloth_seg(enhanced_crop)
                 cloth_r = _postprocess_mask(cloth_r)
+                # GrabCut refine if cloth-seg has excess bg (55-75%)
+                _ci = Image.open(io.BytesIO(cloth_r)).convert("RGBA")
+                _ca = np.array(_ci.split()[3])
+                _cr = np.sum(_ca > 128) / _ca.size
+                if 0.55 < _cr < 0.75:
+                    cloth_r = _refine_mask_grabcut(crop, cloth_r)
+                    cloth_r = _postprocess_mask(cloth_r)
             except:
                 pass
             try:
@@ -115,8 +123,14 @@ async def main():
                     result = inter
                     model_used = "inter"
                 else:
-                    result = cloth_r
-                    model_used = "cloth+"
+                    _ci2 = Image.open(io.BytesIO(cloth_r)).convert("RGBA")
+                    _co2 = np.sum(np.array(_ci2.split()[3]) > 128) / (_ci2.size[0]*_ci2.size[1])
+                    if _co2 >= 0.05:
+                        result = cloth_r
+                        model_used = "cloth+"
+                    else:
+                        result = rmbg_r
+                        model_used = "rmbg+"
             elif rmbg_r:
                 result = rmbg_r
                 model_used = "rmbg"

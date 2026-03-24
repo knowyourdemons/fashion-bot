@@ -87,13 +87,23 @@ async def process_rmbg(payload: dict) -> dict:
         enhanced_crop = _apply_clahe(crop_bytes)
         png_bytes = None
 
-        # Run both models — we may need the intersection
+        # Run both models — we may need the intersection or GrabCut refinement
         cloth_result = None
         rmbg_result = None
 
         try:
             cloth_result = _run_cloth_seg(enhanced_crop)
             cloth_result = _postprocess_mask(cloth_result)
+
+            # If cloth-seg has excess background (55-75%), refine with GrabCut
+            from services.image_processor import _refine_mask_grabcut
+            _ci = Image.open(io.BytesIO(cloth_result)).convert("RGBA")
+            _ca = np.array(_ci.split()[3])
+            _cr = np.sum(_ca > 128) / _ca.size
+            if 0.55 < _cr < 0.75:
+                cloth_result = _refine_mask_grabcut(crop_bytes, cloth_result)
+                cloth_result = _postprocess_mask(cloth_result)
+                logger.info("rmbg_process.grabcut_refined", before=f"{_cr:.0%}")
         except Exception as e:
             logger.warning("rmbg_process.cloth_seg_failed", error=str(e))
 
@@ -120,9 +130,17 @@ async def process_rmbg(payload: dict) -> dict:
                 png_bytes = intersected
                 logger.info("rmbg_process.model_ok", model="intersect")
             else:
-                # Intersection too aggressive → use cloth-seg alone (even if imperfect)
-                png_bytes = cloth_result
-                logger.info("rmbg_process.model_ok", model="cloth_seg_loose")
+                # Intersection too aggressive — pick the better single mask.
+                # If cloth-seg has <5% opaque, it missed the garment → use RMBG.
+                cloth_img = Image.open(io.BytesIO(cloth_result)).convert("RGBA")
+                cloth_opaque = np.sum(np.array(cloth_img.split()[3]) > 128)
+                cloth_ratio = cloth_opaque / (cloth_img.size[0] * cloth_img.size[1])
+                if cloth_ratio >= 0.05:
+                    png_bytes = cloth_result
+                    logger.info("rmbg_process.model_ok", model="cloth_seg_loose")
+                else:
+                    png_bytes = rmbg_result
+                    logger.info("rmbg_process.model_ok", model="rmbg14_rescue")
         elif rmbg_result:
             png_bytes = rmbg_result
             logger.info("rmbg_process.model_ok", model="rmbg14_fallback")
