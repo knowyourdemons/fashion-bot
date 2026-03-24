@@ -15,7 +15,9 @@ RUN mkdir -p /root/.u2net && \
     curl -fSL -o /root/.u2net/silueta.onnx \
     https://github.com/danielgatis/rembg/releases/download/v0.0.0/silueta.onnx && \
     curl -fSL -o /root/.u2net/rmbg14_quantized.onnx \
-    https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model_quantized.onnx
+    https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model_quantized.onnx && \
+    curl -fSL -o /root/.u2net/isnet-general-use.onnx \
+    https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx
 COPY . .
 EXPOSE 8000
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -21,12 +21,16 @@ from exceptions import DuplicateItemError, ImageTooLargeError
 # ── Singleton ONNX sessions for background removal ─────────────────
 _SILUETA_PATH = "/root/.u2net/silueta.onnx"
 _RMBG14_PATH = "/root/.u2net/rmbg14_quantized.onnx"
+_ISNET_PATH = "/root/.u2net/isnet-general-use.onnx"
 
 _ort_session: Optional[ort.InferenceSession] = None
 _ort_lock = threading.Lock()
 
 _rmbg_session: Optional[ort.InferenceSession] = None
 _rmbg_lock = threading.Lock()
+
+_isnet_session: Optional[ort.InferenceSession] = None
+_isnet_lock = threading.Lock()
 
 # Limit concurrent RMBG inferences to prevent OOM (each peak ~600MB)
 _rmbg_semaphore = asyncio.Semaphore(1)
@@ -59,6 +63,74 @@ def _get_rmbg_session() -> ort.InferenceSession:
                     _RMBG14_PATH, opts, providers=["CPUExecutionProvider"]
                 )
     return _rmbg_session
+
+
+def _get_isnet_session() -> ort.InferenceSession:
+    """Thread-safe singleton for ISNet-general-use ONNX model (178MB, best quality)."""
+    global _isnet_session
+    if _isnet_session is None:
+        with _isnet_lock:
+            if _isnet_session is None:
+                opts = ort.SessionOptions()
+                opts.intra_op_num_threads = 2
+                opts.inter_op_num_threads = 1
+                _isnet_session = ort.InferenceSession(
+                    _ISNET_PATH, opts, providers=["CPUExecutionProvider"]
+                )
+    return _isnet_session
+
+
+def _run_isnet(image_bytes: bytes) -> bytes:
+    """Run ISNet-general-use: best quality bg removal for complex backgrounds.
+
+    ISNet is designed for high-accuracy object segmentation.
+    Input: 1024×1024, normalized [0,1], CHW layout.
+    Output: sigmoid mask 1024×1024.
+    """
+    import structlog
+    _logger = structlog.get_logger()
+
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    orig_w, orig_h = img.size
+
+    # Preprocess: resize to 1024×1024, normalize to [0,1]
+    resized = img.resize((1024, 1024), Image.BILINEAR)
+    arr = np.array(resized, dtype=np.float32) / 255.0
+    arr = arr.transpose(2, 0, 1)[np.newaxis, ...]  # (1, 3, 1024, 1024)
+
+    sess = _get_isnet_session()
+    input_name = sess.get_inputs()[0].name
+    outputs = sess.run(None, {input_name: arr})
+    # ISNet returns multiple outputs; first is the main mask
+    mask = outputs[0].squeeze()  # (1024, 1024)
+
+    # Normalize to [0, 255]
+    mask = mask - mask.min()
+    denom = mask.max() - mask.min()
+    if denom > 0:
+        mask = mask / denom
+    mask = (mask * 255).astype(np.uint8)
+
+    # Post-processing: morphological cleanup
+    mask[mask < 25] = 0
+    mask[mask > 230] = 255
+    from PIL import ImageFilter
+    mask_pil = Image.fromarray(mask)
+    mask_pil = mask_pil.filter(ImageFilter.MaxFilter(3))
+    mask_pil = mask_pil.filter(ImageFilter.MinFilter(3))
+    mask_pil = mask_pil.filter(ImageFilter.GaussianBlur(radius=1))
+
+    # Resize mask back to original size
+    mask_img = mask_pil.resize((orig_w, orig_h), Image.BILINEAR)
+
+    # Apply mask as alpha channel
+    img_rgba = img.copy().convert("RGBA")
+    img_rgba.putalpha(mask_img)
+
+    buf = io.BytesIO()
+    img_rgba.save(buf, format="PNG")
+    _logger.info("rmbg.isnet_done", orig_size=f"{orig_w}x{orig_h}")
+    return buf.getvalue()
 
 
 def _run_silueta(image_bytes: bytes) -> bytes:
@@ -388,18 +460,22 @@ def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) ->
         if img_check.mode not in ("RGBA", "LA", "PA"):
             # Auto-brightness BEFORE bg removal (helps RMBG with dark photos)
             result = auto_brightness(result)
-            model = _get_bg_removal_model()
+            # Fallback chain: ISNet (best) → RMBG-1.4 → silueta
             rembg_result = None
+            import os as _os
             try:
-                if model == "rmbg14":
-                    rembg_result = _run_rmbg14(result)
+                if _os.path.exists(_ISNET_PATH):
+                    rembg_result = _run_isnet(result)
                 else:
-                    rembg_result = _run_silueta(result)
+                    rembg_result = _run_rmbg14(result)
             except Exception:
                 try:
-                    rembg_result = _run_silueta(result)
+                    rembg_result = _run_rmbg14(result)
                 except Exception:
-                    pass
+                    try:
+                        rembg_result = _run_silueta(result)
+                    except Exception:
+                        pass
 
             # Quality check: if rembg failed (too much/too little removed), use original
             if rembg_result and _check_rembg_quality(rembg_result):

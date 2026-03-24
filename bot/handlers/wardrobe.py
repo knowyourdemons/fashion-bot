@@ -2610,6 +2610,10 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             import asyncio as _asyncio
             await _asyncio.sleep(0.1)
             _kassi_text = f"💬 {comment}" if comment else ""
+            # Append outfit warnings (missing outerwear, etc.)
+            _outfit_warnings = outfit.get("warnings", [])
+            if _outfit_warnings:
+                _kassi_text += "\n\n" + "\n".join(_outfit_warnings)
             if _kassi_text:
                 try:
                     await message.reply_text(_kassi_text, reply_markup=_outfit_markup)
