@@ -1,6 +1,134 @@
-# Fashion Bot — STATUS (23 марта 2026, вечер)
+# Fashion Bot — STATUS (24 марта 2026)
 
-## Git: 170+ коммитов
+## TODO — Что ещё нужно сделать
+
+### P0 — Критично (до бета-теста)
+- [ ] **i18n**: 15+ ключей отсутствуют в EN (brief/menus/boost/fitting/challenge/weekly) — RU юзеры видят raw keys
+- [ ] **Landing page**: опубликовать на bot.fashioncastle.app, A/B тест conversion
+- [ ] **Stripe webhook**: signature verification + idempotency (аналогично Stars fix)
+- [ ] **Photo orientation**: EXIF rotation не работает для некоторых Android — юзер видит вещи боком/вверх ногами
+- [ ] **RMBG quality**: деревянный пол плохо удаляется → артефакты на коллаже. Нужен fallback на контрастный фон или ручной кроп
+
+### P1 — Важно (первая неделя бета)
+- [ ] **LLM-as-judge tests**: Sonnet оценивает Haiku outfit output (Q6 Comment Relevance) — требует API calls
+- [ ] **Golden photo dataset**: tests/golden_photos/ с known attributes для Vision accuracy (Q1)
+- [ ] **Kibbe/colortype benchmark**: 10 selфи с known ground truth для Q5
+- [ ] **Wardrobe pagination at DB level**: 500 items → LIMIT/OFFSET вместо полной загрузки в память
+- [ ] **Pre-process thumbnails в worker**: при загрузке фото (не при генерации брифа) → убрать RMBG из hot path
+- [ ] **Graceful deploy**: drain active requests перед restart (brief generation теряется при deploy)
+- [ ] **Реферальная программа**: "Пригласи подругу = +7 дней" — UI + backend
+- [ ] **ЮKassa**: для RU юзеров (после ИП)
+
+### P2 — Улучшения (первый месяц)
+- [ ] **A/B test paywall timing**: день 7 vs день 10 vs по engagement score
+- [ ] **Prometheus + Grafana**: метрики вместо logs (P95 latency, outfit quality score)
+- [ ] **Photo instruction UX**: inline пример "как фоткать вещь" при первом фото
+- [ ] **Manual crop/rotate**: кнопка "повернуть" / "обрезать" для плохих фото
+- [ ] **Шоппинг-лист + affiliate**: Admitad/Skimlinks интеграция
+- [ ] **Brief card redesign**: больше пространства для фото, меньше текста
+- [ ] **Capsule colortype filter**: build_seasonal_capsule() учитывает палитру юзера
+- [ ] **Travel formality check**: деловая поездка ≠ шлёпки
+- [ ] **Antibot grace period**: bulk photo upload при онбординге не должен банить
+- [ ] **Dead letter queue cleanup**: cron задача для очистки (метод уже есть)
+
+### P3 — Техдолг
+- [ ] **Preference cache invalidation**: вызывать после каждого feedback (метод есть, не подключён везде)
+- [ ] **Session management**: validate timezone in onboarding (TimezoneFinder может вернуть None)
+- [ ] **SQLAlchemy SAWarning**: Child.wardrobe_items overlaps → добавить overlaps= param
+- [ ] **PTBUserWarning per_message**: CallbackQueryHandler в ConversationHandler
+
+---
+
+## Что сделано (24 марта 2026) — 15 коммитов
+
+### Инфра: OOM fix + Watchdog upgrade + Memory auto-scale
+- **Worker OOM crash loop**: 591 рестарт, бриф опоздал на 2ч. Причина: memory 1024MB < RMBG peak 1100MB
+- **Worker memory**: 1024MB → 1536MB, App memory: 1536MB → 2048MB
+- **Watchdog blind spots**: Redis IP протух (3 дня без алертов), TELEGRAM_BOT_TOKEN не передавался
+- **Watchdog: OOM/RestartCount detection**: docker inspect → Telegram алерт
+- **Watchdog: memory auto-scale**: >80% usage → docker update +512MB (cap 3GB, 1GB host reserve)
+- **Watchdog: re-alerts**: stale worker каждые 30 мин (не одноразовый)
+- **Queue recovery lock**: Redis lock на 30s при recovery (предотвращает дубли при двойном рестарте)
+- **Brief dedup**: `dedup:generate_brief:{user_id}:{date}` внутри generate_brief()
+
+### 5 UI багов
+- **"Что надеть" погода**: temp_now (текущая) вместо temp_morning (прогноз)
+- **"Спросить Касси"**: подсказка про фото (вещь → гардероб, образ → оценка)
+- **Цветотип**: 12 подтипов вместо 4 базовых + кнопка "определить по селфи"
+- **Capsule + Travel**: owner_id для мам = child.id (было user.id → 0 вещей)
+- **Travel**: восстановление reply-клавиатуры после flow
+
+### Коллаж: bbox + RMBG
+- **bbox crop**: пороги 0.92 вместо 0.55 (вещи обрезались до 44% кадра)
+- **Landscape → portrait**: ротация ДО bg removal (на оригинальном фото)
+- **RMBG quality**: stricter check (>15% semi-transparent → reject, 10-80% opaque)
+- **RMBG memory**: asyncio.Semaphore(1) — max 1 inference одновременно (5 юзеров × 600MB = OOM)
+- **Typing indicator**: background task каждые 4s (closure fix: mutable list)
+
+### Outfit Engine: системные валидации
+- **SLOT_EXCLUSIONS матрица**: one_piece → excludes [top, bottom] (расширяемая)
+- **9 post-validation rules**: color harmony, colortype compliance, statement pieces, bag-shoes formality, metal tone, tights, occasion-formality, wind outerwear
+- **AI prompt**: "Если one_piece, НЕ добавляй bottom"
+
+### Shared validation module (`services/validation.py`)
+- **validate_vision_item()**: category_group, season, occasion, warmth, formality, color, type, score_breakdown
+- **VALID_CATEGORY_GROUPS, VALID_SEASONS, VALID_OCCASIONS**: whitelists
+- **has_minimum_wardrobe()**: проверяет top+bottom или one_piece (не только count)
+
+### Destructive аудит: 41 баг найден и исправлен
+**P0 Crashes (7):**
+- Worker semaphore deadlock (try/finally)
+- gap_analysis redis.aclose() убивал singleton
+- Vision bbox NaN/None crash
+- Scoring ZeroDivisionError (empty matrix)
+- OUTFIT_MAX_ADULT 26→28 + score clamp ≤10.0
+- morning_brief uuid NameError
+
+**P0 Security (2):**
+- Cross-user delete: soft_delete() + get_by_id() теперь проверяют owner
+- Share vote: empty voter_id → random anon ID
+
+**P1 Data integrity (14):**
+- Vision: 60s timeout, 8-item cap, expanded post-validation
+- Brief: weather validation, card timeout, no-children fallback
+- Admin exemption в antibot
+- Queue corrupted JSON handling
+- Photo counter atomic INCR
+- 5 EN i18n onboarding keys
+- Scoring comment per-user cache
+- Billing: trial clear on payment, extend not overwrite
+- Outfit evaluator missing dimensions default
+
+**P2 Silent bugs (18):**
+- Warmth filter returns filtered (not unfiltered)
+- AI duplicate item dedup
+- Rotation skip for small wardrobe
+- Per-task 300s timeout
+- Dead letter queue cleanup
+- Streak freezes clamp
+- Vision daily call limit (30/day)
+- Russian plural fix
+- Scheduler safe job imports
+- Redis init asyncio.Lock
+
+### Engagement fix
+- **brief_count**: COUNT(DISTINCT date) вместо COUNT(*) — 181 дубль от crash loop удалён
+
+### Product Quality Test Suite (48 тестов)
+- 4 синтетических персоны: мама Анна, Лена no_kids, edge Катя, poison Вика
+- OutfitQualityChecker: 8 deterministic checks
+- 7 quality dimensions: Weather, Formality, Color, Base Layer, Duplicates, Occasion, Slots
+- Parametrized: -15° to +30°, 2 персоны × 7 температур
+- **Baseline: 48/48 (100%)**
+
+### Тесты: 4371 → 4420 (+49)
+- 48 product quality tests
+- 1 new validation test
+- Scoring tests обновлены для Vision 1-3 scale
+
+---
+
+## Git: 185+ коммитов
 
 ### 23 марта — 1 сессия, 25+ коммитов, 70+ файлов
 ```
@@ -20,9 +148,10 @@
 - 12 critical bugs fixed, 0 remaining
 
 ## Тесты
-- **4371 passed**, 0 failed, 5 skipped
+- **4420 passed**, 0 failed, 5 skipped (24 марта 2026)
+- 48 product quality tests (OutfitQualityChecker + 4 персоны × 7 temps)
 - 122 e2e тестов (test_e2e_flows.py)
-- 72 test files, 92 source files
+- 73 test files, 95 source files
 - CI: GitHub Actions → Tests pass → Deploy via SSH
 - Pre-push hook: блокирует push при failures
 
@@ -164,5 +293,15 @@ worker/tasks/
 - ✅ Referral tracking: `t.me/fashioncastle_bot?start=ref_SOURCE`
 - ✅ Day 3/7 feedback prompts
 - ✅ /stats admin dashboard
-- ✅ Kate onboarding reset
-- ✅ All containers healthy, 4371 tests pass
+- ✅ All containers healthy, 4420 tests pass (4371 tech + 48 product quality + 1 validation)
+- ✅ 41 баг из destructive аудита исправлен
+- ✅ Payment idempotency (Stars)
+- ✅ Cross-user access blocked
+- ✅ 23 outfit post-validation rules
+- ✅ Vision input validation (7 полей)
+- ✅ Worker OOM/deadlock protected
+- ✅ Memory auto-scale + typing indicator
+- ✅ Product quality test suite (baseline 48/48)
+- ⚠️ i18n: 15+ EN ключей отсутствуют (brief/menus/boost)
+- ⚠️ RMBG quality: артефакты на некоторых фонах
+- ⚠️ Stripe webhook: нет signature verification

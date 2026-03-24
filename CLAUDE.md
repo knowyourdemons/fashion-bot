@@ -9,7 +9,7 @@
 - Tunnel: bot.fashioncastle.app (именованный Cloudflare tunnel)
 - Webhook: https://bot.fashioncastle.app/api/v1/webhooks/telegram
 - Тест-пользователи: Стас telegram_id=195169 (plan=admin), жена telegram_id=263775083 (plan=free, тестирует как обычный юзер)
-- Алиса: owner_id=acf0100d-ca11-4fce-815e-c516af11e710 (3г, девочка, Лето, 25 вещей)
+- Алиса: owner_id=acf0100d-ca11-4fce-815e-c516af11e710 (3г, девочка, Лето, 9 вещей)
 
 ## Архитектура
 - **FastAPI** (порт 8000) + python-telegram-bot в режиме webhook
@@ -20,7 +20,9 @@
   - Два API ключа в пуле с atomic round-robin (asyncio.Lock) + circuit breaker
   - Таймауты: 30s стандартные вызовы, 60s vision вызовы
 - **Мониторинг**: Sentry (app + worker), watchdog (`scripts/watchdog.py`) с алертами в Telegram
-- **Rate limiting**: API middleware 60 req/min per IP (`api/middleware/rate_limit.py`)
+- **Rate limiting**: API middleware 60 req/min per IP (`api/middleware/rate_limit.py`), Vision 30 calls/day per user
+- **Memory auto-scale**: watchdog bumps container memory при >80% usage (cap 3GB, 1GB host reserve)
+- **Shared validation**: `services/validation.py` — единый модуль валидации Vision output, wardrobe items
 
 ## Стек
 - Python 3.12, PTB 22.x, SQLAlchemy 2.0, asyncpg
@@ -140,7 +142,7 @@ assets/
 - PIL НЕ рендерит unicode emoji — все тексты на коллаже БЕЗ эмодзи
 - Скор цифрой НЕ показывать юзеру — только текстовый комментарий Haiku или шаблон
 - Удаление фона: RMBG-1.4 quantized (44MB, лучше качество, ~4 сек). Silueta (43MB, ~1.3 сек) как fallback
-- App контейнер 1536MB (RMBG inference peak ~600MB + app ~110MB), worker 512MB
+- App контейнер 2048MB (RMBG inference peak ~600MB × Semaphore(1) + app ~110MB), worker 1536MB
 - ssl=disable в DATABASE_URL: postgres не настроен на SSL
 - listen_addresses='*' в postgres.conf: иначе контейнеры не коннектятся
 - Иконки и фоны в git assets/ (не R2) — мгновенный доступ, нет HTTP
@@ -274,29 +276,77 @@ docker compose -f ~/fashion-bot/docker/docker-compose.yml up --build -d
 ## Тестирование
 ```bash
 docker exec docker-app-1 python3 -m pytest /app/tests/ -v --tb=short
-# 2133 теста (1487 функций + parametrize), pytest-forked для изоляции (22 марта 2026)
+# 4420 тестов (4371 технических + 48 продуктовых + 1 validation), pytest-forked (24 марта 2026)
 # CI: GitHub Actions запускает тесты на каждый push/PR
 # Pre-push hook: .githooks/pre-push блокирует push если тесты не проходят
+
+# Product quality tests (regression после изменения промптов):
+docker exec docker-app-1 python3 -m pytest /app/tests/test_product_quality.py -v
+# 48 тестов: weather, formality, color, base_layer, duplicates, occasion, slots, outerwear
+# 4 синтетические персоны × 7 температур × 8 checks
 ```
 
 > **Правило**: после добавления тестов или значительных изменений — обновить CLAUDE.md (секция "Что сделано") и docs/STATUS.md.
 
 ## Известные баги / TODO (v1.0)
-- "Что надеть" в меню вызывает handle_rate_menu вместо генерации образа → фикс маппинга
-- Помощь: старый текст с "Оценить образ" → обновить
+- ~~"Что надеть" в меню~~ — ИСПРАВЛЕНО
 - ~~Носки/базовый слой видны в коллаже~~ — ИСПРАВЛЕНО (base layer filter)
 - ~~Нет проверки минимального набора для образа~~ — ИСПРАВЛЕНО (has_minimum_outfit)
-- ~~Vision не получает контекст (возраст/погода)~~ — ИСПРАВЛЕНО (vision context)
-- ~~Шорты при +2° не переклассифицируются~~ — ИСПРАВЛЕНО (post-validation)
-- ~~Комментарий "отличный образ" при 1 вещи~~ — ИСПРАВЛЕНО (item_count)
-- Подписи на коллаже не центрированы для реальных фото (placeholder — ок)
-- Иконки/фото не заполняют ячейку (80% вместо текущих ~60%)
+- ~~Vision не получает контекст~~ — ИСПРАВЛЕНО
+- ~~Шорты при +2°~~ — ИСПРАВЛЕНО (post-validation)
+- ~~Комментарий "отличный образ" при 1 вещи~~ — ИСПРАВЛЕНО
+- ~~Штаны под сарафан~~ — ИСПРАВЛЕНО (SLOT_EXCLUSIONS матрица)
+- ~~Worker OOM crash loop~~ — ИСПРАВЛЕНО (memory 2048MB + auto-scale)
+- ~~Watchdog слепые зоны~~ — ИСПРАВЛЕНО (dynamic Redis IP, OOM detection, re-alerts)
+- ~~Cross-user delete~~ — ИСПРАВЛЕНО (owner check в soft_delete)
+- ~~41 баг из destructive аудита~~ — ВСЕ ИСПРАВЛЕНЫ (24 марта)
+- photo_url пустой — фото только в Telegram file_id → нужен R2 pipeline
+- RMBG артефакты на деревянном полу — нужен лучший fallback
+- Подписи на коллаже не центрированы для реальных фото
 - Онбординг: размер обуви только int → нужен float (26.5)
-- Онбординг: лимиты применяются при загрузке первых 5 вещей → не применять
-- photo_url пустой — фото только в Telegram file_id
 - SAWarning про Child.wardrobe_items overlaps — косметика
 - PTBUserWarning про per_message — косметика
-- RMBG-1.4 inference ~4 сек (1024x1024 input) — можно попробовать 512x512 для ~1.5 сек
+
+## Валидации (24 марта, полное покрытие)
+
+### Outfit Engine: 23 post-validation правила
+| Правило | Тип | Действие |
+|---------|-----|----------|
+| Slot exclusions (one_piece→no top/bottom) | Hard | Remove |
+| Warmth consistency (spread ≤2) | Hard | Fallback |
+| Style compatibility (sport≠formal) | Hard | Fallback |
+| Formality coherence (±1, creative ±2) | Hard | Fallback |
+| Minimum outfit (top+bottom or one_piece) | Hard | Fallback |
+| Color harmony (HSL score <3/10) | Hard | Fallback |
+| Shorts at cold (<10°) | Auto-swap | Replace |
+| Rain priority (precip >50%) | Auto-swap | Replace |
+| Colortype compliance | Soft | Warning |
+| Statement pieces limit (max 1) | Soft | Warning |
+| Bag-shoes formality (±1) | Soft | Warning |
+| Metal tone consistency | Soft | Warning |
+| Tights needed (<15° + skirt/dress) | Soft | Warning |
+| Occasion-formality (садик≠каблуки) | Soft | Warning |
+| Wind outerwear (≥15 km/h) | Soft | Warning |
+
+### Vision: 7 валидаций на input
+| Поле | Валидация |
+|------|-----------|
+| category_group | Whitelist (9 values), fallback через normalize_type() |
+| season | Whitelist (4 values), invalid → filtered |
+| occasion | Whitelist (9 values), invalid → filtered |
+| warmth_level | Clamped 1-5 |
+| formality_level | Clamped 1-5 |
+| color | Empty → "неизвестный" |
+| score_breakdown | Values clamped 1-3 |
+
+### Security валидации
+- **Payment idempotency**: Redis dedup by charge_id (7-day TTL)
+- **Cross-user access**: owner_id check в get_by_id() + soft_delete()
+- **Vote dedup**: voter_id tracking (anon → random ID)
+- **Feedback enum**: VALID_FEEDBACK whitelist
+- **Memory injection**: sanitize newlines, 200 char limit
+- **Admin antibot exemption**: admin_ids не банятся
+- **Vision cost guard**: 30 calls/day per user
 
 ## Git log: 151 коммит за 20-22 марта 2026
 
