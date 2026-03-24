@@ -970,7 +970,11 @@ async def _analyze_and_save(
         try:
             from core.queue import RedisQueue, QueuePriority
             queue = RedisQueue(redis)
+            # Collect all bboxes from this photo for sibling masking
+            all_bboxes = [bb for _, bb in rmbg_queue if bb]
             for item_id, bbox in rmbg_queue:
+                # sibling_bboxes = all OTHER items' bboxes from same photo
+                siblings = [b for b in all_bboxes if b != bbox] if bbox else []
                 await queue.push(
                     "rmbg_process",
                     {
@@ -978,6 +982,7 @@ async def _analyze_and_save(
                         "file_id": photo_id,
                         "owner_id": str(owner_id),
                         "bbox": bbox,
+                        "sibling_bboxes": siblings,
                     },
                     priority=QueuePriority.HIGH,
                 )
@@ -1867,7 +1872,9 @@ async def _process_media_group(
                 try:
                     from core.queue import RedisQueue, QueuePriority
                     _q = RedisQueue(_redis)
+                    _all_bboxes = [bb for _, bb in rmbg_queue if bb]
                     for _item_id, _bbox_data in rmbg_queue:
+                        _siblings = [b for b in _all_bboxes if b != _bbox_data] if _bbox_data else []
                         await _q.push(
                             "rmbg_process",
                             {
@@ -1875,6 +1882,7 @@ async def _process_media_group(
                                 "file_id": file_id,
                                 "owner_id": str(owner_id),
                                 "bbox": _bbox_data,
+                                "sibling_bboxes": _siblings,
                             },
                             priority=QueuePriority.HIGH,
                         )

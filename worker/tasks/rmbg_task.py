@@ -25,6 +25,7 @@ async def process_rmbg(payload: dict) -> dict:
     file_id = payload["file_id"]
     owner_id = payload.get("owner_id", "")
     bbox = payload.get("bbox")
+    sibling_bboxes = payload.get("sibling_bboxes", [])
 
     logger.info("rmbg_process.start", item_id=str(item_id), file_id=file_id[:20])
 
@@ -74,15 +75,41 @@ async def process_rmbg(payload: dict) -> dict:
     good_crop = True
 
     if is_multi_item and bbox:
-        # MULTI-ITEM: tight crop → cloth-seg first (knows clothing vs floor),
-        # RMBG fallback. Tight crop (2% padding) to minimize neighbor bleed.
+        # MULTI-ITEM: mask sibling items → crop → cloth-seg first, RMBG fallback.
         from services.vision import _crop_bbox, _check_crop_quality
         from services.image_processor import (
             _run_cloth_seg, _run_rmbg14,
             _postprocess_mask, _check_mask_quality_v2, pad_square_resize,
         )
+
+        # Mask out sibling items: fill their bbox areas with average background color.
+        # This prevents neighboring garments from bleeding into the crop.
+        masked_photo = photo_bytes
+        if sibling_bboxes:
+            try:
+                img = Image.open(io.BytesIO(photo_bytes)).convert("RGB")
+                iw, ih = img.size
+                # Sample background color from image corners (likely floor/surface)
+                px = np.array(img)
+                corners = [px[5, 5], px[5, -5], px[-5, 5], px[-5, -5]]
+                bg_color = tuple(int(c) for c in np.mean(corners, axis=0))
+                from PIL import ImageDraw
+                draw = ImageDraw.Draw(img)
+                for sb in sibling_bboxes:
+                    sx = max(0, int(float(sb.get("x", 0)) * iw))
+                    sy = max(0, int(float(sb.get("y", 0)) * ih))
+                    sw = int(float(sb.get("w", 0)) * iw)
+                    sh = int(float(sb.get("h", 0)) * ih)
+                    draw.rectangle([sx, sy, sx + sw, sy + sh], fill=bg_color)
+                buf = io.BytesIO()
+                img.save(buf, format="JPEG", quality=90)
+                masked_photo = buf.getvalue()
+                logger.info("rmbg_process.siblings_masked", count=len(sibling_bboxes))
+            except Exception as e:
+                logger.warning("rmbg_process.sibling_mask_failed", error=str(e))
+
         try:
-            crop_bytes = _crop_bbox(photo_bytes, bbox, padding=0.04)
+            crop_bytes = _crop_bbox(masked_photo, bbox, padding=0.04)
         except Exception as e:
             logger.warning("rmbg_process.crop_failed", item_id=str(item_id), error=str(e))
             crop_bytes = photo_bytes
