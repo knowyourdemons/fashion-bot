@@ -415,14 +415,21 @@ def pad_square_resize(png_bytes: bytes, size: int = THUMB_SIZE) -> bytes:
     """Auto-trim transparent edges, fix orientation, pad to square, resize."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
 
-    # Auto-trim: crop to non-transparent bounding box
+    # Auto-trim: crop to bounding box of OPAQUE pixels (alpha > 50)
+    # Using threshold eliminates semi-transparent RMBG artifacts that
+    # inflate the bbox and make the garment appear tiny in the cell
     alpha = img.split()[3]
-    bbox = alpha.getbbox()
+    # Threshold alpha: <50 → 0 (treat as transparent for bbox)
+    alpha_thresh = alpha.point(lambda p: 255 if p > 50 else 0)
+    bbox = alpha_thresh.getbbox()
+    if not bbox:
+        # Fallback to any non-zero alpha
+        bbox = alpha.getbbox()
     if bbox:
-        # 8% padding (was 5% — more padding reduces edge clipping)
+        # 3% padding — tight crop makes garment fill the cell
         w, h = img.size
-        pad_x = int((bbox[2] - bbox[0]) * 0.08)
-        pad_y = int((bbox[3] - bbox[1]) * 0.08)
+        pad_x = int((bbox[2] - bbox[0]) * 0.03)
+        pad_y = int((bbox[3] - bbox[1]) * 0.03)
         bbox = (
             max(0, bbox[0] - pad_x), max(0, bbox[1] - pad_y),
             min(w, bbox[2] + pad_x), min(h, bbox[3] + pad_y),
