@@ -87,9 +87,10 @@ def get_collage_params(
     temp_parts = []
     if temp is not None:
         temp_parts.append(f"сейчас {_s(temp)}")
-    if temp_evening is not None and temp_evening != temp:
+    # Show evening/day temp only if visibly different (after rounding)
+    if temp_evening is not None and temp is not None and round(temp_evening) != round(temp):
         temp_parts.append(f"вечером {_s(temp_evening)}")
-    elif temp_day is not None and temp_day != temp:
+    elif temp_day is not None and temp is not None and round(temp_day) != round(temp):
         temp_parts.append(f"днём {_s(temp_day)}")
     temp_str = ", ".join(temp_parts) if temp_parts else ""
 
