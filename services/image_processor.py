@@ -6,6 +6,7 @@
 4. Perceptual hash для дублей
 5. Удаление фона (local ONNX silueta → remove.bg API fallback)
 """
+import asyncio
 import io
 import threading
 from typing import Optional
@@ -26,6 +27,9 @@ _ort_lock = threading.Lock()
 
 _rmbg_session: Optional[ort.InferenceSession] = None
 _rmbg_lock = threading.Lock()
+
+# Limit concurrent RMBG inferences to prevent OOM (each peak ~600MB)
+_rmbg_semaphore = asyncio.Semaphore(1)
 
 
 def _get_ort_session() -> ort.InferenceSession:
@@ -391,6 +395,16 @@ def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) ->
     result = sharpen_thumbnail(result, factor=1.3)
 
     return result
+
+
+async def make_collage_thumbnail_safe(photo_bytes: bytes, needs_bg_removal: bool = True) -> bytes:
+    """Async wrapper: limits concurrent RMBG to 1 to prevent OOM.
+    5 users × 600MB RMBG peak = 3GB → OOM. Semaphore keeps peak ≤ ~800MB."""
+    async with _rmbg_semaphore:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, make_collage_thumbnail, photo_bytes, needs_bg_removal
+        )
 
 
 MAX_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB

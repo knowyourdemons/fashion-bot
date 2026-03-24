@@ -806,9 +806,20 @@ def _build_outfit_from_ai(
         "all_items": [],
     }
 
-    # ── Post-validation: one_piece (dress/sarafan) makes bottom redundant ──
-    if result["one_piece"] and result["bottom"]:
-        result["bottom"] = None
+    # ── Slot exclusion matrix: if slot X filled, slots Y are cleared ──
+    _SLOT_EXCLUSIONS: dict[str, list[str]] = {
+        "one_piece": ["top", "bottom"],       # платье/сарафан заменяет верх+низ
+        # NB: top+bottom НЕ исключают one_piece — это нормальный выбор
+    }
+    for filled_slot, excluded_slots in _SLOT_EXCLUSIONS.items():
+        if result.get(filled_slot):
+            for ex in excluded_slots:
+                if result.get(ex):
+                    logger.info("outfit.slot_exclusion",
+                        filled=filled_slot, excluded=ex,
+                        filled_type=getattr(result[filled_slot], "type", "?"),
+                        excluded_type=getattr(result[ex], "type", "?"))
+                    result[ex] = None
 
     # ── Base layer from rules (not AI) ──
     available = [

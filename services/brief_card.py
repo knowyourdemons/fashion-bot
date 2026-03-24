@@ -138,7 +138,7 @@ async def _download_slot_photos(outfit_slots: list[dict]) -> None:
                         logger.warning("brief_card.bbox_crop_failed", error=str(_crop_err))
 
                 # 4. Build thumbnail (EXIF → brightness → rembg → edges → pad → resize)
-                from services.image_processor import make_collage_thumbnail
+                from services.image_processor import make_collage_thumbnail_safe
                 from PIL import Image
                 import io as _io
 
@@ -146,7 +146,7 @@ async def _download_slot_photos(outfit_slots: list[dict]) -> None:
                 img_check = Image.open(_io.BytesIO(photo_bytes))
                 needs_rembg = img_check.mode not in ("RGBA", "LA", "PA")
 
-                thumb = make_collage_thumbnail(photo_bytes, needs_bg_removal=needs_rembg)
+                thumb = await make_collage_thumbnail_safe(photo_bytes, needs_bg_removal=needs_rembg)
                 slot["_photo_bytes"] = thumb
 
                 # Cache for next time
