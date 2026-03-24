@@ -8,6 +8,7 @@
 """
 import asyncio
 import io
+import math
 import threading
 from typing import Optional
 
@@ -387,6 +388,101 @@ def _bbox_crop_rgba(png_bytes: bytes, bbox: dict, size: int = THUMB_SIZE) -> byt
     return buf.getvalue()
 
 
+def _run_grabcut(image_bytes: bytes) -> bytes | None:
+    """Remove background using OpenCV GrabCut algorithm.
+
+    GrabCut uses iterative graph-cut to separate foreground from background.
+    Works well on textured backgrounds (carpet, wood floor, bedsheets)
+    where RMBG fails. Uses center rectangle as initial foreground hint.
+
+    Returns PNG bytes with alpha channel, or None on failure.
+    """
+    try:
+        import cv2
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        arr = np.array(img)
+
+        h, w = arr.shape[:2]
+        # Initialize mask: assume garment is in center 70% of image
+        mask = np.zeros((h, w), np.uint8)
+        margin_x = int(w * 0.05)
+        margin_y = int(h * 0.05)
+        rect = (margin_x, margin_y, w - 2 * margin_x, h - 2 * margin_y)
+
+        bgd_model = np.zeros((1, 65), np.float64)
+        fgd_model = np.zeros((1, 65), np.float64)
+
+        cv2.grabCut(arr, mask, rect, bgd_model, fgd_model, 5, cv2.GC_INIT_WITH_RECT)
+
+        # Mask: 0=bg, 1=fg, 2=probable_bg, 3=probable_fg
+        fg_mask = np.where((mask == 1) | (mask == 3), 255, 0).astype(np.uint8)
+
+        # Morphological cleanup
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+        fg_mask = cv2.GaussianBlur(fg_mask, (3, 3), 0)
+
+        # Apply mask as alpha
+        img_rgba = img.copy().convert("RGBA")
+        mask_pil = Image.fromarray(fg_mask)
+        img_rgba.putalpha(mask_pil)
+
+        buf = io.BytesIO()
+        img_rgba.save(buf, format="PNG")
+
+        import structlog
+        structlog.get_logger().info("rmbg.grabcut_done", size=f"{w}x{h}")
+        return buf.getvalue()
+    except Exception as e:
+        import structlog
+        structlog.get_logger().warning("rmbg.grabcut_failed", error=str(e))
+        return None
+
+
+def _auto_rotate_to_vertical(img: Image.Image) -> Image.Image:
+    """Rotate garment to vertical orientation using contour analysis.
+
+    Finds the minimum area bounding rectangle of the opaque region,
+    then rotates so the long axis is vertical. Makes garments
+    photographed at angles appear straight.
+    """
+    try:
+        import cv2
+        alpha = img.split()[3]
+        alpha_arr = np.array(alpha)
+
+        # Find contours
+        contours, _ = cv2.findContours(alpha_arr, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            return img
+
+        # Largest contour = the garment
+        largest = max(contours, key=cv2.contourArea)
+        if cv2.contourArea(largest) < 100:
+            return img
+
+        # Minimum area bounding rectangle
+        rect = cv2.minAreaRect(largest)
+        angle = rect[1]  # (width, height) of the rect
+        rotation = rect[2]  # angle in degrees
+
+        rect_w, rect_h = rect[1]
+        # Ensure long side is vertical: if width > height, rotate 90°
+        if rect_w > rect_h:
+            rotation += 90
+
+        # Only rotate if angle is significant (>5°) but not too extreme
+        if abs(rotation) < 5 or abs(rotation) > 85:
+            return img
+
+        # Rotate with expand to avoid clipping
+        rotated = img.rotate(-rotation, expand=True, resample=Image.BICUBIC,
+                             fillcolor=(0, 0, 0, 0))
+        return rotated
+    except Exception:
+        return img
+
+
 def _detect_upside_down(img: Image.Image) -> bool:
     """Detect if a garment is upside down by comparing width of top vs bottom third.
     Pants/skirts: waistband (wider) should be at top. If bottom third is wider → flip.
@@ -428,6 +524,22 @@ def pad_square_resize(png_bytes: bytes, size: int = THUMB_SIZE) -> bytes:
             min(w, bbox[2] + pad_x), min(h, bbox[3] + pad_y),
         )
         img = img.crop(bbox)
+
+    # Auto-rotate to vertical (straighten angled garments)
+    if img.mode == "RGBA":
+        img = _auto_rotate_to_vertical(img)
+        # Re-trim after rotation (rotation may add transparent corners)
+        alpha = img.split()[3]
+        bbox = alpha.getbbox()
+        if bbox:
+            w, h = img.size
+            pad_x = int((bbox[2] - bbox[0]) * 0.05)
+            pad_y = int((bbox[3] - bbox[1]) * 0.05)
+            bbox = (
+                max(0, bbox[0] - pad_x), max(0, bbox[1] - pad_y),
+                min(w, bbox[2] + pad_x), min(h, bbox[3] + pad_y),
+            )
+            img = img.crop(bbox)
 
     # Detect and fix upside-down garments (pants with waistband at bottom)
     if _detect_upside_down(img):
@@ -534,15 +646,20 @@ def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) ->
         if img_check.mode not in ("RGBA", "LA", "PA"):
             # Auto-brightness BEFORE bg removal (helps with dark photos)
             result = auto_brightness(result)
-            # Fallback chain: RMBG-1.4 (best for clothing) → silueta → original
+            # Fallback chain: GrabCut (best for home photos) → RMBG-1.4 → original
             rembg_result = None
-            try:
-                rembg_result = _run_rmbg14(result)
-            except Exception:
+            # Try GrabCut first (handles carpets, wood floors, bedsheets)
+            rembg_result = _run_grabcut(result)
+            if not rembg_result or not _check_rembg_quality(rembg_result):
+                # GrabCut failed → try RMBG-1.4
+                rembg_result = None
                 try:
-                    rembg_result = _run_silueta(result)
+                    rembg_result = _run_rmbg14(result)
                 except Exception:
-                    pass
+                    try:
+                        rembg_result = _run_silueta(result)
+                    except Exception:
+                        pass
 
             # Quality check: if rembg failed (too much/too little removed), use original
             if rembg_result and _check_rembg_quality(rembg_result):
