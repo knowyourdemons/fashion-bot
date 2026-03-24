@@ -94,10 +94,10 @@ async def check_engagement(payload: dict) -> dict:
     if config["condition"] == "low_wardrobe" and wardrobe_count >= 15:
         return {}
 
-    # Brief count + chat count
+    # Brief count — unique dates only (duplicates from crash loops don't count)
     async with AsyncReadSession() as session:
         brief_count = await session.scalar(
-            select(func.count(BriefLog.id)).where(BriefLog.user_id == user.id)
+            select(func.count(func.distinct(BriefLog.date))).where(BriefLog.user_id == user.id)
         ) or 0
 
     # Liked briefs count (только для trial report дня 11)
