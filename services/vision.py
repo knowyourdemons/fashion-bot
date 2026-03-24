@@ -366,27 +366,42 @@ def _resolve_bbox_overlaps(items: list[dict]) -> list[dict]:
             area_b = b["w"] * b["h"]
             small, large = (b, a) if area_b < area_a else (a, b)
 
+            # Skip if overlap is tiny (<15% of smaller bbox) — not worth shrinking
+            overlap_area = ox * oy
+            small_area = small["w"] * small["h"]
+            if small_area > 0 and overlap_area / small_area < 0.15:
+                continue
+
+            # Save original dims — don't shrink below 50% of original
+            orig_w, orig_h = small["w"], small["h"]
+
             # Determine main overlap axis and shrink along it
             if ox < oy:
                 # Horizontal overlap — shrink horizontally
                 if small["x"] < large["x"]:
                     # small is to the left → trim its right edge
-                    small["w"] = max(0.05, large["x"] - small["x"])
+                    small["w"] = max(0.10, large["x"] - small["x"])
                 else:
                     # small is to the right → move its left edge
                     new_x = large["x"] + large["w"]
                     shrink = new_x - small["x"]
                     small["x"] = new_x
-                    small["w"] = max(0.05, small["w"] - shrink)
+                    small["w"] = max(0.10, small["w"] - shrink)
             else:
                 # Vertical overlap — shrink vertically
                 if small["y"] < large["y"]:
-                    small["h"] = max(0.05, large["y"] - small["y"])
+                    small["h"] = max(0.10, large["y"] - small["y"])
                 else:
                     new_y = large["y"] + large["h"]
                     shrink = new_y - small["y"]
                     small["y"] = new_y
-                    small["h"] = max(0.05, small["h"] - shrink)
+                    small["h"] = max(0.10, small["h"] - shrink)
+
+            # Guard: don't shrink below 50% of original dimension
+            if small["w"] < orig_w * 0.5:
+                small["w"] = orig_w
+            if small["h"] < orig_h * 0.5:
+                small["h"] = orig_h
 
     # Write back
     for i, item in enumerate(items):
