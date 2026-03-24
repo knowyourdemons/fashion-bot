@@ -1353,6 +1353,22 @@ async def select_outfit_ai(
             if pants:
                 outfit["bottom"] = pants
 
+    # Post-validation: sandals/open shoes at cold temps (<15°C)
+    if outfit.get("footwear") and temp < 15:
+        foot_type = (getattr(outfit["footwear"], "type", "") or "").lower()
+        if any(w in foot_type for w in ["сандал", "босоножк", "шлёпк", "сланц"]):
+            closed_shoes = next(
+                (i for i in items
+                 if i.category_group == "footwear"
+                 and not any(w in (i.type or "").lower() for w in ["сандал", "босоножк", "шлёпк", "сланц"])
+                 and (not i.season or season in i.season)),
+                None,
+            )
+            if closed_shoes:
+                outfit["footwear"] = closed_shoes
+            else:
+                outfit["warnings"].append("👟 Прохладно для открытой обуви — лучше закрытая!")
+
     # Post-validation: rain priority
     if precip_evening > 50:
         ow = outfit.get("outerwear")

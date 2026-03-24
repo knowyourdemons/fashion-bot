@@ -231,7 +231,7 @@ def prepare_weather_data(weather: dict) -> dict:
         "temp_now_str": format_temp(temp_now),
         "temp_morning_str": format_temp(temp_m),
         "temp_day_str": format_temp(temp_d),
-        "temp_evening_str": format_temp(temp_e),
+        "temp_evening_str": format_temp(temp_e) if (temp_e is not None and round(temp_e) != round(temp_now or temp_m or 0)) else "",
         "icon_morning": wmo_to_emoji(wmo_m),
         "icon_day": wmo_to_emoji(wmo_d),
         "icon_evening": wmo_to_emoji(wmo_e),

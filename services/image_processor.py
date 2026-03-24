@@ -387,16 +387,13 @@ def _check_rembg_quality(png_bytes: bytes) -> bool:
         img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
         alpha = img.split()[3]
         total = alpha.size[0] * alpha.size[1]
-        # Count pixels by transparency level
+        # Count opaque pixels (alpha > 30 = "something there")
         alpha_data = list(alpha.getdata())
-        opaque = sum(1 for a in alpha_data if a > 200)
-        semi = sum(1 for a in alpha_data if 30 < a <= 200)
+        opaque = sum(1 for a in alpha_data if a > 30)
         ratio = opaque / total if total > 0 else 0
-        semi_ratio = semi / total if total > 0 else 0
-        # Too many semi-transparent pixels = poor mask (bg bleeding)
-        if semi_ratio > 0.15:
-            return False
-        return 0.10 <= ratio <= 0.80
+        # Too little removed (<5% transparent) = model failed completely
+        # Too much removed (>95% transparent) = model removed everything
+        return 0.05 <= ratio <= 0.95
     except Exception:
         return True  # fallback — don't block
 
