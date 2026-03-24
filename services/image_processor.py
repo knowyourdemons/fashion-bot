@@ -80,6 +80,51 @@ def _get_isnet_session() -> ort.InferenceSession:
     return _isnet_session
 
 
+def _run_removebg_api(image_bytes: bytes) -> bytes | None:
+    """Remove background via remove.bg API. Best quality, handles any background.
+    Returns PNG bytes with alpha or None if API fails/unavailable.
+    Cost: ~$0.05/image on paid plan, free tier = 50/month.
+    """
+    import os
+    import httpx
+    import structlog
+    _logger = structlog.get_logger()
+
+    api_key = os.environ.get("REMOVEBG_API_KEY", "")
+    if not api_key:
+        return None
+
+    try:
+        # Resize to max 1024px to reduce upload size and API processing time
+        img = Image.open(io.BytesIO(image_bytes))
+        max_dim = max(img.size)
+        if max_dim > 1500:
+            scale = 1500 / max_dim
+            img = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            upload_bytes = buf.getvalue()
+        else:
+            upload_bytes = image_bytes
+
+        resp = httpx.post(
+            "https://api.remove.bg/v1.0/removebg",
+            files={"image_file": ("photo.png", upload_bytes, "image/png")},
+            data={"size": "auto", "type": "product"},
+            headers={"X-Api-Key": api_key},
+            timeout=20,
+        )
+        if resp.status_code == 200 and len(resp.content) > 1000:
+            _logger.info("rmbg.removebg_ok", size=len(resp.content))
+            return resp.content
+        _logger.warning("rmbg.removebg_failed", status=resp.status_code,
+                         body=resp.text[:200])
+        return None
+    except Exception as e:
+        _logger.warning("rmbg.removebg_error", error=str(e))
+        return None
+
+
 def _run_isnet(image_bytes: bytes) -> bytes:
     """Run ISNet-general-use: best quality bg removal for complex backgrounds.
 
@@ -486,22 +531,24 @@ def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) ->
     if needs_bg_removal:
         img_check = Image.open(io.BytesIO(result))
         if img_check.mode not in ("RGBA", "LA", "PA"):
-            # Auto-brightness BEFORE bg removal (helps RMBG with dark photos)
+            # Auto-brightness BEFORE bg removal (helps with dark photos)
             result = auto_brightness(result)
-            # Fallback chain: ISNet (best) → RMBG-1.4 → silueta
+            # Fallback chain: remove.bg API → ISNet → RMBG-1.4 → original
             rembg_result = None
             import os as _os
             try:
-                if _os.path.exists(_ISNET_PATH):
-                    rembg_result = _run_isnet(result)
-                else:
-                    rembg_result = _run_rmbg14(result)
+                rembg_result = _run_removebg_api(result)
             except Exception:
+                pass
+            if not rembg_result:
                 try:
-                    rembg_result = _run_rmbg14(result)
+                    if _os.path.exists(_ISNET_PATH):
+                        rembg_result = _run_isnet(result)
+                    else:
+                        rembg_result = _run_rmbg14(result)
                 except Exception:
                     try:
-                        rembg_result = _run_silueta(result)
+                        rembg_result = _run_rmbg14(result)
                     except Exception:
                         pass
 
