@@ -93,8 +93,13 @@ def _run_isnet(image_bytes: bytes) -> bytes:
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     orig_w, orig_h = img.size
 
-    # Preprocess: resize to 1024×1024, normalize to [0,1]
-    resized = img.resize((1024, 1024), Image.BILINEAR)
+    # Preprocess: pad to square (preserve aspect ratio) then resize to 1024×1024
+    # Stretching non-square photos (e.g., 185×777) distorts features → bad mask
+    side = max(orig_w, orig_h)
+    padded = Image.new("RGB", (side, side), (128, 128, 128))  # neutral gray bg
+    padded.paste(img, ((side - orig_w) // 2, (side - orig_h) // 2))
+    resized = padded.resize((1024, 1024), Image.BILINEAR)
+
     arr = np.array(resized, dtype=np.float32) / 255.0
     arr = arr.transpose(2, 0, 1)[np.newaxis, ...]  # (1, 3, 1024, 1024)
 
@@ -120,12 +125,15 @@ def _run_isnet(image_bytes: bytes) -> bytes:
     mask_pil = mask_pil.filter(ImageFilter.MinFilter(3))
     mask_pil = mask_pil.filter(ImageFilter.GaussianBlur(radius=1))
 
-    # Resize mask back to original size
-    mask_img = mask_pil.resize((orig_w, orig_h), Image.BILINEAR)
+    # Crop mask back to original aspect ratio (remove padding)
+    mask_square = mask_pil.resize((side, side), Image.BILINEAR)
+    left = (side - orig_w) // 2
+    top = (side - orig_h) // 2
+    mask_cropped = mask_square.crop((left, top, left + orig_w, top + orig_h))
 
     # Apply mask as alpha channel
     img_rgba = img.copy().convert("RGBA")
-    img_rgba.putalpha(mask_img)
+    img_rgba.putalpha(mask_cropped)
 
     buf = io.BytesIO()
     img_rgba.save(buf, format="PNG")
@@ -177,19 +185,11 @@ def _run_rmbg14(image_bytes: bytes) -> bytes:
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     orig_w, orig_h = img.size
 
-    # ── Pre-processing: crop center 80% to reduce background noise ──
-    # Clothing photos typically have the item centered with background at edges
-    margin_x = int(orig_w * 0.1)
-    margin_y = int(orig_h * 0.1)
-    if margin_x > 20 and margin_y > 20:
-        img_cropped = img.crop((margin_x, margin_y, orig_w - margin_x, orig_h - margin_y))
-    else:
-        img_cropped = img
-
-    crop_w, crop_h = img_cropped.size
-
-    # Preprocess: resize to 1024×1024, normalize to [0,1], CHW layout
-    resized = img_cropped.resize((1024, 1024), Image.BILINEAR)
+    # Pad to square (preserve aspect ratio) then resize to 1024×1024
+    side = max(orig_w, orig_h)
+    padded = Image.new("RGB", (side, side), (128, 128, 128))
+    padded.paste(img, ((side - orig_w) // 2, (side - orig_h) // 2))
+    resized = padded.resize((1024, 1024), Image.BILINEAR)
     arr = np.array(resized, dtype=np.float32) / 255.0
     arr = arr.transpose(2, 0, 1)[np.newaxis, ...]  # (1, 3, 1024, 1024)
 
@@ -216,11 +216,14 @@ def _run_rmbg14(image_bytes: bytes) -> bytes:
     # Gentle blur to smooth jagged edges
     mask_img_raw = mask_img_raw.filter(ImageFilter.GaussianBlur(radius=1))
 
-    # Resize mask back to cropped image size
-    mask_img = mask_img_raw.resize((crop_w, crop_h), Image.BILINEAR)
+    # Crop mask back to original aspect ratio (remove padding)
+    mask_square = mask_img_raw.resize((side, side), Image.BILINEAR)
+    left = (side - orig_w) // 2
+    top_pad = (side - orig_h) // 2
+    mask_img = mask_square.crop((left, top_pad, left + orig_w, top_pad + orig_h))
 
-    # Apply mask to CROPPED image (not full — we pre-cropped)
-    img_rgba = img_cropped.copy().convert("RGBA")
+    # Apply mask to original image
+    img_rgba = img.copy().convert("RGBA")
     img_rgba.putalpha(mask_img)
 
     buf = io.BytesIO()
