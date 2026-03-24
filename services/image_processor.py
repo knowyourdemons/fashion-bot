@@ -97,12 +97,27 @@ def _run_rmbg14(image_bytes: bytes) -> bytes:
     RMBG-1.4 uses different preprocessing than silueta:
     - Input: 1x3x1024x1024, normalized to [0,1] (no mean/std normalization for quantized)
     - Output: 1x1x1024x1024 sigmoid mask
+
+    Enhanced pipeline:
+    - Pre-crop to center 80% to reduce background noise
+    - Post-process mask with morphological cleanup
     """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     orig_w, orig_h = img.size
 
+    # ── Pre-processing: crop center 80% to reduce background noise ──
+    # Clothing photos typically have the item centered with background at edges
+    margin_x = int(orig_w * 0.1)
+    margin_y = int(orig_h * 0.1)
+    if margin_x > 20 and margin_y > 20:
+        img_cropped = img.crop((margin_x, margin_y, orig_w - margin_x, orig_h - margin_y))
+    else:
+        img_cropped = img
+
+    crop_w, crop_h = img_cropped.size
+
     # Preprocess: resize to 1024×1024, normalize to [0,1], CHW layout
-    resized = img.resize((1024, 1024), Image.BILINEAR)
+    resized = img_cropped.resize((1024, 1024), Image.BILINEAR)
     arr = np.array(resized, dtype=np.float32) / 255.0
     arr = arr.transpose(2, 0, 1)[np.newaxis, ...]  # (1, 3, 1024, 1024)
 
@@ -116,11 +131,24 @@ def _run_rmbg14(image_bytes: bytes) -> bytes:
     mask = np.clip(mask, 0.0, 1.0)
     mask = (mask * 255).astype(np.uint8)
 
-    # Resize mask back to original size
-    mask_img = Image.fromarray(mask).resize((orig_w, orig_h), Image.BILINEAR)
+    # ── Post-processing: morphological cleanup ──
+    # Threshold to binary (remove semi-transparent noise)
+    mask[mask < 30] = 0
+    mask[mask > 225] = 255
+    # Erode then dilate to remove small artifacts at edges
+    from PIL import ImageFilter
+    mask_img_raw = Image.fromarray(mask)
+    # Gentle morphological close: dilate then erode (fills small holes)
+    mask_img_raw = mask_img_raw.filter(ImageFilter.MaxFilter(3))  # dilate
+    mask_img_raw = mask_img_raw.filter(ImageFilter.MinFilter(3))  # erode
+    # Gentle blur to smooth jagged edges
+    mask_img_raw = mask_img_raw.filter(ImageFilter.GaussianBlur(radius=1))
 
-    # Apply mask as alpha channel
-    img_rgba = img.copy().convert("RGBA")
+    # Resize mask back to cropped image size
+    mask_img = mask_img_raw.resize((crop_w, crop_h), Image.BILINEAR)
+
+    # Apply mask to CROPPED image (not full — we pre-cropped)
+    img_rgba = img_cropped.copy().convert("RGBA")
     img_rgba.putalpha(mask_img)
 
     buf = io.BytesIO()
