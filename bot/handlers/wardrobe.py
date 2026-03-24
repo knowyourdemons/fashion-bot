@@ -2125,7 +2125,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
 
         child = children[0] if children else None
 
-        # Погода — Open-Meteo (утро/день/вечер)
+        # Погода — Open-Meteo (сейчас/день/вечер)
         temp_m, temp_e = 10.0, 12.0
         _weather_data: dict = {}
         try:
@@ -2136,10 +2136,10 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                     _weather_data = await _get_weather(
                         _coords[0], _coords[1], user.timezone or "Europe/Vilnius"
                     )
-                    temp_m = _weather_data.get("temp_morning") or 10.0
+                    temp_m = _weather_data.get("temp_now") or _weather_data.get("temp_morning") or 10.0
                     temp_e = _weather_data.get("temp_evening") or temp_m
                     logger.info("outfit_request.weather_ok",
-                        city=user.city, temp_m=temp_m, temp_e=temp_e)
+                        city=user.city, temp_now=temp_m, temp_e=temp_e)
         except Exception as we:
             logger.warning("outfit_request.weather_failed",
                 error=str(we), city=getattr(user, "city", None))
@@ -2574,7 +2574,10 @@ async def handle_ask_kassi(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     plan = _gep(user) if user else "free"
     chat_limit = _gl("chat_per_day", plan)
     await update.message.reply_text(
-        "Напиши вопрос про стиль — помогу! 👗\n"
+        "Напиши вопрос про стиль или отправь фото 👗\n\n"
+        "📸 Фото вещи — добавлю в гардероб\n"
+        "👗 Фото образа — оценю и дам советы\n"
+        "💬 Текст — отвечу как стилист\n\n"
         f"(до {chat_limit} вопросов в день)",
         reply_markup=get_main_menu(context.user_data.get("db_user"), context),
     )

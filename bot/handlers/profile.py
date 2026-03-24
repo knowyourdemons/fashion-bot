@@ -219,23 +219,38 @@ async def handle_edit_city_location(update: Update, context: ContextTypes.DEFAUL
 
 
 async def handle_edit_colortype(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Callback: edit_colortype → inline кнопки Весна/Лето/Осень/Зима."""
+    """Callback: edit_colortype → inline кнопки 12 подтипов цветотипа."""
     query = update.callback_query
     await query.answer()
-    keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🌸 Весна", callback_data="set_colortype:spring"),
-        InlineKeyboardButton("☀️ Лето", callback_data="set_colortype:summer"),
-    ], [
-        InlineKeyboardButton("🍂 Осень", callback_data="set_colortype:autumn"),
-        InlineKeyboardButton("❄️ Зима", callback_data="set_colortype:winter"),
-    ]])
+    keyboard = InlineKeyboardMarkup([
+        # Весна
+        [InlineKeyboardButton("🌸 Яркая Весна", callback_data="set_colortype:bright_spring"),
+         InlineKeyboardButton("🌸 Тёплая Весна", callback_data="set_colortype:true_spring")],
+        [InlineKeyboardButton("🌸 Светлая Весна", callback_data="set_colortype:light_spring")],
+        # Лето
+        [InlineKeyboardButton("☀️ Светлое Лето", callback_data="set_colortype:light_summer"),
+         InlineKeyboardButton("☀️ Холодное Лето", callback_data="set_colortype:true_summer")],
+        [InlineKeyboardButton("☀️ Мягкое Лето", callback_data="set_colortype:soft_summer")],
+        # Осень
+        [InlineKeyboardButton("🍂 Мягкая Осень", callback_data="set_colortype:soft_autumn"),
+         InlineKeyboardButton("🍂 Тёплая Осень", callback_data="set_colortype:true_autumn")],
+        [InlineKeyboardButton("🍂 Глубокая Осень", callback_data="set_colortype:deep_autumn")],
+        # Зима
+        [InlineKeyboardButton("❄️ Глубокая Зима", callback_data="set_colortype:deep_winter"),
+         InlineKeyboardButton("❄️ Холодная Зима", callback_data="set_colortype:true_winter")],
+        [InlineKeyboardButton("❄️ Яркая Зима", callback_data="set_colortype:bright_winter")],
+        # Не знаю
+        [InlineKeyboardButton("🤷 Не знаю (определить по селфи)", callback_data="redo_selfie")],
+    ])
     await query.message.reply_text(
-        "🎨 Выбери свой цветотип:\n\n"
-        "🌸 Весна — тёплые светлые тона\n"
-        "☀️ Лето — холодные приглушённые\n"
-        "🍂 Осень — тёплые насыщенные\n"
-        "❄️ Зима — холодные контрастные",
+        "🎨 Выбери свой подтип цветотипа:\n\n"
+        "🌸 <b>Весна</b> — яркая / тёплая / светлая\n"
+        "☀️ <b>Лето</b> — светлое / холодное / мягкое\n"
+        "🍂 <b>Осень</b> — мягкая / тёплая / глубокая\n"
+        "❄️ <b>Зима</b> — глубокая / холодная / яркая\n\n"
+        "Не знаешь? Отправь селфи — определю!",
         reply_markup=keyboard,
+        parse_mode="HTML",
     )
 
 

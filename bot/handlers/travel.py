@@ -191,9 +191,24 @@ async def handle_travel_build(update: Update, context: ContextTypes.DEFAULT_TYPE
         from db.base import AsyncReadSession
         from db.crud.wardrobe import get_owner_items
         from services.wardrobe_math import build_travel_capsule, format_travel_packing
+        from sqlalchemy.orm import selectinload
+        from sqlalchemy import select as sa_select
+
+        # Определяем owner: для мам — ребёнок, для остальных — сам юзер
+        owner_id, owner_type = user.id, "user"
+        if user.segment in ("mom_girl", "mom_boy"):
+            async with AsyncReadSession() as session:
+                from db.models.user import User
+                result = await session.execute(
+                    sa_select(User).options(selectinload(User.children)).where(User.id == user.id)
+                )
+                _u = result.scalar_one_or_none()
+                children = [c for c in (_u.children or []) if c.deleted_at is None] if _u else []
+                if children:
+                    owner_id, owner_type = children[0].id, "child"
 
         async with AsyncReadSession() as session:
-            items = await get_owner_items(session, user.id, "user")
+            items = await get_owner_items(session, owner_id, owner_type)
 
         from core.permissions import MIN_ITEMS_GAP_ANALYSIS
         if len(items) < MIN_ITEMS_GAP_ANALYSIS:
@@ -213,12 +228,24 @@ async def handle_travel_build(update: Update, context: ContextTypes.DEFAULT_TYPE
         text = f"{header}\n\n{packing}"
 
         await query.edit_message_text(text)
+        # Восстановить reply-клавиатуру главного меню
+        from bot.handlers.menu import get_main_menu
+        await query.message.reply_text(
+            "👇", reply_markup=get_main_menu(user, context),
+        )
         logger.info("travel.built", user_id=str(user.id), city=city, days=days,
                      items=len(capsule["items"]), combos=capsule["total_combos"])
 
     except Exception as e:
         logger.error("travel.error", user_id=str(user.id), error=str(e))
         await query.edit_message_text(t("error.generic", lang))
+        try:
+            from bot.handlers.menu import get_main_menu
+            await query.message.reply_text(
+                "👇", reply_markup=get_main_menu(user, context),
+            )
+        except Exception:
+            pass
     finally:
         _cleanup_travel(context)
 
