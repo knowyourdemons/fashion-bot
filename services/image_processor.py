@@ -271,16 +271,25 @@ def _check_rembg_quality(png_bytes: bytes) -> bool:
     """Check if bg removal produced a usable result.
 
     Returns False if:
-    - >85% pixels transparent (removed too much — probably dark bg)
-    - <15% pixels transparent (removed too little — rembg failed)
+    - >80% pixels opaque (removed too little — background still visible)
+    - <10% pixels opaque (removed too much — garment lost)
+    Also checks for "dirty edges" — semi-transparent pixels that indicate
+    poor mask quality (background bleeding through).
     """
     try:
         img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
-        pixels = list(img.getdata())
-        total = len(pixels)
-        opaque = sum(1 for p in pixels if p[3] > 30)
+        alpha = img.split()[3]
+        total = alpha.size[0] * alpha.size[1]
+        # Count pixels by transparency level
+        alpha_data = list(alpha.getdata())
+        opaque = sum(1 for a in alpha_data if a > 200)
+        semi = sum(1 for a in alpha_data if 30 < a <= 200)
         ratio = opaque / total if total > 0 else 0
-        return 0.15 <= ratio <= 0.85
+        semi_ratio = semi / total if total > 0 else 0
+        # Too many semi-transparent pixels = poor mask (bg bleeding)
+        if semi_ratio > 0.15:
+            return False
+        return 0.10 <= ratio <= 0.80
     except Exception:
         return True  # fallback — don't block
 
@@ -331,6 +340,15 @@ def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) ->
     """
     # 1. EXIF rotate
     result = exif_rotate(photo_bytes)
+
+    # 1b. Auto-rotate landscape photos to portrait (garments are taller than wide)
+    img_orient = Image.open(io.BytesIO(result))
+    if img_orient.width > img_orient.height * 1.3:
+        img_orient = img_orient.rotate(90, expand=True)
+        buf = io.BytesIO()
+        fmt = "PNG" if img_orient.mode == "RGBA" else "JPEG"
+        img_orient.save(buf, format=fmt, quality=90)
+        result = buf.getvalue()
 
     # 2. Background removal (if needed)
     if needs_bg_removal:

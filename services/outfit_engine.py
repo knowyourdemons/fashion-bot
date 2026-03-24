@@ -669,7 +669,8 @@ def _build_user_prompt(
                 parts.append(f"Стиль-тип пользователя: {style_type}. {_hint}")
 
     # Required slots hint
-    required = ["top или one_piece", "bottom (если не платье)", "обувь"]
+    required = ["top или one_piece", "bottom (если не платье/сарафан)", "обувь"]
+    parts.append("ВАЖНО: Если выбрано платье/сарафан (one_piece), НЕ добавляй штаны/юбку (bottom). Платье заменяет и верх и низ.")
     if temp_morning <= 15:
         required.append("верхняя одежда")
     if temp_morning < 10:
@@ -804,6 +805,10 @@ def _build_outfit_from_ai(
         "warnings": [],
         "all_items": [],
     }
+
+    # ── Post-validation: one_piece (dress/sarafan) makes bottom redundant ──
+    if result["one_piece"] and result["bottom"]:
+        result["bottom"] = None
 
     # ── Base layer from rules (not AI) ──
     available = [
