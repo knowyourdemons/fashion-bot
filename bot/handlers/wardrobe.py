@@ -894,6 +894,10 @@ async def _analyze_and_save(
     # Collect (item_id, bbox) pairs for deferred bg removal
     rmbg_queue: list[tuple[uuid.UUID, dict | None]] = []
 
+    # Resolve overlapping bboxes before processing individual items
+    from services.vision import _resolve_bbox_overlaps
+    items_data = _resolve_bbox_overlaps(items_data)
+
     async with AsyncWriteSession() as session:
         for data in items_data:
             cg = data.get("category_group") or "top"
@@ -1825,6 +1829,8 @@ async def _process_media_group(
 
             added: list[dict] = []
             rmbg_queue: list[tuple[uuid.UUID, dict | None]] = []
+            from services.vision import _resolve_bbox_overlaps
+            items_data = _resolve_bbox_overlaps(items_data)
             async with AsyncWriteSession() as _batch_session:
                 for data in items_data:
                     cg = data.get("category_group") or "top"

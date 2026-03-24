@@ -124,6 +124,12 @@ bbox задаёт координаты прямоугольника вещи в 
 - x, y — левый верхний угол
 - w, h — ширина и высота
 
+ВАЖНО — bbox должен быть ПЛОТНЫМ:
+- Облегай вещь максимально точно, без лишнего пространства вокруг
+- НЕ захватывай соседние вещи, пол, ковёр, бирки
+- Если вещи лежат рядом — bbox'ы НЕ должны перекрываться
+- Лучше чуть меньший bbox чем слишком большой (обрежем край вещи — не страшно, захватим соседнюю — плохо)
+
 Если вещей несколько — каждая имеет свой bbox.
 Если вещь занимает всё фото — bbox: {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
 
@@ -309,6 +315,79 @@ def _fix_bbox(data: dict) -> dict:
             "h": new_dim,
         }
     return data
+
+
+def _resolve_bbox_overlaps(items: list[dict]) -> list[dict]:
+    """Shrink overlapping bboxes so each item gets its own non-overlapping area.
+
+    When Vision returns overlapping bboxes for items on the same photo,
+    the overlap zone causes sibling masking to erase parts of the target item.
+
+    Strategy: for each pair of overlapping bboxes, shrink the smaller one
+    away from the larger one along the axis of maximum overlap.
+    """
+    if len(items) < 2:
+        return items
+
+    bboxes = []
+    for item in items:
+        b = item.get("bbox")
+        if b:
+            bboxes.append({
+                "x": float(b.get("x", 0)), "y": float(b.get("y", 0)),
+                "w": float(b.get("w", 1)), "h": float(b.get("h", 1)),
+            })
+        else:
+            bboxes.append(None)
+
+    for i in range(len(bboxes)):
+        if not bboxes[i]:
+            continue
+        a = bboxes[i]
+        for j in range(i + 1, len(bboxes)):
+            if not bboxes[j]:
+                continue
+            b = bboxes[j]
+
+            # Check overlap
+            ox = max(0, min(a["x"] + a["w"], b["x"] + b["w"]) - max(a["x"], b["x"]))
+            oy = max(0, min(a["y"] + a["h"], b["y"] + b["h"]) - max(a["y"], b["y"]))
+            if ox <= 0 or oy <= 0:
+                continue  # no overlap
+
+            # Shrink the smaller bbox away from the larger one
+            area_a = a["w"] * a["h"]
+            area_b = b["w"] * b["h"]
+            small, large = (b, a) if area_b < area_a else (a, b)
+
+            # Determine main overlap axis and shrink along it
+            if ox < oy:
+                # Horizontal overlap — shrink horizontally
+                if small["x"] < large["x"]:
+                    # small is to the left → trim its right edge
+                    small["w"] = max(0.05, large["x"] - small["x"])
+                else:
+                    # small is to the right → move its left edge
+                    new_x = large["x"] + large["w"]
+                    shrink = new_x - small["x"]
+                    small["x"] = new_x
+                    small["w"] = max(0.05, small["w"] - shrink)
+            else:
+                # Vertical overlap — shrink vertically
+                if small["y"] < large["y"]:
+                    small["h"] = max(0.05, large["y"] - small["y"])
+                else:
+                    new_y = large["y"] + large["h"]
+                    shrink = new_y - small["y"]
+                    small["y"] = new_y
+                    small["h"] = max(0.05, small["h"] - shrink)
+
+    # Write back
+    for i, item in enumerate(items):
+        if bboxes[i]:
+            item["bbox"] = bboxes[i]
+
+    return items
 
 
 def _default_score() -> tuple[dict, float]:
