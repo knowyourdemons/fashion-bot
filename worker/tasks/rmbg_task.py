@@ -52,8 +52,7 @@ async def process_rmbg(payload: dict) -> dict:
     except Exception as e:
         logger.warning("rmbg_process.exif_failed", error=str(e))
 
-    # 2. Remove background on FULL photo first (model has full context → better mask)
-    from services.image_processor import remove_background
+    from services.image_processor import remove_background, soften_edges
     from core.redis import get_redis
     redis = None
     try:
@@ -61,25 +60,50 @@ async def process_rmbg(payload: dict) -> dict:
     except Exception:
         pass
 
-    png_bytes = await remove_background(photo_bytes, redis=redis)
-
-    # 2b. Edge softening (smooth rembg artifacts)
-    from services.image_processor import soften_edges
-    try:
-        png_bytes = soften_edges(png_bytes, radius=1.5)
-    except Exception:
-        pass
-
-    # 3. Crop by bbox AFTER bg removal (cleaner result — rembg had full photo context)
-    good_crop = True
+    # 2. Strategy depends on whether this is a multi-item photo (small bbox)
+    #    Multi-item: crop first → bg removal on isolated item (avoids neighbor bleed)
+    #    Single-item: bg removal on full photo → better context for the model
+    is_multi_item = False
     if bbox:
-        from services.image_processor import _bbox_crop_rgba
-        from services.vision import _check_crop_quality
+        bbox_area = float(bbox.get("w", 1.0)) * float(bbox.get("h", 1.0))
+        is_multi_item = bbox_area < 0.55  # multi-item bboxes are typically <0.4
+
+    good_crop = True
+
+    if is_multi_item and bbox:
+        # MULTI-ITEM: crop first to isolate this garment, then remove background
+        from services.vision import _crop_bbox, _check_crop_quality
         try:
-            png_bytes = _bbox_crop_rgba(png_bytes, bbox)
+            crop_bytes = _crop_bbox(photo_bytes, bbox)
         except Exception as e:
             logger.warning("rmbg_process.crop_failed", item_id=str(item_id), error=str(e))
+            crop_bytes = photo_bytes
+
+        png_bytes = await remove_background(crop_bytes, redis=redis)
+        try:
+            png_bytes = soften_edges(png_bytes, radius=1.5)
+        except Exception:
+            pass
         good_crop = _check_crop_quality(png_bytes)
+        logger.info("rmbg_process.strategy", strategy="crop_first", bbox_area=f"{bbox_area:.2f}")
+    else:
+        # SINGLE-ITEM: bg removal on full photo (model has full context)
+        png_bytes = await remove_background(photo_bytes, redis=redis)
+        try:
+            png_bytes = soften_edges(png_bytes, radius=1.5)
+        except Exception:
+            pass
+
+        # Crop by bbox if needed (for single-item with small bbox)
+        if bbox:
+            from services.image_processor import _bbox_crop_rgba
+            from services.vision import _check_crop_quality
+            try:
+                png_bytes = _bbox_crop_rgba(png_bytes, bbox)
+            except Exception as e:
+                logger.warning("rmbg_process.crop_failed", item_id=str(item_id), error=str(e))
+            good_crop = _check_crop_quality(png_bytes)
+        logger.info("rmbg_process.strategy", strategy="rembg_first", bbox_area=f"{float(bbox.get('w',1))*float(bbox.get('h',1)):.2f}" if bbox else "1.00")
 
     # 5. Upload to R2
     is_png = png_bytes[:4] == b'\x89PNG'
