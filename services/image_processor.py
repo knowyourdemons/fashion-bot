@@ -415,21 +415,14 @@ def pad_square_resize(png_bytes: bytes, size: int = THUMB_SIZE) -> bytes:
     """Auto-trim transparent edges, fix orientation, pad to square, resize."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
 
-    # Auto-trim: crop to bounding box of OPAQUE pixels (alpha > 50)
-    # Using threshold eliminates semi-transparent RMBG artifacts that
-    # inflate the bbox and make the garment appear tiny in the cell
+    # Auto-trim: crop to non-transparent bounding box
     alpha = img.split()[3]
-    # Threshold alpha: <50 → 0 (treat as transparent for bbox)
-    alpha_thresh = alpha.point(lambda p: 255 if p > 50 else 0)
-    bbox = alpha_thresh.getbbox()
-    if not bbox:
-        # Fallback to any non-zero alpha
-        bbox = alpha.getbbox()
+    bbox = alpha.getbbox()
     if bbox:
-        # 3% padding — tight crop makes garment fill the cell
+        # 5% padding
         w, h = img.size
-        pad_x = int((bbox[2] - bbox[0]) * 0.03)
-        pad_y = int((bbox[3] - bbox[1]) * 0.03)
+        pad_x = int((bbox[2] - bbox[0]) * 0.05)
+        pad_y = int((bbox[3] - bbox[1]) * 0.05)
         bbox = (
             max(0, bbox[0] - pad_x), max(0, bbox[1] - pad_y),
             min(w, bbox[2] + pad_x), min(h, bbox[3] + pad_y),
@@ -467,13 +460,14 @@ def _check_rembg_quality(png_bytes: bytes) -> bool:
         img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
         alpha = img.split()[3]
         total = alpha.size[0] * alpha.size[1]
-        # Count opaque pixels (alpha > 30 = "something there")
+        # Count opaque pixels (alpha > 128 = solid foreground)
         alpha_data = list(alpha.getdata())
-        opaque = sum(1 for a in alpha_data if a > 30)
+        opaque = sum(1 for a in alpha_data if a > 128)
         ratio = opaque / total if total > 0 else 0
-        # Too little removed (<5% transparent) = model failed completely
-        # Too much removed (>95% transparent) = model removed everything
-        return 0.05 <= ratio <= 0.95
+        # Clothing on a photo typically occupies 15-75% of the frame
+        # <10% = model removed the garment (too aggressive)
+        # >80% = model kept background (sofa, floor, etc.)
+        return 0.10 <= ratio <= 0.80
     except Exception:
         return True  # fallback — don't block
 
