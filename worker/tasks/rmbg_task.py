@@ -52,18 +52,7 @@ async def process_rmbg(payload: dict) -> dict:
     except Exception as e:
         logger.warning("rmbg_process.exif_failed", error=str(e))
 
-    # 2. Crop by bbox (if available)
-    if bbox:
-        from services.vision import _crop_bbox, _check_crop_quality
-        try:
-            crop_bytes = _crop_bbox(photo_bytes, bbox)
-        except Exception as e:
-            logger.warning("rmbg_process.crop_failed", item_id=str(item_id), error=str(e))
-            crop_bytes = photo_bytes
-    else:
-        crop_bytes = photo_bytes
-
-    # 3. Remove background
+    # 2. Remove background on FULL photo first (model has full context → better mask)
     from services.image_processor import remove_background
     from core.redis import get_redis
     redis = None
@@ -72,19 +61,24 @@ async def process_rmbg(payload: dict) -> dict:
     except Exception:
         pass
 
-    png_bytes = await remove_background(crop_bytes, redis=redis)
+    png_bytes = await remove_background(photo_bytes, redis=redis)
 
-    # 3b. Edge softening (smooth rembg artifacts)
+    # 2b. Edge softening (smooth rembg artifacts)
     from services.image_processor import soften_edges
     try:
         png_bytes = soften_edges(png_bytes, radius=1.5)
     except Exception:
         pass
 
-    # 4. Check crop quality
+    # 3. Crop by bbox AFTER bg removal (cleaner result — rembg had full photo context)
     good_crop = True
     if bbox:
+        from services.image_processor import _bbox_crop_rgba
         from services.vision import _check_crop_quality
+        try:
+            png_bytes = _bbox_crop_rgba(png_bytes, bbox)
+        except Exception as e:
+            logger.warning("rmbg_process.crop_failed", item_id=str(item_id), error=str(e))
         good_crop = _check_crop_quality(png_bytes)
 
     # 5. Upload to R2
