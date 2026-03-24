@@ -443,40 +443,47 @@ def _auto_rotate_to_vertical(img: Image.Image) -> Image.Image:
     """Rotate garment to vertical orientation using contour analysis.
 
     Finds the minimum area bounding rectangle of the opaque region,
-    then rotates so the long axis is vertical. Makes garments
-    photographed at angles appear straight.
+    then rotates so the long axis is vertical.
+
+    cv2.minAreaRect returns angle in [-90, 0):
+    - angle is rotation of the rect from HORIZONTAL axis
+    - We need deviation from VERTICAL to straighten
     """
     try:
         import cv2
         alpha = img.split()[3]
         alpha_arr = np.array(alpha)
 
-        # Find contours
-        contours, _ = cv2.findContours(alpha_arr, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # Threshold to binary for clean contours
+        _, binary = cv2.threshold(alpha_arr, 30, 255, cv2.THRESH_BINARY)
+
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             return img
 
-        # Largest contour = the garment
         largest = max(contours, key=cv2.contourArea)
-        if cv2.contourArea(largest) < 100:
-            return img
+        if cv2.contourArea(largest) < img.size[0] * img.size[1] * 0.05:
+            return img  # contour too small, skip
 
-        # Minimum area bounding rectangle
         rect = cv2.minAreaRect(largest)
-        angle = rect[1]  # (width, height) of the rect
-        rotation = rect[2]  # angle in degrees
-
         rect_w, rect_h = rect[1]
-        # Ensure long side is vertical: if width > height, rotate 90°
-        if rect_w > rect_h:
-            rotation += 90
+        angle = rect[2]  # [-90, 0)
 
-        # Only rotate if angle is significant (>5°) but not too extreme
-        if abs(rotation) < 5 or abs(rotation) > 85:
+        # Calculate deviation from vertical
+        if rect_w < rect_h:
+            # Long side is roughly vertical, angle is tilt from vertical
+            deviation = 90 + angle  # e.g., angle=-70 → deviation=20°
+        else:
+            # Long side is roughly horizontal, need 90° + correction
+            deviation = angle  # e.g., angle=-20 → rotate -20° to go vertical
+
+        # Only rotate if deviation is significant (8-45°)
+        # <8° = already straight enough
+        # >45° = probably intentional orientation or detection error
+        if abs(deviation) < 8 or abs(deviation) > 45:
             return img
 
-        # Rotate with expand to avoid clipping
-        rotated = img.rotate(-rotation, expand=True, resample=Image.BICUBIC,
+        rotated = img.rotate(-deviation, expand=True, resample=Image.BICUBIC,
                              fillcolor=(0, 0, 0, 0))
         return rotated
     except Exception:
