@@ -59,10 +59,10 @@ COLOR_BG: dict[str, str] = {
     "синий": "bg-blue",
     "голубой": "bg-blue",
     "бежевый": "bg-beige",
-    "серый": "bg-grey",
+    "серый": "bg-beige",  # contrast: grey item on beige bg (grey-on-grey was invisible)
     "зелёный": "bg-green",
     "зеленый": "bg-green",
-    "белый": "bg-white",
+    "белый": "bg-lavender",  # contrast: white item on lavender bg (white-on-white invisible)
     "чёрный": "bg-black",
     "черный": "bg-black",
     "коричневый": "bg-brown",
