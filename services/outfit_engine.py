@@ -1001,7 +1001,6 @@ def _build_outfit_from_ai(
     # ── Slot exclusion matrix: if slot X filled, slots Y are cleared ──
     _SLOT_EXCLUSIONS: dict[str, list[str]] = {
         "one_piece": ["top", "bottom"],       # платье/сарафан заменяет верх+низ
-        # NB: top+bottom НЕ исключают one_piece — это нормальный выбор
     }
     for filled_slot, excluded_slots in _SLOT_EXCLUSIONS.items():
         if result.get(filled_slot):
@@ -1012,6 +1011,25 @@ def _build_outfit_from_ai(
                         filled_type=getattr(result[filled_slot], "type", "?"),
                         excluded_type=getattr(result[ex], "type", "?"))
                     result[ex] = None
+
+    # ── Dedup: no two items with same category_group (except accessory) ──
+    _seen_cg: dict[str, str] = {}  # category_group → slot_name
+    _DEDUP_PRIORITY = ["one_piece", "outerwear", "top", "bottom", "footwear",
+                       "removable_layer", "hat", "scarf", "gloves"]
+    for slot_name in _DEDUP_PRIORITY:
+        item = result.get(slot_name)
+        if item is None:
+            continue
+        cg = getattr(item, "category_group", "")
+        if cg in ("accessory", "bag", "base_layer", "underwear"):
+            continue  # allow multiple accessories
+        if cg in _seen_cg:
+            logger.info("outfit.category_dedup",
+                        duplicate_slot=slot_name, original_slot=_seen_cg[cg],
+                        category=cg, item_type=getattr(item, "type", "?"))
+            result[slot_name] = None
+        else:
+            _seen_cg[cg] = slot_name
 
     # ── Base layer from rules (not AI) ──
     available = [

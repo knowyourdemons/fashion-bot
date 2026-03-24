@@ -86,12 +86,12 @@ def get_collage_params(
 
     temp_parts = []
     if temp is not None:
-        temp_parts.append(_s(temp))
-    if temp_day is not None:
-        temp_parts.append(_s(temp_day))
-    if temp_evening is not None:
-        temp_parts.append(_s(temp_evening))
-    temp_str = " / ".join(temp_parts) if temp_parts else ""
+        temp_parts.append(f"сейчас {_s(temp)}")
+    if temp_evening is not None and temp_evening != temp:
+        temp_parts.append(f"вечером {_s(temp_evening)}")
+    elif temp_day is not None and temp_day != temp:
+        temp_parts.append(f"днём {_s(temp_day)}")
+    temp_str = ", ".join(temp_parts) if temp_parts else ""
 
     if child:
         context = child.name
