@@ -12,12 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p /root/.u2net && \
-    curl -fSL -o /root/.u2net/silueta.onnx \
-    https://github.com/danielgatis/rembg/releases/download/v0.0.0/silueta.onnx && \
     curl -fSL -o /root/.u2net/rmbg14_quantized.onnx \
     https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model_quantized.onnx && \
-    curl -fSL -o /root/.u2net/isnet-general-use.onnx \
-    https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx && \
     curl -fSL -o /root/.u2net/cloth_seg_u2net.onnx \
     https://huggingface.co/maiti/cloth-segmentation/resolve/main/u2net.onnx
 COPY . .

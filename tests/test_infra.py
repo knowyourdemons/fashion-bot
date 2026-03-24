@@ -95,15 +95,15 @@ class TestHealthCheck:
 class TestOnnxThreadSafety:
     """ONNX session initialization must be thread-safe."""
 
-    def test_get_ort_session_uses_lock(self):
-        """_get_ort_session uses double-check locking."""
-        from services.image_processor import _ort_lock
-        assert isinstance(_ort_lock, type(threading.Lock()))
+    def test_get_rmbg_session_uses_lock(self):
+        """_rmbg_lock exists for thread-safe session init."""
+        from services.image_processor import _rmbg_lock
+        assert isinstance(_rmbg_lock, type(threading.Lock()))
 
-    def test_run_silueta_import(self):
-        """_run_silueta is importable."""
-        from services.image_processor import _run_silueta
-        assert callable(_run_silueta)
+    def test_run_rmbg14_import(self):
+        """_run_rmbg14 is importable."""
+        from services.image_processor import _run_rmbg14
+        assert callable(_run_rmbg14)
 
 
 # ── DB indexes ───────────────────────────────────────────────────────────────

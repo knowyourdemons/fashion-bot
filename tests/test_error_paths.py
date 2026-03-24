@@ -318,7 +318,9 @@ class TestONNXModelNotFound:
         redis = AsyncMock()
         redis.incr = AsyncMock()
 
-        with patch("services.image_processor._run_silueta", side_effect=FileNotFoundError("no model")):
+        with patch("services.image_processor._run_rmbg14", side_effect=FileNotFoundError("no model")), \
+             patch("services.image_processor._run_cloth_seg", side_effect=FileNotFoundError("no model")), \
+             patch("services.image_processor._run_grabcut", return_value=None):
             with patch("config.settings") as ms:
                 ms.removebg_api_key = "test_key"
                 with patch("httpx.AsyncClient") as mock_cls:
@@ -343,7 +345,9 @@ class TestRemoveBGFails:
         redis = AsyncMock()
         redis.incr = AsyncMock()
 
-        with patch("services.image_processor._run_silueta", side_effect=RuntimeError("onnx fail")):
+        with patch("services.image_processor._run_rmbg14", side_effect=RuntimeError("onnx fail")), \
+             patch("services.image_processor._run_cloth_seg", side_effect=RuntimeError("onnx fail")), \
+             patch("services.image_processor._run_grabcut", return_value=None):
             with patch("config.settings") as ms:
                 ms.removebg_api_key = "test_key"
                 with patch("httpx.AsyncClient") as mock_cls:
@@ -361,7 +365,9 @@ class TestRemoveBGFails:
 
         image_bytes = _jpeg_bytes()
 
-        with patch("services.image_processor._run_silueta", side_effect=RuntimeError("onnx fail")):
+        with patch("services.image_processor._run_rmbg14", side_effect=RuntimeError("onnx fail")), \
+             patch("services.image_processor._run_cloth_seg", side_effect=RuntimeError("onnx fail")), \
+             patch("services.image_processor._run_grabcut", return_value=None):
             with patch("config.settings") as ms:
                 ms.removebg_api_key = ""
                 result = await remove_background(image_bytes)

@@ -4,7 +4,7 @@
 2. Resize до 1024×1024
 3. Очистка EXIF (GDPR)
 4. Perceptual hash для дублей
-5. Удаление фона (local ONNX silueta → remove.bg API fallback)
+5. Удаление фона (RMBG-1.4 → cloth-segmentation → GrabCut → remove.bg API)
 """
 import asyncio
 import io
@@ -20,18 +20,10 @@ from PIL import Image
 from exceptions import DuplicateItemError, ImageTooLargeError
 
 # ── Singleton ONNX sessions for background removal ─────────────────
-_SILUETA_PATH = "/root/.u2net/silueta.onnx"
 _RMBG14_PATH = "/root/.u2net/rmbg14_quantized.onnx"
-_ISNET_PATH = "/root/.u2net/isnet-general-use.onnx"
-
-_ort_session: Optional[ort.InferenceSession] = None
-_ort_lock = threading.Lock()
 
 _rmbg_session: Optional[ort.InferenceSession] = None
 _rmbg_lock = threading.Lock()
-
-_isnet_session: Optional[ort.InferenceSession] = None
-_isnet_lock = threading.Lock()
 
 _CLOTH_SEG_PATH = "/root/.u2net/cloth_seg_u2net.onnx"
 _cloth_seg_session: Optional[ort.InferenceSession] = None
@@ -40,19 +32,6 @@ _cloth_seg_lock = threading.Lock()
 # Limit concurrent RMBG inferences to prevent OOM (each peak ~600MB)
 _rmbg_semaphore = asyncio.Semaphore(1)
 
-
-def _get_ort_session() -> ort.InferenceSession:
-    global _ort_session
-    if _ort_session is None:
-        with _ort_lock:
-            if _ort_session is None:  # double-check after acquiring lock
-                opts = ort.SessionOptions()
-                opts.intra_op_num_threads = 1
-                opts.inter_op_num_threads = 1
-                _ort_session = ort.InferenceSession(
-                    _SILUETA_PATH, opts, providers=["CPUExecutionProvider"]
-                )
-    return _ort_session
 
 
 def _get_rmbg_session() -> ort.InferenceSession:
@@ -70,20 +49,6 @@ def _get_rmbg_session() -> ort.InferenceSession:
     return _rmbg_session
 
 
-def _get_isnet_session() -> ort.InferenceSession:
-    """Thread-safe singleton for ISNet-general-use ONNX model (178MB, best quality)."""
-    global _isnet_session
-    if _isnet_session is None:
-        with _isnet_lock:
-            if _isnet_session is None:
-                opts = ort.SessionOptions()
-                opts.intra_op_num_threads = 2
-                opts.inter_op_num_threads = 1
-                _isnet_session = ort.InferenceSession(
-                    _ISNET_PATH, opts, providers=["CPUExecutionProvider"]
-                )
-    return _isnet_session
-
 
 def _get_cloth_seg_session() -> ort.InferenceSession:
     """Thread-safe singleton for cloth-segmentation U2Net ONNX model (clothing-specific)."""
@@ -100,140 +65,6 @@ def _get_cloth_seg_session() -> ort.InferenceSession:
     return _cloth_seg_session
 
 
-def _run_removebg_api(image_bytes: bytes) -> bytes | None:
-    """Remove background via remove.bg API. Best quality, handles any background.
-    Returns PNG bytes with alpha or None if API fails/unavailable.
-    Cost: ~$0.05/image on paid plan, free tier = 50/month.
-    """
-    import os
-    import httpx
-    import structlog
-    _logger = structlog.get_logger()
-
-    api_key = os.environ.get("REMOVEBG_API_KEY", "")
-    if not api_key:
-        return None
-
-    try:
-        # Resize to max 1024px to reduce upload size and API processing time
-        img = Image.open(io.BytesIO(image_bytes))
-        max_dim = max(img.size)
-        if max_dim > 1500:
-            scale = 1500 / max_dim
-            img = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS)
-            buf = io.BytesIO()
-            img.save(buf, format="PNG")
-            upload_bytes = buf.getvalue()
-        else:
-            upload_bytes = image_bytes
-
-        resp = httpx.post(
-            "https://api.remove.bg/v1.0/removebg",
-            files={"image_file": ("photo.png", upload_bytes, "image/png")},
-            data={"size": "auto", "type": "product"},
-            headers={"X-Api-Key": api_key},
-            timeout=20,
-        )
-        if resp.status_code == 200 and len(resp.content) > 1000:
-            _logger.info("rmbg.removebg_ok", size=len(resp.content))
-            return resp.content
-        _logger.warning("rmbg.removebg_failed", status=resp.status_code,
-                         body=resp.text[:200])
-        return None
-    except Exception as e:
-        _logger.warning("rmbg.removebg_error", error=str(e))
-        return None
-
-
-def _run_isnet(image_bytes: bytes) -> bytes:
-    """Run ISNet-general-use: best quality bg removal for complex backgrounds.
-
-    ISNet is designed for high-accuracy object segmentation.
-    Input: 1024×1024, normalized [0,1], CHW layout.
-    Output: sigmoid mask 1024×1024.
-    """
-    import structlog
-    _logger = structlog.get_logger()
-
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    orig_w, orig_h = img.size
-
-    # Preprocess: pad to square (preserve aspect ratio) then resize to 1024×1024
-    # Stretching non-square photos (e.g., 185×777) distorts features → bad mask
-    side = max(orig_w, orig_h)
-    padded = Image.new("RGB", (side, side), (128, 128, 128))  # neutral gray bg
-    padded.paste(img, ((side - orig_w) // 2, (side - orig_h) // 2))
-    resized = padded.resize((1024, 1024), Image.BILINEAR)
-
-    arr = np.array(resized, dtype=np.float32) / 255.0
-    arr = arr.transpose(2, 0, 1)[np.newaxis, ...]  # (1, 3, 1024, 1024)
-
-    sess = _get_isnet_session()
-    input_name = sess.get_inputs()[0].name
-    outputs = sess.run(None, {input_name: arr})
-    # ISNet returns multiple outputs; first is the main mask
-    mask = outputs[0].squeeze()  # (1024, 1024)
-
-    # Normalize to [0, 255]
-    mask = mask - mask.min()
-    denom = mask.max() - mask.min()
-    if denom > 0:
-        mask = mask / denom
-    mask = (mask * 255).astype(np.uint8)
-
-    # Post-processing: morphological cleanup
-    mask[mask < 25] = 0
-    mask[mask > 230] = 255
-    from PIL import ImageFilter
-    mask_pil = Image.fromarray(mask)
-    mask_pil = mask_pil.filter(ImageFilter.MaxFilter(3))
-    mask_pil = mask_pil.filter(ImageFilter.MinFilter(3))
-    mask_pil = mask_pil.filter(ImageFilter.GaussianBlur(radius=1))
-
-    # Crop mask back to original aspect ratio (remove padding)
-    mask_square = mask_pil.resize((side, side), Image.BILINEAR)
-    left = (side - orig_w) // 2
-    top = (side - orig_h) // 2
-    mask_cropped = mask_square.crop((left, top, left + orig_w, top + orig_h))
-
-    # Apply mask as alpha channel
-    img_rgba = img.copy().convert("RGBA")
-    img_rgba.putalpha(mask_cropped)
-
-    buf = io.BytesIO()
-    img_rgba.save(buf, format="PNG")
-    _logger.info("rmbg.isnet_done", orig_size=f"{orig_w}x{orig_h}")
-    return buf.getvalue()
-
-
-def _run_silueta(image_bytes: bytes) -> bytes:
-    """Run silueta ONNX model: returns PNG bytes with transparent background."""
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    orig_w, orig_h = img.size
-
-    # Preprocess: resize to 320×320, normalize to [0,1], CHW layout
-    resized = img.resize((320, 320), Image.BILINEAR)
-    arr = np.array(resized, dtype=np.float32) / 255.0
-    arr = arr.transpose(2, 0, 1)[np.newaxis, ...]  # (1, 3, 320, 320)
-
-    sess = _get_ort_session()
-    mask = sess.run(None, {sess.get_inputs()[0].name: arr})[0]  # (1,1,320,320)
-    mask = mask.squeeze()  # (320, 320)
-
-    # Normalize mask to 0-255
-    mask = (mask - mask.min()) / (mask.max() - mask.min() + 1e-8)
-    mask = (mask * 255).astype(np.uint8)
-
-    # Resize mask back to original size
-    mask_img = Image.fromarray(mask).resize((orig_w, orig_h), Image.BILINEAR)
-
-    # Apply mask as alpha channel
-    img_rgba = img.copy().convert("RGBA")
-    img_rgba.putalpha(mask_img)
-
-    buf = io.BytesIO()
-    img_rgba.save(buf, format="PNG")
-    return buf.getvalue()
 
 
 def _run_rmbg14(image_bytes: bytes) -> bytes:
@@ -1090,15 +921,6 @@ def preprocess(
     img.save(buf, format="JPEG", quality=85)
     return buf.getvalue(), phash
 
-
-def _get_bg_removal_model() -> str:
-    """Return configured background removal model name.
-
-    Uses BG_REMOVAL_MODEL env var via pydantic settings.
-    Valid values: "silueta" (default), "rmbg14".
-    """
-    from config import settings
-    return settings.bg_removal_model
 
 
 async def remove_background(image_bytes: bytes, redis=None) -> bytes:
