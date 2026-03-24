@@ -1404,7 +1404,36 @@ async def _handle_single_photo(
             if len(added) > 1:
                 lines.append("\n💡 Для лучшего качества коллажа — фоткай по одной вещи")
 
-        await update.message.reply_text("\n".join(lines))
+        # Build correction buttons for ambiguous items
+        _correction_kb = None
+        if added and len(added) == 1:
+            _d = added[0]
+            _item_id_str = str(_d.get("id") if isinstance(_d, dict) else getattr(_d, "id", ""))[:8]
+            _cg = _d.get("category_group") if isinstance(_d, dict) else getattr(_d, "category_group", "")
+            _conf = _d.get("confidence") if isinstance(_d, dict) else getattr(_d, "confidence", None)
+            # Show correction button for potentially ambiguous classifications
+            if _cg in ("one_piece", "top", "outerwear") or _conf == "low":
+                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                _fix_buttons = []
+                _FIX_OPTIONS = {
+                    "top": "👕 Кофта/футболка",
+                    "one_piece": "👗 Платье/сарафан",
+                    "outerwear": "🧥 Куртка/пальто",
+                    "bottom": "👖 Штаны/юбка",
+                }
+                for _fix_cg, _fix_label in _FIX_OPTIONS.items():
+                    if _fix_cg != _cg:
+                        _fix_buttons.append(
+                            InlineKeyboardButton(_fix_label, callback_data=f"fix_cg:{_item_id_str}:{_fix_cg}")
+                        )
+                # Show max 3 options in one row
+                _correction_kb = InlineKeyboardMarkup([_fix_buttons[:3]])
+                lines.append("\n❓ Не так определила? Поправь:")
+
+        await update.message.reply_text(
+            "\n".join(lines),
+            reply_markup=_correction_kb,
+        )
 
         # ── Milestone rewards ──────────────────────────────────────────────
         if added and user.onboarding_completed:
@@ -1462,6 +1491,69 @@ async def _handle_single_photo(
         await update.message.reply_text(msg)
         logger.error("wardrobe.photo.error", error=str(e), user_id=str(user.id))
         sentry_sdk.capture_exception(e)
+
+
+# ── Callback: коррекция категории вещи ─────────────────────────────────────
+
+async def handle_fix_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback fix_cg:{short_id}:{new_cg} — user corrects item category."""
+    query = update.callback_query
+    await query.answer()
+    parts = query.data.split(":")
+    if len(parts) < 3:
+        return
+    short_id = parts[1]
+    new_cg = parts[2]
+
+    from services.validation import VALID_CATEGORY_GROUPS
+    if new_cg not in VALID_CATEGORY_GROUPS:
+        return
+
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    owner_id, owner_type = await _get_owner(user, context)
+
+    # Find full item by short ID
+    try:
+        async with AsyncReadSession() as session:
+            items = await get_owner_items(session, owner_id, owner_type)
+        full_item = next((i for i in items if str(i.id).startswith(short_id)), None)
+        if not full_item:
+            await query.edit_message_text("Вещь не найдена")
+            return
+
+        old_cg = full_item.category_group
+        async with AsyncWriteSession() as session:
+            await session.execute(
+                sa.update(WardrobeItem)
+                .where(WardrobeItem.id == full_item.id)
+                .values(category_group=new_cg)
+            )
+            await session.commit()
+
+        _CG_LABELS = {
+            "top": "👕 кофта/футболка", "one_piece": "👗 платье/сарафан",
+            "outerwear": "🧥 куртка", "bottom": "👖 штаны/юбка",
+            "footwear": "👟 обувь", "accessory": "💍 аксессуар",
+        }
+        await query.edit_message_text(
+            f"✅ Поправила: {full_item.type} {full_item.color}\n"
+            f"{_CG_LABELS.get(old_cg, old_cg)} → {_CG_LABELS.get(new_cg, new_cg)}"
+        )
+        logger.info("wardrobe.category_corrected",
+                     item_id=str(full_item.id), old_cg=old_cg, new_cg=new_cg,
+                     user_id=str(user.id))
+
+        # Clear thumbnail cache for this item (will regenerate)
+        redis = context.bot_data.get("redis")
+        if redis:
+            await redis.delete(f"thumb:{full_item.id}")
+
+    except Exception as e:
+        logger.error("wardrobe.fix_category_failed", error=str(e))
+        await query.edit_message_text("Не удалось обновить. Попробуй ещё раз.")
 
 
 # ── Callback: выбор действия с фото ─────────────────────────────────────────
