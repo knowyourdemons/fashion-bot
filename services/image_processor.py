@@ -342,23 +342,51 @@ def _bbox_crop_rgba(png_bytes: bytes, bbox: dict, size: int = THUMB_SIZE) -> byt
     return buf.getvalue()
 
 
+def _detect_upside_down(img: Image.Image) -> bool:
+    """Detect if a garment is upside down by comparing width of top vs bottom third.
+    Pants/skirts: waistband (wider) should be at top. If bottom third is wider → flip.
+    """
+    try:
+        alpha = img.split()[3]
+        w, h = img.size
+        if h < 60:
+            return False
+        third = h // 3
+        # Count opaque pixels in top and bottom thirds
+        top_data = list(alpha.crop((0, 0, w, third)).getdata())
+        bot_data = list(alpha.crop((0, h - third, w, h)).getdata())
+        top_opaque = sum(1 for a in top_data if a > 128)
+        bot_opaque = sum(1 for a in bot_data if a > 128)
+        # If bottom third has significantly more opaque pixels → likely upside down
+        # (waistband = wide = more pixels, should be at top)
+        if bot_opaque > top_opaque * 1.5 and bot_opaque > len(bot_data) * 0.3:
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def pad_square_resize(png_bytes: bytes, size: int = THUMB_SIZE) -> bytes:
-    """Auto-trim transparent edges, rotate if horizontal, pad to square, resize."""
+    """Auto-trim transparent edges, fix orientation, pad to square, resize."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
 
     # Auto-trim: crop to non-transparent bounding box
     alpha = img.split()[3]
     bbox = alpha.getbbox()
     if bbox:
-        # 5% padding
+        # 8% padding (was 5% — more padding reduces edge clipping)
         w, h = img.size
-        pad_x = int((bbox[2] - bbox[0]) * 0.05)
-        pad_y = int((bbox[3] - bbox[1]) * 0.05)
+        pad_x = int((bbox[2] - bbox[0]) * 0.08)
+        pad_y = int((bbox[3] - bbox[1]) * 0.08)
         bbox = (
             max(0, bbox[0] - pad_x), max(0, bbox[1] - pad_y),
             min(w, bbox[2] + pad_x), min(h, bbox[3] + pad_y),
         )
         img = img.crop(bbox)
+
+    # Detect and fix upside-down garments (pants with waistband at bottom)
+    if _detect_upside_down(img):
+        img = img.rotate(180, expand=False)
 
     # Pad to square
     w, h = img.size
