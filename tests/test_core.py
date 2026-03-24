@@ -193,40 +193,40 @@ class TestScoring:
         self.matrix_name_for_owner = matrix_name_for_owner
 
     def test_perfect_score(self):
-        """Все критерии = 2 → score = 10.0."""
+        """Vision returns 3 (best) → maps to internal 2 → score = 10.0."""
         matrix = FakeMatrix()
-        breakdown = {k: 2 for k in matrix.criteria if not k.startswith("_")}
+        breakdown = {k: 3 for k in matrix.criteria if not k.startswith("_")}
         score = self.calc_item_score(breakdown, matrix)
         assert score == 10.0
 
     def test_zero_score(self):
-        """Все критерии = 0 → score = 0.0."""
+        """Vision returns 1 (worst) → maps to internal 0 → score = 0.0."""
         matrix = FakeMatrix()
-        breakdown = {k: 0 for k in matrix.criteria if not k.startswith("_")}
+        breakdown = {k: 1 for k in matrix.criteria if not k.startswith("_")}
         score = self.calc_item_score(breakdown, matrix)
         assert score == 0.0
 
     def test_neutral_score(self):
-        """Все критерии = 1 → score = 5.0."""
+        """Vision returns 2 (mid) → maps to internal 1 → score = 5.0."""
         matrix = FakeMatrix()
-        breakdown = {k: 1 for k in matrix.criteria if not k.startswith("_")}
+        breakdown = {k: 2 for k in matrix.criteria if not k.startswith("_")}
         score = self.calc_item_score(breakdown, matrix)
         assert score == 5.0
 
     def test_score_ignores_underscore_keys(self):
         """Ключи начинающиеся с _ игнорируются."""
         matrix = FakeMatrix()
-        breakdown = {k: 2 for k in matrix.criteria if not k.startswith("_")}
+        breakdown = {k: 3 for k in matrix.criteria if not k.startswith("_")}
         breakdown["_wow_message"] = 999  # не должен влиять
         score = self.calc_item_score(breakdown, matrix)
         assert score == 10.0
 
     def test_score_clamps_values(self):
-        """Значения > 2 или < 0 зажимаются."""
+        """Vision values outside 1-3 are clamped after mapping."""
         matrix = FakeMatrix()
-        breakdown = {k: 5 for k in matrix.criteria if not k.startswith("_")}  # > 2
+        breakdown = {k: 10 for k in matrix.criteria if not k.startswith("_")}  # > 3
         score = self.calc_item_score(breakdown, matrix)
-        assert score == 10.0  # зажато до 2
+        assert score == 10.0  # mapped: min(10-1, 2) = 2 → perfect
 
         breakdown2 = {k: -1 for k in matrix.criteria if not k.startswith("_")}
         score2 = self.calc_item_score(breakdown2, matrix)

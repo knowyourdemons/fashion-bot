@@ -205,6 +205,10 @@ async def build_brief_card(
         await _download_slot_photos(outfit_slots)
         # Recount after download (some may have failed)
         real_photos = _count_real_photos(outfit_slots)
+        if real_photos == 0 and len(outfit_slots) > 0:
+            logger.warning("brief_card.all_photos_failed",
+                           total_slots=len(outfit_slots),
+                           fallback="weather_card")
 
         # Common data
         date_str, context_str = prepare_date_context(user, child)

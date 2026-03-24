@@ -83,8 +83,11 @@ async def handle_capsule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             items = await get_owner_items(session, owner_id, owner_type)
 
         from core.permissions import MIN_ITEMS_GAP_ANALYSIS
-        if len(items) < MIN_ITEMS_GAP_ANALYSIS:
+        from services.validation import has_minimum_wardrobe
+        if len(items) < MIN_ITEMS_GAP_ANALYSIS or not has_minimum_wardrobe(items):
             text = t("capsule.too_few", lang, min=str(MIN_ITEMS_GAP_ANALYSIS))
+            if not has_minimum_wardrobe(items):
+                text += "\n\nСфоткай верх и низ — соберу капсулу! 📸"
             if update.callback_query:
                 await update.callback_query.message.reply_text(text)
             else:

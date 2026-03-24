@@ -478,16 +478,22 @@ async def _call_vision(
         logger.warning("wardrobe.json_parse_failed", raw=raw[:200])
         parsed = []
 
+    # Validate each item before storage
+    from services.validation import validate_vision_item
+    validated = []
     for item in parsed:
-        if isinstance(item.get("type"), str):
-            item["type"] = item["type"].lower()
-        if isinstance(item.get("color"), str):
-            item["color"] = item["color"].lower()
+        if not isinstance(item, dict):
+            continue
+        item = validate_vision_item(item)
+        validated.append(item)
+
+    if not validated and parsed:
+        logger.warning("vision.all_items_invalid", original_count=len(parsed))
 
     # Post-validation: fix misclassifications using weather context
-    parsed = _post_validate_vision(parsed, temp=temp, season=season)
+    validated = _post_validate_vision(validated, temp=temp, season=season)
 
-    return parsed
+    return validated
 
 
 async def _call_rate_vision(

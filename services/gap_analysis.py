@@ -266,7 +266,12 @@ async def build_shopping_list(
             system=system_prompt,
         )
 
-        result = response.content[0].text.strip() if response.content else ""
+        result = ""
+        if response.content:
+            result = response.content[0].text.strip()
+        if not result:
+            logger.warning("gap_analysis.empty_response", user_id=str(user.id))
+            return "Не удалось проанализировать гардероб. Попробуй позже!"
 
         # Сохранить в кэш на 24 часа
         await redis.set(cache_key, result, ex=86400)

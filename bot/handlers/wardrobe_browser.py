@@ -1232,12 +1232,28 @@ async def handle_delete_yes(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         if item:
             item_name = f"{item.type} {item.color}"
 
+    # Check if item is in today's brief (warn user)
+    try:
+        from datetime import date as _date_del
+        from sqlalchemy import select as _sel_del, cast, String
+        from db.models.brief_log import BriefLog as _BL
+        async with AsyncReadSession() as _s_check:
+            _today_brief = await _s_check.scalar(
+                _sel_del(_BL.id).where(
+                    _BL.user_id == user.id,
+                    _BL.date == _date_del.today(),
+                )
+            )
+    except Exception:
+        _today_brief = None
+
     # Soft delete
     async with AsyncWriteSession() as session:
         await soft_delete(session, item_id)
         await session.commit()
 
-    logger.info("wb.deleted", item_id=full_id_str, user_id=str(user.id))
+    logger.info("wb.deleted", item_id=full_id_str, user_id=str(user.id),
+                in_today_brief=bool(_today_brief))
 
     # Delete detail message, show refreshed overview
     try:

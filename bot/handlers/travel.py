@@ -216,6 +216,16 @@ async def handle_travel_build(update: Update, context: ContextTypes.DEFAULT_TYPE
             _cleanup_travel(context)
             return
 
+        # Check wardrobe has top+bottom or one_piece (not just socks)
+        from services.validation import has_minimum_wardrobe
+        if not has_minimum_wardrobe(items):
+            await query.edit_message_text(
+                t("capsule.too_few", lang, min=str(MIN_ITEMS_GAP_ANALYSIS))
+                + "\n\nСфоткай верх и низ — соберу чемодан! 📸"
+            )
+            _cleanup_travel(context)
+            return
+
         # Map occasion codes to Russian labels for the backend
         occ_map = {"work": "работа", "beach": "пляж", "culture": "культура",
                     "dinner": "ужин", "active": "активный", "event": "событие"}

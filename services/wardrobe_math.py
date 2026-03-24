@@ -128,6 +128,31 @@ def build_seasonal_capsule(items: list, season: str = "", size: int = 25) -> dic
             added += 1
 
     capsule = capsule[:size]
+
+    # Color harmony: remove items that clash with majority
+    try:
+        from services.color_harmony import color_compatibility
+        if len(capsule) >= 4:
+            # Score each item against all others
+            item_scores: list[tuple[int, float]] = []
+            for idx, item in enumerate(capsule):
+                ic = getattr(item, "color", "") or ""
+                total = sum(
+                    color_compatibility(ic, getattr(other, "color", "") or "")
+                    for j, other in enumerate(capsule) if j != idx
+                )
+                item_scores.append((idx, total))
+            # Remove worst clashing items (bottom 10% with negative score)
+            item_scores.sort(key=lambda x: x[1])
+            to_remove: set[int] = set()
+            for idx, score in item_scores:
+                if score < -1 and len(capsule) - len(to_remove) > size // 2:
+                    to_remove.add(idx)
+            if to_remove:
+                capsule = [i for idx, i in enumerate(capsule) if idx not in to_remove]
+    except Exception:
+        pass
+
     combos = calc_wardrobe_combos(capsule)
     palette = [c for c, _ in used_colors.most_common(6)]
 

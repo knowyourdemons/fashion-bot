@@ -54,8 +54,8 @@ def calc_item_score(breakdown: dict, matrix: ScoringMatrix) -> float:
     for criterion, weight_info in matrix.criteria.items():
         if criterion.startswith("_"):
             continue
-        value = breakdown.get(criterion, 1)
-        clamped = max(0, min(int(value), 2))
+        value = breakdown.get(criterion, 2)  # default mid-range (Vision scale 1-3)
+        clamped = max(0, min(int(value) - 1, 2))  # Vision 1-3 → scoring 0-2
         total += clamped * weight_info["weight"]
     return round((total / matrix.max_score) * 10, 2)
 
