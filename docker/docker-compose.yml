@@ -57,7 +57,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768m
+          memory: 1536m
     logging:
       driver: json-file
       options:
@@ -137,17 +137,17 @@ services:
 
   watchdog:
     image: python:3.12-alpine
-    command: sh -c "pip install --quiet redis && python /app/scripts/watchdog.py"
+    command: sh -c "apk add --no-cache docker-cli > /dev/null 2>&1 && pip install --quiet redis && python /app/scripts/watchdog.py"
+    env_file: ../.env
     environment:
       - HEALTH_URL=http://app:8000/health
       - REDIS_URL=redis://redis:6379/0
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - ADMIN_TELEGRAM_ID=${ADMIN_TELEGRAM_ID:-195169}
       - CHECK_INTERVAL=30
       - FAILURE_THRESHOLD=2
       - TZ=UTC
     volumes:
       - ../scripts:/app/scripts:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       app:
         condition: service_healthy

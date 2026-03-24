@@ -48,6 +48,9 @@ WORKER_HEARTBEAT_MAX_AGE = 120  # seconds
 consecutive_failures: int = 0
 alert_sent: bool = False
 worker_alert_sent: dict[str, bool] = {k: False for k in WORKER_HEARTBEAT_KEYS}
+worker_stale_since: dict[str, float] = {}  # key -> first_stale_time
+worker_last_realert: dict[str, float] = {}  # key -> last_realert_time
+WORKER_REALERT_INTERVAL = 1800  # re-alert every 30 min
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -91,6 +94,23 @@ def check_health() -> tuple[int, dict]:
         return 0, {"error": str(e)}
 
 
+def _resolve_redis_url() -> str:
+    """Re-resolve Redis container IP (it changes on container recreation)."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["docker", "inspect", "-f",
+             "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+             "docker-redis-1"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return f"redis://{result.stdout.strip()}:6379/0"
+    except Exception:
+        pass
+    return REDIS_URL
+
+
 def check_worker_heartbeats() -> dict[str, bool]:
     """Check Redis TTL keys for worker heartbeats. Returns {key: alive}."""
     results: dict[str, bool] = {}
@@ -100,8 +120,10 @@ def check_worker_heartbeats() -> dict[str, bool]:
         log("WARN: redis package not installed, skipping worker heartbeat checks")
         return {}
 
+    # Re-resolve Redis IP each time (container IP may change after restart)
+    redis_url = _resolve_redis_url()
     try:
-        r = redis_lib.from_url(REDIS_URL, socket_connect_timeout=5, socket_timeout=5)
+        r = redis_lib.from_url(redis_url, socket_connect_timeout=5, socket_timeout=5)
         for key in WORKER_HEARTBEAT_KEYS:
             ttl = r.ttl(key)
             # ttl > 0 means key exists and hasn't expired
@@ -111,7 +133,7 @@ def check_worker_heartbeats() -> dict[str, bool]:
             results[key] = alive
         r.close()
     except Exception as e:
-        log(f"WARN: Redis connection failed: {e}")
+        log(f"WARN: Redis connection failed ({redis_url}): {e}")
     return results
 
 
@@ -127,6 +149,28 @@ def failed_components(body: dict) -> list[str]:
 
 # State for restart loop detection
 container_restart_alerted: set[str] = set()
+# State for OOM / high-restart detection: {container: last_alert_time}
+container_oom_alerted: dict[str, float] = {}
+# Known restart counts to detect increases
+container_restart_counts: dict[str, int] = {}
+
+OOM_REALERT_INTERVAL = 1800  # re-alert every 30 min if OOM persists
+RESTART_COUNT_THRESHOLD = 3  # alert when restarts exceed this
+
+MONITORED_CONTAINERS = [
+    "docker-app-1",
+    "docker-worker-1",
+    "docker-renderer-1",
+]
+
+# --- Auto-scale memory ---
+MEMORY_HIGH_THRESHOLD = 0.80  # bump when usage > 80% of limit
+MEMORY_BUMP_MB = 512          # add 512MB per bump
+MEMORY_MAX_MB = 3072          # absolute cap per container (3GB)
+VPS_RESERVE_MB = 1024         # always keep 1GB free on host
+# Track bumps to avoid spamming
+memory_bumped: dict[str, float] = {}  # container -> last_bump_time
+MEMORY_BUMP_COOLDOWN = 300    # min 5 min between bumps per container
 
 
 def check_container_health() -> None:
@@ -185,6 +229,194 @@ def check_container_health() -> None:
         container_restart_alerted.discard(container)
         log(f"Container {container}: recovered from restart loop")
 
+    # --- OOM and RestartCount detection via docker inspect ---
+    _check_oom_and_restarts(now)
+
+
+def _check_oom_and_restarts(now: str) -> None:
+    """Check docker inspect for OomKilled flag and high RestartCount."""
+    import subprocess
+
+    for container in MONITORED_CONTAINERS:
+        try:
+            result = subprocess.run(
+                [
+                    "docker", "inspect",
+                    "--format",
+                    "{{.State.OOMKilled}} {{.RestartCount}} {{.HostConfig.Memory}}",
+                    container,
+                ],
+                capture_output=True, text=True, timeout=10,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            continue
+
+        if result.returncode != 0:
+            continue
+
+        parts = result.stdout.strip().split()
+        if len(parts) < 3:
+            continue
+
+        oom_killed = parts[0].lower() == "true"
+        try:
+            restart_count = int(parts[1])
+        except ValueError:
+            restart_count = 0
+        try:
+            mem_limit_bytes = int(parts[2])
+            mem_limit_mb = mem_limit_bytes // (1024 * 1024)
+        except ValueError:
+            mem_limit_mb = 0
+
+        prev_count = container_restart_counts.get(container, 0)
+        container_restart_counts[container] = restart_count
+
+        current_time = time.time()
+        last_alert = container_oom_alerted.get(container, 0)
+        should_alert = current_time - last_alert > OOM_REALERT_INTERVAL
+
+        # Detect OOM kill
+        if oom_killed and should_alert:
+            alert_text = (
+                f"\U0001f4a5 <b>{container}</b> OOM Killed!\n"
+                f"Memory limit: {mem_limit_mb}MB\n"
+                f"Restarts: {restart_count}\n"
+                f"Time: {now}\n\n"
+                f"Нужно увеличить memory limit в docker-compose.yml"
+            )
+            send_telegram(alert_text)
+            container_oom_alerted[container] = current_time
+            log(f"Container {container}: OOM KILLED — alert sent (restarts={restart_count})")
+
+        # Detect restart count spike (new restarts since last check)
+        elif restart_count > prev_count and restart_count > RESTART_COUNT_THRESHOLD and should_alert:
+            delta = restart_count - prev_count
+            alert_text = (
+                f"\U0001f504 <b>{container}</b> перезапустился {delta}x за последний цикл!\n"
+                f"Всего рестартов: {restart_count}\n"
+                f"Memory limit: {mem_limit_mb}MB\n"
+                f"Time: {now}"
+            )
+            send_telegram(alert_text)
+            container_oom_alerted[container] = current_time
+            log(f"Container {container}: restart spike +{delta} (total={restart_count})")
+
+        # Recovery: OOM was alerted before, now cleared
+        elif not oom_killed and container in container_oom_alerted and restart_count == prev_count:
+            if last_alert > 0:
+                send_telegram(
+                    f"\u2705 <b>{container}</b> стабилен, OOM больше нет.\n"
+                    f"Time: {now}"
+                )
+                del container_oom_alerted[container]
+                log(f"Container {container}: OOM recovered")
+
+
+def _auto_scale_memory(now: str) -> None:
+    """Bump container memory limit when usage exceeds threshold.
+    Uses `docker stats` for usage and `docker update --memory` to resize live."""
+    import subprocess
+
+    # Check host free memory first
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    host_avail_mb = int(line.split()[1]) // 1024
+                    break
+            else:
+                return
+    except Exception:
+        return
+
+    if host_avail_mb < VPS_RESERVE_MB:
+        log(f"auto_scale: host only {host_avail_mb}MB free, skipping (reserve={VPS_RESERVE_MB}MB)")
+        return
+
+    current_time = time.time()
+
+    for container in MONITORED_CONTAINERS:
+        # Cooldown check
+        if current_time - memory_bumped.get(container, 0) < MEMORY_BUMP_COOLDOWN:
+            continue
+
+        try:
+            # Get current usage and limit from docker stats
+            result = subprocess.run(
+                ["docker", "stats", "--no-stream", "--format",
+                 "{{.MemUsage}}", container],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode != 0 or not result.stdout.strip():
+                continue
+
+            # Parse "117.9MiB / 1.5GiB" format
+            usage_str = result.stdout.strip()
+            parts = usage_str.split("/")
+            if len(parts) != 2:
+                continue
+
+            usage_mb = _parse_mem(parts[0].strip())
+            limit_mb = _parse_mem(parts[1].strip())
+
+            if limit_mb <= 0:
+                continue
+
+            ratio = usage_mb / limit_mb
+            if ratio < MEMORY_HIGH_THRESHOLD:
+                continue
+
+            # Check caps
+            new_limit_mb = int(limit_mb + MEMORY_BUMP_MB)
+            if new_limit_mb > MEMORY_MAX_MB:
+                log(f"auto_scale: {container} at {ratio:.0%} but already at cap ({int(limit_mb)}MB/{MEMORY_MAX_MB}MB)")
+                continue
+
+            if new_limit_mb > host_avail_mb - VPS_RESERVE_MB:
+                log(f"auto_scale: {container} needs +{MEMORY_BUMP_MB}MB but host only has {host_avail_mb}MB free")
+                continue
+
+            # Bump memory
+            bump_result = subprocess.run(
+                ["docker", "update", f"--memory={new_limit_mb}m",
+                 f"--memory-swap={new_limit_mb}m", container],
+                capture_output=True, text=True, timeout=10,
+            )
+
+            if bump_result.returncode == 0:
+                memory_bumped[container] = current_time
+                msg = (
+                    f"\U0001f4c8 <b>{container}</b> auto-scaled memory\n"
+                    f"{int(limit_mb)}MB → {new_limit_mb}MB (usage was {int(usage_mb)}MB, {ratio:.0%})\n"
+                    f"Host free: {host_avail_mb}MB\n"
+                    f"Time: {now}"
+                )
+                send_telegram(msg)
+                log(f"auto_scale: {container} bumped {int(limit_mb)}→{new_limit_mb}MB (was {ratio:.0%})")
+            else:
+                log(f"auto_scale: docker update failed for {container}: {bump_result.stderr.strip()}")
+
+        except Exception as e:
+            log(f"auto_scale: error checking {container}: {e}")
+
+
+def _parse_mem(s: str) -> float:
+    """Parse Docker memory string like '117.9MiB' or '1.5GiB' to MB."""
+    s = s.strip()
+    try:
+        if s.endswith("GiB"):
+            return float(s[:-3]) * 1024
+        elif s.endswith("MiB"):
+            return float(s[:-3])
+        elif s.endswith("KiB"):
+            return float(s[:-3]) / 1024
+        elif s.endswith("B"):
+            return float(s[:-1]) / (1024 * 1024)
+    except ValueError:
+        pass
+    return 0
+
 
 # ---------------------------------------------------------------------------
 # Main loop
@@ -231,23 +463,33 @@ def run() -> None:
                 )
                 alert_sent = True
 
-        # --- Container restart loop detection ---
+        # --- Container restart loop + OOM detection ---
         check_container_health()
+
+        # --- Auto-scale memory if approaching limit ---
+        _auto_scale_memory(now)
 
         # --- Worker heartbeats ---
         heartbeats = check_worker_heartbeats()
+        current_time = time.time()
         for key, alive in heartbeats.items():
             short_name = key.split(":")[-1]
             if alive:
                 if worker_alert_sent.get(key, False):
+                    stale_dur = current_time - worker_stale_since.get(key, current_time)
                     send_telegram(
                         f"\u2705 Worker <b>{short_name}</b> recovered!\n"
+                        f"Was stale for {int(stale_dur)}s\n"
                         f"Time: {now}"
                     )
                     worker_alert_sent[key] = False
+                worker_stale_since.pop(key, None)
+                worker_last_realert.pop(key, None)
                 log(f"Worker {short_name}: alive")
             else:
                 log(f"Worker {short_name}: STALE (heartbeat missing or expired)")
+                if key not in worker_stale_since:
+                    worker_stale_since[key] = current_time
                 if not worker_alert_sent.get(key, False):
                     send_telegram(
                         f"\u26a0\ufe0f Worker <b>{short_name}</b> appears stuck!\n"
@@ -255,6 +497,16 @@ def run() -> None:
                         f"Time: {now}"
                     )
                     worker_alert_sent[key] = True
+                    worker_last_realert[key] = current_time
+                # Re-alert every 30 min if still stale
+                elif current_time - worker_last_realert.get(key, 0) > WORKER_REALERT_INTERVAL:
+                    stale_dur = current_time - worker_stale_since.get(key, current_time)
+                    send_telegram(
+                        f"\u26a0\ufe0f Worker <b>{short_name}</b> всё ещё не отвечает!\n"
+                        f"Stale уже {int(stale_dur // 60)} мин\n"
+                        f"Time: {now}"
+                    )
+                    worker_last_realert[key] = current_time
 
         time.sleep(CHECK_INTERVAL)
 

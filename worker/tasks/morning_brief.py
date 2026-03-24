@@ -711,6 +711,14 @@ async def generate_brief(payload: dict) -> dict:
 
     user_id = _uuid.UUID(payload["user_id"])
 
+    # Dedup: prevent duplicate brief generation on worker recovery/restart
+    _redis = get_redis()
+    _today = datetime.now(pytz.utc).strftime("%Y-%m-%d")
+    _dedup_key = f"dedup:generate_brief:{user_id}:{_today}"
+    if not await _redis.set(_dedup_key, 1, ex=86400, nx=True):
+        logger.info("brief.generate.dedup_skip", user_id=str(user_id))
+        return {}
+
     async with AsyncReadSession() as session:
         result = await session.execute(
             select(User)

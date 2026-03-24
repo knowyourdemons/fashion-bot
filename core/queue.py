@@ -135,7 +135,13 @@ class RedisQueue:
 
     async def recover_processing(self) -> int:
         """On startup: move orphaned messages from processing back to HIGH queue.
-        Returns number of recovered messages."""
+        Returns number of recovered messages.
+        Uses a Redis lock to prevent double-recovery on rapid restarts."""
+        lock_key = "lock:queue_recovery"
+        acquired = await self._redis.set(lock_key, 1, ex=30, nx=True)
+        if not acquired:
+            logger.info("queue.recovery_skipped_locked")
+            return 0
         count = 0
         while True:
             raw = await self._redis.rpoplpush(_PROCESSING_KEY, QueuePriority.HIGH.value)
