@@ -28,9 +28,12 @@
 - Python 3.12, PTB 22.x, SQLAlchemy 2.0, asyncpg
 - Vision: claude-sonnet-4-6 (НЕ haiku — плохое качество!)
 - Чат/бриф/текст: claude-haiku-4-5-20251001
-- Удаление фона: **RMBG-1.4 quantized** (44MB, ~4 сек), fallback: silueta → remove.bg API → RGB
-  - Модель: `/root/.u2net/rmbg14_quantized.onnx` (env: `BG_REMOVAL_MODEL=rmbg14`)
-  - Fallback: `/root/.u2net/silueta.onnx` (43MB, ~1.3 сек, менее качественная)
+- Удаление фона: **Оптимизированный пайплайн** (24 марта 2026)
+  - **Single-item** (bbox_area ≥ 0.55): CLAHE → RMBG-1.4 + postprocess → cloth-seg → GrabCut → remove.bg API
+  - **Multi-item** (bbox_area < 0.55): sibling bbox masking → crop → cloth-seg first → RMBG fallback → intersection
+  - Модели: `/root/.u2net/rmbg14_quantized.onnx` (44MB) + `/root/.u2net/cloth_seg_u2net.onnx` (168MB)
+  - ISNet и silueta удалены (не используются, экономия 222MB в Docker image)
+  - Тестовый скрипт: `scripts/mama_test.py` — 7 реальных групповых фото, 35 вещей
 - Prompt caching: ephemeral везде
 - onnxruntime 1.24.4, numpy 1.26.4
 
@@ -301,11 +304,14 @@ docker exec docker-app-1 python3 -m pytest /app/tests/test_product_quality.py -v
 - ~~Cross-user delete~~ — ИСПРАВЛЕНО (owner check в soft_delete)
 - ~~41 баг из destructive аудита~~ — ВСЕ ИСПРАВЛЕНЫ (24 марта)
 - photo_url пустой — фото только в Telegram file_id → нужен R2 pipeline
-- RMBG артефакты на деревянном полу — нужен лучший fallback
+- ~~RMBG артефакты на деревянном полу~~ — ИСПРАВЛЕНО (cloth-seg + sibling masking + intersection)
 - Подписи на коллаже не центрированы для реальных фото
 - Онбординг: размер обуви только int → нужен float (26.5)
 - SAWarning про Child.wardrobe_items overlaps — косметика
 - PTBUserWarning про per_message — косметика
+- Vision: носок определяется как "шапка с бантом" — нужна правка промпта Vision
+- Bg removal: тёмные вещи на тёмном полу — ограничение моделей, рекомендация "контрастный фон"
+- Bg removal: мелкие перекрывающиеся вещи (трусики под платьем) — нужен instance segmentation
 
 ## Валидации (24 марта, полное покрытие)
 
@@ -657,6 +663,89 @@ docker exec docker-app-1 python3 -m pytest /app/tests/test_product_quality.py -v
 - **Breakeven**: 1 paying user ($7.60/мес infra)
 - **10 юзеров**: $1.50/мес API, $90 revenue (если все paid)
 - **100 юзеров**: $14.50/мес API, $900 revenue
+
+## Что сделано (24 марта 2026)
+
+### Оптимизация bg removal pipeline (полная переработка)
+
+**Проблема**: диван, ковёр, деревянный пол попадали в коллаж. RMBG-1.4 не отличал мебель от одежды. На групповых фото (3-7 вещей) соседние вещи "протекали" в кроп.
+
+**Результат**: success rate на 7 реальных групповых фото (35 вещей): **46% → 83%**
+
+#### Новый пайплайн (`services/image_processor.py` + `worker/tasks/rmbg_task.py`)
+
+**Single-item** (bbox_area ≥ 0.55):
+```
+CLAHE → RMBG-1.4 + postprocess → quality_v2 check
+     → cloth-segmentation + postprocess → quality_v2
+     → GrabCut → quality_v2
+     → remove.bg API → original
+```
+
+**Multi-item** (bbox_area < 0.55):
+```
+1. Sibling masking: замазать bbox соседних вещей цветом фона (углы фото)
+2. Crop целевого item
+3. cloth-seg first → GrabCut refinement if 55-75% opaque
+4. RMBG fallback
+5. Intersection (RMBG × cloth-seg) if neither alone passes quality
+6. Fallback: cloth-seg loose → RMBG rescue
+```
+
+#### Ключевые компоненты
+
+| Компонент | Файл | Назначение |
+|-----------|------|------------|
+| `_apply_clahe()` | image_processor.py | CLAHE в LAB для контраста ткань/фон |
+| `_run_cloth_seg()` | image_processor.py | Clothing-specific U2Net (168MB, iMaterialist) |
+| `_postprocess_mask()` | image_processor.py | Largest components ≥15%, морфология |
+| `_check_mask_quality_v2()` | image_processor.py | Region dominance + bbox coverage + fragmentation |
+| `_intersect_masks()` | image_processor.py | Min alpha двух масок |
+| `_refine_mask_grabcut()` | image_processor.py | GrabCut seeded by cloth-seg mask |
+| Sibling masking | rmbg_task.py | Замазывание bbox соседних вещей |
+| `scripts/mama_test.py` | — | Тестовый скрипт: 7 фото × все стратегии |
+| `scripts/test_bg_pipeline.py` | — | A/B сравнение стратегий на реальных фото |
+
+#### Технические решения (почему так)
+- **cloth-seg ONNX output уже [0,1]** — НЕ применять sigmoid (двойной sigmoid → всё >0.5 → бесполезная маска)
+- **_postprocess_mask сохраняет компоненты ≥15%** — иначе рукава свитера удаляются как "шум"
+- **_detect_upside_down порог 3x** (было 1.5x) — иначе платья переворачиваются (юбка шире плеч = нормально)
+- **Двойной CLAHE вреден** — применять один раз, не на кроп повторно
+- **boost_contrast 1.05** (было 1.15) — на тёмных кропах 1.15 слишком агрессивен
+- **Sibling masking**: цвет фона из углов изображения, заполнение bbox соседних вещей
+- **bbox padding 4%** для multi-item (было 2% = обрезало края вещей, 5% = захват соседей)
+
+#### Удалённый мёртвый код
+- `_run_isnet()` + ISNet ONNX (178MB) — никогда не вызывался
+- `_run_silueta()` + silueta ONNX (44MB) — заменена cloth-seg
+- `_run_removebg_api()` — заменена inline httpx в remove_background()
+- `_get_bg_removal_model()` — не использовалась
+- Docker image: -222MB
+
+#### Контейнеры: memory limits
+- App: 2048 → **3072MB** (cloth-seg 168MB + RMBG inference peak)
+- Worker: 1536 → **3072MB** (тот же пайплайн)
+
+#### Оставшиеся проблемы (не bg removal)
+1. **Vision classification**: носок → "шапка с бантом" (нужна правка промпта Vision)
+2. **Тёмное на тёмном**: горчичная кофта на тёмном полу — ограничение моделей
+3. **Перекрывающиеся мелкие вещи**: трусики под платьем — нужен instance segmentation
+4. **UX подсказка**: рекомендовать "положи на кровать/покрывало" для контрастного фона
+
+### Коммиты (24 марта, 11 шт)
+```
+851799d feat: sibling masking — erase other items before bg removal
+42dd4f5 fix: collage quality — preserve sleeves, fix upside-down, reduce contrast
+2fb7e16 feat: GrabCut mask refinement + fallback fix for empty cloth-seg
+3b8400b fix: cloth-seg output is already [0,1] — remove double sigmoid
+3a4aa47 feat: cloth-seg first for multi-item photos + tighter bbox crop
+20f3af0 chore: remove dead bg removal code — ISNet, silueta, removebg wrapper
+{worker OOM fix} fix: worker OOM — bump memory 2048→3072m
+31ba690 fix: hybrid bg removal strategy — crop-first for multi-item, rembg-first for single
+cd38548 fix: bg removal on full photo before bbox crop — fixes terrible multi-item thumbnails
+c69f517 feat: optimized bg removal pipeline — CLAHE, largest component filter, cloth-segmentation
+05ac4c0 fix: auto-rotate angle calculation — was using raw minAreaRect angle
+```
 
 ## Документация
 - **WORKFLOW.md** — методология + deploy rules + red flags
