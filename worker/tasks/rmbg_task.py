@@ -4,10 +4,13 @@ Background removal task: crop + rembg + R2 upload.
 Deferred from the photo upload flow so the user gets an immediate response.
 Runs in the fast worker (HIGH priority queue).
 """
+import io
 import uuid
 
 import httpx
+import numpy as np
 import structlog
+from PIL import Image
 
 from config import settings
 from worker.fast_worker import register
