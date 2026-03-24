@@ -138,13 +138,13 @@ class TestCropBbox:
 
     def test_full_image(self):
         from services.vision import _crop_bbox
-        result = _crop_bbox(self._make_image(), {"x": 0, "y": 0, "w": 1.0, "h": 1.0})
+        result = _crop_bbox(self._make_image(), {"x": 0, "y": 0, "w": 1.0, "h": 1.0}, padding=0)
         img = Image.open(io.BytesIO(result))
         assert img.size == (200, 300)
 
     def test_quarter_crop(self):
         from services.vision import _crop_bbox
-        result = _crop_bbox(self._make_image(), {"x": 0, "y": 0, "w": 0.5, "h": 0.5})
+        result = _crop_bbox(self._make_image(), {"x": 0, "y": 0, "w": 0.5, "h": 0.5}, padding=0)
         img = Image.open(io.BytesIO(result))
         assert img.size == (100, 150)
 

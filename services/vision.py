@@ -321,8 +321,13 @@ def _default_score() -> tuple[dict, float]:
     return breakdown, round((sum(breakdown.values()) / 15) * 10, 2)
 
 
-def _crop_bbox(image_bytes: bytes, bbox: dict) -> bytes:
-    """Вырезает вещь из фото по нормализованным координатам bbox."""
+def _crop_bbox(image_bytes: bytes, bbox: dict, padding: float = 0.05) -> bytes:
+    """Вырезает вещь из фото по нормализованным координатам bbox.
+
+    Args:
+        padding: fractional padding around bbox (0.05 = 5%). Use smaller values
+                 for multi-item photos to avoid capturing neighbor items.
+    """
     try:
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         iw, ih = img.size
@@ -330,6 +335,13 @@ def _crop_bbox(image_bytes: bytes, bbox: dict) -> bytes:
         y = max(0.0, min(1.0, float(bbox.get("y", 0.0))))
         w = max(0.01, min(1.0 - x, float(bbox.get("w", 1.0))))
         h = max(0.01, min(1.0 - y, float(bbox.get("h", 1.0))))
+        # Apply padding
+        pad_x = w * padding
+        pad_y = h * padding
+        x = max(0.0, x - pad_x)
+        y = max(0.0, y - pad_y)
+        w = min(1.0 - x, w + 2 * pad_x)
+        h = min(1.0 - y, h + 2 * pad_y)
         left = int(x * iw)
         top = int(y * ih)
         right = int((x + w) * iw)

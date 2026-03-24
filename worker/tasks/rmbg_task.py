@@ -71,21 +71,51 @@ async def process_rmbg(payload: dict) -> dict:
     good_crop = True
 
     if is_multi_item and bbox:
-        # MULTI-ITEM: crop first to isolate this garment, then remove background
+        # MULTI-ITEM: tight crop → cloth-seg first (knows clothing vs floor),
+        # RMBG fallback. Tight crop (2% padding) to minimize neighbor bleed.
         from services.vision import _crop_bbox, _check_crop_quality
+        from services.image_processor import (
+            _apply_clahe, _run_cloth_seg, _run_rmbg14,
+            _postprocess_mask, _check_mask_quality_v2, pad_square_resize,
+        )
         try:
-            crop_bytes = _crop_bbox(photo_bytes, bbox)
+            crop_bytes = _crop_bbox(photo_bytes, bbox, padding=0.02)
         except Exception as e:
             logger.warning("rmbg_process.crop_failed", item_id=str(item_id), error=str(e))
             crop_bytes = photo_bytes
 
-        png_bytes = await remove_background(crop_bytes, redis=redis)
+        enhanced_crop = _apply_clahe(crop_bytes)
+        png_bytes = None
+
+        # Try cloth-seg first (trained on clothing → removes floor/carpet)
+        try:
+            png_bytes = _run_cloth_seg(enhanced_crop)
+            png_bytes = _postprocess_mask(png_bytes)
+            if not _check_mask_quality_v2(png_bytes):
+                logger.info("rmbg_process.cloth_seg_quality_fail")
+                png_bytes = None
+            else:
+                logger.info("rmbg_process.model_ok", model="cloth_seg")
+        except Exception as e:
+            logger.warning("rmbg_process.cloth_seg_failed", error=str(e))
+            png_bytes = None
+
+        # Fallback to RMBG
+        if not png_bytes:
+            try:
+                png_bytes = _run_rmbg14(enhanced_crop)
+                png_bytes = _postprocess_mask(png_bytes)
+                logger.info("rmbg_process.model_ok", model="rmbg14_fallback")
+            except Exception as e:
+                logger.warning("rmbg_process.rmbg14_failed", error=str(e))
+                png_bytes = crop_bytes  # last resort: original crop
+
         try:
             png_bytes = soften_edges(png_bytes, radius=1.5)
         except Exception:
             pass
         good_crop = _check_crop_quality(png_bytes)
-        logger.info("rmbg_process.strategy", strategy="crop_first", bbox_area=f"{bbox_area:.2f}")
+        logger.info("rmbg_process.strategy", strategy="multi_cloth_first", bbox_area=f"{bbox_area:.2f}")
     else:
         # SINGLE-ITEM: bg removal on full photo (model has full context)
         png_bytes = await remove_background(photo_bytes, redis=redis)

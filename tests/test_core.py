@@ -510,7 +510,7 @@ class TestBboxCrop:
 
     def _crop(self, image_bytes: bytes, bbox: dict) -> bytes:
         from bot.handlers.wardrobe import _crop_bbox
-        return _crop_bbox(image_bytes, bbox)
+        return _crop_bbox(image_bytes, bbox, padding=0)
 
     def test_full_bbox_returns_original_size(self):
         """bbox на всё фото — размер не меняется."""
