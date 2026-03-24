@@ -340,9 +340,14 @@ def _postprocess_mask(png_bytes: bytes) -> bytes:
                 largest_area = area
                 largest_label = label_idx
 
-        # Zero out all components except the largest
+        # Keep the largest component + any component ≥15% of its area.
+        # This preserves garment parts (sleeves, collars) that detach from
+        # the main body during segmentation, while still removing tiny noise.
         cleaned = np.zeros_like(alpha)
-        cleaned[labels == largest_label] = alpha[labels == largest_label]
+        for label_idx in range(1, num_labels):
+            area = stats[label_idx, cv2.CC_STAT_AREA]
+            if area >= largest_area * 0.15:
+                cleaned[labels == label_idx] = alpha[labels == label_idx]
 
         # Morphological close to fill small holes in the main component
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
@@ -612,7 +617,9 @@ def _auto_rotate_to_vertical(img: Image.Image) -> Image.Image:
 
 def _detect_upside_down(img: Image.Image) -> bool:
     """Detect if a garment is upside down by comparing width of top vs bottom third.
-    Pants/skirts: waistband (wider) should be at top. If bottom third is wider → flip.
+
+    Only flips when VERY confident: bottom must be 3x wider than top.
+    Conservative threshold avoids flipping dresses (skirt wider than shoulders is normal).
     """
     try:
         alpha = img.split()[3]
@@ -620,14 +627,12 @@ def _detect_upside_down(img: Image.Image) -> bool:
         if h < 60:
             return False
         third = h // 3
-        # Count opaque pixels in top and bottom thirds
         top_data = list(alpha.crop((0, 0, w, third)).getdata())
         bot_data = list(alpha.crop((0, h - third, w, h)).getdata())
         top_opaque = sum(1 for a in top_data if a > 128)
         bot_opaque = sum(1 for a in bot_data if a > 128)
-        # If bottom third has significantly more opaque pixels → likely upside down
-        # (waistband = wide = more pixels, should be at top)
-        if bot_opaque > top_opaque * 1.5 and bot_opaque > len(bot_data) * 0.3:
+        # Very conservative: 3x difference needed (was 1.5x — flipped dresses)
+        if top_opaque > 0 and bot_opaque > top_opaque * 3.0 and bot_opaque > len(bot_data) * 0.4:
             return True
     except Exception:
         pass
@@ -830,7 +835,7 @@ def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) ->
         result = auto_brightness(result)
 
     # 4. Contrast boost (helps wrinkled fabrics read better at small sizes)
-    result = boost_contrast(result, factor=1.15)
+    result = boost_contrast(result, factor=1.05)
 
     # 5. Auto-trim + pad to square + resize
     result = pad_square_resize(result, THUMB_SIZE)

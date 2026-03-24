@@ -88,7 +88,7 @@ async def main():
             name = item["name"]
             bbox = item["bbox"]
 
-            crop = _crop_bbox(enhanced, bbox, padding=0.02)
+            crop = _crop_bbox(enhanced, bbox, padding=0.04)
             enhanced_crop = _apply_clahe(crop)
 
             cloth_r = None

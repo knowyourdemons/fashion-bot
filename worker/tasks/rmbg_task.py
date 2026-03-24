@@ -79,7 +79,7 @@ async def process_rmbg(payload: dict) -> dict:
             _postprocess_mask, _check_mask_quality_v2, pad_square_resize,
         )
         try:
-            crop_bytes = _crop_bbox(photo_bytes, bbox, padding=0.02)
+            crop_bytes = _crop_bbox(photo_bytes, bbox, padding=0.04)
         except Exception as e:
             logger.warning("rmbg_process.crop_failed", item_id=str(item_id), error=str(e))
             crop_bytes = photo_bytes
