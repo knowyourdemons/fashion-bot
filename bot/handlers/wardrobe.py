@@ -2103,12 +2103,13 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
         status_msg = await message.reply_text(t("wardrobe.outfit_picking", get_user_lang(context.user_data.get("db_user"))))
 
     # Keep typing indicator alive during long generation (RMBG ~7s × N thumbnails)
-    _typing_active = True
+    # Use list as mutable container so closure sees changes
+    _typing_flag = [True]
 
     async def _keep_typing():
-        while _typing_active:
+        while _typing_flag[0]:
             await asyncio.sleep(4)
-            if _typing_active:
+            if _typing_flag[0]:
                 try:
                     await context.bot.send_chat_action(message.chat_id, "typing")
                 except Exception:
@@ -2560,7 +2561,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
                 reply_markup=get_main_menu(context.user_data.get("db_user"), context),
             )
     finally:
-        _typing_active = False
+        _typing_flag[0] = False
         _typing_task.cancel()
         await _release_lock()
 

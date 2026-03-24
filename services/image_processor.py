@@ -253,11 +253,6 @@ def pad_square_resize(png_bytes: bytes, size: int = THUMB_SIZE) -> bytes:
         )
         img = img.crop(bbox)
 
-    # Rotate horizontal items to vertical (garments look better top-down)
-    w, h = img.size
-    if w > h * 1.3:
-        img = img.rotate(90, expand=True, resample=Image.BICUBIC)
-
     # Pad to square
     w, h = img.size
     side = max(w, h)
