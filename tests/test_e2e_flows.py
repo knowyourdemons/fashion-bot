@@ -685,6 +685,72 @@ class TestKassiMemory:
         assert "photos_day:" in key
         assert date.today().isoformat() in key
 
+    def test_get_limit_no_import_shadowing(self):
+        """Verify get_limit is callable for all plans — catches import shadowing.
+
+        Python 3.12+ treats `from X import Y` inside a function as a local
+        variable declaration. If Y is also imported at module top level AND
+        used before the inner import, UnboundLocalError occurs.
+        This test verifies the fix by calling get_limit in the same scope
+        pattern as handle_photo/handle_text.
+        """
+        from core.permissions import get_effective_plan, get_limit
+        for plan in ("free", "premium", "admin"):
+            photos = get_limit("photos_per_day", plan)
+            chat = get_limit("chat_per_day", plan)
+            wardrobe = get_limit("wardrobe_size", plan)
+            assert isinstance(photos, int) and photos > 0
+            assert isinstance(chat, int) and chat > 0
+            assert isinstance(wardrobe, int) and wardrobe > 0
+
+    def test_no_import_shadowing_in_codebase(self):
+        """AST scan: no function re-imports a name that's used before it.
+
+        This catches the exact Python 3.12 bug pattern where:
+        1. Module has `from X import foo` at top
+        2. Function has `from X import foo` inside an if-block
+        3. `foo` is used before that if-block → UnboundLocalError
+        """
+        import ast, os
+        problems = []
+        for root, dirs, files in os.walk('.'):
+            if any(s in root for s in ['.git', '__pycache__', 'node_modules', '.venv']):
+                continue
+            for fname in files:
+                if not fname.endswith('.py'):
+                    continue
+                path = os.path.join(root, fname)
+                try:
+                    with open(path) as f:
+                        source = f.read()
+                    tree = ast.parse(source)
+                except Exception:
+                    continue
+                top_imports = set()
+                for node in ast.iter_child_nodes(tree):
+                    if isinstance(node, ast.ImportFrom):
+                        for alias in node.names:
+                            top_imports.add(alias.asname or alias.name)
+                for node in ast.walk(tree):
+                    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        continue
+                    local_imports = {}
+                    for child in ast.walk(node):
+                        if isinstance(child, ast.ImportFrom) and child is not node:
+                            for alias in child.names:
+                                name = alias.asname or alias.name
+                                if name in top_imports:
+                                    local_imports[name] = child.lineno
+                    for name, import_line in local_imports.items():
+                        for child in ast.walk(node):
+                            if isinstance(child, ast.Name) and child.id == name:
+                                if hasattr(child, 'lineno') and child.lineno < import_line:
+                                    problems.append(
+                                        f'{path}:{child.lineno} "{name}" used before '
+                                        f're-import at :{import_line} in {node.name}()'
+                                    )
+        assert not problems, f"Import shadowing found:\n" + "\n".join(problems)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PROFESSIONAL STYLING: CONTRAST + KIBBE + ESSENCE
