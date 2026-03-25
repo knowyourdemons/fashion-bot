@@ -26,7 +26,7 @@ def _track_task(coro, *, name: str | None = None) -> asyncio.Task:
     return task
 from core.anthropic_client import get_anthropic_pool
 from db.base import AsyncWriteSession, AsyncReadSession
-from db.crud.wardrobe import create, get_owner_items
+from db.crud.wardrobe import create, get_owner_items, get_by_id
 from db.models.user import User
 from exceptions import FashionBotError, RateLimitError
 from services.i18n import t, get_user_lang
@@ -1096,6 +1096,22 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text(t("wardrobe.need_start", get_user_lang(user)))
         return
 
+    # Resnap mode: replace photo for existing wardrobe item
+    resnap_item_id = context.user_data.pop("pending_resnap_item_id", None)
+    if resnap_item_id:
+        try:
+            file_id = update.message.photo[-1].file_id if update.message.photo else None
+            if not file_id:
+                await update.message.reply_text("Отправь фото вещи.")
+                context.user_data["pending_resnap_item_id"] = resnap_item_id
+                return
+            await _process_resnap(update, context, user, resnap_item_id, file_id)
+            return
+        except Exception as e:
+            logger.error("resnap.error", error=str(e), item_id=resnap_item_id)
+            await update.message.reply_text("Не удалось обновить фото. Попробуй ещё раз.")
+            return
+
     # Fitting mode: photo → fit check, not wardrobe add
     if context.user_data.get("mode") == "fitting":
         try:
@@ -1298,6 +1314,70 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 # ── Одиночное фото (fallback без Redis) ─────────────────────────────────────
 
+async def _process_resnap(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    user,
+    item_id_str: str,
+    file_id: str,
+) -> None:
+    """Replace photo for an existing wardrobe item (resnap flow).
+
+    Downloads new photo, runs bg removal, updates photo_id/photo_url in DB,
+    refreshes thumbnail cache.
+    """
+    import uuid as _uuid
+
+    item_id = _uuid.UUID(item_id_str)
+    progress_msg = await update.message.reply_text("✨ Обновляю фото...")
+
+    # Download new photo
+    tg_file = await context.bot.get_file(file_id)
+    photo_bytes = bytes(await tg_file.download_as_bytearray())
+
+    # Update photo_id in DB
+    import sqlalchemy as sa
+    from db.models.wardrobe import WardrobeItem
+
+    async with AsyncWriteSession() as session:
+        await session.execute(
+            sa.update(WardrobeItem)
+            .where(WardrobeItem.id == item_id)
+            .values(photo_id=file_id)
+        )
+        await session.commit()
+
+    # Get item info for response
+    async with AsyncReadSession() as session:
+        item = await get_by_id(session, item_id)
+    item_name = f"{item.type} {item.color}".strip() if item else "вещь"
+    owner_id = str(item.owner_id) if item else ""
+
+    # Queue bg removal (single item, no bbox = full photo)
+    try:
+        from core.redis import get_redis
+        from core.queue import RedisQueue, QueuePriority
+        redis = get_redis()
+        queue = RedisQueue(redis)
+        await queue.push("rmbg_process", {
+            "item_id": item_id_str,
+            "file_id": file_id,
+            "owner_id": owner_id,
+            "bbox": None,
+            "sibling_bboxes": [],
+        }, QueuePriority.HIGH)
+    except Exception as e:
+        logger.warning("resnap.queue_failed", error=str(e))
+
+    logger.info("resnap.done", item_id=item_id_str, user_id=str(user.id))
+
+    await _safe_edit_text(
+        progress_msg,
+        f"✅ Фото для **{item_name}** обновлено!\n\n"
+        "Через пару секунд появится на коллаже.",
+    )
+
+
 async def _handle_single_photo(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -1398,7 +1478,7 @@ async def _handle_single_photo(
                 lines.append(_hint)
             # Hint about separate photos for better collage quality
             if len(added) > 1:
-                lines.append("\n💡 Для лучшего качества коллажа — фоткай по одной вещи")
+                lines.append("\n💡 По одной вещи на фото = идеальный коллаж. Групповое фото может захватить фон")
 
         # Build correction buttons for ambiguous items
         _correction_kb = None

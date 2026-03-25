@@ -12,6 +12,7 @@ Callbacks:
   w:sz:{season}             — season filter (winter/spring/summer/autumn/all)
   w:cat:{category}:{page}   — category grid page
   w:it:{index}              — item detail (1-9 page index)
+  w:resnap:{short_id}       — resnap item (ask for new photo)
   w:del:{short_id}          — delete confirmation
   w:dly:{short_id}          — confirm delete
   w:szed:{short_id}:{season} — toggle season on item
@@ -998,7 +999,10 @@ async def handle_item_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     buttons = InlineKeyboardMarkup([
         [
+            InlineKeyboardButton("📸 Переснять", callback_data=f"w:resnap:{short}"),
             InlineKeyboardButton("🗑 Удалить", callback_data=f"w:del:{short}"),
+        ],
+        [
             InlineKeyboardButton("Сезон", callback_data=f"w:szed:{short}:pick"),
             InlineKeyboardButton(f"← {_CAT_NAME.get(cat, 'Назад')}", callback_data=f"w:cat:{cat}:{cat_page}"),
         ],
@@ -1284,6 +1288,60 @@ async def handle_delete_yes(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await query.message.chat.send_message(text, reply_markup=markup)
     except Exception:
         pass
+
+
+async def handle_resnap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Start resnap flow. Callback: w:resnap:{short_id}
+
+    Sets pending_resnap_item_id in user_data, then prompts user to send
+    a new photo. The wardrobe photo handler picks it up.
+    """
+    query = update.callback_query
+    await query.answer()
+    user = context.user_data.get("db_user")
+    if not user:
+        return
+
+    short = query.data.split(":")[2]
+
+    # Resolve full item id
+    item_map = context.user_data.get("wrd_items", {})
+    full_id_str = item_map.get(short) or context.user_data.get("wb_detail_item")
+    if not full_id_str:
+        async with AsyncReadSession() as session:
+            owner_id, owner_type = await _get_owner(user, context)
+            items = await get_owner_items(session, owner_id, owner_type)
+        item = next((i for i in items if str(i.id).startswith(short)), None)
+        if item:
+            full_id_str = str(item.id)
+
+    if not full_id_str:
+        await query.message.reply_text("Вещь не найдена.")
+        return
+
+    # Get item name
+    item_name = "вещь"
+    async with AsyncReadSession() as session:
+        item = await get_by_id(session, uuid.UUID(full_id_str))
+        if item:
+            item_name = f"{item.type} {item.color}".strip()
+
+    # Store resnap state
+    context.user_data["pending_resnap_item_id"] = full_id_str
+    logger.info("wb.resnap_started", item_id=full_id_str, user_id=str(user.id))
+
+    try:
+        await query.message.delete()
+    except Exception:
+        pass
+
+    await query.message.chat.send_message(
+        f"📸 Переснимаем: **{item_name}**\n\n"
+        "Сфоткай эту вещь отдельно на светлом фоне "
+        "(кровать, стол, светлый пол).\n"
+        "Одна вещь — одно фото, так качество будет идеальным!",
+        parse_mode="Markdown",
+    )
 
 
 async def handle_noop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
