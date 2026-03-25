@@ -469,36 +469,35 @@ def prepare_underwear_line(outfit: dict) -> str:
 
 # ── Flat-lay layout engine ────────────────────────────────────────────────────
 
-# Canvas 440x520. Magazine flat-lay layout:
-# Row 1 (y 0-170):   top (landscape, left) | outerwear (portrait, right)
-# Row 2 (y 170-430): bottom (portrait, center)
-# Row 3 (y 430-520): shoes + bag + accessories spread across
-# No overlapping between main garments.
+# Canvas 440x520. Magazine flat-lay — items fill 80%+ of space.
+# Reference: top-left big landscape top, top-right tall outerwear,
+# center big portrait pants, bottom row shoes+bag+accessories.
+# Light overlap between zones is OK (magazine feel).
 
 _FLATLAY_SLOTS = {
     # slot: (top, left, width, height, rotate, z-index)
-    "top":        (10,  10,  220, 150, 0, 3),
-    "outerwear":  (5,   240, 190, 250, 0, 2),
-    "bottom":     (170, 120, 170, 255, 0, 4),
-    "one_piece":  (5,   240, 190, 250, 0, 2),  # same pos as outerwear (fallback)
-    "footwear_1": (440, 300, 115, 75,  0, 5),
-    "footwear_2": (445, 175, 105, 70,  0, 5),
-    "accessory_1":(175, 10,  75,  75,  0, 6),
-    "accessory_2":(175, 330, 75,  75,  0, 6),
-    "bag":        (380, 10,  105, 105, 0, 5),
-    "hat":        (265, 330, 80,  80,  0, 6),
-    "scarf":      (265, 10,  70,  95,  0, 5),
+    "top":        (5,   5,   230, 170, 0, 3),
+    "outerwear":  (0,   230, 210, 270, 0, 2),
+    "bottom":     (175, 50,  250, 330, 0, 4),
+    "one_piece":  (0,   230, 210, 270, 0, 2),
+    "footwear_1": (420, 320, 120, 95,  0, 5),
+    "footwear_2": (430, 200, 110, 85,  0, 5),
+    "accessory_1":(180, 310, 90,  90,  0, 6),
+    "accessory_2":(280, 340, 90,  90,  0, 6),
+    "bag":        (370, 0,   125, 125, 0, 5),
+    "hat":        (180, 0,   90,  90,  0, 6),
+    "scarf":      (280, 0,   85,  110, 0, 5),
 }
 
 _FLATLAY_SLOTS_ONE_PIECE = {
-    "outerwear":  (5,   240, 190, 250, 0, 2),
-    "one_piece":  (5,   15,  210, 340, 0, 3),
-    "footwear_1": (440, 300, 115, 75,  0, 5),
-    "footwear_2": (445, 175, 105, 70,  0, 5),
-    "accessory_1":(355, 240, 75,  75,  0, 6),
-    "accessory_2":(265, 240, 75,  75,  0, 6),
-    "bag":        (380, 10,  110, 110, 0, 5),
-    "hat":        (265, 330, 80,  80,  0, 6),
+    "outerwear":  (0,   230, 210, 280, 0, 2),
+    "one_piece":  (0,   0,   240, 400, 0, 3),
+    "footwear_1": (430, 310, 130, 90,  0, 5),
+    "footwear_2": (440, 180, 120, 80,  0, 5),
+    "accessory_1":(410, 0,   90,  90,  0, 6),
+    "accessory_2":(300, 250, 90,  90,  0, 6),
+    "bag":        (340, 0,   120, 120, 0, 5),
+    "hat":        (300, 340, 95,  95,  0, 6),
 }
 
 
