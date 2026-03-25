@@ -1323,37 +1323,89 @@ async def _process_resnap(
 ) -> None:
     """Replace photo for an existing wardrobe item (resnap flow).
 
-    Downloads new photo, runs bg removal, updates photo_id/photo_url in DB,
-    refreshes thumbnail cache.
+    Runs Vision on new photo to verify it's the same type of item.
+    If Vision detects a different item → warns user and keeps old photo.
+    If same type → updates photo_id, runs bg removal.
     """
     import uuid as _uuid
 
     item_id = _uuid.UUID(item_id_str)
-    progress_msg = await update.message.reply_text("✨ Обновляю фото...")
+    progress_msg = await update.message.reply_text("✨ Смотрю на фото...")
+
+    # Get old item info
+    async with AsyncReadSession() as session:
+        item = await get_by_id(session, item_id)
+    if not item:
+        await _safe_edit_text(progress_msg, "Вещь не найдена.")
+        return
+
+    old_type = (item.type or "").lower()
+    old_cg = item.category_group or "top"
+    old_name = f"{item.type} {item.color}".strip()
+    owner_id = str(item.owner_id)
 
     # Download new photo
     tg_file = await context.bot.get_file(file_id)
     photo_bytes = bytes(await tg_file.download_as_bytearray())
 
-    # Update photo_id in DB
+    # Pre-process for Vision
+    from services.photo_quality import preprocess_for_vision
+    photo_for_vision, _pq = preprocess_for_vision(photo_bytes)
+
+    # Run Vision on new photo
+    from services.vision import _call_vision
+    owner_type = item.owner_type or "child"
+    new_items = await _call_vision(photo_for_vision, owner_type=owner_type)
+
+    if not new_items:
+        await _safe_edit_text(progress_msg,
+            "🤔 Не вижу одежду на фото. Сфоткай вещь ближе на светлом фоне.")
+        return
+
+    # Take first detected item and check if category_group matches
+    new_item = new_items[0]
+    new_cg = new_item.get("category_group", "top")
+
+    # If multiple items detected → warn
+    if len(new_items) > 1:
+        await _safe_edit_text(progress_msg,
+            f"📸 Вижу {len(new_items)} вещей на фото. "
+            "Для переснятия нужна одна вещь — сфоткай только её.")
+        context.user_data["pending_resnap_item_id"] = item_id_str
+        return
+
+    # If category_group is completely different → warn but allow
+    cg_match = new_cg == old_cg
+    new_name = f"{new_item.get('type', '')} {new_item.get('color', '')}".strip()
+
+    # Update item in DB: photo_id + optionally refresh type/color from Vision
     import sqlalchemy as sa
     from db.models.wardrobe import WardrobeItem
+    from services.normalize import normalize_type, normalize_color
+
+    new_type_raw = new_item.get("type", old_type)
+    new_color_raw = new_item.get("color", item.color or "")
+    norm_type, norm_cg = normalize_type(new_type_raw)
+    norm_color = normalize_color(new_color_raw)
+
+    update_vals = {"photo_id": file_id, "photo_url": None, "show_in_collage": True}
+    if not cg_match:
+        # Different category — update metadata too
+        update_vals.update({
+            "type": norm_type,
+            "color": norm_color,
+            "category_group": norm_cg or new_cg,
+        })
 
     async with AsyncWriteSession() as session:
         await session.execute(
             sa.update(WardrobeItem)
             .where(WardrobeItem.id == item_id)
-            .values(photo_id=file_id)
+            .values(**update_vals)
         )
         await session.commit()
 
-    # Get item info for response
-    async with AsyncReadSession() as session:
-        item = await get_by_id(session, item_id)
-    item_name = f"{item.type} {item.color}".strip() if item else "вещь"
-    owner_id = str(item.owner_id) if item else ""
-
-    # Queue bg removal (single item, no bbox = full photo)
+    # Queue bg removal
     try:
         from core.redis import get_redis
         from core.queue import RedisQueue, QueuePriority
@@ -1369,13 +1421,15 @@ async def _process_resnap(
     except Exception as e:
         logger.warning("resnap.queue_failed", error=str(e))
 
-    logger.info("resnap.done", item_id=item_id_str, user_id=str(user.id))
+    logger.info("resnap.done", item_id=item_id_str, user_id=str(user.id),
+                old_type=old_type, new_cg=new_cg, cg_match=cg_match)
 
-    await _safe_edit_text(
-        progress_msg,
-        f"✅ Фото для **{item_name}** обновлено!\n\n"
-        "Через пару секунд появится на коллаже.",
-    )
+    if cg_match:
+        await _safe_edit_text(progress_msg,
+            f"✅ Фото для **{old_name}** обновлено!")
+    else:
+        await _safe_edit_text(progress_msg,
+            f"✅ Обновлено! Была *{old_name}*, теперь *{new_name}*.")
 
 
 async def _handle_single_photo(
