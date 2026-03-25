@@ -130,11 +130,14 @@ bbox задаёт координаты прямоугольника вещи в 
 - x, y — левый верхний угол
 - w, h — ширина и высота
 
-ВАЖНО — bbox должен быть ПЛОТНЫМ:
-- Облегай вещь максимально точно, без лишнего пространства вокруг
-- НЕ захватывай соседние вещи, пол, ковёр, бирки
+КРИТИЧЕСКИ ВАЖНО — bbox должен быть МАКСИМАЛЬНО ПЛОТНЫМ (tight-crop):
+- bbox = МИНИМАЛЬНЫЙ прямоугольник вокруг ТОЛЬКО пикселей самой вещи
+- Представь что обводишь вещь маркером по самому краю ткани — вот такой bbox нужен
+- Каждый край bbox должен касаться края вещи, зазор ≤1-2%
+- НИКОГДА не захватывай пол, ковёр, диван, соседние вещи — даже 1 см фона = брак
 - Если вещи лежат рядом — bbox'ы НЕ должны перекрываться
-- Лучше чуть меньший bbox чем слишком большой (обрежем край вещи — не страшно, захватим соседнюю — плохо)
+- ЛУЧШЕ обрезать 5% края вещи, чем захватить 5% фона
+- Проверь себя: если убрать bbox из фото — виден ли фон/пол? Если да — bbox слишком большой, уменьши
 
 Если вещей несколько — каждая имеет свой bbox.
 Если вещь занимает всё фото — bbox: {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
@@ -412,27 +415,40 @@ def _resolve_bbox_overlaps(items: list[dict]) -> list[dict]:
 
 
 def _refine_bbox_by_color(image_bytes: bytes, items: list[dict]) -> list[dict]:
-    """Refine bbox boundaries using texture + gradient analysis.
+    """Shrink bbox edges that contain background (floor/carpet).
 
-    Scans from each bbox edge inward. Where the gradient magnitude (texture)
-    changes sharply compared to the center, shrinks the bbox — cutting off
-    neighboring garments or floor that leaked into the bbox.
+    Strategy: sample BACKGROUND color from photo corners, then scan each
+    bbox edge inward. If a strip is SIMILAR to background → trim it.
+    Stop when strip looks different from background (= garment found).
 
-    Uses Sobel gradient magnitude which captures texture boundaries
-    (fabric weave vs wood grain) even when colors are similar.
+    This is the inverse of the old approach (which compared to center).
+    Comparing to background is more robust because floor color is consistent
+    across the photo, while garment center may have varied textures.
     """
     try:
         import cv2
+        import numpy as np
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         arr = np.array(img)
+        lab = cv2.cvtColor(arr, cv2.COLOR_RGB2LAB).astype(np.float32)
         gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
-        # Compute gradient magnitude (texture signal)
         gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
         gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
         grad = np.sqrt(gx ** 2 + gy ** 2)
-        # Also use LAB color for combined signal
-        lab = cv2.cvtColor(arr, cv2.COLOR_RGB2LAB).astype(np.float32)
         ih, iw = arr.shape[:2]
+
+        # Sample background from 4 corners (10x10 patches)
+        p = 10
+        corners = [
+            lab[:p, :p],        lab[:p, -p:],
+            lab[-p:, :p],       lab[-p:, -p:],
+        ]
+        bg_color = np.mean([c.mean(axis=(0, 1)) for c in corners], axis=0)
+        bg_grad_corners = [
+            grad[:p, :p],       grad[:p, -p:],
+            grad[-p:, :p],      grad[-p:, -p:],
+        ]
+        bg_grad = np.mean([c.mean() for c in bg_grad_corners])
 
         for item in items:
             bbox = item.get("bbox")
@@ -441,83 +457,174 @@ def _refine_bbox_by_color(image_bytes: bytes, items: list[dict]) -> list[dict]:
             x, y = float(bbox.get("x", 0)), float(bbox.get("y", 0))
             w, h = float(bbox.get("w", 1)), float(bbox.get("h", 1))
 
-            # Skip single-item photos
             if w * h > 0.5:
                 continue
-
-            # Center region: compute reference texture + color signature
-            cx1 = int((x + w * 0.3) * iw)
-            cy1 = int((y + h * 0.3) * ih)
-            cx2 = int((x + w * 0.7) * iw)
-            cy2 = int((y + h * 0.7) * ih)
-            cx1, cy1 = max(0, cx1), max(0, cy1)
-            cx2, cy2 = min(iw, cx2), min(ih, cy2)
-            if cx2 <= cx1 or cy2 <= cy1:
+            # Don't refine tiny items (noise)
+            if w * h < 0.01:
                 continue
-
-            center_grad_mean = grad[cy1:cy2, cx1:cx2].mean()
-            center_grad_std = grad[cy1:cy2, cx1:cx2].std()
-            center_color = lab[cy1:cy2, cx1:cx2].mean(axis=(0, 1))
 
             px_x, px_y = int(x * iw), int(y * ih)
             px_r, px_b = int((x + w) * iw), int((y + h) * ih)
-            strip_w = max(3, int(w * iw * 0.04))
-            strip_h = max(3, int(h * ih * 0.04))
+            strip_w = max(4, int(w * iw * 0.05))
+            strip_h = max(4, int(h * ih * 0.05))
 
-            def _is_different(strip_region):
-                """Check if a strip has significantly different texture+color vs center."""
+            # Center band for sampling edge strips (avoid corners of bbox)
+            mid_y1 = int((y + h * 0.3) * ih)
+            mid_y2 = int((y + h * 0.7) * ih)
+            mid_x1 = int((x + w * 0.3) * iw)
+            mid_x2 = int((x + w * 0.7) * iw)
+
+            def _is_background(strip_region):
+                """True if strip looks like background (similar color OR texture to corners)."""
                 y1, y2, x1, x2 = strip_region
-                if y2 <= y1 or x2 <= x1:
+                if y2 <= y1 + 1 or x2 <= x1 + 1:
                     return False
-                # Gradient-based texture difference
-                sg = grad[y1:y2, x1:x2]
-                if sg.size == 0:
-                    return False
-                grad_diff = abs(sg.mean() - center_grad_mean) / (center_grad_std + 1e-5)
-                # Color difference (LAB delta_E)
                 sc = lab[y1:y2, x1:x2]
-                color_diff = np.sqrt(np.sum((sc.mean(axis=(0, 1)) - center_color) ** 2))
-                # Combined: texture OR color significantly different
-                return grad_diff > 2.0 or color_diff > 20.0
+                if sc.size == 0:
+                    return False
+                color_diff = np.sqrt(np.sum((sc.mean(axis=(0, 1)) - bg_color) ** 2))
+                sg = grad[y1:y2, x1:x2]
+                grad_diff = abs(sg.mean() - bg_grad)
+                # Color similar to bg → likely background
+                if color_diff < 22.0:
+                    return True
+                # Texture similar to bg AND color not drastically different → background
+                if grad_diff < 20.0 and color_diff < 35.0:
+                    return True
+                return False
 
-            # Scan from each edge inward (up to 5 steps)
-            for step in range(5):
+            orig_x, orig_y, orig_w, orig_h = x, y, w, h
+            trimmed = False
+            # Guard: never trim more than 25% from any side
+            max_trim_w = orig_w * 0.25
+            max_trim_h = orig_h * 0.25
+
+            # Left edge: scan inward while strip looks like background
+            for step in range(8):
                 lx = px_x + step * strip_w
-                if lx + strip_w >= cx1:
+                if lx + strip_w >= mid_x1:
                     break
-                if _is_different((max(0, px_y), min(ih, px_b), lx, lx + strip_w)):
-                    bbox["x"] = (lx + strip_w) / iw
-                    bbox["w"] = max(0.08, (x + w) - bbox["x"])
-                    break
+                new_x = (lx + strip_w) / iw
+                if new_x - orig_x > max_trim_w:
+                    break  # guard: too much trimmed
+                if _is_background((mid_y1, mid_y2, lx, lx + strip_w)):
+                    bbox["x"] = new_x
+                    bbox["w"] = max(0.06, (orig_x + orig_w) - bbox["x"])
+                    trimmed = True
+                else:
+                    break  # hit garment, stop
 
-            for step in range(5):
+            # Right edge
+            for step in range(8):
                 rx = px_r - (step + 1) * strip_w
-                if rx <= cx2:
+                if rx <= mid_x2:
                     break
-                if _is_different((max(0, px_y), min(ih, px_b), rx, rx + strip_w)):
-                    bbox["w"] = max(0.08, rx / iw - float(bbox["x"]))
+                new_w = rx / iw - float(bbox["x"])
+                if orig_w - new_w > max_trim_w:
+                    break
+                if _is_background((mid_y1, mid_y2, rx, rx + strip_w)):
+                    bbox["w"] = max(0.06, new_w)
+                    trimmed = True
+                else:
                     break
 
-            for step in range(5):
+            # Top edge
+            for step in range(8):
                 ty = px_y + step * strip_h
-                if ty + strip_h >= cy1:
+                if ty + strip_h >= mid_y1:
                     break
-                if _is_different((ty, ty + strip_h, max(0, px_x), min(iw, px_r))):
-                    bbox["y"] = (ty + strip_h) / ih
-                    bbox["h"] = max(0.08, (y + h) - bbox["y"])
+                new_y = (ty + strip_h) / ih
+                if new_y - orig_y > max_trim_h:
+                    break
+                if _is_background((ty, ty + strip_h, mid_x1, mid_x2)):
+                    bbox["y"] = new_y
+                    bbox["h"] = max(0.06, (orig_y + orig_h) - bbox["y"])
+                    trimmed = True
+                else:
                     break
 
-            for step in range(5):
+            # Bottom edge
+            for step in range(8):
                 by = px_b - (step + 1) * strip_h
-                if by <= cy2:
+                if by <= mid_y2:
                     break
-                if _is_different((by, by + strip_h, max(0, px_x), min(iw, px_r))):
-                    bbox["h"] = max(0.08, by / ih - float(bbox["y"]))
+                new_h = by / ih - float(bbox["y"])
+                if orig_h - new_h > max_trim_h:
                     break
+                if _is_background((by, by + strip_h, mid_x1, mid_x2)):
+                    bbox["h"] = max(0.06, new_h)
+                    trimmed = True
+                else:
+                    break
+
+            if trimmed:
+                logger.info("bbox.texture_refined",
+                    item_type=item.get("type", ""),
+                    orig=f"{orig_w:.2f}x{orig_h:.2f}",
+                    new=f"{float(bbox['w']):.2f}x{float(bbox['h']):.2f}")
 
     except Exception as e:
-        import structlog
-        structlog.get_logger().warning("bbox.texture_refine_failed", error=str(e))
+        logger.warning("bbox.texture_refine_failed", error=str(e))
+
+    return items
+
+
+
+# ── Post-Vision reclassification: fix misidentified items ────────────────
+
+_FORCE_BASE_LAYER_TYPES = frozenset({
+    "носки", "гольфы", "колготки", "подследники",
+    "термоштаны", "термофутболка", "тельняшка",
+})
+
+_FORCE_UNDERWEAR_TYPES = frozenset({
+    "трусики", "трусы", "майка нижняя", "бюстгальтер",
+})
+
+
+def _reclassify_items(items: list[dict]) -> list[dict]:
+    """Fix common Vision classification mistakes using bbox size and context.
+
+    Rules:
+    1. Small "шапка" with no outerwear context → носки (threshold 0.25)
+    2. Носки/колготки/гольфы → force category_group=base_layer
+    3. Трусики/бюстгальтер → force category_group=underwear
+    """
+    has_outerwear = any(
+        item.get("category_group") == "outerwear" for item in items
+    )
+
+    for item in items:
+        item_type = (item.get("type") or "").lower().strip()
+        cg = item.get("category_group", "")
+        bbox = item.get("bbox") or {}
+        bw = float(bbox.get("w", 0.5))
+        bh = float(bbox.get("h", 0.5))
+
+        if (cg == "accessory" and
+                any(w in item_type for w in ["шапка", "шапочка", "hat"]) and
+                bw <= 0.25 and bh <= 0.25 and
+                not has_outerwear):
+            logger.info("vision.reclassify",
+                from_type=item.get("type"), to_type="носки",
+                reason="small_bbox_no_outerwear",
+                bbox_w=bw, bbox_h=bh)
+            item["category_group"] = "base_layer"
+            item["type"] = "носки"
+            continue
+
+        if any(t in item_type for t in _FORCE_BASE_LAYER_TYPES) and cg != "base_layer":
+            logger.info("vision.reclassify",
+                from_type=item.get("type"), from_cg=cg,
+                to_cg="base_layer", reason="force_base_layer")
+            item["category_group"] = "base_layer"
+            continue
+
+        if any(t in item_type for t in _FORCE_UNDERWEAR_TYPES) and cg != "underwear":
+            logger.info("vision.reclassify",
+                from_type=item.get("type"), from_cg=cg,
+                to_cg="underwear", reason="force_underwear")
+            item["category_group"] = "underwear"
 
     return items
 
@@ -751,6 +858,9 @@ async def _call_vision(
     if len(validated) > 8:
         logger.warning("vision.too_many_items", count=len(validated), capped=8)
         validated = validated[:8]
+
+    # Reclassify misidentified items (bbox-based + type-based)
+    validated = _reclassify_items(validated)
 
     # Post-validation: fix misclassifications using weather context
     validated = _post_validate_vision(validated, temp=temp, season=season)

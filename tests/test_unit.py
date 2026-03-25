@@ -54,33 +54,56 @@ class TestFixBbox:
 
 class TestReclassification:
     def test_маленькая_шапка_становится_носками(self):
-        """bbox ≤0.2×0.2 + accessory/шапка → должна переклассифицироваться"""
-        data = {
-            "category_group": "accessory",
-            "type": "шапка",
-            "bbox": {"x": 0.7, "y": 0.1, "w": 0.12, "h": 0.10},
-        }
-        bbox = data["bbox"]
-        bw, bh = float(bbox["w"]), float(bbox["h"])
-        cg = data["category_group"]
-        item_type = data["type"].lower()
+        """bbox ≤0.25×0.25 + accessory/шапка + no outerwear → носки"""
+        from services.vision import _reclassify_items
+        items = [{"category_group": "accessory", "type": "шапка",
+                  "bbox": {"x": 0.7, "y": 0.1, "w": 0.12, "h": 0.10}}]
+        result = _reclassify_items(items)
+        assert result[0]["type"] == "носки"
+        assert result[0]["category_group"] == "base_layer"
 
-        should_reclassify = (
-            cg == "accessory"
-            and any(w in item_type for w in ["шапка", "шапочка"])
-            and bw <= 0.2 and bh <= 0.2
-        )
-        assert should_reclassify
+    def test_маленькая_шапка_с_outerwear_остаётся(self):
+        """bbox ≤0.25 but outerwear present → stays as шапка"""
+        from services.vision import _reclassify_items
+        items = [
+            {"category_group": "accessory", "type": "шапка",
+             "bbox": {"x": 0.7, "y": 0.1, "w": 0.12, "h": 0.10}},
+            {"category_group": "outerwear", "type": "куртка",
+             "bbox": {"x": 0.1, "y": 0.1, "w": 0.5, "h": 0.7}},
+        ]
+        result = _reclassify_items(items)
+        assert result[0]["type"] == "шапка"
+        assert result[0]["category_group"] == "accessory"
 
     def test_большая_шапка_не_переклассифицируется(self):
-        data = {
-            "category_group": "accessory",
-            "type": "шапка",
-            "bbox": {"x": 0.3, "y": 0.1, "w": 0.4, "h": 0.35},
-        }
-        bbox = data["bbox"]
-        bw, bh = float(bbox["w"]), float(bbox["h"])
-        assert not (bw <= 0.2 and bh <= 0.2)
+        from services.vision import _reclassify_items
+        items = [{"category_group": "accessory", "type": "шапка",
+                  "bbox": {"x": 0.3, "y": 0.1, "w": 0.4, "h": 0.35}}]
+        result = _reclassify_items(items)
+        assert result[0]["type"] == "шапка"
+
+    def test_носки_force_base_layer(self):
+        """Носки with wrong category_group → forced to base_layer"""
+        from services.vision import _reclassify_items
+        items = [{"category_group": "accessory", "type": "носки",
+                  "bbox": {"x": 0.5, "y": 0.5, "w": 0.3, "h": 0.2}}]
+        result = _reclassify_items(items)
+        assert result[0]["category_group"] == "base_layer"
+
+    def test_колготки_force_base_layer(self):
+        from services.vision import _reclassify_items
+        items = [{"category_group": "bottom", "type": "колготки",
+                  "bbox": {"x": 0.1, "y": 0.1, "w": 0.5, "h": 0.8}}]
+        result = _reclassify_items(items)
+        assert result[0]["category_group"] == "base_layer"
+
+    def test_bbox_between_020_025_reclassifies(self):
+        """bbox 0.22×0.22 — was missed by old threshold 0.2, now caught at 0.25"""
+        from services.vision import _reclassify_items
+        items = [{"category_group": "accessory", "type": "шапка",
+                  "bbox": {"x": 0.5, "y": 0.5, "w": 0.22, "h": 0.22}}]
+        result = _reclassify_items(items)
+        assert result[0]["type"] == "носки"
 
 
 # ── Style config ──────────────────────────────────────────────────────────
