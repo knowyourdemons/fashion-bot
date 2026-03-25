@@ -602,14 +602,23 @@ def _auto_rotate_to_vertical(img: Image.Image) -> Image.Image:
             # Long side is roughly horizontal, need 90° + correction
             deviation = angle  # e.g., angle=-20 → rotate -20° to go vertical
 
-        # Only rotate if deviation is significant (8-45°)
-        # <8° = already straight enough
-        # >45° = probably intentional orientation or detection error
-        if abs(deviation) < 8 or abs(deviation) > 45:
+        # Only rotate if deviation is significant (>5°)
+        # <5° = already straight enough
+        if abs(deviation) < 5:
             return img
 
-        rotated = img.rotate(-deviation, expand=True, resample=Image.BICUBIC,
-                             fillcolor=(0, 0, 0, 0))
+        # For large deviations (>80°) the garment is essentially horizontal
+        # → rotate by exactly 90° (cleaner than fractional rotation)
+        if abs(deviation) > 80:
+            if deviation > 0:
+                rotated = img.rotate(-90, expand=True, resample=Image.BICUBIC,
+                                     fillcolor=(0, 0, 0, 0))
+            else:
+                rotated = img.rotate(90, expand=True, resample=Image.BICUBIC,
+                                     fillcolor=(0, 0, 0, 0))
+        else:
+            rotated = img.rotate(-deviation, expand=True, resample=Image.BICUBIC,
+                                 fillcolor=(0, 0, 0, 0))
         return rotated
     except Exception:
         return img
