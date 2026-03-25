@@ -469,43 +469,36 @@ def prepare_underwear_line(outfit: dict) -> str:
 
 # ── Flat-lay layout engine ────────────────────────────────────────────────────
 
-# Canvas: 440 x 520. Positions designed to mimic magazine flat-lay.
-# Outerwear top-right, top center-left, bottom center, shoes bottom-left,
-# accessories scattered around edges. Slight rotations for natural look.
+# Canvas 440x520. Magazine flat-lay layout:
+# Row 1 (y 0-170):   top (landscape, left) | outerwear (portrait, right)
+# Row 2 (y 170-430): bottom (portrait, center)
+# Row 3 (y 430-520): shoes + bag + accessories spread across
+# No overlapping between main garments.
 
 _FLATLAY_SLOTS = {
     # slot: (top, left, width, height, rotate, z-index)
-    # Tops: LANDSCAPE (wider than tall) — sleeves spread out
-    "top":        (20,  10,  230, 155, 0, 3),
-    # Outerwear: portrait, top-right
-    "outerwear":  (0,   250, 185, 240, 0, 2),
-    # Bottom: portrait, center-bottom
-    "bottom":     (190, 130, 160, 260, 0, 4),
-    # One-piece fallback
-    "one_piece":  (10,  100, 200, 310, 0, 3),
-    # Shoes: small landscape, bottom corners
-    "footwear_1": (420, 290, 120, 95, 0, 5),
-    "footwear_2": (430, 160, 105, 85, 0, 5),
-    # Accessories: small, scattered in free areas
-    "accessory_1":(5,   180, 70,  70, 0, 6),
-    "accessory_2":(410, 20,  80,  80, 0, 6),
-    # Bag: bottom-left
-    "bag":        (360, 5,   110, 110, 0, 5),
-    # Hat: top-right corner
-    "hat":        (0,   355, 80,  80, 0, 6),
-    # Scarf: left side
-    "scarf":      (200, 5,   70,  100, 0, 5),
+    "top":        (10,  10,  220, 150, 0, 3),
+    "outerwear":  (5,   240, 190, 250, 0, 2),
+    "bottom":     (170, 120, 170, 255, 0, 4),
+    "one_piece":  (5,   240, 190, 250, 0, 2),  # same pos as outerwear (fallback)
+    "footwear_1": (440, 300, 115, 75,  0, 5),
+    "footwear_2": (445, 175, 105, 70,  0, 5),
+    "accessory_1":(175, 10,  75,  75,  0, 6),
+    "accessory_2":(175, 330, 75,  75,  0, 6),
+    "bag":        (380, 10,  105, 105, 0, 5),
+    "hat":        (265, 330, 80,  80,  0, 6),
+    "scarf":      (265, 10,  70,  95,  0, 5),
 }
 
 _FLATLAY_SLOTS_ONE_PIECE = {
-    "outerwear":  (0,   245, 185, 240, 0, 2),
-    "one_piece":  (10,  20,  220, 350, 0, 3),
-    "footwear_1": (400, 290, 125, 100, 0, 5),
-    "footwear_2": (420, 165, 110, 90, 0, 5),
-    "accessory_1":(5,   250, 75,  75, 0, 6),
-    "accessory_2":(380, 15,  80,  80, 0, 6),
-    "bag":        (340, 5,   115, 115, 0, 5),
-    "hat":        (0,   355, 80,  80, 0, 6),
+    "outerwear":  (5,   240, 190, 250, 0, 2),
+    "one_piece":  (5,   15,  210, 340, 0, 3),
+    "footwear_1": (440, 300, 115, 75,  0, 5),
+    "footwear_2": (445, 175, 105, 70,  0, 5),
+    "accessory_1":(355, 240, 75,  75,  0, 6),
+    "accessory_2":(265, 240, 75,  75,  0, 6),
+    "bag":        (380, 10,  110, 110, 0, 5),
+    "hat":        (265, 330, 80,  80,  0, 6),
 }
 
 
