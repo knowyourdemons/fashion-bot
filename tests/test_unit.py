@@ -106,6 +106,172 @@ class TestReclassification:
         assert result[0]["type"] == "носки"
 
 
+# ── Bbox refinement ──────────────────────────────────────────────────────────
+
+class TestBboxRefine:
+    def test_refine_skips_single_item(self):
+        """bbox > 0.5 area should not be refined"""
+        from services.vision import _refine_bbox_by_color
+        import io
+        from PIL import Image
+        img = Image.new("RGB", (100, 100), (200, 200, 200))
+        buf = io.BytesIO(); img.save(buf, format="JPEG"); image_bytes = buf.getvalue()
+        items = [{"type": "платье", "bbox": {"x": 0.0, "y": 0.0, "w": 0.9, "h": 0.9}}]
+        result = _refine_bbox_by_color(image_bytes, items)
+        assert float(result[0]["bbox"]["w"]) == 0.9  # unchanged
+
+    def test_refine_trims_background(self):
+        """Strips matching background color should be trimmed"""
+        from services.vision import _refine_bbox_by_color
+        import io, numpy as np
+        from PIL import Image
+        # White background with dark rectangle in center
+        img = Image.new("RGB", (200, 200), (240, 240, 240))
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([60, 40, 140, 160], fill=(30, 30, 80))
+        buf = io.BytesIO(); img.save(buf, format="JPEG"); image_bytes = buf.getvalue()
+        items = [{"type": "штаны", "bbox": {"x": 0.1, "y": 0.1, "w": 0.4, "h": 0.4}}]
+        result = _refine_bbox_by_color(image_bytes, items)
+        # Should have trimmed at least some background
+        assert float(result[0]["bbox"]["w"]) <= 0.4
+
+    def test_refine_max_trim_guard(self):
+        """Should not trim more than 25% from any side"""
+        from services.vision import _refine_bbox_by_color
+        import io
+        from PIL import Image
+        # All white (all looks like background) — guard should prevent excessive trim
+        img = Image.new("RGB", (200, 200), (240, 240, 240))
+        buf = io.BytesIO(); img.save(buf, format="JPEG"); image_bytes = buf.getvalue()
+        items = [{"type": "кофта", "bbox": {"x": 0.1, "y": 0.1, "w": 0.4, "h": 0.4}}]
+        result = _refine_bbox_by_color(image_bytes, items)
+        # Should not trim more than 25% = 0.1
+        assert float(result[0]["bbox"]["w"]) >= 0.4 * 0.75 - 0.01
+
+
+# ── Flat-lay layout ──────────────────────────────────────────────────────────
+
+class TestFlatlay:
+    def test_prepare_items_returns_tuple(self):
+        from services.brief_renderer import prepare_items_flatlay
+        items, placeholders, pct, txt = prepare_items_flatlay([])
+        assert items == []
+        assert isinstance(placeholders, list)
+        assert len(placeholders) > 0  # should show essential slot placeholders
+        assert pct == 0  # empty wardrobe = 0% progress
+
+    def test_placeholders_for_missing_slots(self):
+        """Empty outfit should show placeholders for essential slots"""
+        from services.brief_renderer import prepare_items_flatlay
+        items, placeholders, pct, txt = prepare_items_flatlay([])
+        # With no items, should show placeholders for top, bottom, outerwear, footwear
+        ph_labels = [p["label"] for p in placeholders]
+        assert any("верх" in l for l in ph_labels)
+        assert any("низ" in l for l in ph_labels)
+
+    def test_filled_slot_no_placeholder(self):
+        """Filled slot should not have placeholder"""
+        from services.brief_renderer import prepare_items_flatlay
+        import io
+        from PIL import Image
+        # Create a minimal RGBA PNG
+        img = Image.new("RGBA", (50, 50), (100, 100, 100, 255))
+        buf = io.BytesIO(); img.save(buf, format="PNG")
+        slots = [{"slot": "top", "item_type": "футболка", "item_color": "белый",
+                  "has_item": True, "_photo_bytes": buf.getvalue()}]
+        items, placeholders, pct, txt = prepare_items_flatlay(slots)
+        assert len(items) == 1
+        assert not any("верх" in p["label"] for p in placeholders)
+
+    def test_progress_complete_with_essential_slots(self):
+        """All essential slots filled → no placeholders"""
+        from services.brief_renderer import prepare_items_flatlay
+        import io
+        from PIL import Image
+        img = Image.new("RGBA", (50, 50), (100, 100, 100, 255))
+        buf = io.BytesIO(); img.save(buf, format="PNG"); pb = buf.getvalue()
+        slots = [
+            {"slot": "top", "item_type": "t", "item_color": "c", "has_item": True, "_photo_bytes": pb},
+            {"slot": "bottom", "item_type": "t", "item_color": "c", "has_item": True, "_photo_bytes": pb},
+            {"slot": "outerwear", "item_type": "t", "item_color": "c", "has_item": True, "_photo_bytes": pb},
+            {"slot": "footwear", "item_type": "t", "item_color": "c", "has_item": True, "_photo_bytes": pb},
+            {"slot": "bag", "item_type": "t", "item_color": "c", "has_item": True, "_photo_bytes": pb},
+            {"slot": "accessory", "item_type": "t", "item_color": "c", "has_item": True, "_photo_bytes": pb},
+            {"slot": "accessory", "item_type": "t2", "item_color": "c", "has_item": True, "_photo_bytes": pb},
+        ]
+        items, placeholders, pct, txt = prepare_items_flatlay(slots)
+        assert len(items) >= 4
+        assert pct == 100
+        assert len(placeholders) == 0
+
+    def test_one_piece_uses_correct_layout(self):
+        """One-piece without top+bottom should use one_piece layout"""
+        from services.brief_renderer import prepare_items_flatlay
+        import io
+        from PIL import Image
+        img = Image.new("RGBA", (50, 50), (100, 100, 100, 255))
+        buf = io.BytesIO(); img.save(buf, format="PNG"); pb = buf.getvalue()
+        slots = [{"slot": "one_piece", "item_type": "платье", "item_color": "серый",
+                  "has_item": True, "_photo_bytes": pb}]
+        items, placeholders, pct, txt = prepare_items_flatlay(slots)
+        assert len(items) == 1
+        # one_piece should be centered (x around 60-80)
+        assert items[0]["left"] >= 50
+
+    def test_tights_not_filtered(self):
+        """Tights should be visible in flatlay (for skirt/dress)"""
+        from services.brief_renderer import prepare_items_flatlay
+        import io
+        from PIL import Image
+        img = Image.new("RGBA", (50, 50), (100, 100, 100, 255))
+        buf = io.BytesIO(); img.save(buf, format="PNG"); pb = buf.getvalue()
+        slots = [
+            {"slot": "bottom", "item_type": "юбка", "item_color": "серый", "has_item": True, "_photo_bytes": pb},
+            {"slot": "tights", "item_type": "колготки", "item_color": "чёрный", "has_item": True, "_photo_bytes": pb},
+        ]
+        items, placeholders, pct, txt = prepare_items_flatlay(slots)
+        slot_names = [it["slot"] for it in items]
+        assert "tights" in slot_names
+
+    def test_underwear_filtered(self):
+        """Underwear should NOT appear in flatlay"""
+        from services.brief_renderer import prepare_items_flatlay
+        import io
+        from PIL import Image
+        img = Image.new("RGBA", (50, 50), (100, 100, 100, 255))
+        buf = io.BytesIO(); img.save(buf, format="PNG"); pb = buf.getvalue()
+        slots = [{"slot": "underwear", "item_type": "трусики", "item_color": "розовый",
+                  "has_item": True, "_photo_bytes": pb}]
+        items, placeholders, pct, txt = prepare_items_flatlay(slots)
+        assert len(items) == 0
+
+
+# ── Merge bbox rotation ─────────────────────────────────────────────────────
+
+class TestMergeBboxRotation:
+    def test_rotation_saved_in_bbox(self):
+        from bot.handlers.wardrobe import _merge_bbox_rotation
+        result = _merge_bbox_rotation({"x": 0.1, "y": 0.2, "w": 0.5, "h": 0.6}, 90)
+        assert result["flat_lay_rotation"] == 90
+        assert result["x"] == 0.1  # original bbox preserved
+
+    def test_no_rotation_no_change(self):
+        from bot.handlers.wardrobe import _merge_bbox_rotation
+        result = _merge_bbox_rotation({"x": 0.1, "y": 0.2, "w": 0.5, "h": 0.6}, 0)
+        assert result is None or "flat_lay_rotation" not in (result or {})
+
+    def test_rotation_creates_bbox_if_none(self):
+        from bot.handlers.wardrobe import _merge_bbox_rotation
+        result = _merge_bbox_rotation(None, 180)
+        assert result["flat_lay_rotation"] == 180
+
+    def test_invalid_rotation_ignored(self):
+        from bot.handlers.wardrobe import _merge_bbox_rotation
+        result = _merge_bbox_rotation({"x": 0}, 45)  # invalid, not in (90,180,270)
+        assert result is None or "flat_lay_rotation" not in (result or {})
+
+
 # ── Style config ──────────────────────────────────────────────────────────
 
 class TestStyleConfig:

@@ -549,7 +549,10 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
             # top, bottom, footwear, outerwear, one_piece
             type_counts[slot] = type_counts.get(slot, 0) + 1
             cnt = type_counts[slot]
+            # Try exact name first, then with _N suffix
             key = slot if cnt == 1 else f"{slot}_{cnt}"
+            if key not in layout:
+                key = f"{slot}_{cnt}"  # footwear → footwear_1
 
         if key and key in layout and key not in slot_items:
             slot_items[key] = s

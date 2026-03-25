@@ -348,8 +348,23 @@ docker exec docker-app-1 python3 -m pytest /app/tests/test_product_quality.py -v
 - **Admin antibot exemption**: admin_ids не банятся
 - **Vision cost guard**: 30 calls/day per user
 
+## Коллаж: Magazine Flat-Lay (25 марта 2026)
+- **Шаблон**: `tpl_flatlay.html` — Playwright рендер, белый фон, absolute positioning
+- **Layout**: Row 1 (top + outerwear с перекрытием), Row 2 (bottom центр), Row 3 (bag + shoes)
+- **Слоты**: top, top_2, outerwear, bottom, one_piece, footwear_1, bag, accessory_1, accessory_2, hat, scarf, tights
+- **Placeholders**: пунктирные рамки для незаполненных слотов (🧥+куртку, 👟+обувь, 👜+сумку, 🕶+очки, 📿+ремень)
+- **Progress bar**: "3/7 · Сфоткай куртку, обувь" (footer)
+- **Vision `flat_lay_rotation`**: 0/90/180/270 — ориентация для flat-lay (пояс сверху, горловина сверху)
+  - Сохраняется в bbox JSONB, пробрасывается через outfit_builder → prepare_items_flatlay
+  - 5-zone CV fallback если Vision вернул 0 для portrait item
+- **Ориентация по слоту**: top → landscape (рукава в стороны), bottom/outerwear → portrait
+- **Переснятие**: кнопка "📸 Переснять" в detail view → Vision валидация → замена фото
+- **Авто-ротация**: `_auto_rotate_to_vertical` выпрямляет наклонённые вещи (3-35°)
+- **Bbox refinement**: сравнение с фоном (углы фото), 25% guard, background-aware trimming
+- Подключён ко всем 6 точкам через `build_brief_card()`: "Что надеть", morning/evening brief, онбординг
+
 ## Тесты
-- 4420 тестов (4371 технических + 48 продуктовых + 1 validation), pytest-forked
+- 4434 тестов (4371 + 14 flatlay/bbox/reclassify + 48 продуктовых + 1 validation), pytest-forked
 - Юнит-экономика: $0.15/юзер/мес API, breakeven: 1 paying user ($7.60/мес infra)
 
 ## Роадмап
