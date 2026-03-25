@@ -476,8 +476,7 @@ def prepare_underwear_line(outfit: dict) -> str:
 
 _FLATLAY_SLOTS = {
     # slot: (top, left, width, height, rotate, z-index)
-    "top":        (5,   5,   210, 155, 0, 3),
-    "top_2":      (5,   220, 210, 155, 0, 3),
+    "top":        (5,   5,   220, 160, 0, 3),
     "outerwear":  (0,   230, 210, 260, 0, 2),
     "bottom":     (170, 90,  220, 270, 0, 4),
     "one_piece":  (0,   230, 210, 270, 0, 2),
