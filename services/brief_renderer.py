@@ -513,12 +513,16 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
     """Prepare items with absolute positions for flat-lay template."""
     from services.image_builder import _auto_trim
 
-    # Determine if we have a one_piece
+    # Use one_piece layout ONLY if one_piece is present AND no top+bottom
     has_one_piece = any(
         s.get("slot") == "one_piece" and s.get("has_item") and s.get("_photo_bytes")
         for s in outfit_slots
     )
-    layout = _FLATLAY_SLOTS_ONE_PIECE if has_one_piece else _FLATLAY_SLOTS
+    has_top = any(s.get("slot") == "top" and s.get("has_item") for s in outfit_slots)
+    has_bottom = any(s.get("slot") == "bottom" and s.get("has_item") for s in outfit_slots)
+    # Only use one_piece layout if it's truly the only main garment
+    use_one_piece_layout = has_one_piece and not (has_top and has_bottom)
+    layout = _FLATLAY_SLOTS_ONE_PIECE if use_one_piece_layout else _FLATLAY_SLOTS
 
     # Assign slots
     slot_items = {}  # slot_key -> outfit_slot data
@@ -559,13 +563,10 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
 
         photo_b64 = ""
         try:
-            from services.image_processor import _auto_rotate_to_vertical
             from PIL import Image as _PILImg
             import io as _io
-            # Auto-rotate → trim → encode
             _img = _PILImg.open(_io.BytesIO(s["_photo_bytes"])).convert("RGBA")
-            _img = _auto_rotate_to_vertical(_img)
-            # Trim transparent edges
+            # Trim transparent edges only (no rotation — CSS object-fit handles it)
             _bbox = _img.split()[3].getbbox()
             if _bbox:
                 _p = 3
