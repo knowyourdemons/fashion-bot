@@ -463,20 +463,24 @@ class TestBuildBriefCard:
         user = self._make_user()
         child = self._make_child()
         weather = {"temp_morning": 4.0}
+        # Create valid RGBA PNG for _photo_bytes
+        import io as _io
+        from PIL import Image as _Img
+        _img = _Img.new("RGBA", (50, 50), (100, 100, 100, 255))
+        _buf = _io.BytesIO(); _img.save(_buf, format="PNG"); _pb = _buf.getvalue()
         slots = [
-            {"slot": f"top", "has_item": True, "item_type": f"Item{i}", "item_color": "серый",
-             "photo_id": f"id{i}", "_photo_bytes": b"img"}
+            {"slot": "top", "has_item": True, "item_type": f"Item{i}", "item_color": "серый",
+             "photo_id": f"id{i}", "_photo_bytes": _pb}
             for i in range(8)
         ]
 
-        with patch("services.brief_card.render_html_to_png", new_callable=AsyncMock) as mock_render, \
-             patch("services.image_builder._auto_trim", return_value=b"\x89PNG"):
+        with patch("services.brief_card.render_html_to_png", new_callable=AsyncMock) as mock_render:
             mock_render.return_value = b"\x89PNG_FULL"
             result = _run(build_brief_card(user, child, {}, weather, slots))
 
         assert result == b"\x89PNG_FULL"
         html = mock_render.call_args[0][0]
-        assert "fi-top" in html  # flat lay positioning
+        assert "canvas" in html  # flat-lay canvas class
 
     def test_woman_segment(self):
         from services.brief_card import build_brief_card
