@@ -562,7 +562,32 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
             import io as _io
             _img = _PILImg.open(_io.BytesIO(s["_photo_bytes"])).convert("RGBA")
 
-            # 1. Trim transparent edges
+            # 1. Apply flat_lay_rotation from Vision (if available)
+            _rotation = s.get("flat_lay_rotation", 0)
+            if _rotation and _rotation in (90, 180, 270):
+                _img = _img.rotate(-_rotation, expand=True, fillcolor=(0, 0, 0, 0))
+            elif _want_portrait and not _rotation:
+                # Vision said 0 for portrait item — verify with 5-zone heuristic
+                # If waistband (wider zone) is at bottom → flip 180°
+                import numpy as _np
+                _alpha = _np.array(_img.split()[3])
+                _ih = _alpha.shape[0]
+                if _ih > 50:
+                    _zones = []
+                    for _zi in range(5):
+                        _zs = (_ih * _zi) // 5
+                        _ze = (_ih * (_zi + 1)) // 5
+                        _zdata = _alpha[_zs:_ze, :]
+                        _zones.append(_np.sum(_zdata > 128) / max(1, _zdata.size))
+                    # Pants pattern: if bottom 2 zones are wider than top 2 → flipped
+                    _top_avg = sum(_zones[:2]) / 2
+                    _bot_avg = sum(_zones[3:]) / 2
+                    if _bot_avg > _top_avg * 1.3 and _bot_avg > 0.25:
+                        _img = _img.rotate(180, expand=False)
+                        logger.info("flatlay.zone_flip", slot=slot_name,
+                                    top_avg=f"{_top_avg:.2f}", bot_avg=f"{_bot_avg:.2f}")
+
+            # 2. Trim transparent edges
             _bbox = _img.split()[3].getbbox()
             if _bbox:
                 _p = 3
@@ -573,15 +598,11 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
             _w, _h = _img.size
             _is_landscape = _w > _h
 
-            # 2. Rotate to match expected orientation for slot
-            #    Only rotate tops to landscape — bottoms/outerwear keep original orientation
-            if _want_landscape and not _is_landscape:
+            # 3. If no Vision rotation, use slot-based heuristic for tops only
+            if not _rotation and _want_landscape and not _is_landscape:
                 _img = _img.rotate(-90, expand=True, fillcolor=(0, 0, 0, 0))
 
-            # No upside-down detection — trust the user's photo orientation.
-            # _detect_upside_down fails on spread pants (legs wider = "upside down")
-
-            # 3. Re-trim after rotation
+            # 4. Re-trim after rotation
             _bbox = _img.split()[3].getbbox()
             if _bbox:
                 _p = 3
