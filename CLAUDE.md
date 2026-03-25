@@ -365,7 +365,15 @@ docker exec docker-app-1 python3 -m pytest /app/tests/test_product_quality.py -v
 
 ## Тесты
 - 4434 тестов (4371 + 14 flatlay/bbox/reclassify + 48 продуктовых + 1 validation), pytest-forked
-- Юнит-экономика: $0.15/юзер/мес API, breakeven: 1 paying user ($7.60/мес infra)
+- Юнит-экономика (25 марта 2026, реальные данные):
+  - Vision Sonnet call: **$0.05/фото** (image tokens + text + output)
+  - Haiku call: **$0.0003** (outfit engine, chat, comments)
+  - Free user: **$0.17/мес** (3 фото + 1x "что надеть"/день + brief 2x/нед)
+  - Premium user: **$1.73/мес** (30 фото + 5x "что надеть" + brief ежедн + chat)
+  - Infra: $7.60/мес (VPS)
+  - Breakeven: 5% конверсия при 200+ users
+  - 90% API cost = Vision Sonnet (фото). Haiku = копейки
+  - Оптимизация: resize фото до 768px → -40% Vision cost
 
 ## Роадмап
 
