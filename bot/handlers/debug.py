@@ -388,4 +388,35 @@ async def handle_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         for src, cnt in sorted(sources.items(), key=lambda x: -x[1]):
             text_msg += f"  {src}: {cnt}\n"
 
+    # API usage (from Redis)
+    from datetime import date, timedelta
+    today = date.today()
+    text_msg += "\n\U0001f4b0 API usage (last 7 days):\n"
+    _pricing = {
+        "claude-sonnet-4-6": (3.0, 15.0),       # $/M input, $/M output
+        "claude-haiku-4-5-20251001": (0.25, 1.25),
+    }
+    total_cost_7d = 0.0
+    for i in range(7):
+        day = (today - timedelta(days=i)).isoformat()
+        usage = await redis.hgetall(f"api_usage:{day}")
+        if not usage:
+            continue
+        day_cost = 0.0
+        day_calls = 0
+        for model, (p_in, p_out) in _pricing.items():
+            calls = int(usage.get(f"{model}:calls", 0))
+            inp = int(usage.get(f"{model}:input", 0))
+            out = int(usage.get(f"{model}:output", 0))
+            if calls:
+                cost = inp * p_in / 1_000_000 + out * p_out / 1_000_000
+                day_cost += cost
+                day_calls += calls
+        if day_calls:
+            short_day = day[5:]  # MM-DD
+            text_msg += f"  {short_day}: {day_calls} calls, ${day_cost:.3f}\n"
+            total_cost_7d += day_cost
+    if total_cost_7d:
+        text_msg += f"  Total 7d: ${total_cost_7d:.2f}\n"
+
     await update.message.reply_text(text_msg)

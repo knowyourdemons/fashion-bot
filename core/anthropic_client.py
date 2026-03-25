@@ -101,6 +101,24 @@ class AnthropicPool:
                 )
                 if cache_read or cache_write:
                     logger.info("anthropic.cache", cache_read=cache_read, cache_write=cache_write)
+
+                # Persist usage to Redis (survives container restarts)
+                try:
+                    from datetime import date
+                    day = date.today().isoformat()
+                    inp = response.usage.input_tokens
+                    out = response.usage.output_tokens
+                    pipe = self._redis.pipeline(transaction=False)
+                    pipe.hincrby(f"api_usage:{day}", f"{model}:calls", 1)
+                    pipe.hincrby(f"api_usage:{day}", f"{model}:input", inp)
+                    pipe.hincrby(f"api_usage:{day}", f"{model}:output", out)
+                    pipe.hincrby(f"api_usage:{day}", f"{model}:cache_read", cache_read or 0)
+                    pipe.hincrby(f"api_usage:{day}", f"{model}:cache_write", cache_write or 0)
+                    pipe.expire(f"api_usage:{day}", 90 * 86400)  # keep 90 days
+                    await pipe.execute()
+                except Exception:
+                    pass  # don't break on tracking failure
+
                 return response
 
             except TimeoutError:
