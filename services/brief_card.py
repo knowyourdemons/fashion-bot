@@ -229,7 +229,7 @@ async def build_brief_card(
                 real_photos, colortype,
             )
         else:
-            html = _build_full_html(
+            html = _build_flatlay_html(
                 name, context_str, date_str, theme,
                 weather_tpl, outfit_slots, outfit, advice_text,
                 colortype,
@@ -311,11 +311,35 @@ def _build_hybrid_html(
 
 # ── Full card (8+ photos) ───────────────────────────────────────────────────
 
+def _build_flatlay_html(
+    name: str, context_str: str, date_str: str, theme: dict,
+    weather_tpl: dict, outfit_slots: list[dict], outfit: dict,
+    advice_text: str, colortype: str = "",
+) -> str:
+    """Magazine-style flat-lay composition with absolute positioning."""
+    from services.brief_renderer import prepare_items_flatlay
+    items = prepare_items_flatlay(outfit_slots)
+    palette = _collect_palette_rich(outfit_slots, colortype=colortype)
+
+    return render_template(
+        "tpl_flatlay.html",
+        css_class=theme["css_class"],
+        name=name,
+        context=context_str,
+        date_str=date_str,
+        weather=weather_tpl,
+        items=items,
+        palette=palette,
+        kassi_comment=advice_text,
+    )
+
+
 def _build_full_html(
     name: str, context_str: str, date_str: str, theme: dict,
     weather_tpl: dict, outfit_slots: list[dict], outfit: dict,
     advice_text: str, colortype: str = "",
 ) -> str:
+    """Legacy full card — fallback if flatlay fails."""
     items = prepare_items_full(outfit_slots)
     palette = _collect_palette_rich(outfit_slots, colortype=colortype)
     base_layer = prepare_underwear_line(outfit)

@@ -467,6 +467,113 @@ def prepare_underwear_line(outfit: dict) -> str:
     return ""
 
 
+# ── Flat-lay layout engine ────────────────────────────────────────────────────
+
+# Canvas: 440 x 520. Positions designed to mimic magazine flat-lay.
+# Outerwear top-right, top center-left, bottom center, shoes bottom-left,
+# accessories scattered around edges. Slight rotations for natural look.
+
+_FLATLAY_SLOTS = {
+    # slot: (top, left, width, height, rotate, z-index)
+    "outerwear":  (10,  250, 185, 220, -3, 2),
+    "top":        (30,  20,  190, 180, 2, 3),
+    "bottom":     (220, 110, 180, 230, -1, 4),
+    "one_piece":  (20,  100, 200, 280, -2, 3),
+    "footwear_1": (400, 280, 120, 110, 8, 5),
+    "footwear_2": (420, 160, 110, 95, -5, 5),
+    "accessory_1":(10,  170, 80,  80,  15, 6),
+    "accessory_2":(380, 20,  90,  90,  -10, 6),
+    "bag":        (350, 10,  120, 120, 5, 5),
+    "hat":        (0,   350, 90,  90,  -8, 6),
+    "scarf":      (200, 10,  80,  100, 12, 5),
+}
+
+# When one_piece is present, skip top+bottom slots
+_FLATLAY_SLOTS_ONE_PIECE = {
+    "outerwear":  (10,  250, 180, 210, -3, 2),
+    "one_piece":  (20,  30,  220, 320, -2, 3),
+    "footwear_1": (380, 280, 130, 120, 8, 5),
+    "footwear_2": (400, 150, 110, 100, -5, 5),
+    "accessory_1":(10,  260, 80,  80,  12, 6),
+    "accessory_2":(360, 20,  90,  90,  -8, 6),
+    "bag":        (330, 10,  120, 120, 5, 5),
+    "hat":        (0,   350, 90,  90,  -8, 6),
+}
+
+
+def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
+    """Prepare items with absolute positions for flat-lay template."""
+    from services.image_builder import _auto_trim
+
+    # Determine if we have a one_piece
+    has_one_piece = any(
+        s.get("slot") == "one_piece" and s.get("has_item") and s.get("_photo_bytes")
+        for s in outfit_slots
+    )
+    layout = _FLATLAY_SLOTS_ONE_PIECE if has_one_piece else _FLATLAY_SLOTS
+
+    # Assign slots
+    slot_items = {}  # slot_key -> outfit_slot data
+    footwear_count = 0
+    accessory_count = 0
+
+    for s in outfit_slots:
+        slot = s.get("slot", "top")
+        if not s.get("has_item") or not s.get("_photo_bytes"):
+            continue
+        if slot in ("underwear", "tights", "socks", "base_layer"):
+            continue
+
+        # Map to layout key
+        if slot == "footwear":
+            footwear_count += 1
+            key = f"footwear_{footwear_count}" if footwear_count <= 2 else None
+        elif slot in ("accessory", "hat", "scarf", "gloves"):
+            if slot in layout:
+                key = slot
+            else:
+                accessory_count += 1
+                key = f"accessory_{accessory_count}" if accessory_count <= 2 else None
+        elif slot == "bag":
+            key = "bag"
+        elif slot in layout:
+            key = slot
+        else:
+            key = None
+
+        if key and key in layout and key not in slot_items:
+            slot_items[key] = s
+
+    # Build positioned items
+    items = []
+    for key, s in slot_items.items():
+        top, left, width, height, rotate, z = layout[key]
+
+        photo_b64 = ""
+        try:
+            trimmed = _auto_trim(s["_photo_bytes"])
+            photo_b64 = base64.b64encode(trimmed).decode()
+        except Exception:
+            try:
+                photo_b64 = base64.b64encode(s["_photo_bytes"]).decode()
+            except Exception:
+                continue
+
+        items.append({
+            "slot": s.get("slot", "top"),
+            "label": s.get("item_type", ""),
+            "photo_base64": photo_b64,
+            "top": top,
+            "left": left,
+            "width": width,
+            "height": height,
+            "rotate": rotate,
+            "z": z,
+        })
+
+    return items
+
+
 # ── Render function ──────────────────────────────────────────────────────────
 
 async def render_html_to_png(html: str, width: int = 440) -> Optional[bytes]:

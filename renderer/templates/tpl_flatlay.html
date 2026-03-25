@@ -1,0 +1,72 @@
+{# TEMPLATE: magazine flat-lay composition
+   Vars: name, date_str, context, css_class, weather, items, palette, kassi_comment
+   Each item: slot, label, photo_base64, top, left, width, height, rotate
+   Preview: open in Chrome, width=440px #}
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face{font-family:'N';src:url('/usr/share/fonts/custom/Nunito-Regular.ttf');font-weight:400}
+@font-face{font-family:'N';src:url('/usr/share/fonts/custom/Nunito-Bold.ttf');font-weight:700}
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:440px;font-family:'N',sans-serif;background:#FAFAFA}
+
+/* Weather strip */
+.wx-strip{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#fff}
+.wx-left{display:flex;align-items:center;gap:6px}
+.wx-icon{font-size:20px}
+.wx-temp{font-size:17px;font-weight:700;color:#333}
+.wx-arrow{color:#ccc;font-size:10px;margin:0 2px}
+.wx-temp.warm{color:#C05050}
+.wx-right{font-size:9px;color:#aaa;letter-spacing:.5px}
+
+/* Flat lay canvas */
+.canvas{position:relative;width:440px;height:520px;background:#FAFAFA;overflow:hidden}
+
+/* Each garment */
+.g{position:absolute;transform-origin:center center}
+.g img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,.10))}
+
+/* Comment */
+.comment{padding:10px 16px 14px;font-size:12px;color:#666;line-height:1.4;background:#fff;border-top:1px solid #f0f0f0}
+.comment b{color:#333}
+
+/* Brand */
+.brand{text-align:right;padding:0 16px 8px;font-size:8px;color:rgba(0,0,0,.15);letter-spacing:.5px;background:#fff}
+</style>
+</head>
+<body>
+
+{% if weather %}
+<div class="wx-strip">
+  <div class="wx-left">
+    {% if weather.icon_morning %}<span class="wx-icon">{{ weather.icon_morning }}</span>{% endif %}
+    {% if weather.temp_now_str %}<span class="wx-temp">{{ weather.temp_now_str }}</span>
+    {% elif weather.temp_morning_str %}<span class="wx-temp">{{ weather.temp_morning_str }}</span>{% endif %}
+    {% if weather.temp_evening_str %}
+    <span class="wx-arrow">&rarr;</span>
+    <span class="wx-temp{{ ' warm' if weather.evening_warn else '' }}">{{ weather.temp_evening_str }}</span>
+    {% if weather.icon_evening %}<span class="wx-icon">{{ weather.icon_evening }}</span>{% endif %}
+    {% endif %}
+  </div>
+  <div class="wx-right">{{ date_str }}</div>
+</div>
+{% endif %}
+
+<div class="canvas">
+  {% for item in items %}
+  <div class="g" style="top:{{ item.top }}px;left:{{ item.left }}px;width:{{ item.width }}px;height:{{ item.height }}px;{% if item.rotate %}transform:rotate({{ item.rotate }}deg);{% endif %}{% if item.z %}z-index:{{ item.z }};{% endif %}">
+    <img src="data:image/png;base64,{{ item.photo_base64 }}">
+  </div>
+  {% endfor %}
+</div>
+
+{% if kassi_comment %}
+<div class="comment">{{ kassi_comment }}</div>
+{% endif %}
+
+<div class="brand">fashioncastle.app</div>
+
+</body>
+</html>
