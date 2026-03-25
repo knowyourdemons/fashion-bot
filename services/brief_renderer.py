@@ -474,25 +474,27 @@ def prepare_underwear_line(outfit: dict) -> str:
 # center big portrait pants, bottom row shoes+bag+accessories.
 # Light overlap between zones is OK (magazine feel).
 
-# Reference layout: 3 layers in row 1 overlapping left→right,
-# pants center row 2, shoes+bag+accessories row 3.
+# Reference: 3 layers in row 1: top(left,z=2) → mid_layer(center,z=3) → outerwear(right,z=4)
+# Each layer slightly overlaps the previous, covering its right sleeve.
+# Row 2: pants center. Row 3: accessories across bottom.
 _FLATLAY_SLOTS = {
     # slot: (top, left, width, height, rotate, z-index)
-    # Row 1: top → outerwear, overlapping left to right, z grows
-    "top":        (5,   0,   180, 145, 0, 2),
-    "outerwear":  (0,   200, 240, 230, 0, 3),
+    # Row 1: layered left→right with increasing z
+    "top":        (10,  0,   175, 140, 0, 2),
+    "top_2":      (5,   100, 195, 155, 0, 3),
+    "outerwear":  (0,   210, 230, 230, 0, 4),
     # Row 2: bottom center
-    "bottom":     (155, 60,  210, 280, 0, 4),
-    # One-piece takes bottom+top area
-    "one_piece":  (0,   0,   220, 310, 0, 3),
-    # Row 3: accessories spread across bottom
-    "footwear_1": (380, 260, 150, 120, 0, 5),
-    "footwear_2": (400, 120, 130, 100, 0, 5),
-    "accessory_1":(160, 290, 85,  85,  0, 6),
-    "accessory_2":(250, 310, 85,  85,  0, 6),
-    "bag":        (350, 0,   130, 130, 0, 5),
-    "hat":        (160, 0,   85,  85,  0, 6),
-    "scarf":      (250, 0,   80,  100, 0, 5),
+    "bottom":     (160, 70,  200, 270, 0, 5),
+    # One-piece alternative
+    "one_piece":  (0,   10,  210, 300, 0, 3),
+    # Row 3: spread across bottom
+    "footwear_1": (380, 280, 140, 110, 0, 6),
+    "footwear_2": (400, 140, 120, 95,  0, 6),
+    "accessory_1":(165, 310, 80,  80,  0, 7),  # очки/аксессуар right of top row
+    "accessory_2":(255, 330, 80,  80,  0, 7),  # ремень right of pants
+    "bag":        (340, 0,   120, 120, 0, 6),
+    "hat":        (165, 0,   80,  80,  0, 7),
+    "scarf":      (255, 0,   75,  95,  0, 6),
 }
 
 _FLATLAY_SLOTS_ONE_PIECE = {
@@ -638,10 +640,13 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
 
     # Generate placeholders for essential missing slots
     _ESSENTIAL_SLOTS = {
-        "top":       ("👚", "верх"),
-        "bottom":    ("👖", "низ"),
-        "outerwear": ("🧥", "куртку"),
-        "footwear_1":("👟", "обувь"),
+        "top":        ("👚", "верх"),
+        "bottom":     ("👖", "низ"),
+        "outerwear":  ("🧥", "куртку"),
+        "footwear_1": ("👟", "обувь"),
+        "bag":        ("👜", "сумку"),
+        "accessory_1":("🕶", "очки"),
+        "accessory_2":("📿", "ремень"),
     }
     # Collect all occupied positions (top,left) to avoid overlap
     _occupied = {(layout[k][0], layout[k][1]) for k in slot_items if k in layout}
