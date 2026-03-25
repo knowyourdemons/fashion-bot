@@ -16,7 +16,7 @@ RATE_LIMIT = 60
 WINDOW_SECONDS = 60
 
 # Paths that skip rate limiting
-SKIP_PATHS = frozenset({"/health"})
+SKIP_PATHS = frozenset({"/health", "/api/v1/test-survey"})
 # Path prefixes that skip rate limiting (webhooks)
 SKIP_PREFIXES = ("/api/v1/webhooks/",)
 

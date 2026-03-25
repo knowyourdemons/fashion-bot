@@ -1,7 +1,7 @@
 """FastAPI application."""
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import sentry_sdk
@@ -46,6 +46,33 @@ def create_app() -> FastAPI:
     app.include_router(onboarding.router, prefix="/api/v1/onboarding", tags=["onboarding"])
     app.include_router(billing.router, prefix="/api/v1/billing", tags=["billing"])
     app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["webhooks"])
+
+    @app.post("/api/v1/test-survey")
+    async def test_survey(request: Request) -> dict:
+        """Receive test survey results and forward to admin via Telegram."""
+        try:
+            import json
+            import httpx
+            from config import settings
+            body = await request.json()
+            # Format for Telegram
+            text = "📋 Результаты тестирования:\n\n"
+            for key, val in body.items():
+                if isinstance(val, (dict, list)):
+                    val = json.dumps(val, ensure_ascii=False)[:200]
+                text += f"**{key}**: {val}\n"
+            # Truncate to Telegram limit
+            text = text[:4000]
+            async with httpx.AsyncClient(timeout=10) as client:
+                await client.post(
+                    f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+                    json={"chat_id": "195169", "text": text, "parse_mode": "Markdown"},
+                )
+            return {"status": "ok"}
+        except Exception as e:
+            import structlog
+            structlog.get_logger().warning("test_survey.error", error=str(e))
+            return {"status": "ok"}  # Don't show error to user
 
     @app.get("/health")
     async def health() -> dict:

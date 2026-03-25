@@ -851,9 +851,10 @@
     } else if (n === 5) {
       next.textContent = 'Завтра утром →';
     } else if (n === 7) {
-      next.textContent = 'Готово ✓';
+      next.textContent = 'Отправить результаты ✓';
     } else if (n === 8) {
       document.getElementById('navBar').style.display = 'none';
+      submitResults();
     } else {
       next.textContent = 'Дальше →';
     }
@@ -979,6 +980,25 @@
   // Auto-save every 10 sec
   setInterval(saveProgress, 10000);
   window.addEventListener('beforeunload', saveProgress);
+
+  // Submit results to server
+  async function submitResults() {
+    collectTextInputs();
+    try {
+      const resp = await fetch('/api/v1/test-survey', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+      });
+      if (resp.ok) {
+        alert('Спасибо! Результаты отправлены Стасу.');
+      } else {
+        alert('Ошибка отправки. Попробуй ещё раз.');
+      }
+    } catch(e) {
+      alert('Нет связи. Проверь интернет и попробуй ещё раз.');
+    }
+  }
 
   // Init
   loadProgress();
