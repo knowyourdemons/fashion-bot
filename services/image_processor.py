@@ -602,11 +602,18 @@ def _auto_rotate_to_vertical(img: Image.Image) -> Image.Image:
             # Long side is roughly horizontal, need 90° + correction
             deviation = angle  # e.g., angle=-20 → rotate -20° to go vertical
 
-        # Only straighten small tilts (3-35°)
-        # <3° = already straight
-        # >35° = garment is intentionally horizontal (top with spread sleeves)
-        #        or vertical — don't flip orientation, just fix tilt
-        if abs(deviation) < 3 or abs(deviation) > 35:
+        # Straighten garment so its long axis is horizontal (flat-lay style).
+        #
+        # Calculate deviation from horizontal for the LONG side:
+        if rect_w < rect_h:
+            # Long side is closer to vertical → need large rotation
+            deviation = 90 + angle  # e.g., angle=-70 → deviation=20°
+        else:
+            # Long side is closer to horizontal → small correction
+            deviation = angle  # e.g., angle=-5 → deviation=-5°
+
+        # Skip if already straight (<2°)
+        if abs(deviation) < 2:
             return img
 
         rotated = img.rotate(-deviation, expand=True, resample=Image.BICUBIC,
