@@ -638,11 +638,17 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
         "outerwear": ("🧥", "куртку"),
         "footwear_1":("👟", "обувь"),
     }
+    # Collect all occupied positions (top,left) to avoid overlap
+    _occupied = {(layout[k][0], layout[k][1]) for k in slot_items if k in layout}
     placeholders = []
     for slot_key, (emoji, label) in _ESSENTIAL_SLOTS.items():
         if slot_key not in slot_items and slot_key in layout:
             top, left, width, height, _, _ = layout[slot_key]
-            # Shrink placeholder a bit
+            # Skip if another item occupies a nearby position (within 50px)
+            _overlaps = any(abs(top - ot) < 50 and abs(left - ol) < 50
+                           for ot, ol in _occupied)
+            if _overlaps:
+                continue
             placeholders.append({
                 "emoji": emoji,
                 "label": f"+ {label}",
