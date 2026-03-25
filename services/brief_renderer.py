@@ -486,8 +486,8 @@ _FLATLAY_SLOTS = {
     # Row 2: bottom center-right, partially under outerwear
     "bottom":     (165, 115, 195, 265, 0, 5),
     "tights":     (280, 60,  80, 150, 0, 4),  # behind bottom, peeking below skirt
-    # One-piece alternative
-    "one_piece":  (0,   10,  210, 300, 0, 3),
+    # One-piece: central, tall — replaces top+bottom
+    "one_piece":  (10,  80,  240, 380, 0, 3),
     # Row 3: bag+glasses left, belt+shoes right. Bag & shoes aligned at bottom.
     "bag":        (370, 0,   110, 110, 0, 6),
     "accessory_1":(170, 0,   75,  75,  0, 7),  # очки left
@@ -499,14 +499,16 @@ _FLATLAY_SLOTS = {
 }
 
 _FLATLAY_SLOTS_ONE_PIECE = {
-    "outerwear":  (0,   230, 210, 280, 0, 2),
-    "one_piece":  (0,   0,   240, 400, 0, 3),
-    "footwear_1": (430, 310, 130, 90,  0, 5),
-    "footwear_2": (440, 180, 120, 80,  0, 5),
-    "accessory_1":(410, 0,   90,  90,  0, 6),
-    "accessory_2":(300, 250, 90,  90,  0, 6),
-    "bag":        (340, 0,   120, 120, 0, 5),
-    "hat":        (300, 340, 95,  95,  0, 6),
+    "one_piece":  (5,   60,  250, 390, 0, 3),
+    "outerwear":  (0,   240, 200, 200, 0, 4),
+    "footwear_1": (400, 290, 130, 100, 0, 5),
+    "footwear_2": (410, 160, 110, 85,  0, 5),
+    "accessory_1":(170, 0,   75,  75,  0, 6),
+    "accessory_2":(260, 310, 75,  75,  0, 6),
+    "bag":        (370, 0,   110, 110, 0, 5),
+    "hat":        (170, 350, 75,  75,  0, 6),
+    "scarf":      (260, 0,   70,  90,  0, 6),
+    "tights":     (280, 330, 70,  120, 0, 2),
 }
 
 
