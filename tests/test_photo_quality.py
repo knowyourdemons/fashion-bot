@@ -283,11 +283,16 @@ class TestContrast:
 class TestPreprocessing:
     """Test preprocess_for_vision() returns corrected image when needed."""
 
-    def test_good_photo_unchanged(self):
+    def test_good_photo_resized(self):
         original = _make_good_photo()
         processed, quality = preprocess_for_vision(original)
-        assert processed == original  # no correction needed
         assert quality.is_usable
+        # Should be resized to 768px max (saves Vision API tokens)
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(processed))
+        assert max(img.size) <= 768
+        assert len(processed) < len(original)  # smaller after resize
 
     def test_dark_photo_corrected(self):
         original = _make_dark_photo(brightness=25)
@@ -297,11 +302,12 @@ class TestPreprocessing:
         assert len(processed) > 0
 
     def test_overexposed_not_corrected(self):
-        """Overexposed photos are not auto-corrected (too risky)."""
+        """Overexposed photos are not auto-corrected (too risky), only resized."""
         original = _make_overexposed_photo()
         processed, quality = preprocess_for_vision(original)
-        assert processed == original  # no correction
         assert not quality.was_corrected
+        # Photo is resized but not brightness-corrected
+        assert len(processed) > 0
 
 
 # ══════════════════════════════════════════════════════════════════════════════
