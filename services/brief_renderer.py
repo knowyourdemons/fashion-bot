@@ -560,8 +560,6 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
         try:
             from PIL import Image as _PILImg
             import io as _io
-            from services.image_processor import _detect_upside_down
-
             _img = _PILImg.open(_io.BytesIO(s["_photo_bytes"])).convert("RGBA")
 
             # 1. Trim transparent edges
@@ -575,19 +573,15 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
             _w, _h = _img.size
             _is_landscape = _w > _h
 
-            # 2. Rotate to match expected orientation
+            # 2. Rotate to match expected orientation for slot
+            #    Only rotate tops to landscape — bottoms/outerwear keep original orientation
             if _want_landscape and not _is_landscape:
-                # Portrait garment in landscape slot → rotate 90° CW
-                _img = _img.rotate(-90, expand=True, fillcolor=(0, 0, 0, 0))
-            elif _want_portrait and _is_landscape:
-                # Landscape garment in portrait slot → rotate 90° CW
                 _img = _img.rotate(-90, expand=True, fillcolor=(0, 0, 0, 0))
 
-            # 3. Fix upside-down (waistband at bottom, collar at bottom)
-            if _detect_upside_down(_img):
-                _img = _img.rotate(180, expand=False)
+            # No upside-down detection — trust the user's photo orientation.
+            # _detect_upside_down fails on spread pants (legs wider = "upside down")
 
-            # 4. Re-trim after rotation
+            # 3. Re-trim after rotation
             _bbox = _img.split()[3].getbbox()
             if _bbox:
                 _p = 3
