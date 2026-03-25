@@ -53,7 +53,6 @@ def create_app() -> FastAPI:
         try:
             import json
             import httpx
-            from config import settings
             body = await request.json()
             # Format for Telegram
             text = "📋 Результаты тестирования:\n\n"
