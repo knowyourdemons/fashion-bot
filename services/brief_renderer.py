@@ -487,13 +487,13 @@ _FLATLAY_SLOTS = {
     "bottom":     (160, 70,  200, 270, 0, 5),
     # One-piece alternative
     "one_piece":  (0,   10,  210, 300, 0, 3),
-    # Row 3: spread across bottom
+    # Row 3: bag+glasses left, belt center-right, shoes right
+    "bag":        (340, 0,   120, 120, 0, 6),
+    "accessory_1":(165, 0,   80,  80,  0, 7),  # очки left
+    "accessory_2":(255, 290, 80,  80,  0, 7),  # ремень right of pants
     "footwear_1": (380, 280, 140, 110, 0, 6),
     "footwear_2": (400, 140, 120, 95,  0, 6),
-    "accessory_1":(165, 310, 80,  80,  0, 7),  # очки/аксессуар right of top row
-    "accessory_2":(255, 330, 80,  80,  0, 7),  # ремень right of pants
-    "bag":        (340, 0,   120, 120, 0, 6),
-    "hat":        (165, 0,   80,  80,  0, 7),
+    "hat":        (165, 350, 80,  80,  0, 7),
     "scarf":      (255, 0,   75,  95,  0, 6),
 }
 
