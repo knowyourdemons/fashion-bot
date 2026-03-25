@@ -482,19 +482,19 @@ _FLATLAY_SLOTS = {
     # Row 1: layered left→right with increasing z
     "top":        (10,  0,   175, 140, 0, 2),
     "top_2":      (5,   100, 195, 155, 0, 3),
-    "outerwear":  (0,   210, 230, 230, 0, 4),
-    # Row 2: bottom center
-    "bottom":     (160, 70,  200, 270, 0, 5),
+    "outerwear":  (0,   230, 200, 200, 0, 4),
+    # Row 2: bottom center-right, partially under outerwear
+    "bottom":     (165, 115, 195, 265, 0, 5),
     # One-piece alternative
     "one_piece":  (0,   10,  210, 300, 0, 3),
-    # Row 3: bag+glasses left, belt center-right, shoes right
-    "bag":        (340, 0,   120, 120, 0, 6),
-    "accessory_1":(165, 0,   80,  80,  0, 7),  # очки left
-    "accessory_2":(255, 290, 80,  80,  0, 7),  # ремень right of pants
-    "footwear_1": (380, 280, 140, 110, 0, 6),
-    "footwear_2": (400, 140, 120, 95,  0, 6),
-    "hat":        (165, 350, 80,  80,  0, 7),
-    "scarf":      (255, 0,   75,  95,  0, 6),
+    # Row 3: bag+glasses left, belt+shoes right. Bag & shoes aligned at bottom.
+    "bag":        (370, 0,   110, 110, 0, 6),
+    "accessory_1":(170, 0,   75,  75,  0, 7),  # очки left
+    "accessory_2":(260, 310, 75,  75,  0, 7),  # ремень right of pants
+    "footwear_1": (370, 290, 130, 110, 0, 6),  # aligned bottom with bag
+    "footwear_2": (390, 160, 115, 90,  0, 6),
+    "hat":        (170, 355, 75,  75,  0, 7),
+    "scarf":      (260, 0,   70,  90,  0, 6),
 }
 
 _FLATLAY_SLOTS_ONE_PIECE = {
