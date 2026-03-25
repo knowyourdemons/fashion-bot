@@ -476,9 +476,10 @@ def prepare_underwear_line(outfit: dict) -> str:
 
 _FLATLAY_SLOTS = {
     # slot: (top, left, width, height, rotate, z-index)
-    "top":        (5,   5,   230, 170, 0, 3),
-    "outerwear":  (0,   230, 210, 270, 0, 2),
-    "bottom":     (175, 50,  250, 330, 0, 4),
+    "top":        (5,   5,   210, 155, 0, 3),
+    "top_2":      (5,   220, 210, 155, 0, 3),
+    "outerwear":  (0,   230, 210, 260, 0, 2),
+    "bottom":     (170, 90,  220, 270, 0, 4),
     "one_piece":  (0,   230, 210, 270, 0, 2),
     "footwear_1": (420, 320, 120, 95,  0, 5),
     "footwear_2": (430, 200, 110, 85,  0, 5),
@@ -516,10 +517,9 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
     use_one_piece_layout = has_one_piece and not (has_top and has_bottom)
     layout = _FLATLAY_SLOTS_ONE_PIECE if use_one_piece_layout else _FLATLAY_SLOTS
 
-    # Assign slots
+    # Assign slots — support multiple items per type (top_2, footwear_2, etc.)
     slot_items = {}  # slot_key -> outfit_slot data
-    footwear_count = 0
-    accessory_count = 0
+    type_counts = {}  # slot_type -> count
 
     for s in outfit_slots:
         slot = s.get("slot", "top")
@@ -528,22 +528,20 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
         if slot in ("underwear", "tights", "socks", "base_layer"):
             continue
 
-        # Map to layout key
-        if slot == "footwear":
-            footwear_count += 1
-            key = f"footwear_{footwear_count}" if footwear_count <= 2 else None
-        elif slot in ("accessory", "hat", "scarf", "gloves"):
-            if slot in layout:
+        # Map to layout key, supporting multiples
+        if slot in ("accessory", "hat", "scarf", "gloves"):
+            if slot in layout and slot not in slot_items:
                 key = slot
             else:
-                accessory_count += 1
-                key = f"accessory_{accessory_count}" if accessory_count <= 2 else None
+                type_counts["accessory"] = type_counts.get("accessory", 0) + 1
+                key = f"accessory_{type_counts['accessory']}"
         elif slot == "bag":
             key = "bag"
-        elif slot in layout:
-            key = slot
         else:
-            key = None
+            # top, bottom, footwear, outerwear, one_piece
+            type_counts[slot] = type_counts.get(slot, 0) + 1
+            cnt = type_counts[slot]
+            key = slot if cnt == 1 else f"{slot}_{cnt}"
 
         if key and key in layout and key not in slot_items:
             slot_items[key] = s
