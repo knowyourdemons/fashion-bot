@@ -552,17 +552,49 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
         top, left, width, height, rotate, z = layout[key]
 
         photo_b64 = ""
+        slot_name = s.get("slot", "top")
+        # Expected orientation per slot type
+        # True = landscape (wider than tall), False = portrait (taller than wide)
+        _want_landscape = slot_name in ("top",)
+        _want_portrait = slot_name in ("bottom", "outerwear", "one_piece")
         try:
             from PIL import Image as _PILImg
             import io as _io
+            from services.image_processor import _detect_upside_down
+
             _img = _PILImg.open(_io.BytesIO(s["_photo_bytes"])).convert("RGBA")
-            # Trim transparent edges only (no rotation — CSS object-fit handles it)
+
+            # 1. Trim transparent edges
             _bbox = _img.split()[3].getbbox()
             if _bbox:
                 _p = 3
                 _bbox = (max(0, _bbox[0]-_p), max(0, _bbox[1]-_p),
                          min(_img.size[0], _bbox[2]+_p), min(_img.size[1], _bbox[3]+_p))
                 _img = _img.crop(_bbox)
+
+            _w, _h = _img.size
+            _is_landscape = _w > _h
+
+            # 2. Rotate to match expected orientation
+            if _want_landscape and not _is_landscape:
+                # Portrait garment in landscape slot → rotate 90° CW
+                _img = _img.rotate(-90, expand=True, fillcolor=(0, 0, 0, 0))
+            elif _want_portrait and _is_landscape:
+                # Landscape garment in portrait slot → rotate 90° CW
+                _img = _img.rotate(-90, expand=True, fillcolor=(0, 0, 0, 0))
+
+            # 3. Fix upside-down (waistband at bottom, collar at bottom)
+            if _detect_upside_down(_img):
+                _img = _img.rotate(180, expand=False)
+
+            # 4. Re-trim after rotation
+            _bbox = _img.split()[3].getbbox()
+            if _bbox:
+                _p = 3
+                _bbox = (max(0, _bbox[0]-_p), max(0, _bbox[1]-_p),
+                         min(_img.size[0], _bbox[2]+_p), min(_img.size[1], _bbox[3]+_p))
+                _img = _img.crop(_bbox)
+
             _buf = _io.BytesIO()
             _img.save(_buf, format="PNG")
             photo_b64 = base64.b64encode(_buf.getvalue()).decode()
