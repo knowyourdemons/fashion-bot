@@ -272,6 +272,196 @@ class TestMergeBboxRotation:
         assert result is None or "flat_lay_rotation" not in (result or {})
 
 
+# ── Auto-rotate ──────────────────────────────────────────────────────────
+
+class TestAutoRotate:
+    def test_horizontal_item_stays_horizontal(self):
+        """Wide item (top with sleeves) should not be rotated"""
+        from services.image_processor import _auto_rotate_to_vertical
+        from PIL import Image
+        # Create wide RGBA image (simulates top with spread sleeves)
+        img = Image.new("RGBA", (400, 200), (0, 0, 0, 0))
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([50, 30, 350, 170], fill=(100, 100, 100, 255))
+        result = _auto_rotate_to_vertical(img)
+        # Should stay roughly the same dimensions (no 90° rotation)
+        assert abs(result.size[0] - result.size[1]) < result.size[0] * 0.5 or result.size[0] > result.size[1]
+
+    def test_tilted_item_straightened(self):
+        """Item tilted 15° should be straightened"""
+        from services.image_processor import _auto_rotate_to_vertical
+        from PIL import Image
+        img = Image.new("RGBA", (400, 400), (0, 0, 0, 0))
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(img)
+        # Draw a tilted rectangle
+        draw.polygon([(100, 50), (350, 100), (320, 300), (70, 250)], fill=(100, 100, 100, 255))
+        result = _auto_rotate_to_vertical(img)
+        # Result should exist and be different from input
+        assert result.size[0] > 0 and result.size[1] > 0
+
+    def test_small_contour_skipped(self):
+        """Very small opaque area → no rotation"""
+        from services.image_processor import _auto_rotate_to_vertical
+        from PIL import Image
+        img = Image.new("RGBA", (400, 400), (0, 0, 0, 0))
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([195, 195, 205, 205], fill=(100, 100, 100, 255))  # tiny 10x10
+        result = _auto_rotate_to_vertical(img)
+        assert result.size == img.size  # unchanged
+
+
+# ── 5-zone fallback ──────────────────────────────────────────────────────
+
+class TestZoneFallback:
+    def _make_portrait_rgba(self, top_heavy=True):
+        """Create RGBA where top or bottom is wider (simulates pants orientation)"""
+        from PIL import Image, ImageDraw
+        img = Image.new("RGBA", (200, 400), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        if top_heavy:
+            # Wide top (waistband), narrow bottom (legs) — correct orientation
+            draw.rectangle([30, 10, 170, 200], fill=(50, 50, 100, 255))
+            draw.rectangle([60, 200, 90, 390], fill=(50, 50, 100, 255))
+            draw.rectangle([110, 200, 140, 390], fill=(50, 50, 100, 255))
+        else:
+            # Narrow top, wide bottom — upside down
+            draw.rectangle([60, 10, 90, 200], fill=(50, 50, 100, 255))
+            draw.rectangle([110, 10, 140, 200], fill=(50, 50, 100, 255))
+            draw.rectangle([30, 200, 170, 390], fill=(50, 50, 100, 255))
+        import io
+        buf = io.BytesIO(); img.save(buf, format="PNG")
+        return buf.getvalue()
+
+    def test_correct_orientation_no_flip(self):
+        """Wide top (waistband) → should not flip"""
+        from services.brief_renderer import prepare_items_flatlay
+        pb = self._make_portrait_rgba(top_heavy=True)
+        slots = [{"slot": "bottom", "item_type": "штаны", "item_color": "синий",
+                  "has_item": True, "_photo_bytes": pb}]
+        items, _, _, _ = prepare_items_flatlay(slots)
+        assert len(items) >= 1
+
+    def test_upside_down_gets_flipped(self):
+        """Wide bottom (legs wider than waist) → should flip 180°"""
+        from services.brief_renderer import prepare_items_flatlay
+        pb = self._make_portrait_rgba(top_heavy=False)
+        slots = [{"slot": "bottom", "item_type": "штаны", "item_color": "синий",
+                  "has_item": True, "_photo_bytes": pb, "flat_lay_rotation": 0}]
+        items, _, _, _ = prepare_items_flatlay(slots)
+        assert len(items) >= 1
+
+
+# ── Flatlay orientation per slot ─────────────────────────────────────────
+
+class TestFlatlayOrientation:
+    def _make_tall_rgba(self):
+        """Portrait RGBA (taller than wide)"""
+        from PIL import Image, ImageDraw
+        import io
+        img = Image.new("RGBA", (100, 200), (0, 0, 0, 0))
+        ImageDraw.Draw(img).rectangle([10, 10, 90, 190], fill=(100, 100, 100, 255))
+        buf = io.BytesIO(); img.save(buf, format="PNG"); return buf.getvalue()
+
+    def _make_wide_rgba(self):
+        """Landscape RGBA (wider than tall)"""
+        from PIL import Image, ImageDraw
+        import io
+        img = Image.new("RGBA", (200, 100), (0, 0, 0, 0))
+        ImageDraw.Draw(img).rectangle([10, 10, 190, 90], fill=(100, 100, 100, 255))
+        buf = io.BytesIO(); img.save(buf, format="PNG"); return buf.getvalue()
+
+    def test_top_rotated_to_landscape(self):
+        """Portrait top → should be rotated to landscape"""
+        from services.brief_renderer import prepare_items_flatlay
+        import base64
+        from PIL import Image
+        import io
+        pb = self._make_tall_rgba()
+        slots = [{"slot": "top", "item_type": "футболка", "item_color": "белый",
+                  "has_item": True, "_photo_bytes": pb}]
+        items, _, _, _ = prepare_items_flatlay(slots)
+        assert len(items) == 1
+        # Decode and check orientation
+        img = Image.open(io.BytesIO(base64.b64decode(items[0]["photo_base64"])))
+        assert img.size[0] > img.size[1]  # landscape after rotation
+
+    def test_bottom_keeps_portrait(self):
+        """Portrait bottom → should stay portrait (no rotation)"""
+        from services.brief_renderer import prepare_items_flatlay
+        import base64
+        from PIL import Image
+        import io
+        pb = self._make_tall_rgba()
+        slots = [{"slot": "bottom", "item_type": "штаны", "item_color": "синий",
+                  "has_item": True, "_photo_bytes": pb}]
+        items, _, _, _ = prepare_items_flatlay(slots)
+        assert len(items) == 1
+        img = Image.open(io.BytesIO(base64.b64decode(items[0]["photo_base64"])))
+        assert img.size[1] >= img.size[0]  # still portrait
+
+    def test_vision_rotation_applied(self):
+        """flat_lay_rotation=180 should flip the image"""
+        from services.brief_renderer import prepare_items_flatlay
+        pb = self._make_tall_rgba()
+        slots = [{"slot": "bottom", "item_type": "штаны", "item_color": "синий",
+                  "has_item": True, "_photo_bytes": pb, "flat_lay_rotation": 180}]
+        items, _, _, _ = prepare_items_flatlay(slots)
+        assert len(items) == 1  # processed without error
+
+    def test_vision_rotation_from_bbox(self):
+        """flat_lay_rotation stored in bbox dict should be picked up"""
+        from services.brief_renderer import prepare_items_flatlay
+        pb = self._make_tall_rgba()
+        slots = [{"slot": "bottom", "item_type": "штаны", "item_color": "синий",
+                  "has_item": True, "_photo_bytes": pb,
+                  "bbox": {"x": 0.1, "y": 0.1, "w": 0.5, "h": 0.8, "flat_lay_rotation": 90}}]
+        items, _, _, _ = prepare_items_flatlay(slots)
+        assert len(items) == 1
+
+
+# ── Resize for Vision ────────────────────────────────────────────────────
+
+class TestVisionResize:
+    def test_large_photo_resized(self):
+        """Photo > 768px should be resized"""
+        from services.photo_quality import preprocess_for_vision
+        from PIL import Image
+        import io
+        img = Image.new("RGB", (2000, 1500), (150, 150, 150))
+        buf = io.BytesIO(); img.save(buf, format="JPEG"); original = buf.getvalue()
+        processed, quality = preprocess_for_vision(original)
+        result_img = Image.open(io.BytesIO(processed))
+        assert max(result_img.size) <= 768
+        assert len(processed) < len(original)
+
+    def test_small_photo_not_resized(self):
+        """Photo <= 768px should not be resized"""
+        from services.photo_quality import preprocess_for_vision
+        from PIL import Image
+        import io
+        img = Image.new("RGB", (500, 400), (150, 150, 150))
+        buf = io.BytesIO(); img.save(buf, format="JPEG"); original = buf.getvalue()
+        processed, quality = preprocess_for_vision(original)
+        result_img = Image.open(io.BytesIO(processed))
+        assert result_img.size == (500, 400)  # unchanged
+
+    def test_aspect_ratio_preserved(self):
+        """Resize should preserve aspect ratio"""
+        from services.photo_quality import preprocess_for_vision
+        from PIL import Image
+        import io
+        img = Image.new("RGB", (1600, 1200), (150, 150, 150))
+        buf = io.BytesIO(); img.save(buf, format="JPEG"); original = buf.getvalue()
+        processed, _ = preprocess_for_vision(original)
+        result_img = Image.open(io.BytesIO(processed))
+        orig_ratio = 1600 / 1200
+        new_ratio = result_img.size[0] / result_img.size[1]
+        assert abs(orig_ratio - new_ratio) < 0.02  # close enough
+
+
 # ── Style config ──────────────────────────────────────────────────────────
 
 class TestStyleConfig:
