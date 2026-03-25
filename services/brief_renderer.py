@@ -475,28 +475,37 @@ def prepare_underwear_line(outfit: dict) -> str:
 
 _FLATLAY_SLOTS = {
     # slot: (top, left, width, height, rotate, z-index)
-    "outerwear":  (5,   240, 190, 230, -1, 2),
-    "top":        (20,  10,  200, 200, 1, 3),
-    "bottom":     (230, 100, 190, 250, 0, 4),
-    "one_piece":  (15,  90,  220, 300, -1, 3),
-    "footwear_1": (410, 290, 120, 105, 2, 5),
-    "footwear_2": (425, 170, 105, 90,  -2, 5),
-    "accessory_1":(5,   180, 75,  75,  3, 6),
-    "accessory_2":(400, 20,  85,  85,  -2, 6),
-    "bag":        (360, 5,   115, 115, 1, 5),
-    "hat":        (0,   350, 85,  85,  -2, 6),
-    "scarf":      (210, 5,   75,  100, 2, 5),
+    # Tops: LANDSCAPE (wider than tall) — sleeves spread out
+    "top":        (20,  10,  230, 155, 0, 3),
+    # Outerwear: portrait, top-right
+    "outerwear":  (0,   250, 185, 240, 0, 2),
+    # Bottom: portrait, center-bottom
+    "bottom":     (190, 130, 160, 260, 0, 4),
+    # One-piece fallback
+    "one_piece":  (10,  100, 200, 310, 0, 3),
+    # Shoes: small landscape, bottom corners
+    "footwear_1": (420, 290, 120, 95, 0, 5),
+    "footwear_2": (430, 160, 105, 85, 0, 5),
+    # Accessories: small, scattered in free areas
+    "accessory_1":(5,   180, 70,  70, 0, 6),
+    "accessory_2":(410, 20,  80,  80, 0, 6),
+    # Bag: bottom-left
+    "bag":        (360, 5,   110, 110, 0, 5),
+    # Hat: top-right corner
+    "hat":        (0,   355, 80,  80, 0, 6),
+    # Scarf: left side
+    "scarf":      (200, 5,   70,  100, 0, 5),
 }
 
 _FLATLAY_SLOTS_ONE_PIECE = {
-    "outerwear":  (5,   245, 185, 220, -1, 2),
-    "one_piece":  (15,  25,  230, 340, -1, 3),
-    "footwear_1": (390, 290, 125, 115, 2, 5),
-    "footwear_2": (410, 160, 110, 100, -1, 5),
-    "accessory_1":(5,   260, 80,  80,  2, 6),
-    "accessory_2":(370, 15,  85,  85,  -2, 6),
-    "bag":        (340, 5,   120, 120, 1, 5),
-    "hat":        (0,   350, 85,  85,  -2, 6),
+    "outerwear":  (0,   245, 185, 240, 0, 2),
+    "one_piece":  (10,  20,  220, 350, 0, 3),
+    "footwear_1": (400, 290, 125, 100, 0, 5),
+    "footwear_2": (420, 165, 110, 90, 0, 5),
+    "accessory_1":(5,   250, 75,  75, 0, 6),
+    "accessory_2":(380, 15,  80,  80, 0, 6),
+    "bag":        (340, 5,   115, 115, 0, 5),
+    "hat":        (0,   355, 80,  80, 0, 6),
 }
 
 
