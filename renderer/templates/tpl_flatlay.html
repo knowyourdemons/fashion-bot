@@ -1,6 +1,8 @@
 {# TEMPLATE: magazine flat-lay composition
-   Vars: name, date_str, context, css_class, weather, items, palette, kassi_comment
-   Each item: slot, label, photo_base64, top, left, width, height, rotate
+   Vars: name, date_str, context, css_class, weather, items, placeholders,
+         progress_text, progress_pct, kassi_comment, palette
+   items: photo_base64, top, left, width, height, rotate, z
+   placeholders: emoji, label, top, left, width, height
    Preview: open in Chrome, width=440px #}
 <!DOCTYPE html>
 <html>
@@ -28,11 +30,20 @@ body{width:440px;font-family:'N',sans-serif;background:#FAFAFA}
 .g{position:absolute;transform-origin:center center}
 .g img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,.10))}
 
-/* Comment */
-.comment{padding:10px 16px 14px;font-size:12px;color:#666;line-height:1.4;background:#fff;border-top:1px solid #f0f0f0}
-.comment b{color:#333}
+/* Placeholder for missing items */
+.ph{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    border:2px dashed #ddd;border-radius:16px;background:rgba(0,0,0,.02)}
+.ph-emoji{font-size:24px;opacity:.3}
+.ph-label{font-size:9px;color:#bbb;margin-top:4px;font-weight:600}
 
-/* Brand */
+/* Footer */
+.footer{padding:10px 16px 12px;background:#fff;border-top:1px solid #f0f0f0}
+.progress{display:flex;align-items:center;gap:10px}
+.prog-bar{flex:1;height:6px;background:#f0ede8;border-radius:3px;overflow:hidden}
+.prog-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#D080A0,#C06080)}
+.prog-text{font-size:11px;color:#888;font-weight:600}
+.comment{font-size:12px;color:#666;line-height:1.4}
+
 .brand{text-align:right;padding:0 16px 8px;font-size:8px;color:rgba(0,0,0,.15);letter-spacing:.5px;background:#fff}
 </style>
 </head>
@@ -60,11 +71,25 @@ body{width:440px;font-family:'N',sans-serif;background:#FAFAFA}
     <img src="data:image/png;base64,{{ item.photo_base64 }}">
   </div>
   {% endfor %}
+
+  {% for ph in placeholders %}
+  <div class="ph" style="top:{{ ph.top }}px;left:{{ ph.left }}px;width:{{ ph.width }}px;height:{{ ph.height }}px">
+    <div class="ph-emoji">{{ ph.emoji }}</div>
+    <div class="ph-label">{{ ph.label }}</div>
+  </div>
+  {% endfor %}
 </div>
 
-{% if kassi_comment %}
-<div class="comment">{{ kassi_comment }}</div>
-{% endif %}
+<div class="footer">
+  {% if progress_pct is defined and progress_pct < 100 %}
+  <div class="progress">
+    <div class="prog-bar"><div class="prog-fill" style="width:{{ progress_pct }}%"></div></div>
+    <div class="prog-text">{{ progress_text }}</div>
+  </div>
+  {% elif kassi_comment %}
+  <div class="comment">{{ kassi_comment }}</div>
+  {% endif %}
+</div>
 
 <div class="brand">fashioncastle.app</div>
 

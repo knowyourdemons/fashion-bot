@@ -318,7 +318,7 @@ def _build_flatlay_html(
 ) -> str:
     """Magazine-style flat-lay composition with absolute positioning."""
     from services.brief_renderer import prepare_items_flatlay
-    items = prepare_items_flatlay(outfit_slots)
+    items, placeholders, progress_pct, progress_text = prepare_items_flatlay(outfit_slots)
     palette = _collect_palette_rich(outfit_slots, colortype=colortype)
 
     return render_template(
@@ -329,8 +329,11 @@ def _build_flatlay_html(
         date_str=date_str,
         weather=weather_tpl,
         items=items,
+        placeholders=placeholders,
         palette=palette,
         kassi_comment=advice_text,
+        progress_pct=progress_pct,
+        progress_text=progress_text,
     )
 
 

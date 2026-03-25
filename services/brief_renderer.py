@@ -631,7 +631,39 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
             "z": z,
         })
 
-    return items
+    # Generate placeholders for essential missing slots
+    _ESSENTIAL_SLOTS = {
+        "top":       ("👚", "верх"),
+        "bottom":    ("👖", "низ"),
+        "outerwear": ("🧥", "куртку"),
+        "footwear_1":("👟", "обувь"),
+    }
+    placeholders = []
+    for slot_key, (emoji, label) in _ESSENTIAL_SLOTS.items():
+        if slot_key not in slot_items and slot_key in layout:
+            top, left, width, height, _, _ = layout[slot_key]
+            # Shrink placeholder a bit
+            placeholders.append({
+                "emoji": emoji,
+                "label": f"+ {label}",
+                "top": top + 10,
+                "left": left + 10,
+                "width": max(60, width - 20),
+                "height": max(60, height - 20),
+            })
+
+    # Progress
+    filled = len(items)
+    total = filled + len(placeholders)
+    progress_pct = int(filled / max(total, 1) * 100) if placeholders else 100
+
+    _missing_names = [p["label"].replace("+ ", "") for p in placeholders[:2]]
+    if _missing_names:
+        progress_text = f"{filled}/{total} · Сфоткай {', '.join(_missing_names)}"
+    else:
+        progress_text = ""
+
+    return items, placeholders, progress_pct, progress_text
 
 
 # ── Render function ──────────────────────────────────────────────────────────
