@@ -696,6 +696,14 @@ RATE_LIMIT_FREE = 5
 RATE_LIMIT_PREMIUM = 20
 
 
+def _merge_bbox_rotation(bbox: dict | None, rotation: int | None) -> dict | None:
+    """Store flat_lay_rotation inside bbox JSONB."""
+    if rotation and rotation in (90, 180, 270):
+        bbox = dict(bbox) if bbox else {}
+        bbox["flat_lay_rotation"] = rotation
+    return bbox or None
+
+
 async def _save_one(
     owner_id: uuid.UUID,
     owner_type: str,
@@ -799,7 +807,7 @@ async def _save_one(
             rain_ok=bool(data.get("rain_ok", False)),
             formality_level=_formality,
             metal_tone=_metal_tone,
-            bbox=data.get("bbox"),
+            bbox=_merge_bbox_rotation(data.get("bbox"), data.get("flat_lay_rotation")),
             score_item=score_item,
             score_breakdown=score_breakdown,
             score_version=score_version,

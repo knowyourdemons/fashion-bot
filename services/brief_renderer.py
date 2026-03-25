@@ -485,6 +485,7 @@ _FLATLAY_SLOTS = {
     "outerwear":  (0,   230, 200, 200, 0, 4),
     # Row 2: bottom center-right, partially under outerwear
     "bottom":     (165, 115, 195, 265, 0, 5),
+    "tights":     (280, 60,  80, 150, 0, 4),  # behind bottom, peeking below skirt
     # One-piece alternative
     "one_piece":  (0,   10,  210, 300, 0, 3),
     # Row 3: bag+glasses left, belt+shoes right. Bag & shoes aligned at bottom.
@@ -532,11 +533,11 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
         slot = s.get("slot", "top")
         if not s.get("has_item") or not s.get("_photo_bytes"):
             continue
-        if slot in ("underwear", "tights", "socks", "base_layer"):
+        if slot in ("underwear", "socks", "base_layer"):
             continue
 
         # Map to layout key, supporting multiples
-        if slot in ("accessory", "hat", "scarf", "gloves"):
+        if slot in ("accessory", "hat", "scarf", "gloves", "tights"):
             if slot in layout and slot not in slot_items:
                 key = slot
             else:
@@ -569,8 +570,9 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
             import io as _io
             _img = _PILImg.open(_io.BytesIO(s["_photo_bytes"])).convert("RGBA")
 
-            # 1. Apply flat_lay_rotation from Vision (if available)
-            _rotation = s.get("flat_lay_rotation", 0)
+            # 1. Apply flat_lay_rotation from Vision (stored in bbox or direct)
+            _bbox_data = s.get("bbox") or {}
+            _rotation = s.get("flat_lay_rotation") or _bbox_data.get("flat_lay_rotation", 0)
             if _rotation and _rotation in (90, 180, 270):
                 _img = _img.rotate(-_rotation, expand=True, fillcolor=(0, 0, 0, 0))
             elif _want_portrait and not _rotation:
