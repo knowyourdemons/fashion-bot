@@ -474,19 +474,25 @@ def prepare_underwear_line(outfit: dict) -> str:
 # center big portrait pants, bottom row shoes+bag+accessories.
 # Light overlap between zones is OK (magazine feel).
 
+# Reference layout: 3 layers in row 1 overlapping left→right,
+# pants center row 2, shoes+bag+accessories row 3.
 _FLATLAY_SLOTS = {
     # slot: (top, left, width, height, rotate, z-index)
-    "top":        (5,   5,   220, 160, 0, 3),
-    "outerwear":  (0,   230, 210, 260, 0, 2),
-    "bottom":     (170, 90,  220, 270, 0, 4),
-    "one_piece":  (0,   230, 210, 270, 0, 2),
-    "footwear_1": (420, 320, 120, 95,  0, 5),
-    "footwear_2": (430, 200, 110, 85,  0, 5),
-    "accessory_1":(180, 310, 90,  90,  0, 6),
-    "accessory_2":(280, 340, 90,  90,  0, 6),
-    "bag":        (370, 0,   125, 125, 0, 5),
-    "hat":        (180, 0,   90,  90,  0, 6),
-    "scarf":      (280, 0,   85,  110, 0, 5),
+    # Row 1: top → outerwear, overlapping left to right, z grows
+    "top":        (5,   0,   180, 145, 0, 2),
+    "outerwear":  (0,   200, 240, 230, 0, 3),
+    # Row 2: bottom center
+    "bottom":     (155, 60,  210, 280, 0, 4),
+    # One-piece takes bottom+top area
+    "one_piece":  (0,   0,   220, 310, 0, 3),
+    # Row 3: accessories spread across bottom
+    "footwear_1": (380, 260, 150, 120, 0, 5),
+    "footwear_2": (400, 120, 130, 100, 0, 5),
+    "accessory_1":(160, 290, 85,  85,  0, 6),
+    "accessory_2":(250, 310, 85,  85,  0, 6),
+    "bag":        (350, 0,   130, 130, 0, 5),
+    "hat":        (160, 0,   85,  85,  0, 6),
+    "scarf":      (250, 0,   80,  100, 0, 5),
 }
 
 _FLATLAY_SLOTS_ONE_PIECE = {
