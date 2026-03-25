@@ -1248,13 +1248,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 InlineKeyboardButton("✨ Расширить гардероб →", callback_data="show_upgrade")
             ]])
             if _effective_plan == "free":
-                from core.permissions import TRIAL_DAYS, get_limit
+                from core.permissions import TRIAL_DAYS as _TRIAL_DAYS
                 msg = t(
                     "wardrobe.full.free",
                     used=str(len(_existing_items)),
                     max=str(_wardrobe_limit),
                     premium_wardrobe=str(get_limit("wardrobe_size", "premium")),
-                    trial_days=str(TRIAL_DAYS),
+                    trial_days=str(_TRIAL_DAYS),
                 )
             else:
                 msg = t(
