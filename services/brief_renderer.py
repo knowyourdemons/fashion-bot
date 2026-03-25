@@ -559,8 +559,22 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
 
         photo_b64 = ""
         try:
-            trimmed = _auto_trim(s["_photo_bytes"])
-            photo_b64 = base64.b64encode(trimmed).decode()
+            from services.image_processor import _auto_rotate_to_vertical
+            from PIL import Image as _PILImg
+            import io as _io
+            # Auto-rotate → trim → encode
+            _img = _PILImg.open(_io.BytesIO(s["_photo_bytes"])).convert("RGBA")
+            _img = _auto_rotate_to_vertical(_img)
+            # Trim transparent edges
+            _bbox = _img.split()[3].getbbox()
+            if _bbox:
+                _p = 3
+                _bbox = (max(0, _bbox[0]-_p), max(0, _bbox[1]-_p),
+                         min(_img.size[0], _bbox[2]+_p), min(_img.size[1], _bbox[3]+_p))
+                _img = _img.crop(_bbox)
+            _buf = _io.BytesIO()
+            _img.save(_buf, format="PNG")
+            photo_b64 = base64.b64encode(_buf.getvalue()).decode()
         except Exception:
             try:
                 photo_b64 = base64.b64encode(s["_photo_bytes"]).decode()
