@@ -364,38 +364,41 @@ docker exec docker-app-1 python3 -m pytest /app/tests/test_product_quality.py -v
 - Подключён ко всем 6 точкам через `build_brief_card()`: "Что надеть", morning/evening brief, онбординг
 
 ## Тесты
-- 4434 тестов (4371 + 14 flatlay/bbox/reclassify + 48 продуктовых + 1 validation), pytest-forked
+- 4450 тестов (4371 + 26 flatlay/bbox/reclassify/rotate/resize + 48 продуктовых + 1 validation + 5 skipped), pytest-forked
 - Юнит-экономика (25 марта 2026, реальные данные):
-  - Vision Sonnet call: **$0.05/фото** (image tokens + text + output)
+  - Vision Sonnet call: **~$0.03/фото** (после resize 768px)
   - Haiku call: **$0.0003** (outfit engine, chat, comments)
-  - Free user: **$0.17/мес** (3 фото + 1x "что надеть"/день + brief 2x/нед)
-  - Premium user: **$1.73/мес** (30 фото + 5x "что надеть" + brief ежедн + chat)
+  - Free user: **~$0.12/мес** (3 фото + 1x "что надеть"/день + brief 2x/нед)
+  - Premium user: **~$1.13/мес** (30 фото + 5x "что надеть" + brief ежедн + chat)
   - Infra: $7.60/мес (VPS)
-  - Breakeven: 5% конверсия при 200+ users
+  - Breakeven: 3-4% конверсия при 200+ users
   - 90% API cost = Vision Sonnet (фото). Haiku = копейки
-  - Оптимизация: resize фото до 768px → -40% Vision cost
+  - Resize 768px внедрён (-40%), Haiku для Vision отклонён (плохое качество)
+
+## Тестовая анкета
+- `landing/test.html` — 7-шаговый опросник для бета-тестеров
+- `POST /api/v1/test-survey` — результаты → Telegram (admin chat_id=195169)
+- localStorage для auto-save прогресса между сессиями
+- Кнопка "Отправить результаты" на последнем шаге
 
 ## Роадмап
 
-### v1.0-v1.1 ✅ ГОТОВО
+### v1.0-v1.2 ✅ ГОТОВО
 - Все базовые + продвинутые фичи, CI/CD, monitoring, i18n, deploy
+- Professional styling, scoring v3, accessories, USP features
+- Онбординг UX, pre-generate briefs, color depth, conversion
 
-### v1.2 ✅ ГОТОВО (23 марта — 1 сессия)
-- ~~Антибот~~ — rate limiting + temp ban
-- ~~4 worker tasks~~ — wardrobe_analysis, declutter, taxonomy_review, unknown_items_report
-- ~~Professional styling~~ — contrast + Kibbe + essence + fabric-body harmony
-- ~~Scoring v3~~ — 8 измерений + segment overrides
-- ~~Аксессуары Phase 2~~ — jewelry, belt, metal tone, neckline rules
-- ~~USP~~ — preference learning, streak, memory, mood, style passport
-- ~~Онбординг UX~~ — reactions, progress, 5-photo, selfie-first, photo instruction
-- ~~Pre-generate briefs~~ — overnight weather cache
-- ~~Color depth~~ — tonal, chroma, flow seasons (16-season equiv)
-- ~~Conversion~~ — smart paywall, nudge, language picker, referral tracking
-- ~~Beta prep~~ — /stats, day 3/7 feedback, referral deep links
-- ~~12 critical bugs~~ — fixed
-- ~~Alembic migration~~ — 10 new columns
+### v1.3 ✅ ГОТОВО (24-25 марта — 2 сессии)
+- Magazine flat-lay коллаж (Playwright)
+- Vision bbox refinement (background-aware)
+- Vision reclassification (шапка→носки)
+- flat_lay_rotation (Vision + 5-zone CV fallback)
+- Кнопка "Переснять" с Vision валидацией
+- Resize 768px (-40% Vision API cost)
+- 4450 тестов, 26 новых
+- Тестовая анкета с серверным сохранением
 
-### v1.3 (апрель-май)
+### v1.4 (апрель-май)
 - ЮKassa для RU юзеров (после ИП)
 - Шоппинг-лист + affiliate (Admitad/Skimlinks)
 - Реферальная программа ("Пригласи подругу = +7 дней")
