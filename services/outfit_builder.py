@@ -130,6 +130,7 @@ def get_collage_params(
 _SLOT_ORDER = [
     "outerwear", "top", "removable_layer", "bottom", "one_piece",
     "footwear", "bag", "accessory", "hat", "scarf", "gloves", "tights",
+    "jewelry",
 ]
 
 # ── Base layer items: NEVER show as photos in collage, only in text line ────
@@ -219,6 +220,27 @@ def build_outfit_slots(
         if slot_key == "one_piece" and has_top_bottom:
             continue
         if slot_key == "tights" and not _needs_tights(outfit, _temp):
+            continue
+        if slot_key == "jewelry":
+            # Jewelry: show real items only, no placeholder
+            _j1 = outfit.get("jewelry")
+            _j2 = outfit.get("jewelry_2")
+            for _ji, _jkey in [(_j1, "jewelry_1"), (_j2, "jewelry_2")]:
+                if _ji and getattr(_ji, "show_in_collage", True):
+                    slots.append({
+                        "slot": "accessory",  # treated as accessory for layout mapping
+                        "item_id": str(_ji.id) if hasattr(_ji, "id") else "",
+                        "item_type": _ji.type,
+                        "item_color": getattr(_ji, "color", "") or "",
+                        "photo_id": _ji.photo_id,
+                        "photo_url": getattr(_ji, "photo_url", None),
+                        "bbox": getattr(_ji, "bbox", None),
+                        "has_item": True,
+                        "adult": is_adult,
+                        "gender": gender,
+                        "_layout_hint": _jkey,
+                    })
+            seen.add(slot_key)
             continue
 
         # socks → tights fallback

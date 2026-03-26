@@ -276,6 +276,23 @@ def _select_outfit(
     if temp < 0:
         result["gloves"] = _first_any("accessory", ["перчатк", "варежк", "gloves"])
 
+    # ── СЛОЙ 7: Украшения (до 2 шт) ─────────────────────────────────────────
+    _jewelry_words = [
+        "браслет", "серьг", "колье", "кольц", "кулон", "цепоч", "подвеск",
+        "брошь", "часы", "заколк", "ободок", "бант",
+    ]
+    _used_ids = {result[k].id for k in result if result[k] and hasattr(result[k], "id")}
+    _jewelry_pool = [
+        i for i in available
+        if i.category_group == "accessory"
+        and any(w in (i.type or "").lower() for w in _jewelry_words)
+        and i.id not in _used_ids
+    ]
+    if _jewelry_pool:
+        result["jewelry"] = _jewelry_pool[0]
+        if len(_jewelry_pool) >= 2:
+            result["jewelry_2"] = _jewelry_pool[1]
+
     # ── Warmth consistency check ────────────────────────────────────────────
     # Prevent absurd combos like puffer jacket (warmth=5) + shorts (warmth=1)
     visual_keys = ("one_piece", "top", "bottom", "outerwear", "footwear")
@@ -330,6 +347,10 @@ def _select_outfit(
         if result[key]:
             all_items.append(result[key])
     all_items.extend(result["underwear_items"])
+    if result.get("jewelry"):
+        all_items.append(result["jewelry"])
+    if result.get("jewelry_2"):
+        all_items.append(result["jewelry_2"])
     result["all_items"] = all_items
     result["temp"] = temp
 

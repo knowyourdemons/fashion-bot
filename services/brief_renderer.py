@@ -583,6 +583,8 @@ _FLATLAY_SLOTS = {
     "bag":        (410, 0,   105, 105, 0, 6),
     "accessory_1":(170, 0,   75,  75,  0, 7),  # очки left
     "accessory_2":(325, 320, 65,  60,  0, 7),  # ремень right, above shoes
+    "jewelry_1":  (100, 0,   55,  55,  0, 8),  # bracelet/watch, left of top
+    "jewelry_2":  (155, 55,  50,  50,  0, 8),  # necklace/earrings, below jewelry_1
     "footwear_1": (410, 310, 125, 105, 0, 6),  # aligned bottom with bag
     "hat":        (0,   360, 75,  75,  0, 7),
     "scarf":      (85,  355, 70,  85,  0, 6),
@@ -600,6 +602,8 @@ _FLATLAY_SLOTS_ONE_PIECE = {
     "scarf":      (260, 0,   70,  90,  0, 6),
     "gloves":     (260, 350, 65,  65,  0, 6),  # next to hat
     "tights":     (280, 330, 70,  120, 0, 2),
+    "jewelry_1":  (100, 0,   55,  55,  0, 7),
+    "jewelry_2":  (155, 55,  50,  50,  0, 7),
 }
 
 
