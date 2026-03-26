@@ -104,8 +104,10 @@ services/
   photo_quality.py — Pre-Vision проверка: brightness, blur, contrast, auto-correction
   image_processor.py — resize, EXIF, phash, bg removal (RMBG-1.4 + cloth-seg)
                        Thread-safe singleton (threading.Lock + double-check) для каждой модели
-                       Smart thumbnail pipeline: exif_rotate → auto_brightness → rembg
-                       → soften_edges → pad_square_resize(400) → make_collage_thumbnail()
+                       Thumbnail pipeline: exif_rotate → rembg (mask от CLAHE, цвета от оригинала)
+                       → soften_edges(0.5) → alpha cleanup(<80) → pad_square_resize(400)
+                       Без contrast boost/sharpen — сохраняем оригинальные цвета фото
+                       auto_rotate_to_vertical: ненадёжен, TODO заменить Vision rotation
                        Texture refinement: _refine_bbox_by_color() — Sobel gradient + LAB color
   brief_card.py    — Точка входа коллажа: 3 состояния (0/1-7/8+ фото)
                      Thumb cache: Redis thumb:{item_id} (7 дней)
@@ -146,7 +148,7 @@ assets/
 - PIL НЕ рендерит unicode emoji — все тексты на коллаже БЕЗ эмодзи
 - Скор цифрой НЕ показывать юзеру — только текстовый комментарий Haiku или шаблон
 - Удаление фона: RMBG-1.4 quantized (44MB) + cloth-seg U2Net (168MB). ISNet и silueta удалены
-- App контейнер 3072MB (cloth-seg 168MB + RMBG inference peak ~600MB + app ~110MB), worker 3072MB
+- App контейнер 4096MB (cloth-seg 168MB + RMBG inference peak ~600MB + app ~110MB), worker 3072MB
 - ssl=disable в DATABASE_URL: postgres не настроен на SSL
 - listen_addresses='*' в postgres.conf: иначе контейнеры не коннектятся
 - Иконки и фоны в git assets/ (не R2) — мгновенный доступ, нет HTTP
@@ -348,20 +350,36 @@ docker exec docker-app-1 python3 -m pytest /app/tests/test_product_quality.py -v
 - **Admin antibot exemption**: admin_ids не банятся
 - **Vision cost guard**: 30 calls/day per user
 
-## Коллаж: Magazine Flat-Lay (25 марта 2026)
-- **Шаблон**: `tpl_flatlay.html` — Playwright рендер, белый фон, absolute positioning
-- **Layout**: Row 1 (top + outerwear с перекрытием), Row 2 (bottom центр), Row 3 (bag + shoes)
-- **Слоты**: top, top_2, outerwear, bottom, one_piece, footwear_1, bag, accessory_1, accessory_2, hat, scarf, tights
-- **Placeholders**: пунктирные рамки для незаполненных слотов (🧥+куртку, 👟+обувь, 👜+сумку, 🕶+очки, 📿+ремень)
-- **Progress bar**: "3/7 · Сфоткай куртку, обувь" (footer)
-- **Vision `flat_lay_rotation`**: 0/90/180/270 — ориентация для flat-lay (пояс сверху, горловина сверху)
-  - Сохраняется в bbox JSONB, пробрасывается через outfit_builder → prepare_items_flatlay
-  - 5-zone CV fallback если Vision вернул 0 для portrait item
-- **Ориентация по слоту**: top → landscape (рукава в стороны), bottom/outerwear → portrait
+## Коллаж: Unified Flat-Lay (26 марта 2026)
+- **Единый шаблон**: `tpl_flatlay.html` для ВСЕХ карточек (brief, morning update, "что надеть")
+  - Legacy шаблоны (tpl_weather, tpl_hybrid, tpl_full, tpl_morning) deprecated
+  - Morning update: flat-lay + alert banner (warn/ok) вместо отдельного шаблона
+- **Layout**: Row 1 (top + outerwear), Row 2 (bottom), Row 3 (bag + shoes + accessories)
+- **Слоты**: top, top_2, outerwear, bottom, one_piece, footwear_1, bag, accessory_1 (очки), accessory_2 (ремень), hat, scarf, gloves, tights
+- **Погодо-зависимые плейсхолдеры** (через SEASON_SLOT_TYPES):
+  - +28° жара: top + bottom + footwear (3 слота, без куртки/шапки)
+  - +18° тепло: + ветровка, очки (4-5 слотов)
+  - +8° прохлада: + куртка, шапка (5 слотов)
+  - 0° мороз: + тёплая куртка/комбинезон, шарф, перчатки/варежки (7 слотов)
+  - -15° сильный мороз: пуховик, зимние сапоги, тёплая шапка, тёплый шарф (7 слотов)
+  - Комбинезон для детей ≤5 лет при ≤0°, Варежки вместо Перчаток
+  - Warmth check: тёплые вещи (warmth≥2) при жаре → плейсхолдер "Футболка"/"Шорты"
+- **Цветные кружки палитры**: каждый плейсхолдер имеет dot с рекомендованным цветом из COLORTYPE_PALETTES
+  - Stem-based color matching (186/186 цветов палитры матчатся)
+  - Default палитра с разнообразными цветами по слотам
+- **Image pipeline** (26 марта):
+  - Upload: TG HD → rembg (mask от CLAHE, цвета от оригинала) → R2 RGBA + Redis thumb cache
+  - Render: Redis cache hit → 0.3s | Cache miss → R2 → trim+resize → 0.5s
+  - `_crop_bbox` сохраняет RGBA (не конвертирует в RGB)
+  - `auto_rotate_to_vertical` — ненадёжен для одежды, TODO: заменить на Vision flat_lay_rotation
+  - Portrait correction: bottom/outerwear landscape → rotate 90° (в prepare_items_flatlay)
+  - Alpha cleanup: < 80 → transparent + connected components filter
+  - Без contrast boost/sharpen — сохраняем оригинальные цвета
+- **Scripts**: `scripts/reprocess_r2.py` (перегенерация R2), `scripts/warm_thumb_cache.py` (прогрев кэша)
 - **Переснятие**: кнопка "📸 Переснять" в detail view → Vision валидация → замена фото
-- **Авто-ротация**: `_auto_rotate_to_vertical` выпрямляет наклонённые вещи (3-35°)
 - **Bbox refinement**: сравнение с фоном (углы фото), 25% guard, background-aware trimming
-- Подключён ко всем 6 точкам через `build_brief_card()`: "Что надеть", morning/evening brief, онбординг
+- Подключён ко всем точкам через `build_brief_card()`: "Что надеть", morning/evening brief, онбординг
+- **Известные проблемы ротации**: auto_rotate_to_vertical (cv2.minAreaRect) ненадёжен для сложных форм одежды (рукава, жилеты). Правильное решение — Vision flat_lay_rotation при upload
 
 ## Тесты
 - 4450 тестов (4371 + 26 flatlay/bbox/reclassify/rotate/resize + 48 продуктовых + 1 validation + 5 skipped), pytest-forked
