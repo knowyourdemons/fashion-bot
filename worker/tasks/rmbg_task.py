@@ -214,6 +214,26 @@ async def process_rmbg(payload: dict) -> dict:
             good_crop = _check_crop_quality(png_bytes)
         logger.info("rmbg_process.strategy", strategy="rembg_first", bbox_area=f"{float(bbox.get('w',1))*float(bbox.get('h',1)):.2f}" if bbox else "1.00")
 
+    # 4b. Restore original colors (rembg pipeline uses CLAHE which washes out colors)
+    try:
+        _mask_img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+        if _mask_img.mode == "RGBA":
+            _orig_img = Image.open(io.BytesIO(photo_bytes)).convert("RGB")
+            _orig_img = _orig_img.resize(_mask_img.size, Image.LANCZOS)
+            _restored = Image.new("RGBA", _mask_img.size)
+            _restored.paste(_orig_img, (0, 0))
+            _restored.putalpha(_mask_img.split()[3])
+            # Clean alpha artifacts
+            _r_arr = np.array(_restored)
+            _r_arr[_r_arr[:, :, 3] < 80, 3] = 0
+            _restored = Image.fromarray(_r_arr)
+            _buf_r = io.BytesIO()
+            _restored.save(_buf_r, format="PNG")
+            png_bytes = _buf_r.getvalue()
+            logger.info("rmbg_process.colors_restored")
+    except Exception as e:
+        logger.warning("rmbg_process.colors_restore_failed", error=str(e))
+
     # 5. Upload to R2
     is_png = png_bytes[:4] == b'\x89PNG'
     ext = "png" if is_png else "jpg"
@@ -252,16 +272,36 @@ async def process_rmbg(payload: dict) -> dict:
         good_crop=good_crop,
     )
 
-    # 7. Generate and cache collage thumbnail (400×400 retina)
+    # 7. Generate and cache collage thumbnail
+    # Use ORIGINAL photo colors (not CLAHE'd) for natural appearance.
+    # png_bytes has bg-removed mask but may have enhanced colors from rembg pipeline.
+    # Re-apply mask onto original photo for true colors.
     if redis:
         try:
-            from services.image_processor import pad_square_resize, auto_brightness
+            from services.image_processor import pad_square_resize, soften_edges as _se
             import base64 as _b64
-            # png_bytes is already bg-removed + edge-softened
-            thumb_bytes = auto_brightness(png_bytes)
+
+            # Apply bg mask onto original photo colors
+            _mask_img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+            _orig_img = Image.open(io.BytesIO(photo_bytes)).convert("RGB")
+            _orig_img = _orig_img.resize(_mask_img.size, Image.LANCZOS)
+            _combined = Image.new("RGBA", _mask_img.size)
+            _combined.paste(_orig_img, (0, 0))
+            _combined.putalpha(_mask_img.split()[3])
+
+            # Clean bg artifacts: alpha < 80 → fully transparent
+            _arr = np.array(_combined)
+            _arr[_arr[:, :, 3] < 80, 3] = 0
+            _combined = Image.fromarray(_arr)
+
+            _buf_t = io.BytesIO()
+            _combined.save(_buf_t, format="PNG")
+            thumb_bytes = _buf_t.getvalue()
+
+            thumb_bytes = _se(thumb_bytes, radius=0.5)
             thumb_bytes = pad_square_resize(thumb_bytes, 400)
             thumb_b64 = _b64.b64encode(thumb_bytes).decode()
-            await redis.set(f"thumb:{item_id}", thumb_b64, ex=86400 * 7)  # 7 day TTL
+            await redis.set(f"thumb:{item_id}", thumb_b64, ex=86400 * 7)
             logger.info("rmbg_process.thumb_cached", item_id=str(item_id), size=len(thumb_bytes))
         except Exception as e:
             logger.warning("rmbg_process.thumb_failed", error=str(e))

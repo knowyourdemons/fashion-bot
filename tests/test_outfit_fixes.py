@@ -209,12 +209,23 @@ class TestMinimumOutfit:
         ]
         assert has_minimum_wardrobe(items) is True
 
-    def test_has_minimum_wardrobe_too_few_items(self):
+    def test_has_minimum_wardrobe_top_bottom_socks(self):
+        """top + bottom + socks IS a minimum wardrobe (has top and bottom)."""
         from services.outfit_builder import has_minimum_wardrobe
         items = [
             _item("top", "кофта"),
             _item("bottom", "штаны"),
             _item("base_layer", "носки"),
+        ]
+        assert has_minimum_wardrobe(items) is True
+
+    def test_has_minimum_wardrobe_too_few_items(self):
+        """Only base_layer items → NOT a minimum wardrobe."""
+        from services.outfit_builder import has_minimum_wardrobe
+        items = [
+            _item("base_layer", "носки"),
+            _item("base_layer", "майка"),
+            _item("base_layer", "колготки"),
         ]
         assert has_minimum_wardrobe(items) is False
 

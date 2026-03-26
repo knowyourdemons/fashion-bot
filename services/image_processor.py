@@ -665,7 +665,7 @@ def pad_square_resize(png_bytes: bytes, size: int = THUMB_SIZE) -> bytes:
         )
         img = img.crop(bbox)
 
-    # Auto-rotate to vertical (straighten angled garments)
+    # Auto-rotate: straighten angled garments (make long axis vertical)
     if img.mode == "RGBA":
         img = _auto_rotate_to_vertical(img)
         # Re-trim after rotation (rotation may add transparent corners)
@@ -791,11 +791,13 @@ def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) ->
             import structlog as _sl
             _log = _sl.get_logger()
 
-            # Auto-brightness BEFORE bg removal (helps with dark photos)
-            result = auto_brightness(result)
-            # CLAHE preprocessing: boosts local contrast to separate garment from
-            # textured backgrounds (couches, carpets, wood floors)
-            enhanced = _apply_clahe(result)
+            # Keep original colors for final output
+            _original_for_colors = result
+
+            # Auto-brightness + CLAHE only for RMBG mask extraction
+            # (helps separate garment from textured backgrounds)
+            _brightened = auto_brightness(result)
+            enhanced = _apply_clahe(_brightened)
 
             # Optimized fallback chain:
             # RMBG-1.4 + postprocess → cloth-segmentation → GrabCut → original
@@ -809,7 +811,16 @@ def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) ->
                 pass
             if rembg_result and _check_mask_quality_v2(rembg_result):
                 _log.info("rmbg.pipeline_ok", model="rmbg14")
-                result = rembg_result
+                # Apply mask from enhanced image onto original colors
+                _mask_img = Image.open(io.BytesIO(rembg_result)).convert("RGBA")
+                _orig_img = Image.open(io.BytesIO(_original_for_colors)).convert("RGB")
+                _orig_img = _orig_img.resize(_mask_img.size, Image.LANCZOS)
+                _combined = Image.new("RGBA", _mask_img.size)
+                _combined.paste(_orig_img, (0, 0))
+                _combined.putalpha(_mask_img.split()[3])
+                _buf_c = io.BytesIO()
+                _combined.save(_buf_c, format="PNG")
+                result = _buf_c.getvalue()
                 rembg_result = "done"
 
             # Step 2: cloth-segmentation (clothing-specific, trained on fashion data)
@@ -822,7 +833,16 @@ def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) ->
                     rembg_result = None
                 if rembg_result and _check_mask_quality_v2(rembg_result):
                     _log.info("rmbg.pipeline_ok", model="cloth_seg")
-                    result = rembg_result
+                    # Apply mask onto original colors
+                    _mask_img = Image.open(io.BytesIO(rembg_result)).convert("RGBA")
+                    _orig_img = Image.open(io.BytesIO(_original_for_colors)).convert("RGB")
+                    _orig_img = _orig_img.resize(_mask_img.size, Image.LANCZOS)
+                    _combined = Image.new("RGBA", _mask_img.size)
+                    _combined.paste(_orig_img, (0, 0))
+                    _combined.putalpha(_mask_img.split()[3])
+                    _buf_c = io.BytesIO()
+                    _combined.save(_buf_c, format="PNG")
+                    result = _buf_c.getvalue()
                     rembg_result = "done"
 
             # Step 3: GrabCut (graph-cut, works on textured backgrounds)
@@ -830,26 +850,35 @@ def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) ->
                 rembg_result = _run_grabcut(enhanced)
                 if rembg_result and _check_mask_quality_v2(rembg_result):
                     _log.info("rmbg.pipeline_ok", model="grabcut")
-                    result = rembg_result
+                    _mask_img = Image.open(io.BytesIO(rembg_result)).convert("RGBA")
+                    _orig_img = Image.open(io.BytesIO(_original_for_colors)).convert("RGB")
+                    _orig_img = _orig_img.resize(_mask_img.size, Image.LANCZOS)
+                    _combined = Image.new("RGBA", _mask_img.size)
+                    _combined.paste(_orig_img, (0, 0))
+                    _combined.putalpha(_mask_img.split()[3])
+                    _buf_c = io.BytesIO()
+                    _combined.save(_buf_c, format="PNG")
+                    result = _buf_c.getvalue()
                 else:
                     _log.warning("rmbg.pipeline_all_failed")
             # else: keep brightness-corrected original (no bg removal)
 
-    # 3. Edge softening (only if has alpha)
+    # 3. Edge softening — minimal, only smooth jagged alpha edges
     img_check = Image.open(io.BytesIO(result))
     if img_check.mode == "RGBA":
-        result = soften_edges(result, radius=1.5)
-    else:
-        result = auto_brightness(result)
+        result = soften_edges(result, radius=0.5)
 
-    # 4. Contrast boost (helps wrinkled fabrics read better at small sizes)
-    result = boost_contrast(result, factor=1.05)
+        # 3b. Clean bg artifacts: alpha < 80 → fully transparent
+        _clean_img = Image.open(io.BytesIO(result)).convert("RGBA")
+        _clean_arr = np.array(_clean_img)
+        _clean_arr[_clean_arr[:, :, 3] < 80, 3] = 0
+        _clean_img = Image.fromarray(_clean_arr)
+        _clean_buf = io.BytesIO()
+        _clean_img.save(_clean_buf, format="PNG")
+        result = _clean_buf.getvalue()
 
-    # 5. Auto-trim + pad to square + resize
+    # 4. Auto-trim + pad to square + resize (no contrast boost, no sharpen — preserve original colors)
     result = pad_square_resize(result, THUMB_SIZE)
-
-    # 6. Sharpen (after resize — improves detail at 200px display size)
-    result = sharpen_thumbnail(result, factor=1.3)
 
     return result
 

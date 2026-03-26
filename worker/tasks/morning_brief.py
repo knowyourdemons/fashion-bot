@@ -688,6 +688,8 @@ async def _generate_adult_brief(user, payload: dict) -> dict:
             _send_payload["brief_card_b64"] = _b64_adult.b64encode(brief_card_bytes).decode()
         else:
             _send_payload["adult_has_outfit"] = bool(outfit_slots)
+            _send_payload["text_only"] = True
+            _send_payload["parse_mode"] = "HTML"
 
         await queue.push(
             "send_morning_brief",
@@ -817,21 +819,17 @@ async def generate_brief(payload: dict) -> dict:
             child_briefs.append(f"👧 {child.name}: гардероб пуст. Добавь вещи!")
             continue
 
-        # ── Mode B check: мало реальных фото → погодная карточка ──
+        # ── Mode B check: нет реальных фото → погодная карточка ──
+        # Flat-lay показывает placeholder'ы для недостающих вещей,
+        # поэтому Mode B нужен только когда фото совсем нет.
         real_photos = sum(
             1 for i in items
             if (getattr(i, "photo_url", None) or getattr(i, "photo_id", None))
             and getattr(i, "show_in_collage", True)
             and getattr(i, "category_group", "") != "underwear"
         )
-        total_visible = sum(
-            1 for i in items
-            if getattr(i, "show_in_collage", True)
-            and getattr(i, "category_group", "") != "underwear"
-        )
-        placeholder_ratio = 1 - (real_photos / max(total_visible, 1))
 
-        if real_photos < 3 or placeholder_ratio > 0.5:
+        if real_photos == 0:
             # ── MODE B: погодная карточка ──
             from services.weather_card import build_weather_card, generate_weather_advice, season_palette
             from core.anthropic_client import get_anthropic_pool, init_anthropic_pool
@@ -1006,8 +1004,8 @@ async def generate_brief(payload: dict) -> dict:
         if is_wow_outfit:
             any_wow = True
 
-        # Gap insight: append tip if wardrobe is small (< 15 items)
-        if len(items) < 15:
+        # Gap insight: append tip only if AI comment (not fallback which already has "добавь")
+        if len(items) < 15 and _engine_result.ai_selected:
             from services.scoring import get_wardrobe_gaps
             _gaps = get_wardrobe_gaps(items)
             _gap_tips = [g for g in _gaps if "Добавь" in g]
@@ -1419,36 +1417,9 @@ async def send_morning_brief(payload: dict) -> dict:
                     except Exception as e:
                         logger.warning("morning_brief.adult.decode_failed", error=str(e))
             else:
-                # Детский бриф: собираем коллаж из outfit_slots или photo_ids
-                collage_photo_ids = payload.get("collage_photo_ids", [])
-                collage_labels = payload.get("collage_labels", [])
-                collage_photo_urls = payload.get("collage_photo_urls")
-                collage_header = payload.get("collage_header", "")
-                collage_theme = payload.get("collage_theme", "girl")
-
-                outfit_slots = payload.get("outfit_slots")
-                if outfit_slots:
-                    try:
-                        from services.image_builder import build_collage
-                        collage_bytes = await build_collage(
-                            outfit_slots=outfit_slots,
-                            theme=collage_theme,
-                            header_text=collage_header,
-                        )
-                    except Exception as e:
-                        logger.warning("morning_brief.collage_failed", error=str(e))
-                elif collage_photo_ids:
-                    try:
-                        from services.image_builder import build_collage
-                        collage_bytes = await build_collage(
-                            photo_ids=collage_photo_ids,
-                            labels=collage_labels,
-                            photo_urls=collage_photo_urls,
-                            theme=collage_theme,
-                            header_text=collage_header,
-                        )
-                    except Exception as e:
-                        logger.warning("morning_brief.collage_failed", error=str(e))
+                # Child briefs always use brief_card or text_only — no legacy collage
+                logger.warning("morning_brief.unexpected_legacy_path",
+                               telegram_id=telegram_id, brief_id=brief_id)
 
             if collage_bytes:
                 # Split delivery: фото без caption, текст отдельным сообщением
@@ -1493,17 +1464,23 @@ async def send_morning_brief(payload: dict) -> dict:
                 import asyncio as _asyncio
                 await _asyncio.sleep(0.1)
                 try:
+                    _text_data: dict = {"chat_id": telegram_id, "text": text, "reply_markup": reply_markup}
+                    if parse_mode:
+                        _text_data["parse_mode"] = parse_mode
                     text_resp = await client.post(
                         f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
-                        json={"chat_id": telegram_id, "text": text, "reply_markup": reply_markup},
+                        json=_text_data,
                     )
                     text_resp.raise_for_status()
                 except Exception as e:
                     logger.warning("morning_brief.text_message_failed", error=str(e))
             else:
+                _fallback_data: dict = {"chat_id": telegram_id, "text": text, "reply_markup": reply_markup}
+                if parse_mode:
+                    _fallback_data["parse_mode"] = parse_mode
                 resp = await client.post(
                     f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
-                    json={"chat_id": telegram_id, "text": text, "reply_markup": reply_markup},
+                    json=_fallback_data,
                 )
                 resp.raise_for_status()
 

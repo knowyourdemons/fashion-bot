@@ -1,10 +1,10 @@
 """
-Brief card system — three card states + two color themes.
+Brief card system — unified flat-lay layout + two color themes.
 
-Card states:
-  - Weather card (0 real photos): weather + layers + advice + CTA
-  - Hybrid card (1-7 real photos): weather strip + items grid + missing + progress
-  - Full card (8+ real photos): flat lay with all items
+All card states use tpl_flatlay.html:
+  - 0 real photos: flat-lay with all placeholder slots
+  - 1+ real photos: flat-lay with real photos + placeholders for missing
+  - Morning update: flat-lay with alert banner (weather changed / OK)
 
 Color themes:
   - "mom" (mom_girl/mom_boy): warm pink palette
@@ -23,10 +23,10 @@ from services.brief_renderer import (
     get_segment as _get_segment,  # backward compat for morning_brief imports
     get_theme,
     prepare_weather_data,
-    prepare_items_hybrid,
-    prepare_items_full,
+    prepare_items_hybrid,  # legacy — kept for backward compat imports
+    prepare_items_full,    # legacy — kept for backward compat imports
     prepare_date_context,
-    prepare_layers,
+    prepare_layers,        # legacy — kept for backward compat imports
     prepare_underwear_line,
     render_template,
     render_html_to_png,
@@ -137,8 +137,7 @@ async def _download_slot_photos(outfit_slots: list[dict]) -> None:
                     except Exception as _crop_err:
                         logger.warning("brief_card.bbox_crop_failed", error=str(_crop_err))
 
-                # 4. Build thumbnail (EXIF → brightness → rembg → edges → pad → resize)
-                from services.image_processor import make_collage_thumbnail_safe
+                # 4. Build thumbnail
                 from PIL import Image
                 import io as _io
 
@@ -146,7 +145,31 @@ async def _download_slot_photos(outfit_slots: list[dict]) -> None:
                 img_check = Image.open(_io.BytesIO(photo_bytes))
                 needs_rembg = img_check.mode not in ("RGBA", "LA", "PA")
 
-                thumb = await make_collage_thumbnail_safe(photo_bytes, needs_bg_removal=needs_rembg)
+                if needs_rembg:
+                    # No R2 — full pipeline (Telegram photo)
+                    from services.image_processor import make_collage_thumbnail_safe
+                    thumb = await make_collage_thumbnail_safe(photo_bytes, needs_bg_removal=True)
+                else:
+                    # R2 RGBA with original colors — trim + resize (no rembg needed)
+                    from services.image_processor import soften_edges
+                    img_rgba = img_check.convert("RGBA")
+
+                    _alpha_bbox = img_rgba.split()[3].getbbox()
+                    if _alpha_bbox:
+                        _p = 5
+                        _alpha_bbox = (
+                            max(0, _alpha_bbox[0] - _p),
+                            max(0, _alpha_bbox[1] - _p),
+                            min(img_rgba.size[0], _alpha_bbox[2] + _p),
+                            min(img_rgba.size[1], _alpha_bbox[3] + _p),
+                        )
+                        img_rgba = img_rgba.crop(_alpha_bbox)
+
+                    img_rgba.thumbnail((400, 400), Image.LANCZOS)
+
+                    _buf = _io.BytesIO()
+                    img_rgba.save(_buf, format="PNG")
+                    thumb = soften_edges(_buf.getvalue(), radius=0.5)
                 slot["_photo_bytes"] = thumb
 
                 # Cache for next time
@@ -182,10 +205,9 @@ async def build_brief_card(
     """
     Build morning brief card as PNG bytes.
 
-    Chooses card type based on real photo count:
-      0 photos  -> weather card (tpl_weather.html)
-      1-7       -> hybrid card (tpl_hybrid.html)
-      8+        -> full card (tpl_full.html)
+    Always uses flat-lay layout (tpl_flatlay.html):
+      0 photos  -> flat-lay with all placeholder slots
+      1+ photos -> flat-lay with real photos + placeholders for missing
 
     Returns PNG bytes or None on failure.
     """
@@ -206,9 +228,8 @@ async def build_brief_card(
         # Recount after download (some may have failed)
         real_photos = _count_real_photos(outfit_slots)
         if real_photos == 0 and len(outfit_slots) > 0:
-            logger.warning("brief_card.all_photos_failed",
-                           total_slots=len(outfit_slots),
-                           fallback="weather_card")
+            logger.info("brief_card.all_placeholders",
+                        total_slots=len(outfit_slots))
 
         # Common data
         date_str, context_str = prepare_date_context(user, child)
@@ -217,32 +238,17 @@ async def build_brief_card(
         user_name = getattr(user, "name", "") if user else ""
         name = child_name or user_name or ""
 
-        if real_photos == 0:
-            html = _build_weather_html(
-                name, context_str, date_str, theme,
-                weather_tpl, weather, outfit_slots, advice_text,
-            )
-        elif real_photos < 8:
-            html = _build_hybrid_html(
-                name, context_str, date_str, theme, segment,
-                weather_tpl, outfit_slots, outfit, advice_text,
-                real_photos, colortype,
-            )
-        else:
-            html = _build_flatlay_html(
-                name, context_str, date_str, theme,
-                weather_tpl, outfit_slots, outfit, advice_text,
-                colortype,
-            )
+        # Always flat-lay (0 photos = all placeholders, 1+ = real photos + placeholders)
+        html = _build_flatlay_html(
+            name, context_str, date_str, theme,
+            weather_tpl, outfit_slots, outfit, advice_text,
+            colortype,
+        )
 
         png_bytes = await render_html_to_png(html)
         if png_bytes:
-            card_type = (
-                "weather" if real_photos == 0
-                else "hybrid" if real_photos < 8
-                else "full"
-            )
-            logger.info("brief_card.rendered", size=len(png_bytes), card_type=card_type)
+            logger.info("brief_card.rendered", size=len(png_bytes),
+                        real_photos=real_photos)
             return png_bytes
 
         logger.warning("brief_card.render_failed")
@@ -253,70 +259,23 @@ async def build_brief_card(
         return None
 
 
-# ── Weather card (0 photos) ──────────────────────────────────────────────────
-
-def _build_weather_html(
-    name: str, context_str: str, date_str: str, theme: dict,
-    weather_tpl: dict, weather_raw: dict, outfit_slots: list[dict],
-    advice_text: str,
-) -> str:
-    layers = prepare_layers(weather_raw, outfit_slots)
-
-    return render_template(
-        "tpl_weather.html",
-        css_class=theme["css_class"],
-        name=name,
-        context=context_str,
-        date_str=date_str,
-        weather=weather_tpl,
-        layers=layers,
-        kassi_comment=advice_text,
-    )
-
-
-# ── Hybrid card (1-7 photos) ────────────────────────────────────────────────
-
-def _build_hybrid_html(
-    name: str, context_str: str, date_str: str, theme: dict,
-    segment: str, weather_tpl: dict, outfit_slots: list[dict],
-    outfit: dict, advice_text: str, real_photo_count: int,
-    colortype: str = "",
-) -> str:
-    items, missing = prepare_items_hybrid(outfit_slots)
-    palette = _collect_palette_rich(outfit_slots, colortype=colortype)
-    base_layer = prepare_underwear_line(outfit)
-
-    # Progress
-    threshold = 8 if segment == "mom" else 12
-    progress_pct = min(100, int(real_photo_count / max(threshold, 1) * 100))
-    next_item_ru = missing[0]["name_ru"] if missing else "вещь"
-    progress_text = f"{real_photo_count}/{threshold} · 📸 Сфоткай {next_item_ru.lower()}!"
-
-    return render_template(
-        "tpl_hybrid.html",
-        css_class=theme["css_class"],
-        name=name,
-        context=context_str,
-        date_str=date_str,
-        weather=weather_tpl,
-        items=items,
-        missing=missing,
-        palette=palette,
-        base_layer=base_layer,
-        kassi_comment=advice_text,
-        progress_pct=progress_pct,
-        progress_text=progress_text,
-    )
-
-
-# ── Full card (8+ photos) ───────────────────────────────────────────────────
+# ── Flat-lay card (unified layout for all states) ────────────────────────────
 
 def _build_flatlay_html(
     name: str, context_str: str, date_str: str, theme: dict,
     weather_tpl: dict, outfit_slots: list[dict], outfit: dict,
     advice_text: str, colortype: str = "",
+    alert: dict | None = None,
 ) -> str:
-    """Magazine-style flat-lay composition with absolute positioning."""
+    """Magazine-style flat-lay composition with absolute positioning.
+
+    Used for ALL card states:
+      - 0 photos: all placeholder slots
+      - 1+ photos: real photos + placeholders for missing
+      - morning update: with alert banner (pass alert dict)
+
+    alert dict: {"type": "warn"|"ok", "icon": str, "header": str, "text": str}
+    """
     from services.brief_renderer import prepare_items_flatlay
     items, placeholders, progress_pct, progress_text = prepare_items_flatlay(outfit_slots)
     palette = _collect_palette_rich(outfit_slots, colortype=colortype)
@@ -334,30 +293,7 @@ def _build_flatlay_html(
         kassi_comment=advice_text,
         progress_pct=progress_pct,
         progress_text=progress_text,
-    )
-
-
-def _build_full_html(
-    name: str, context_str: str, date_str: str, theme: dict,
-    weather_tpl: dict, outfit_slots: list[dict], outfit: dict,
-    advice_text: str, colortype: str = "",
-) -> str:
-    """Legacy full card — fallback if flatlay fails."""
-    items = prepare_items_full(outfit_slots)
-    palette = _collect_palette_rich(outfit_slots, colortype=colortype)
-    base_layer = prepare_underwear_line(outfit)
-
-    return render_template(
-        "tpl_full.html",
-        css_class=theme["css_class"],
-        name=name,
-        context=context_str,
-        date_str=date_str,
-        weather=weather_tpl,
-        items=items,
-        palette=palette,
-        base_layer=base_layer,
-        kassi_comment=advice_text,
+        alert=alert,
     )
 
 
@@ -374,7 +310,7 @@ async def build_morning_update(
     change_text: str,
     kassi_comment: str,
 ) -> bytes | None:
-    """Render morning update card (weather changed / not changed)."""
+    """Render morning update card using flat-lay layout + alert banner."""
     segment = get_segment(user)
     theme = get_theme(segment)
     date_str, context_str = prepare_date_context(user, child)
@@ -383,33 +319,31 @@ async def build_morning_update(
     user_name = getattr(user, "name", "") if user else ""
     name = child_name or user_name or ""
 
-    from services.brief_renderer import prepare_items_morning
-    items = prepare_items_morning(evening_slots)
+    weather_tpl = prepare_weather_data(weather_now)
 
-    # Weather now for header
-    from services.brief_renderer import format_temp
-    from services.brief_weather import wmo_to_emoji
-    temp_now = weather_now.get("temp_now") or weather_now.get("temp_morning")
-    wmo_now = weather_now.get("wmo_morning", 0)
-    weather_now_tpl = {}
-    if temp_now is not None:
-        weather_now_tpl = {
-            "icon": wmo_to_emoji(wmo_now),
-            "temp_str": format_temp(temp_now),
-            "is_good": not weather_changed,
+    # Build alert banner
+    if weather_changed:
+        alert = {
+            "type": "warn",
+            "icon": "\u26a0\ufe0f",
+            "header": change_text.split(".")[0] + "!" if change_text else "Погода изменилась!",
+            "text": ". ".join(change_text.split(".")[1:]).strip() if "." in (change_text or "") else "",
+        }
+    else:
+        alert = {
+            "type": "ok",
+            "icon": "\u2705",
+            "header": "Всё как вчера планировали",
+            "text": "",
         }
 
-    html = render_template(
-        "tpl_morning.html",
-        css_class=theme["css_class"],
-        name=name,
-        context=context_str,
-        date_str=date_str,
-        weather_now=weather_now_tpl,
-        changed=weather_changed,
-        change_text=change_text,
-        items=items,
-        kassi_comment=kassi_comment,
+    # Download photos for slots
+    await _download_slot_photos(evening_slots)
+
+    html = _build_flatlay_html(
+        name, context_str, date_str, theme,
+        weather_tpl, evening_slots, {},
+        kassi_comment, alert=alert,
     )
 
     try:

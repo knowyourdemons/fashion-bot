@@ -13,7 +13,19 @@
 body{
   width:1080px;height:1920px;
   font-family:'N',sans-serif;
+  {% if palette and palette|length >= 3 %}
+  background:linear-gradient(160deg,
+    color-mix(in srgb, {{ palette[0] }} 35%, #1a1a2e) 0%,
+    color-mix(in srgb, {{ palette[1] }} 25%, #16213e) 50%,
+    color-mix(in srgb, {{ palette[2] }} 20%, #0f3460) 100%);
+  {% elif palette and palette|length >= 1 %}
+  background:linear-gradient(160deg,
+    color-mix(in srgb, {{ palette[0] }} 30%, #1a1a2e) 0%,
+    color-mix(in srgb, {{ palette[0] }} 20%, #16213e) 50%,
+    #0f3460 100%);
+  {% else %}
   background:linear-gradient(160deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
+  {% endif %}
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:60px 80px;color:#fff;
 }

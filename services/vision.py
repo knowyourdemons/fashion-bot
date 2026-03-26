@@ -603,10 +603,26 @@ def _reclassify_items(items: list[dict]) -> list[dict]:
     """Fix common Vision classification mistakes using bbox size and context.
 
     Rules:
+    0. Tiny bbox (area < 5%) → remove as noise (phantom items from photo corners)
     1. Small "шапка" with no outerwear context → носки (threshold 0.25)
     2. Носки/колготки/гольфы → force category_group=base_layer
     3. Трусики/бюстгальтер → force category_group=underwear
     """
+    # Filter out phantom items with tiny bbox (corner artifacts)
+    _MIN_BBOX_AREA = 0.05  # 5% of photo area
+    filtered = []
+    for item in items:
+        bbox = item.get("bbox") or {}
+        bw = float(bbox.get("w", 1.0))
+        bh = float(bbox.get("h", 1.0))
+        if bw * bh < _MIN_BBOX_AREA and len(items) > 1:
+            logger.info("vision.filter_tiny_bbox",
+                type=item.get("type"), bbox_area=f"{bw * bh:.3f}",
+                reason="bbox_area_below_5pct")
+            continue
+        filtered.append(item)
+    items = filtered
+
     has_outerwear = any(
         item.get("category_group") == "outerwear" for item in items
     )
@@ -664,7 +680,10 @@ def _crop_bbox(image_bytes: bytes, bbox: dict, padding: float = 0.05) -> bytes:
                  for multi-item photos to avoid capturing neighbor items.
     """
     try:
-        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        img = Image.open(io.BytesIO(image_bytes))
+        has_alpha = img.mode in ("RGBA", "LA", "PA")
+        if not has_alpha:
+            img = img.convert("RGB")
         iw, ih = img.size
         x = max(0.0, min(1.0, float(bbox.get("x", 0.0))))
         y = max(0.0, min(1.0, float(bbox.get("y", 0.0))))
@@ -683,7 +702,10 @@ def _crop_bbox(image_bytes: bytes, bbox: dict, padding: float = 0.05) -> bytes:
         bottom = int((y + h) * ih)
         cropped = img.crop((left, top, right, bottom))
         buf = io.BytesIO()
-        cropped.save(buf, format="JPEG", quality=90)
+        if has_alpha:
+            cropped.save(buf, format="PNG")
+        else:
+            cropped.save(buf, format="JPEG", quality=90)
         return buf.getvalue()
     except (ValueError, TypeError):
         return image_bytes

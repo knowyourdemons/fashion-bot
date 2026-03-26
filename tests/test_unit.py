@@ -57,7 +57,7 @@ class TestReclassification:
         """bbox ≤0.25×0.25 + accessory/шапка + no outerwear → носки"""
         from services.vision import _reclassify_items
         items = [{"category_group": "accessory", "type": "шапка",
-                  "bbox": {"x": 0.7, "y": 0.1, "w": 0.12, "h": 0.10}}]
+                  "bbox": {"x": 0.7, "y": 0.1, "w": 0.25, "h": 0.22}}]
         result = _reclassify_items(items)
         assert result[0]["type"] == "носки"
         assert result[0]["category_group"] == "base_layer"
@@ -67,13 +67,26 @@ class TestReclassification:
         from services.vision import _reclassify_items
         items = [
             {"category_group": "accessory", "type": "шапка",
-             "bbox": {"x": 0.7, "y": 0.1, "w": 0.12, "h": 0.10}},
+             "bbox": {"x": 0.7, "y": 0.1, "w": 0.25, "h": 0.22}},
             {"category_group": "outerwear", "type": "куртка",
              "bbox": {"x": 0.1, "y": 0.1, "w": 0.5, "h": 0.7}},
         ]
         result = _reclassify_items(items)
         assert result[0]["type"] == "шапка"
         assert result[0]["category_group"] == "accessory"
+
+    def test_tiny_bbox_filtered_as_noise(self):
+        """Phantom item with bbox < 5% is removed from multi-item photo."""
+        from services.vision import _reclassify_items
+        items = [
+            {"category_group": "bottom", "type": "леггинсы",
+             "bbox": {"x": 0.05, "y": 0.1, "w": 0.83, "h": 0.83}},
+            {"category_group": "bottom", "type": "джинсы",
+             "bbox": {"x": 0.82, "y": 0.0, "w": 0.18, "h": 0.22}},
+        ]
+        result = _reclassify_items(items)
+        assert len(result) == 1
+        assert result[0]["type"] == "леггинсы"
 
     def test_большая_шапка_не_переклассифицируется(self):
         from services.vision import _reclassify_items
@@ -158,17 +171,22 @@ class TestFlatlay:
         items, placeholders, pct, txt = prepare_items_flatlay([])
         assert items == []
         assert isinstance(placeholders, list)
-        assert len(placeholders) > 0  # should show essential slot placeholders
-        assert pct == 0  # empty wardrobe = 0% progress
+        # Empty list = no placeholders (weather-aware: only slots from outfit_slots)
+        assert pct == 100  # no items, no placeholders = 100%
 
     def test_placeholders_for_missing_slots(self):
-        """Empty outfit should show placeholders for essential slots"""
+        """Placeholder slots from build_outfit_slots (has_item=False) should appear"""
         from services.brief_renderer import prepare_items_flatlay
-        items, placeholders, pct, txt = prepare_items_flatlay([])
-        # With no items, should show placeholders for top, bottom, outerwear, footwear
+        # Simulate outfit_slots with missing items (as build_outfit_slots would produce)
+        slots = [
+            {"slot": "top", "has_item": False, "label": "Футболка", "item_color": "розовый"},
+            {"slot": "bottom", "has_item": False, "label": "Штаны", "item_color": "синий"},
+            {"slot": "outerwear", "has_item": False, "label": "Куртка", "item_color": ""},
+        ]
+        items, placeholders, pct, txt = prepare_items_flatlay(slots)
         ph_labels = [p["label"] for p in placeholders]
-        assert any("верх" in l for l in ph_labels)
-        assert any("низ" in l for l in ph_labels)
+        assert any("Футболка" in l for l in ph_labels)
+        assert any("Штаны" in l for l in ph_labels)
 
     def test_filled_slot_no_placeholder(self):
         """Filled slot should not have placeholder"""
@@ -373,8 +391,8 @@ class TestFlatlayOrientation:
         ImageDraw.Draw(img).rectangle([10, 10, 190, 90], fill=(100, 100, 100, 255))
         buf = io.BytesIO(); img.save(buf, format="PNG"); return buf.getvalue()
 
-    def test_top_rotated_to_landscape(self):
-        """Portrait top → should be rotated to landscape"""
+    def test_top_keeps_original_orientation(self):
+        """Portrait top → keeps original orientation (no forced rotation)."""
         from services.brief_renderer import prepare_items_flatlay
         import base64
         from PIL import Image
@@ -384,9 +402,9 @@ class TestFlatlayOrientation:
                   "has_item": True, "_photo_bytes": pb}]
         items, _, _, _ = prepare_items_flatlay(slots)
         assert len(items) == 1
-        # Decode and check orientation
+        # Decode and check: keeps portrait (no forced landscape rotation)
         img = Image.open(io.BytesIO(base64.b64decode(items[0]["photo_base64"])))
-        assert img.size[0] > img.size[1]  # landscape after rotation
+        assert img.size[1] > img.size[0]  # stays portrait
 
     def test_bottom_keeps_portrait(self):
         """Portrait bottom → should stay portrait (no rotation)"""

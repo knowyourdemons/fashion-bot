@@ -286,20 +286,25 @@ async def _show_quiz_result(query, context, scores: dict) -> None:
         pass
     await context.bot.send_chat_action(query.message.chat_id, "typing")
 
-    # Render result card via Playwright
+    # Render result card as Style Passport (1080x1920, Stories format)
     result_png = None
     try:
-        from services.brief_renderer import render_template, render_html_to_png
+        from services.brief_renderer import render_style_passport
         name = getattr(user, "name", "").split()[0] if getattr(user, "name", "") else ""
-        html = render_template(
-            "tpl_style_result.html",
+        result_png = await render_style_passport(
             name=name or "Style",
-            style_label=st["label"],
-            style_desc=st["desc"],
-            palette=st["palette"],
-            tone_words=", ".join(st["tone_words"]),
+            lang="ru",
+            sub_season=st["label"],
+            palette=st.get("palette", []),
+            contrast_level="",
+            contrast_filled=5,
+            kibbe_primary="",
+            kibbe_secondary="",
+            kibbe_desc=st.get("desc", ""),
+            essence_label=", ".join(st.get("tone_words", [])),
+            tonal_depth="",
+            chroma="",
         )
-        result_png = await render_html_to_png(html, width=440)
     except Exception as e:
         logger.warning("quiz.render_failed", error=str(e))
 

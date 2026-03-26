@@ -1,6 +1,7 @@
-{# TEMPLATE: magazine flat-lay composition
+{# TEMPLATE: magazine flat-lay composition (unified card template)
    Vars: name, date_str, context, css_class, weather, items, placeholders,
-         progress_text, progress_pct, kassi_comment, palette
+         progress_text, progress_pct, kassi_comment, palette,
+         alert (optional): {type: "warn"|"ok", icon, header, text}
    items: photo_base64, top, left, width, height, rotate, z
    placeholders: emoji, label, top, left, width, height
    Preview: open in Chrome, width=440px #}
@@ -30,11 +31,24 @@ body{width:440px;font-family:'N',sans-serif;background:#FAFAFA}
 .g{position:absolute;transform-origin:center center}
 .g img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,.10))}
 
-/* Placeholder for missing items */
+/* Placeholder for missing items — dynamic color via color_class */
 .ph{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    border:2px dashed #ddd;border-radius:16px;background:rgba(0,0,0,.02)}
-.ph-emoji{font-size:24px;opacity:.3}
-.ph-label{font-size:9px;color:#bbb;margin-top:4px;font-weight:600}
+    border:2px dashed rgba(0,0,0,.12);border-radius:16px;background:rgba(0,0,0,.02)}
+.ph-emoji{font-size:24px;opacity:.4}
+.ph-dot{width:12px;height:12px;border-radius:50%;margin-top:3px;border:1px solid rgba(255,255,255,.6);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.ph-label{font-size:9px;color:#999;margin-top:3px;font-weight:600}
+/* Color-tinted placeholders */
+.ph.bg-pink{background:rgba(224,160,176,.12);border-color:rgba(224,160,176,.3)}
+.ph.bg-red{background:rgba(208,96,96,.10);border-color:rgba(208,96,96,.25)}
+.ph.bg-blue{background:rgba(64,96,192,.10);border-color:rgba(64,96,192,.25)}
+.ph.bg-navy{background:rgba(48,64,128,.10);border-color:rgba(48,64,128,.25)}
+.ph.bg-green{background:rgba(96,160,96,.10);border-color:rgba(96,160,96,.25)}
+.ph.bg-beige{background:rgba(200,184,160,.15);border-color:rgba(200,184,160,.35)}
+.ph.bg-grey{background:rgba(160,160,160,.08);border-color:rgba(160,160,160,.2)}
+.ph.bg-brown{background:rgba(138,106,74,.10);border-color:rgba(138,106,74,.25)}
+.ph.bg-black{background:rgba(48,48,48,.08);border-color:rgba(48,48,48,.2)}
+.ph.bg-purple{background:rgba(144,112,176,.10);border-color:rgba(144,112,176,.25)}
+.ph.bg-lavender{background:rgba(184,160,208,.10);border-color:rgba(184,160,208,.25)}
 
 /* Footer */
 .footer{padding:10px 16px 12px;background:#fff;border-top:1px solid #f0f0f0}
@@ -45,6 +59,15 @@ body{width:440px;font-family:'N',sans-serif;background:#FAFAFA}
 .comment{font-size:12px;color:#666;line-height:1.4}
 
 .brand{text-align:right;padding:0 16px 8px;font-size:8px;color:rgba(0,0,0,.15);letter-spacing:.5px;background:#fff}
+
+/* Alert banner (morning update) */
+.alert{border-radius:10px;padding:8px 12px;margin:4px 16px 0}
+.alert-warn{background:#FFF8E8;border:1px solid #F0E0B0}
+.alert-warn .alert-h{font-size:11px;font-weight:700;color:#A08020}
+.alert-warn .alert-t{font-size:10px;color:#806020;line-height:1.4;margin-top:3px}
+.alert-ok{background:#F0FAF5;border:1px solid #C0E0D0}
+.alert-ok .alert-h{font-size:11px;color:#2A6A4A}
+.alert-ok .alert-t{font-size:10px;color:#3A7A5A;line-height:1.4;margin-top:3px}
 </style>
 </head>
 <body>
@@ -65,6 +88,13 @@ body{width:440px;font-family:'N',sans-serif;background:#FAFAFA}
 </div>
 {% endif %}
 
+{% if alert %}
+<div class="alert alert-{{ alert.type }}">
+  <div class="alert-h">{{ alert.icon }} {{ alert.header }}</div>
+  {% if alert.text %}<div class="alert-t">{{ alert.text }}</div>{% endif %}
+</div>
+{% endif %}
+
 <div class="canvas">
   {% for item in items %}
   <div class="g" style="top:{{ item.top }}px;left:{{ item.left }}px;width:{{ item.width }}px;height:{{ item.height }}px;{% if item.rotate %}transform:rotate({{ item.rotate }}deg);{% endif %}{% if item.z %}z-index:{{ item.z }};{% endif %}">
@@ -73,8 +103,9 @@ body{width:440px;font-family:'N',sans-serif;background:#FAFAFA}
   {% endfor %}
 
   {% for ph in placeholders %}
-  <div class="ph" style="top:{{ ph.top }}px;left:{{ ph.left }}px;width:{{ ph.width }}px;height:{{ ph.height }}px">
+  <div class="ph{{ ' ' + ph.color_class if ph.color_class else '' }}" style="top:{{ ph.top }}px;left:{{ ph.left }}px;width:{{ ph.width }}px;height:{{ ph.height }}px">
     <div class="ph-emoji">{{ ph.emoji }}</div>
+    {% if ph.color_hex %}<div class="ph-dot" style="background:{{ ph.color_hex }}"></div>{% endif %}
     <div class="ph-label">{{ ph.label }}</div>
   </div>
   {% endfor %}
@@ -86,8 +117,6 @@ body{width:440px;font-family:'N',sans-serif;background:#FAFAFA}
     <div class="prog-bar"><div class="prog-fill" style="width:{{ progress_pct }}%"></div></div>
     <div class="prog-text">{{ progress_text }}</div>
   </div>
-  {% elif kassi_comment %}
-  <div class="comment">{{ kassi_comment }}</div>
   {% endif %}
 </div>
 

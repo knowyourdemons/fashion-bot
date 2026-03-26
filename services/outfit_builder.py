@@ -129,7 +129,7 @@ def get_collage_params(
 
 _SLOT_ORDER = [
     "outerwear", "top", "removable_layer", "bottom", "one_piece",
-    "footwear", "bag", "hat", "scarf", "gloves", "tights",
+    "footwear", "bag", "accessory", "hat", "scarf", "gloves", "tights",
 ]
 
 # ── Base layer items: NEVER show as photos in collage, only in text line ────
@@ -200,11 +200,21 @@ def build_outfit_slots(
         else:
             item = outfit.get(slot_key)
 
-        if item and getattr(item, "show_in_collage", True):
+        # Check warmth mismatch: item too warm for hot weather or too cold for frost
+        _use_item = bool(item and getattr(item, "show_in_collage", True))
+        if _use_item and slot_key in ("top", "bottom"):
+            _warmth = getattr(item, "warmth_level", None)
+            if regime == "жара" and _warmth is not None and _warmth >= 2:
+                _use_item = False  # too warm for hot weather
+            elif regime == "сильный_мороз" and _warmth is not None and _warmth <= 1:
+                _use_item = False  # too cold for severe frost
+
+        if _use_item:
             # Base layer items (socks, underwear, tights, etc.) → text only, no photo
             if _is_base_layer_item(item):
                 seen.add(slot_key)
                 continue
+
             seen.add(slot_key)
             slots.append({
                 "slot": slot_key,
@@ -237,6 +247,12 @@ def build_outfit_slots(
 
             if needs_placeholder:
                 seen.add(slot_key)
+                # Get recommended color from colortype palette
+                from worker.tasks.style_config import COLORTYPE_PALETTES
+                _palette = COLORTYPE_PALETTES.get(colortype, COLORTYPE_PALETTES.get("default", {}))
+                _rec_colors = _palette.get(slot_key, ["нейтральная"])
+                _rec_color = _rec_colors[0] if _rec_colors else ""
+
                 ph_slot: dict = {
                     "slot": slot_key,
                     "has_item": False,
@@ -244,22 +260,82 @@ def build_outfit_slots(
                     "photo_url": None,
                     "adult": is_adult,
                     "gender": gender,
+                    "item_color": _rec_color,  # recommended color for placeholder tint
                 }
-                # Подпись placeholder по температуре
-                if slot_key == "outerwear":
-                    if _temp > 10:
-                        ph_slot["label"] = "Ветровка"
-                    elif _temp > 0:
-                        ph_slot["label"] = "Куртка"
+                # Подпись placeholder по температуре и возрасту
+                _child_age = None
+                if child and hasattr(child, "birthdate") and child.birthdate:
+                    from datetime import date as _dt
+                    _child_age = (_dt.today() - child.birthdate).days / 365.25
+
+                if slot_key == "top":
+                    if _temp > 25:
+                        ph_slot["label"] = "Футболка"
+                    elif _temp > 15:
+                        ph_slot["label"] = "Лонгслив"
+                    elif _temp > 5:
+                        ph_slot["label"] = "Кофта"
                     else:
+                        ph_slot["label"] = "Тёплый свитер"
+                elif slot_key == "bottom":
+                    if _temp > 25:
+                        ph_slot["label"] = "Шорты"
+                    elif _temp > 15:
+                        ph_slot["label"] = "Штаны"
+                    elif _temp > 5:
+                        ph_slot["label"] = "Штаны"
+                    else:
+                        ph_slot["label"] = "Тёплые штаны"
+                elif slot_key == "outerwear":
+                    if _temp <= 0 and _child_age is not None and _child_age <= 5:
+                        ph_slot["label"] = "Тёплый комбинезон"
+                    elif _temp <= -10:
+                        ph_slot["label"] = "Пуховик"
+                    elif _temp <= 0:
                         ph_slot["label"] = "Тёплая куртка"
+                    elif _temp > 10:
+                        ph_slot["label"] = "Ветровка"
+                    else:
+                        ph_slot["label"] = "Куртка"
                 elif slot_key == "footwear":
                     if _temp > 20:
                         ph_slot["label"] = "Сандалии"
                     elif _temp > 5:
                         ph_slot["label"] = "Кроссовки"
-                    else:
+                    elif _temp > 0:
                         ph_slot["label"] = "Ботинки"
+                    elif _temp > -10:
+                        ph_slot["label"] = "Тёплые ботинки"
+                    else:
+                        ph_slot["label"] = "Зимние сапоги"
+                elif slot_key == "hat":
+                    if _temp <= -10:
+                        ph_slot["label"] = "Тёплая шапка"
+                    elif _temp <= 5:
+                        ph_slot["label"] = "Шапка"
+                    else:
+                        ph_slot["label"] = "Шапка"
+                elif slot_key == "scarf":
+                    if _temp <= -10:
+                        ph_slot["label"] = "Тёплый шарф"
+                    else:
+                        ph_slot["label"] = "Шарф"
+                elif slot_key == "gloves":
+                    if _child_age is not None and _child_age <= 5:
+                        ph_slot["label"] = "Варежки"
+                    elif _temp <= -10:
+                        ph_slot["label"] = "Тёплые перчатки"
+                    else:
+                        ph_slot["label"] = "Перчатки"
+                elif slot_key == "bag":
+                    ph_slot["label"] = "Сумка"
+                elif slot_key == "accessory":
+                    if _temp > 15:
+                        ph_slot["label"] = "Очки"
+                        ph_slot["_layout_hint"] = "accessory_1"  # left position
+                    else:
+                        ph_slot["label"] = "Ремень"
+                        ph_slot["_layout_hint"] = "accessory_2"  # right, above shoes
                 slots.append(ph_slot)
 
     return slots
@@ -283,12 +359,10 @@ def has_minimum_outfit(outfit: dict) -> bool:
 def has_minimum_wardrobe(items: list) -> bool:
     """Check if wardrobe has items to form a minimum outfit (top+bottom or one_piece).
 
-    Requires at least 5 items AND matching category groups.
-
     Args:
         items: list of WardrobeItem objects
     """
-    if len(items) < 5:
+    if len(items) < 2:
         return False
     groups = {getattr(i, "category_group", "") for i in items}
     return ("top" in groups and "bottom" in groups) or "one_piece" in groups

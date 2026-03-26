@@ -54,41 +54,132 @@ THEMES = {
 # ── Color mapping ─────────────────────────────────────────────────────────────
 
 COLOR_BG: dict[str, str] = {
-    "розовый": "bg-pink",
-    "красный": "bg-red",
+    # Stems to match all gender forms (розовый/розовая/розовое)
+    "розов": "bg-pink",
+    "красн": "bg-red",
+    "алы": "bg-red",
+    "бордо": "bg-red",
     "синий": "bg-blue",
-    "голубой": "bg-blue",
-    "бежевый": "bg-beige",
-    "серый": "bg-beige",  # contrast: grey item on beige bg (grey-on-grey was invisible)
-    "зелёный": "bg-green",
-    "зеленый": "bg-green",
-    "белый": "bg-lavender",  # contrast: white item on lavender bg (white-on-white invisible)
-    "чёрный": "bg-black",
-    "черный": "bg-black",
-    "коричневый": "bg-brown",
-    "фиолетовый": "bg-purple",
-    "тёмно-синий": "bg-navy",
-    "темно-синий": "bg-navy",
-    "лавандовый": "bg-lavender",
+    "синя": "bg-blue",
+    "голуб": "bg-blue",
+    "бирюз": "bg-blue",
+    "бежев": "bg-beige",
+    "кремов": "bg-beige",
+    "слонов": "bg-beige",
+    "серебр": "bg-beige",
+    "сер": "bg-beige",
+    "зелён": "bg-green",
+    "зелен": "bg-green",
+    "хаки": "bg-green",
+    "мятн": "bg-green",
+    "оливк": "bg-green",
+    "бел": "bg-lavender",
+    "молочн": "bg-lavender",
+    "чёрн": "bg-black",
+    "черн": "bg-black",
+    "графит": "bg-black",
+    "коричнев": "bg-brown",
+    "шоколад": "bg-brown",
+    "кофе": "bg-brown",
+    "верблюж": "bg-brown",
+    "фиолет": "bg-purple",
+    "сирен": "bg-purple",
+    "лаванд": "bg-lavender",
+    "тёмно-син": "bg-navy",
+    "темно-син": "bg-navy",
+    "индиго": "bg-navy",
+    "деним": "bg-navy",
+    "оранж": "bg-beige",
+    "персик": "bg-pink",
+    "коралл": "bg-pink",
+    "жёлт": "bg-beige",
+    "золот": "bg-beige",
+    "горчич": "bg-brown",
+    "нейтральн": "bg-beige",
+    "телесн": "bg-beige",
+    "абрикос": "bg-pink",
+    "лосос": "bg-pink",
+    "пудров": "bg-pink",
+    "пыльн": "bg-pink",
+    "фукси": "bg-pink",
+    "рубинов": "bg-red",
+    "терракот": "bg-brown",
+    "ржав": "bg-brown",
+    "бронзов": "bg-brown",
+    "бронз": "bg-brown",
+    "тауп": "bg-brown",
+    "рыж": "bg-brown",
+    "мандарин": "bg-beige",
+    "лимон": "bg-beige",
+    "изумруд": "bg-green",
+    "дымчат": "bg-beige",
+    "электрик": "bg-blue",
+    "ярко-син": "bg-blue",
+    "серебрист": "bg-beige",
 }
 
 COLOR_HEX: dict[str, str] = {
-    "розовый": "#E0A0B0",
-    "красный": "#D06060",
+    "розов": "#E0A0B0",
+    "красн": "#D06060",
+    "алы": "#D06060",
+    "бордо": "#8B3A3A",
     "синий": "#4060C0",
-    "голубой": "#70A0D0",
-    "бежевый": "#C8B8A0",
-    "серый": "#A0A0A0",
-    "зелёный": "#60A060",
-    "зеленый": "#60A060",
-    "белый": "#E8E8E8",
-    "чёрный": "#303030",
-    "черный": "#303030",
-    "коричневый": "#8A6A4A",
-    "фиолетовый": "#9070B0",
-    "тёмно-синий": "#304080",
-    "темно-синий": "#304080",
-    "лавандовый": "#B8A0D0",
+    "синя": "#4060C0",
+    "голуб": "#70A0D0",
+    "бирюз": "#40B0B0",
+    "бежев": "#C8B8A0",
+    "кремов": "#D8CDB8",
+    "слонов": "#D8CDB8",
+    "серебр": "#C0C0C0",
+    "сер": "#A0A0A0",
+    "зелён": "#60A060",
+    "зелен": "#60A060",
+    "хаки": "#8A8A60",
+    "мятн": "#80C8A0",
+    "оливк": "#808040",
+    "бел": "#E8E8E8",
+    "молочн": "#F0EAE0",
+    "чёрн": "#303030",
+    "черн": "#303030",
+    "графит": "#404040",
+    "коричнев": "#8A6A4A",
+    "шоколад": "#6A4A2A",
+    "кофе": "#7A5A3A",
+    "верблюж": "#B09060",
+    "фиолет": "#9070B0",
+    "сирен": "#A080C0",
+    "лаванд": "#B8A0D0",
+    "тёмно-син": "#304080",
+    "темно-син": "#304080",
+    "индиго": "#304080",
+    "деним": "#4060A0",
+    "оранж": "#D08040",
+    "персик": "#E0B090",
+    "коралл": "#D07070",
+    "жёлт": "#D0C060",
+    "золот": "#C8A840",
+    "горчич": "#B09030",
+    "нейтральн": "#C8B8A0",
+    "телесн": "#D8C0A8",
+    "абрикос": "#E8A878",
+    "лосос": "#E89080",
+    "пудров": "#D8A8B0",
+    "пыльн": "#C8A0A0",
+    "фукси": "#D04080",
+    "рубинов": "#A02040",
+    "терракот": "#C06040",
+    "ржав": "#B06030",
+    "бронзов": "#A08040",
+    "бронз": "#A08040",
+    "тауп": "#A09080",
+    "рыж": "#C07030",
+    "мандарин": "#E08030",
+    "лимон": "#D8D040",
+    "изумруд": "#308060",
+    "дымчат": "#B0B0B0",
+    "электрик": "#2060E0",
+    "ярко-син": "#2060E0",
+    "серебрист": "#C0C0C8",
 }
 
 TYPE_EMOJI: dict[str, str] = {
@@ -491,10 +582,11 @@ _FLATLAY_SLOTS = {
     # Row 3: pinned to bottom. Bag left, shoes right, accessories between.
     "bag":        (410, 0,   105, 105, 0, 6),
     "accessory_1":(170, 0,   75,  75,  0, 7),  # очки left
-    "accessory_2":(280, 310, 75,  75,  0, 7),  # ремень right of pants
+    "accessory_2":(325, 320, 65,  60,  0, 7),  # ремень right, above shoes
     "footwear_1": (410, 310, 125, 105, 0, 6),  # aligned bottom with bag
     "hat":        (0,   360, 75,  75,  0, 7),
     "scarf":      (85,  355, 70,  85,  0, 6),
+    "gloves":     (165, 370, 65,  60,  0, 7),  # right of scarf, no overlap
 }
 
 _FLATLAY_SLOTS_ONE_PIECE = {
@@ -506,13 +598,17 @@ _FLATLAY_SLOTS_ONE_PIECE = {
     "bag":        (370, 0,   110, 110, 0, 5),
     "hat":        (170, 350, 75,  75,  0, 6),
     "scarf":      (260, 0,   70,  90,  0, 6),
+    "gloves":     (260, 350, 65,  65,  0, 6),  # next to hat
     "tights":     (280, 330, 70,  120, 0, 2),
 }
 
 
 def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
-    """Prepare items with absolute positions for flat-lay template."""
-    from services.image_builder import _auto_trim
+    """Prepare items with absolute positions for flat-lay template.
+
+    Placeholders are weather-aware: only slots present in outfit_slots
+    (from build_outfit_slots) get placeholders. No hardcoded essential slots.
+    """
 
     # Use one_piece layout ONLY if one_piece is present AND no top+bottom
     has_one_piece = any(
@@ -564,42 +660,33 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
 
         photo_b64 = ""
         slot_name = s.get("slot", "top")
-        # Expected orientation per slot type
-        # True = landscape (wider than tall), False = portrait (taller than wide)
-        _want_landscape = slot_name in ("top",)
-        _want_portrait = slot_name in ("bottom", "outerwear", "one_piece")
         try:
             from PIL import Image as _PILImg
             import io as _io
             _img = _PILImg.open(_io.BytesIO(s["_photo_bytes"])).convert("RGBA")
 
-            # 1. Apply flat_lay_rotation from Vision (stored in bbox or direct)
-            _bbox_data = s.get("bbox") or {}
-            _rotation = s.get("flat_lay_rotation") or _bbox_data.get("flat_lay_rotation", 0)
-            if _rotation and _rotation in (90, 180, 270):
-                _img = _img.rotate(-_rotation, expand=True, fillcolor=(0, 0, 0, 0))
-            elif _want_portrait and not _rotation:
-                # Vision said 0 for portrait item — verify with 5-zone heuristic
-                # If waistband (wider zone) is at bottom → flip 180°
-                import numpy as _np
-                _alpha = _np.array(_img.split()[3])
-                _ih = _alpha.shape[0]
-                if _ih > 50:
-                    _zones = []
-                    for _zi in range(5):
-                        _zs = (_ih * _zi) // 5
-                        _ze = (_ih * (_zi + 1)) // 5
-                        _zdata = _alpha[_zs:_ze, :]
-                        _zones.append(_np.sum(_zdata > 128) / max(1, _zdata.size))
-                    # Pants pattern: if bottom 2 zones are wider than top 2 → flipped
-                    _top_avg = sum(_zones[:2]) / 2
-                    _bot_avg = sum(_zones[3:]) / 2
-                    if _bot_avg > _top_avg * 1.3 and _bot_avg > 0.25:
-                        _img = _img.rotate(180, expand=False)
-                        logger.info("flatlay.zone_flip", slot=slot_name,
-                                    top_avg=f"{_top_avg:.2f}", bot_avg=f"{_bot_avg:.2f}")
+            # 0. Clean bg artifacts
+            import numpy as _np
+            _arr = _np.array(_img)
+            # 0a. Alpha threshold: < 80 → transparent
+            _arr[_arr[:, :, 3] < 80, 3] = 0
+            # 0b. Keep only largest connected component (removes floor/bg islands)
+            try:
+                import cv2 as _cv2
+                _alpha_bin = (_arr[:, :, 3] > 128).astype(_np.uint8)
+                _n_labels, _labels = _cv2.connectedComponents(_alpha_bin)
+                if _n_labels > 2:
+                    _sizes = [(_np.sum(_labels == i), i) for i in range(1, _n_labels)]
+                    _sizes.sort(reverse=True)
+                    _main_size = _sizes[0][0]
+                    for _sz, _lbl in _sizes[1:]:
+                        if _sz < _main_size * 0.10:
+                            _arr[_labels == _lbl, 3] = 0
+            except Exception:
+                pass
+            _img = _PILImg.fromarray(_arr)
 
-            # 2. Trim transparent edges
+            # 1. Trim transparent edges
             _bbox = _img.split()[3].getbbox()
             if _bbox:
                 _p = 3
@@ -607,24 +694,52 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
                          min(_img.size[0], _bbox[2]+_p), min(_img.size[1], _bbox[3]+_p))
                 _img = _img.crop(_bbox)
 
+            # 1b. (removed — bottom trim handled by quality of bg removal)
+
+            # 2. Portrait correction for bottom/outerwear only
+            # Tops are handled by auto_rotate in thumbnail pipeline
             _w, _h = _img.size
-            _is_landscape = _w > _h
+            _did_portrait_fix = False
+            if slot_name in ("bottom", "outerwear", "one_piece") and _w > _h * 1.2:
+                _img = _img.rotate(90, expand=True, fillcolor=(0, 0, 0, 0))
+                _did_portrait_fix = True
+                _bbox = _img.split()[3].getbbox()
+                if _bbox:
+                    _p = 3
+                    _bbox = (max(0, _bbox[0]-_p), max(0, _bbox[1]-_p),
+                             min(_img.size[0], _bbox[2]+_p), min(_img.size[1], _bbox[3]+_p))
+                    _img = _img.crop(_bbox)
 
-            # 3. If no Vision rotation, use slot-based heuristic for tops only
-            if not _rotation and _want_landscape and not _is_landscape:
-                _img = _img.rotate(-90, expand=True, fillcolor=(0, 0, 0, 0))
-
-            # 4. Re-trim after rotation
-            _bbox = _img.split()[3].getbbox()
-            if _bbox:
-                _p = 3
-                _bbox = (max(0, _bbox[0]-_p), max(0, _bbox[1]-_p),
-                         min(_img.size[0], _bbox[2]+_p), min(_img.size[1], _bbox[3]+_p))
-                _img = _img.crop(_bbox)
+            # 3. Apply flat_lay_rotation from Vision — only if no portrait fix was needed
+            # (portrait fix already oriented the item correctly; Vision rotation
+            #  was computed on the original photo orientation and conflicts)
+            if not _did_portrait_fix:
+                _bbox_data = s.get("bbox") or {}
+                _rotation = s.get("flat_lay_rotation") or _bbox_data.get("flat_lay_rotation", 0)
+                if _rotation and _rotation in (90, 180, 270):
+                    _img = _img.rotate(-_rotation, expand=True, fillcolor=(0, 0, 0, 0))
+                    _bbox = _img.split()[3].getbbox()
+                    if _bbox:
+                        _p = 3
+                        _bbox = (max(0, _bbox[0]-_p), max(0, _bbox[1]-_p),
+                                 min(_img.size[0], _bbox[2]+_p), min(_img.size[1], _bbox[3]+_p))
+                        _img = _img.crop(_bbox)
 
             _buf = _io.BytesIO()
             _img.save(_buf, format="PNG")
             photo_b64 = base64.b64encode(_buf.getvalue()).decode()
+
+            # Adjust slot dimensions to match photo aspect ratio
+            _iw, _ih = _img.size
+            if _iw > 0 and _ih > 0:
+                _img_ratio = _iw / _ih
+                _slot_ratio = width / max(height, 1)
+                if _img_ratio < _slot_ratio * 0.5:
+                    # Photo is much more portrait than slot — grow height, shrink width
+                    _new_h = min(int(height * 1.8), 280)
+                    width = max(int(_new_h * _img_ratio), 60)
+                    height = _new_h
+                    top = max(0, top + 20)  # shift down a bit
         except Exception:
             try:
                 photo_b64 = base64.b64encode(s["_photo_bytes"]).decode()
@@ -643,35 +758,84 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
             "z": z,
         })
 
-    # Generate placeholders for essential missing slots
-    _ESSENTIAL_SLOTS = {
-        "top":        ("👚", "верх"),
-        "bottom":     ("👖", "низ"),
-        "outerwear":  ("🧥", "куртку"),
-        "footwear_1": ("👟", "обувь"),
-        "bag":        ("👜", "сумку"),
-        "accessory_1":("🕶", "очки"),
-        "accessory_2":("📿", "ремень"),
+    # ── Weather-aware placeholders ───────────────────────────────────────────
+    # Show placeholders for:
+    #   1. Slots with has_item=False (needed but missing from wardrobe)
+    #   2. Slots with has_item=True but no _photo_bytes (item exists, no photo yet)
+    # Only slots present in outfit_slots get placeholders (weather-aware).
+    _SLOT_PH_EMOJI = {
+        "outerwear": "🧥", "top": "👚", "bottom": "👖", "one_piece": "👗",
+        "footwear": "👟", "bag": "👜", "hat": "🧢", "scarf": "🧣",
+        "gloves": "🧤", "tights": "🧦", "accessory": "🕶",
     }
-    # Collect all occupied positions (top,left) to avoid overlap
+    # Override emoji based on placeholder label (weather-dependent)
+    _LABEL_EMOJI_OVERRIDE = {
+        "Комбинезон": "🧥", "Тёплый комбинезон": "🧥", "Тёплые ботинки": "👢",
+        "Очки": "🕶", "Ремень": "📿", "Сумка": "👜",
+    }
+    _SLOT_PH_LABEL = {
+        "outerwear": "куртку", "top": "верх", "bottom": "низ", "one_piece": "платье",
+        "footwear": "обувь", "bag": "сумку", "hat": "шапку", "scarf": "шарф",
+        "gloves": "перчатки", "tights": "колготки", "accessory": "аксессуар",
+    }
+
+    # Collect all occupied positions to avoid overlap
     _occupied = {(layout[k][0], layout[k][1]) for k in slot_items if k in layout}
     placeholders = []
-    for slot_key, (emoji, label) in _ESSENTIAL_SLOTS.items():
-        if slot_key not in slot_items and slot_key in layout:
-            top, left, width, height, _, _ = layout[slot_key]
-            # Skip if another item occupies a nearby position (within 50px)
-            _overlaps = any(abs(top - ot) < 50 and abs(left - ol) < 50
-                           for ot, ol in _occupied)
-            if _overlaps:
-                continue
-            placeholders.append({
-                "emoji": emoji,
-                "label": f"+ {label}",
-                "top": top + 10,
-                "left": left + 10,
-                "width": max(60, width - 20),
-                "height": max(60, height - 20),
-            })
+
+    for s in outfit_slots:
+        slot = s.get("slot", "")
+        # Skip slots already rendered with real photos
+        if s.get("has_item") and s.get("_photo_bytes"):
+            continue
+        if slot in ("underwear", "socks", "base_layer", "removable_layer"):
+            continue
+
+        # Map slot to layout key
+        key = s.get("_layout_hint") or slot
+        if slot == "footwear":
+            key = "footwear_1"
+        elif key not in layout:
+            # Try numbered variants
+            for suffix in ("_1", "_2"):
+                if f"{slot}{suffix}" in layout:
+                    key = f"{slot}{suffix}"
+                    break
+
+        if key not in layout or key in slot_items:
+            continue
+
+        top, left, width, height, _, _ = layout[key]
+        # Skip if overlapping with a real item
+        _overlaps = any(abs(top - ot) < 50 and abs(left - ol) < 50
+                        for ot, ol in _occupied)
+        if _overlaps:
+            continue
+
+        color = s.get("item_color") or ""
+        raw_label = s.get("label") or _SLOT_PH_LABEL.get(slot, slot)
+
+        # Items with photo → "📸 тип цвет", missing items → "+ label"
+        if s.get("has_item"):
+            item_type = s.get("item_type") or _SLOT_PH_LABEL.get(slot, slot)
+            label = f"\U0001f4f8 {item_type}"
+        else:
+            label = f"+ {raw_label}"
+
+        # Emoji: check label-based override first, then slot default
+        emoji = _LABEL_EMOJI_OVERRIDE.get(raw_label) or _SLOT_PH_EMOJI.get(slot, "👕")
+
+        placeholders.append({
+            "emoji": emoji,
+            "label": label,
+            "top": top + 10,
+            "left": left + 10,
+            "width": max(60, width - 20),
+            "height": max(60, height - 20),
+            "color_class": get_color_bg(color) if color else "",
+            "color_hex": get_color_hex(color) if color else "",
+        })
+        _occupied.add((top, left))
 
     # Progress
     filled = len(items)

@@ -1438,6 +1438,84 @@ async def select_outfit_ai(
 # ── Fallback ─────────────────────────────────────────────────────────────────
 
 
+def _build_fallback_comment(
+    visual_items: list,
+    child_name: str | None,
+    temp: float,
+    segment: str = "",
+) -> str:
+    """Build a personalized Kassi-style comment referencing actual outfit items."""
+    import random
+    name = child_name or ""
+    is_child = bool(child_name)
+
+    # Collect item descriptions
+    item_descs = []
+    colors_used = []
+    for item in visual_items[:5]:
+        color = (getattr(item, "color", "") or "").lower()
+        itype = (getattr(item, "type", "") or "").lower()
+        if color:
+            colors_used.append(color)
+        if color and color not in itype:
+            item_descs.append(f"{color} {itype}")
+        elif itype:
+            item_descs.append(itype)
+
+    # Pick key items for personalization
+    top = next((i for i in visual_items if getattr(i, "category_group", "") in ("top", "one_piece")), None)
+    outer = next((i for i in visual_items if getattr(i, "category_group", "") == "outerwear"), None)
+    bottom = next((i for i in visual_items if getattr(i, "category_group", "") == "bottom"), None)
+
+    key_item = top or outer or bottom
+    key_desc = ""
+    if key_item:
+        c = (getattr(key_item, "color", "") or "").lower()
+        t = (getattr(key_item, "type", "") or "").lower()
+        key_desc = f"{c} {t}".strip() if c and c not in t else t
+
+    # Color harmony note
+    color_note = ""
+    if len(set(colors_used)) >= 2:
+        unique = list(dict.fromkeys(colors_used))[:2]
+        color_note = f"{unique[0]} и {unique[1]} классно дружат между собой"
+
+    # Temperature-specific advice
+    if temp < 0:
+        weather_advice = "В такой мороз главное — многослойность: воздух между слоями сохраняет тепло"
+    elif temp < 5:
+        weather_advice = "Идеально для прогулки — тепло, но без перегрева"
+    elif temp < 12:
+        weather_advice = "Можно активно двигаться и не вспотеть — самый комфортный вариант"
+    elif temp < 20:
+        weather_advice = "Лёгкие слои — можно снять если станет жарко"
+    else:
+        weather_advice = "Лёгко и свободно — для тёплого дня то что нужно"
+
+    templates = []
+    if is_child and key_desc and len(item_descs) >= 2:
+        templates = [
+            f"{key_desc.capitalize()} + {item_descs[1]} — классное сочетание для {name}! {weather_advice}",
+            f"Для {name} сегодня: {key_desc} с {item_descs[1]}. {color_note + '. ' if color_note else ''}{weather_advice}",
+            f"{name} будет выглядеть отлично! {key_desc.capitalize()} с {item_descs[1]} — {weather_advice.lower()}",
+        ]
+    elif key_desc and len(item_descs) >= 2:
+        templates = [
+            f"{key_desc.capitalize()} + {item_descs[1]} — стильная пара! {color_note + '. ' if color_note else ''}{weather_advice}",
+            f"Сегодня {key_desc} с {item_descs[1]}. {weather_advice}",
+        ]
+    elif key_desc:
+        templates = [
+            f"{key_desc.capitalize()} — отличная основа образа. {weather_advice}",
+        ]
+    else:
+        templates = [
+            f"Образ собран! {weather_advice}",
+        ]
+
+    return random.choice(templates)
+
+
 def _fallback_result(
     items: list,
     season: str,
@@ -1448,30 +1526,15 @@ def _fallback_result(
     segment: str,
     child_name: str | None,
 ) -> OutfitResult:
-    """Fallback to rule-based selector + template comment."""
-    from services.outfit_builder import warm_outfit_comment
-
+    """Fallback to rule-based selector + personalized comment."""
     outfit = _select_outfit(items, season, today, temp, temp_eve, precip)
 
-    # Build simple comment
+    # Build personalized comment from actual outfit items
+    visual_items = [i for i in outfit.get("all_items", []) if not _is_base_layer_item(i)]
+    comment = _build_fallback_comment(visual_items, child_name, temp, segment)
+
     scored = [float(i.score_item) for i in outfit.get("all_items", []) if i.score_item]
     avg = sum(scored) / len(scored) if scored else 6.0
-
-    visual_items = [i for i in outfit.get("all_items", []) if not _is_base_layer_item(i)]
-    first_desc = ""
-    if len(visual_items) == 1:
-        first_desc = f"{visual_items[0].type} {visual_items[0].color}".strip().lower()
-
-    comment = warm_outfit_comment(
-        score=avg,
-        child_name=child_name,
-        temp=temp,
-        has_outerwear=outfit.get("outerwear") is not None,
-        missing_slots=[],
-        real_item_count=len(visual_items),
-        first_item_desc=first_desc,
-    )
-
     is_wow = bool(scored and avg >= 8.0)
 
     return OutfitResult(

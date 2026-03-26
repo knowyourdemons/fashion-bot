@@ -183,16 +183,23 @@ def _select_outfit(
             or _first(cg="bottom")
         )
     else:  # мороз / сильный_мороз
-        result["top"] = (
-            _first(cg="top", prefer_contains="свитер")
-            or _first(cg="top", prefer_contains="кофт")
-            or _first(cg="top")
+        # Prefer one_piece (комбинезон) in freezing weather — especially for young children
+        result["one_piece"] = (
+            _first(cg="one_piece", prefer_contains="комбинезон")
+            or _first(cg="one_piece", prefer_contains="пуховик")
+            or _first(cg="one_piece")
         )
-        result["bottom"] = (
-            _first(cg="bottom", prefer_contains="брюк", type_not_contains="шорт")
-            or _first(cg="bottom", type_not_contains="шорт")
-            or _first(cg="bottom")
-        )
+        if not result["one_piece"]:
+            result["top"] = (
+                _first(cg="top", prefer_contains="свитер")
+                or _first(cg="top", prefer_contains="кофт")
+                or _first(cg="top")
+            )
+            result["bottom"] = (
+                _first(cg="bottom", prefer_contains="брюк", type_not_contains="шорт")
+                or _first(cg="bottom", type_not_contains="шорт")
+                or _first(cg="bottom")
+            )
 
     # Переходный период — съёмный слой
     if abs(temp_eve - temp) > 8:

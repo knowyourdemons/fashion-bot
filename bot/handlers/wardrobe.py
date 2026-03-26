@@ -2737,7 +2737,7 @@ async def _generate_outfit_for_user(message, user, context, exclude_ids: set | N
             logger.warning("wardrobe.outfit.delete_status_msg_failed", error=str(e))
 
         if collage_bytes:
-            # Split delivery: фото без caption, текст + кнопки отдельно
+            # Карточка + текст Касси с кнопками
             _photo_msg = await message.reply_photo(photo=collage_bytes, disable_notification=True)
             import asyncio as _asyncio
             await _asyncio.sleep(0.1)

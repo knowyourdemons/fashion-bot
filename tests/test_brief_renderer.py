@@ -420,6 +420,7 @@ class TestBuildBriefCard:
         return c
 
     def test_weather_card_0_photos(self):
+        """0 photos now uses flat-lay with all placeholders (unified layout)."""
         from services.brief_card import build_brief_card
         user = self._make_user()
         child = self._make_child()
@@ -432,10 +433,10 @@ class TestBuildBriefCard:
         assert result == b"\x89PNG_FAKE"
         mock_render.assert_called_once()
         html = mock_render.call_args[0][0]
-        assert "Алиса" in html
-        # advice_text no longer on card (split delivery)
+        assert "canvas" in html  # flat-lay template used for 0 photos too
 
-    def test_hybrid_card_2_photos(self):
+    def test_flatlay_card_2_photos(self):
+        """2 photos should use flat-lay (hybrid removed)."""
         from services.brief_card import build_brief_card
         user = self._make_user()
         child = self._make_child()
@@ -450,13 +451,12 @@ class TestBuildBriefCard:
 
         with patch("services.brief_card.render_html_to_png", new_callable=AsyncMock) as mock_render, \
              patch("services.image_builder._auto_trim", return_value=b"\x89PNG"):
-            mock_render.return_value = b"\x89PNG_HYBRID"
+            mock_render.return_value = b"\x89PNG_FLATLAY"
             result = _run(build_brief_card(user, child, {}, weather, slots))
 
-        assert result == b"\x89PNG_HYBRID"
+        assert result == b"\x89PNG_FLATLAY"
         html = mock_render.call_args[0][0]
-        assert "bg-pink" in html
-        assert "Куртка" in html  # missing item
+        assert "canvas" in html  # flat-lay template
 
     def test_full_card_8_photos(self):
         from services.brief_card import build_brief_card
@@ -483,6 +483,7 @@ class TestBuildBriefCard:
         assert "canvas" in html  # flat-lay canvas class
 
     def test_woman_segment(self):
+        """Woman segment uses flat-lay template (unified layout)."""
         from services.brief_card import build_brief_card
         user = self._make_user(segment="no_kids", name="Мария")
         weather = {"temp_morning": 15.0}
@@ -492,8 +493,7 @@ class TestBuildBriefCard:
             result = _run(build_brief_card(user, None, {}, weather, []))
 
         html = mock_render.call_args[0][0]
-        assert 'class="woman"' in html
-        assert "Мария" in html
+        assert "canvas" in html  # flat-lay template for all segments
 
     def test_render_failure_returns_none(self):
         from services.brief_card import build_brief_card
