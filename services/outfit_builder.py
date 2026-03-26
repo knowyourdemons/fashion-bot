@@ -230,16 +230,32 @@ def build_outfit_slots(
             })
         else:
             # Нужен ли плейсхолдер? Footwear — всегда. Остальное — через get_placeholder_label.
+            _child_age = None
+            if child and hasattr(child, "birthdate") and child.birthdate:
+                from datetime import date as _dt
+                _child_age = (_dt.today() - child.birthdate).days / 365.25
+
             if slot_key == "footwear":
                 needs_placeholder = True
             elif slot_key == "removable_layer":
-                needs_placeholder = False  # плейсхолдер для removable_layer не нужен
+                needs_placeholder = False
+            elif slot_key == "bag":
+                # Сумка не нужна маленьким детям
+                needs_placeholder = _child_age is None or _child_age >= 6
+            elif slot_key == "accessory":
+                # Ремень — только с джинсами/брюками (не леггинсы/шорты/юбка)
+                # Очки — всегда при тепле
+                if _temp > 15:
+                    needs_placeholder = True  # очки
+                else:
+                    # Ремень: проверить тип bottom
+                    _bottom_item = outfit.get("bottom")
+                    _bottom_type = (getattr(_bottom_item, "type", "") or "").lower() if _bottom_item else ""
+                    _belt_bottoms = ("джинс", "брюк", "штан", "чинос", "карго")
+                    needs_placeholder = any(w in _bottom_type for w in _belt_bottoms)
             else:
                 ph_label = get_placeholder_label(slot_key, colortype, regime)
                 needs_placeholder = ph_label is not None
-                # Для top/bottom/one_piece get_placeholder_label может вернуть None только
-                # если слот отсутствует в SEASON_SLOT_TYPES — тогда не показываем.
-                # Дополнительная защита: top/bottom нужны если нет one_piece
                 if slot_key in ("top", "bottom") and not has_one_piece and ph_label is not None:
                     needs_placeholder = True
                 elif slot_key == "one_piece" and not has_top_bottom and ph_label is not None:
