@@ -565,59 +565,60 @@ def _refine_mask_grabcut(image_bytes: bytes, mask_bytes: bytes, iterations: int 
 
 
 def _auto_rotate_to_vertical(img: Image.Image) -> Image.Image:
-    """Rotate garment to vertical orientation using contour analysis.
+    """Straighten slightly angled garments (±35° max).
 
-    Finds the minimum area bounding rectangle of the opaque region,
-    then rotates so the long axis is vertical.
-
-    cv2.minAreaRect returns angle in [-90, 0):
-    - angle is rotation of the rect from HORIZONTAL axis
-    - We need deviation from VERTICAL to straighten
+    Only corrects small tilts — does NOT change portrait/landscape orientation.
+    Uses cv2.minAreaRect to detect angle of the opaque contour.
     """
     try:
         import cv2
         alpha = img.split()[3]
         alpha_arr = np.array(alpha)
 
-        # Threshold to binary for clean contours
         _, binary = cv2.threshold(alpha_arr, 30, 255, cv2.THRESH_BINARY)
-
         contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             return img
 
         largest = max(contours, key=cv2.contourArea)
         if cv2.contourArea(largest) < img.size[0] * img.size[1] * 0.05:
-            return img  # contour too small, skip
+            return img
 
         rect = cv2.minAreaRect(largest)
         rect_w, rect_h = rect[1]
         angle = rect[2]  # [-90, 0)
 
-        # Calculate deviation from vertical
-        if rect_w < rect_h:
-            # Long side is roughly vertical, angle is tilt from vertical
-            deviation = 90 + angle  # e.g., angle=-70 → deviation=20°
-        else:
-            # Long side is roughly horizontal, need 90° + correction
-            deviation = angle  # e.g., angle=-20 → rotate -20° to go vertical
+        # Determine current orientation from content bounding box
+        _bb = np.where(alpha_arr > 128)
+        if len(_bb[0]) == 0:
+            return img
+        _content_w = _bb[1].max() - _bb[1].min()
+        _content_h = _bb[0].max() - _bb[0].min()
+        _is_portrait = _content_h > _content_w
 
-        # Straighten garment so its long axis is horizontal (flat-lay style).
-        #
-        # Calculate deviation from horizontal for the LONG side:
+        # Calculate smallest angle to straighten (keep current orientation)
         if rect_w < rect_h:
-            # Long side is closer to vertical → need large rotation
-            deviation = 90 + angle  # e.g., angle=-70 → deviation=20°
+            deviation = 90 + angle
         else:
-            # Long side is closer to horizontal → small correction
-            deviation = angle  # e.g., angle=-5 → deviation=-5°
+            deviation = angle
 
-        # Skip if already straight (<2°)
-        if abs(deviation) < 2:
+        # Only small corrections (±35°) — never flip orientation
+        if abs(deviation) < 3 or abs(deviation) > 35:
             return img
 
         rotated = img.rotate(-deviation, expand=True, resample=Image.BICUBIC,
                              fillcolor=(0, 0, 0, 0))
+
+        # Verify orientation didn't flip
+        _r_alpha = np.array(rotated.split()[3])
+        _r_bb = np.where(_r_alpha > 128)
+        if len(_r_bb[0]) > 0:
+            _r_w = _r_bb[1].max() - _r_bb[1].min()
+            _r_h = _r_bb[0].max() - _r_bb[0].min()
+            _r_portrait = _r_h > _r_w
+            if _is_portrait != _r_portrait:
+                return img  # orientation flipped — revert
+
         return rotated
     except Exception:
         return img

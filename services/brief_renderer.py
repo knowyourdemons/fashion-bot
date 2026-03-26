@@ -696,11 +696,10 @@ def prepare_items_flatlay(outfit_slots: list[dict]) -> list[dict]:
 
             # 1b. (removed — bottom trim handled by quality of bg removal)
 
-            # 2. Portrait correction for bottom/outerwear only
-            # Tops are handled by auto_rotate in thumbnail pipeline
+            # 2. Portrait correction for all garments (flat-lay = vertical)
             _w, _h = _img.size
             _did_portrait_fix = False
-            if slot_name in ("bottom", "outerwear", "one_piece") and _w > _h * 1.2:
+            if slot_name in ("top", "bottom", "outerwear", "one_piece") and _w > _h * 1.2:
                 _img = _img.rotate(90, expand=True, fillcolor=(0, 0, 0, 0))
                 _did_portrait_fix = True
                 _bbox = _img.split()[3].getbbox()
