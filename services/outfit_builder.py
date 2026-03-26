@@ -243,16 +243,18 @@ def build_outfit_slots(
                 # Сумка не нужна маленьким детям
                 needs_placeholder = _child_age is None or _child_age >= 6
             elif slot_key == "accessory":
-                # Ремень — только с джинсами/брюками (не леггинсы/шорты/юбка)
-                # Очки — всегда при тепле
-                if _temp > 15:
-                    needs_placeholder = True  # очки
+                # Дети < 6 лет — не нужны аксессуары (ремень/очки)
+                if _child_age is not None and _child_age < 6:
+                    needs_placeholder = False
                 else:
-                    # Ремень: проверить тип bottom
+                    # Ремень: только с джинсами/брюками
                     _bottom_item = outfit.get("bottom")
                     _bottom_type = (getattr(_bottom_item, "type", "") or "").lower() if _bottom_item else ""
                     _belt_bottoms = ("джинс", "брюк", "штан", "чинос", "карго")
-                    needs_placeholder = any(w in _bottom_type for w in _belt_bottoms)
+                    _needs_belt = any(w in _bottom_type for w in _belt_bottoms)
+                    # Очки: при тепле/жаре — дополнительно к ремню
+                    _needs_glasses = _temp > 15
+                    needs_placeholder = _needs_belt or _needs_glasses
             else:
                 ph_label = get_placeholder_label(slot_key, colortype, regime)
                 needs_placeholder = ph_label is not None
@@ -346,12 +348,23 @@ def build_outfit_slots(
                 elif slot_key == "bag":
                     ph_slot["label"] = "Сумка"
                 elif slot_key == "accessory":
-                    if _temp > 15:
-                        ph_slot["label"] = "Очки"
-                        ph_slot["_layout_hint"] = "accessory_1"  # left position
-                    else:
+                    if _needs_belt and _needs_glasses:
+                        # Both: add belt, then glasses as second slot
                         ph_slot["label"] = "Ремень"
-                        ph_slot["_layout_hint"] = "accessory_2"  # right, above shoes
+                        ph_slot["_layout_hint"] = "accessory_2"
+                        slots.append(ph_slot)
+                        # Add glasses as separate slot
+                        _gl_slot = dict(ph_slot)
+                        _gl_slot["label"] = "Очки"
+                        _gl_slot["_layout_hint"] = "accessory_1"
+                        slots.append(_gl_slot)
+                        continue  # already appended
+                    elif _needs_belt:
+                        ph_slot["label"] = "Ремень"
+                        ph_slot["_layout_hint"] = "accessory_2"
+                    elif _needs_glasses:
+                        ph_slot["label"] = "Очки"
+                        ph_slot["_layout_hint"] = "accessory_1"
                 slots.append(ph_slot)
 
     return slots
