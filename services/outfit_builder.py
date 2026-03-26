@@ -394,6 +394,20 @@ def build_outfit_slots(
                     elif _needs_glasses:
                         ph_slot["label"] = "Очки"
                         ph_slot["_layout_hint"] = "accessory_1"
+                elif slot_key == "tights":
+                    if _temp <= 0:
+                        ph_slot["label"] = "Тёплые колготки"
+                    else:
+                        ph_slot["label"] = "Колготки"
+                elif slot_key == "one_piece":
+                    if _needs_kombinezon:
+                        ph_slot["label"] = "Тёплый комбинезон"
+                    elif _temp > 20:
+                        ph_slot["label"] = "Сарафан"
+                    elif _temp > 10:
+                        ph_slot["label"] = "Платье"
+                    else:
+                        ph_slot["label"] = "Платье"
                 slots.append(ph_slot)
 
     return slots
