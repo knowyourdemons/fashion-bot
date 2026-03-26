@@ -234,6 +234,36 @@ async def process_rmbg(payload: dict) -> dict:
     except Exception as e:
         logger.warning("rmbg_process.colors_restore_failed", error=str(e))
 
+    # 4c. BG removal quality check — detect residual background
+    try:
+        _q_img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+        _q_arr = np.array(_q_img)
+        _q_opaque = _q_arr[:, :, 3] > 128
+        _q_total = np.sum(_q_opaque)
+        if _q_total > 100:
+            _q_rgb_sum = _q_arr[:, :, 0].astype(int) + _q_arr[:, :, 1].astype(int) + _q_arr[:, :, 2].astype(int)
+            _q_median = np.median(_q_rgb_sum[_q_opaque])
+            # For dark garments: check bright pixel contamination
+            if _q_median < 150:
+                _q_bright = np.sum((_q_rgb_sum > 400) & _q_opaque)
+                _q_bright_pct = _q_bright / _q_total * 100
+                if _q_bright_pct > 5:
+                    logger.warning("rmbg_process.bg_quality_low",
+                                   item_id=str(item_id),
+                                   bright_pct=f"{_q_bright_pct:.1f}%",
+                                   hint="dark garment with bright bg residue")
+            # For light garments: check dark pixel contamination
+            elif _q_median > 500:
+                _q_dark = np.sum((_q_rgb_sum < 150) & _q_opaque)
+                _q_dark_pct = _q_dark / _q_total * 100
+                if _q_dark_pct > 10:
+                    logger.warning("rmbg_process.bg_quality_low",
+                                   item_id=str(item_id),
+                                   dark_pct=f"{_q_dark_pct:.1f}%",
+                                   hint="light garment with dark bg residue")
+    except Exception:
+        pass
+
     # 5. Upload to R2
     is_png = png_bytes[:4] == b'\x89PNG'
     ext = "png" if is_png else "jpg"
