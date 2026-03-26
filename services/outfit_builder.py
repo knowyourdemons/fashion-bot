@@ -177,6 +177,35 @@ def build_outfit_slots(
     has_one_piece = bool(outfit.get("one_piece"))
     has_top_bottom = bool(outfit.get("top") or outfit.get("bottom"))
 
+    # Young children (≤5yo) at frost should wear комбинезон, not separate outerwear
+    _child_age_global = None
+    if child and hasattr(child, "birthdate") and child.birthdate:
+        from datetime import date as _dt
+        _child_age_global = (_dt.today() - child.birthdate).days / 365.25
+
+    _needs_kombinezon = (
+        _child_age_global is not None
+        and _child_age_global <= 5
+        and _temp <= 0
+    )
+    # Check if actual one_piece is a real комбинезон (not a dress)
+    _one_piece_item = outfit.get("one_piece")
+    _one_piece_is_kombinezon = (
+        _one_piece_item is not None
+        and any(w in (getattr(_one_piece_item, "type", "") or "").lower()
+                for w in ["комбинезон", "комбез"])
+    )
+    # If needs комбинезон but outfit has dress/outerwear instead → force placeholder
+    if _needs_kombinezon and not _one_piece_is_kombinezon:
+        # Комбинезон replaces outerwear + top + bottom
+        outfit = dict(outfit)
+        outfit["outerwear"] = None
+        outfit["top"] = None
+        outfit["bottom"] = None
+        outfit["one_piece"] = None  # will be shown as комбинезон placeholder
+        has_one_piece = True  # suppress top/bottom slots
+        has_top_bottom = False
+
     slots = []
     seen: set = set()
 
