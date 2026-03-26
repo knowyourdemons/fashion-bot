@@ -85,6 +85,14 @@ class Scheduler:
         self._add_job_safe("cleanup_r2", cleanup_r2.run,
             CronTrigger(hour=3, minute=0))
 
+        # Warm thumbnail cache — ensures collage rendering is fast
+        try:
+            from worker.tasks import thumb_cache
+            self._add_job_safe("warm_thumb_cache", thumb_cache.run,
+                CronTrigger(hour=4, minute=0))
+        except Exception as e:
+            logger.error("scheduler.import_failed", task="warm_thumb_cache", error=str(e))
+
         # Optional tasks — each import wrapped individually
         try:
             from worker.tasks import growth_alert
