@@ -1152,3 +1152,234 @@ class TestGapAnalysis:
         assert captured, "Claude должен был быть вызван"
         prompt = captured[0]["messages"][0]["content"]
         assert "Детский" in prompt
+
+
+# ── Collage v2 tests (Mar 26) ───────────────────────────────────────────────
+
+class TestCollageV2:
+    """Tests for unified flat-lay collage features."""
+
+    def _make_item(self, type, cg, warmth=2, color="серый"):
+        class FI:
+            pass
+        i = FI()
+        i.id = f"test-{type}"
+        i.type = type
+        i.category_group = cg
+        i.warmth_level = warmth
+        i.color = color
+        i.season = None
+        i.photo_id = None
+        i.photo_url = None
+        i.show_in_collage = True
+        i.bbox = None
+        i.occasion = None
+        i.formality_level = 2
+        i.last_worn = None
+        i.score_item = 7.0
+        return i
+
+    def _make_user(self, segment="no_kids", colortype=""):
+        class FU:
+            pass
+        u = FU()
+        u.segment = segment
+        u.colortype = colortype
+        u.name = "Test"
+        return u
+
+    def _make_child(self, age_years=3, gender="girl", colortype="Лето"):
+        from datetime import date, timedelta
+        class FC:
+            pass
+        c = FC()
+        c.id = "test-child"
+        c.name = "Тест"
+        c.birthdate = date.today() - timedelta(days=int(age_years * 365.25))
+        c.gender = gender
+        c.colortype = colortype
+        return c
+
+    def _basic_wardrobe(self):
+        return [
+            self._make_item("футболка", "top", 1, "белый"),
+            self._make_item("свитер", "top", 3, "бежевый"),
+            self._make_item("джинсы", "bottom", 3, "тёмно-синий"),
+            self._make_item("шорты", "bottom", 1, "синий"),
+            self._make_item("платье", "one_piece", 2, "розовый"),
+            self._make_item("куртка", "outerwear", 3, "бежевый"),
+            self._make_item("пуховик", "outerwear", 5, "чёрный"),
+            self._make_item("кроссовки", "footwear", 2, "белый"),
+            self._make_item("ботинки", "footwear", 4, "коричневый"),
+            self._make_item("шапка", "hat", 3, "серый"),
+        ]
+
+    # ── Kombinezon for young children ────────────────────────────────────────
+
+    def test_kombinezon_toddler_frost(self):
+        """≤5yo at frost → комбинезон placeholder, no separate outerwear."""
+        from services.outfit_builder import build_outfit_slots, select_outfit
+        from datetime import date
+        items = self._basic_wardrobe()
+        outfit = select_outfit(items, "Лето", date.today(), temp_morning=-15.0, temp_evening=-18.0)
+        child = self._make_child(age_years=3)
+        slots = build_outfit_slots(outfit, child=child, user=self._make_user("mom_girl"), temp=-15.0)
+        ph_labels = [s.get("label", "") for s in slots if not s.get("has_item")]
+        assert any("омбинезон" in l for l in ph_labels), f"No комбинезон: {ph_labels}"
+
+    def test_no_kombinezon_school(self):
+        """8yo at frost → normal outerwear, no комбинезон."""
+        from services.outfit_builder import build_outfit_slots, select_outfit
+        from datetime import date
+        items = self._basic_wardrobe()
+        outfit = select_outfit(items, "Лето", date.today(), temp_morning=-15.0, temp_evening=-18.0)
+        child = self._make_child(age_years=8)
+        slots = build_outfit_slots(outfit, child=child, user=self._make_user("mom_girl"), temp=-15.0)
+        ph_labels = [s.get("label", "") for s in slots if not s.get("has_item")]
+        assert not any("омбинезон" in l for l in ph_labels)
+
+    # ── Age-based accessory rules ────────────────────────────────────────────
+
+    def test_no_bag_for_toddler(self):
+        """<6yo should not have bag placeholder."""
+        from services.outfit_builder import build_outfit_slots, select_outfit
+        from datetime import date
+        items = self._basic_wardrobe()
+        outfit = select_outfit(items, "Лето", date.today(), temp_morning=18.0)
+        child = self._make_child(age_years=3)
+        slots = build_outfit_slots(outfit, child=child, user=self._make_user("mom_girl"), temp=18.0)
+        assert not any(s["slot"] == "bag" for s in slots)
+
+    def test_bag_for_school(self):
+        """≥6yo should have bag placeholder."""
+        from services.outfit_builder import build_outfit_slots, select_outfit
+        from datetime import date
+        items = self._basic_wardrobe()
+        outfit = select_outfit(items, "Лето", date.today(), temp_morning=18.0)
+        child = self._make_child(age_years=8)
+        slots = build_outfit_slots(outfit, child=child, user=self._make_user("mom_girl"), temp=18.0)
+        assert any(s["slot"] == "bag" for s in slots)
+
+    def test_no_accessories_for_toddler(self):
+        """<6yo no belt/glasses."""
+        from services.outfit_builder import build_outfit_slots, select_outfit
+        from datetime import date
+        items = self._basic_wardrobe()
+        outfit = select_outfit(items, "Лето", date.today(), temp_morning=18.0)
+        child = self._make_child(age_years=3)
+        slots = build_outfit_slots(outfit, child=child, user=self._make_user("mom_girl"), temp=18.0)
+        acc_labels = [s.get("label", "") for s in slots if s["slot"] == "accessory"]
+        assert not any("Ремень" in l or "Очки" in l for l in acc_labels)
+
+    # ── Warmth check ─────────────────────────────────────────────────────────
+
+    def test_warmth_check_hot(self):
+        """Warm items (warmth≥2) should become placeholders at +28°."""
+        from services.outfit_builder import build_outfit_slots, select_outfit
+        from datetime import date
+        items = self._basic_wardrobe()
+        outfit = select_outfit(items, "Лето", date.today(), temp_morning=28.0, temp_evening=25.0)
+        slots = build_outfit_slots(outfit, child=None, user=self._make_user(), temp=28.0)
+        real_tops = [s for s in slots if s.get("has_item") and s["slot"] in ("top", "bottom")]
+        for s in real_tops:
+            item = next((i for i in items if i.type == s.get("item_type")), None)
+            assert item is None or item.warmth_level < 2, f"Warm item at +28: {s}"
+
+    # ── Belt logic ───────────────────────────────────────────────────────────
+
+    def test_belt_with_jeans(self):
+        """Belt placeholder should appear with jeans."""
+        from services.outfit_builder import build_outfit_slots
+        items = self._basic_wardrobe()
+        jeans = next(i for i in items if i.type == "джинсы")
+        top = next(i for i in items if i.type == "футболка")
+        outfit = {"top": top, "bottom": jeans}
+        slots = build_outfit_slots(outfit, child=None, user=self._make_user(), temp=8.0)
+        acc = [s for s in slots if s["slot"] == "accessory" and s.get("label") == "Ремень"]
+        assert len(acc) == 1
+
+    def test_no_belt_with_leggings(self):
+        """No belt with leggings."""
+        from services.outfit_builder import build_outfit_slots
+        items = self._basic_wardrobe()
+        leggings = self._make_item("леггинсы", "bottom", 3, "чёрный")
+        top = next(i for i in items if i.type == "футболка")
+        outfit = {"top": top, "bottom": leggings}
+        slots = build_outfit_slots(outfit, child=None, user=self._make_user(), temp=8.0)
+        acc = [s for s in slots if s["slot"] == "accessory" and s.get("label") == "Ремень"]
+        assert len(acc) == 0
+
+    # ── Jewelry ──────────────────────────────────────────────────────────────
+
+    def test_jewelry_selected(self):
+        """Jewelry items should be selected by outfit engine."""
+        from services.outfit_builder import build_outfit_slots, select_outfit
+        from datetime import date
+        items = self._basic_wardrobe()
+        items.append(self._make_item("браслет", "accessory", 1, "золотой"))
+        items.append(self._make_item("серьги", "accessory", 1, "серебристый"))
+        outfit = select_outfit(items, "Лето", date.today(), temp_morning=18.0)
+        assert outfit.get("jewelry") is not None, "No jewelry selected"
+        assert outfit["jewelry"].type == "браслет"
+
+    def test_jewelry_in_slots(self):
+        """Jewelry items should appear in collage slots."""
+        from services.outfit_builder import build_outfit_slots, select_outfit
+        from datetime import date
+        items = self._basic_wardrobe()
+        items.append(self._make_item("браслет", "accessory", 1, "золотой"))
+        outfit = select_outfit(items, "Лето", date.today(), temp_morning=18.0)
+        slots = build_outfit_slots(outfit, child=None, user=self._make_user(), temp=18.0)
+        jewelry = [s for s in slots if s.get("_layout_hint", "").startswith("jewelry")]
+        assert len(jewelry) >= 1
+
+    # ── Weather-dependent placeholders ────────────────────────────────────────
+
+    def test_no_hat_at_hot(self):
+        """No hat placeholder at +28°."""
+        from services.outfit_builder import build_outfit_slots, select_outfit
+        from datetime import date
+        items = self._basic_wardrobe()
+        outfit = select_outfit(items, "Лето", date.today(), temp_morning=28.0)
+        slots = build_outfit_slots(outfit, child=None, user=self._make_user(), temp=28.0)
+        assert not any(s["slot"] == "hat" for s in slots)
+
+    def test_hat_scarf_gloves_at_frost(self):
+        """Hat + scarf + gloves at -15°."""
+        from services.outfit_builder import build_outfit_slots, select_outfit
+        from datetime import date
+        items = self._basic_wardrobe()
+        outfit = select_outfit(items, "Лето", date.today(), temp_morning=-15.0, temp_evening=-18.0)
+        slots = build_outfit_slots(outfit, child=None, user=self._make_user(), temp=-15.0)
+        slot_types = {s["slot"] for s in slots}
+        assert "hat" in slot_types
+        assert "scarf" in slot_types
+        assert "gloves" in slot_types
+
+    # ── All labels filled ────────────────────────────────────────────────────
+
+    def test_all_labels_filled(self):
+        """All placeholder slots must have non-empty labels."""
+        from services.outfit_builder import build_outfit_slots, select_outfit
+        from datetime import date
+        items = self._basic_wardrobe()
+        for temp in [-15, 0, 8, 18, 28]:
+            outfit = select_outfit(items, "Лето", date.today(), temp_morning=float(temp))
+            slots = build_outfit_slots(outfit, child=None, user=self._make_user(), temp=float(temp))
+            for s in slots:
+                if not s.get("has_item"):
+                    assert s.get("label"), f"Empty label at {temp}° for {s['slot']}"
+
+    # ── Color matching ───────────────────────────────────────────────────────
+
+    def test_all_palette_colors_match(self):
+        """All colors in COLORTYPE_PALETTES should resolve to valid hex."""
+        from worker.tasks.style_config import COLORTYPE_PALETTES
+        from services.brief_renderer import get_color_hex
+        bad = []
+        for ct, palette in COLORTYPE_PALETTES.items():
+            for slot, colors in palette.items():
+                for c in colors:
+                    if get_color_hex(c) == "#C0C0C0":
+                        bad.append(f"{ct}/{slot}: {c}")
+        assert not bad, f"Unmatched colors: {bad}"

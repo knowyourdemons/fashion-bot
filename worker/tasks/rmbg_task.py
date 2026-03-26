@@ -252,6 +252,8 @@ async def process_rmbg(payload: dict) -> dict:
                                    item_id=str(item_id),
                                    bright_pct=f"{_q_bright_pct:.1f}%",
                                    hint="dark garment with bright bg residue")
+                    if _q_bright_pct > 15:
+                        good_crop = False  # will trigger re-photo hint
             # For light garments: check dark pixel contamination
             elif _q_median > 500:
                 _q_dark = np.sum((_q_rgb_sum < 150) & _q_opaque)
@@ -261,6 +263,8 @@ async def process_rmbg(payload: dict) -> dict:
                                    item_id=str(item_id),
                                    dark_pct=f"{_q_dark_pct:.1f}%",
                                    hint="light garment with dark bg residue")
+                    if _q_dark_pct > 20:
+                        good_crop = False
     except Exception:
         pass
 

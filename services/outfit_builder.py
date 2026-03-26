@@ -267,8 +267,10 @@ def build_outfit_slots(
                 continue
 
             seen.add(slot_key)
+            # Map removable_layer → top slot for layout
+            _display_slot = "top" if slot_key == "removable_layer" else slot_key
             slots.append({
-                "slot": slot_key,
+                "slot": _display_slot,
                 "item_id": str(item.id) if hasattr(item, "id") else "",
                 "item_type": item.type,
                 "item_color": getattr(item, "color", "") or "",
