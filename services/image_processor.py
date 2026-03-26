@@ -872,6 +872,20 @@ def make_collage_thumbnail(photo_bytes: bytes, needs_bg_removal: bool = True) ->
         _clean_img = Image.open(io.BytesIO(result)).convert("RGBA")
         _clean_arr = np.array(_clean_img)
         _clean_arr[_clean_arr[:, :, 3] < 80, 3] = 0
+
+        # 3c. Dark garment cleanup: remove bright bg pixels trapped inside contour
+        # (e.g. white bedsheet between dark leggings legs)
+        # ONLY for very dark garments — avoids damaging light clothing
+        _opaque = _clean_arr[:, :, 3] > 128
+        if np.sum(_opaque) > 100:
+            _rgb_sum = _clean_arr[:, :, 0].astype(int) + _clean_arr[:, :, 1].astype(int) + _clean_arr[:, :, 2].astype(int)
+            _median_brightness = np.median(_rgb_sum[_opaque])
+            # Only for very dark garments (median < 150 out of 765 = near-black)
+            if _median_brightness < 150:
+                _bright_bg = (_rgb_sum > 400) & _opaque
+                if np.sum(_bright_bg) > 50:
+                    _clean_arr[_bright_bg, 3] = 0
+
         _clean_img = Image.fromarray(_clean_arr)
         _clean_buf = io.BytesIO()
         _clean_img.save(_clean_buf, format="PNG")
