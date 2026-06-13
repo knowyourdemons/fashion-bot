@@ -19,6 +19,9 @@ def _make_child(gender="girl", name="Алиса"):
     child = MagicMock()
     child.gender = gender
     child.name = name
+    # Explicit birthdate: MagicMock otherwise auto-creates a truthy attr, which
+    # breaks the ≤5yo комбинезон age check (MagicMock <= int → TypeError).
+    child.birthdate = None
     return child
 
 
