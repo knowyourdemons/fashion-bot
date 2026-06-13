@@ -269,19 +269,29 @@ def _check_oom_and_restarts(now: str) -> None:
         except ValueError:
             mem_limit_mb = 0
 
-        prev_count = container_restart_counts.get(container, 0)
+        # State.OOMKilled is a sticky flag: it stays true until the container is
+        # recreated, and it's also set when a child process (e.g. a Chromium tab
+        # in the renderer) is OOM-killed while PID 1 survives — RestartCount stays
+        # 0 and the service keeps working. Such a flag is not actionable, so we
+        # only treat OOM as alert-worthy when it coincides with a RestartCount
+        # increase (the container actually went down). seen_before guards against
+        # a false alert on watchdog startup when historical restarts already exist.
+        seen_before = container in container_restart_counts
+        prev_count = container_restart_counts.get(container, restart_count)
         container_restart_counts[container] = restart_count
+        restarts_increased = seen_before and restart_count > prev_count
 
         current_time = time.time()
         last_alert = container_oom_alerted.get(container, 0)
         should_alert = current_time - last_alert > OOM_REALERT_INTERVAL
 
-        # Detect OOM kill
-        if oom_killed and should_alert:
+        # Detect OOM kill that actually restarted the container
+        if oom_killed and restarts_increased and should_alert:
+            delta = restart_count - prev_count
             alert_text = (
                 f"\U0001f4a5 <b>{container}</b> OOM Killed!\n"
                 f"Memory limit: {mem_limit_mb}MB\n"
-                f"Restarts: {restart_count}\n"
+                f"Перезапусков: +{delta} (всего {restart_count})\n"
                 f"Time: {now}\n\n"
                 f"Нужно увеличить memory limit в docker-compose.yml"
             )
@@ -290,7 +300,7 @@ def _check_oom_and_restarts(now: str) -> None:
             log(f"Container {container}: OOM KILLED — alert sent (restarts={restart_count})")
 
         # Detect restart count spike (new restarts since last check)
-        elif restart_count > prev_count and restart_count > RESTART_COUNT_THRESHOLD and should_alert:
+        elif restarts_increased and restart_count > RESTART_COUNT_THRESHOLD and should_alert:
             delta = restart_count - prev_count
             alert_text = (
                 f"\U0001f504 <b>{container}</b> перезапустился {delta}x за последний цикл!\n"
@@ -303,7 +313,7 @@ def _check_oom_and_restarts(now: str) -> None:
             log(f"Container {container}: restart spike +{delta} (total={restart_count})")
 
         # Recovery: OOM was alerted before, now cleared
-        elif not oom_killed and container in container_oom_alerted and restart_count == prev_count:
+        elif not oom_killed and container in container_oom_alerted and not restarts_increased:
             if last_alert > 0:
                 send_telegram(
                     f"\u2705 <b>{container}</b> стабилен, OOM больше нет.\n"
