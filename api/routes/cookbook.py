@@ -11,16 +11,23 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 import json
 import re
+import secrets
+import time
 from datetime import date
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, Request, UploadFile
 
 from config import settings
 from core.anthropic_client import get_anthropic_pool
+
+SESSION_TTL = 30 * 86400  # 30 дней
+TELEGRAM_AUTH_MAX_AGE = 86400  # подпись виджета не старше суток
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -52,12 +59,63 @@ IMPORT_SYSTEM = (
 # ---------------------------------------------------------------------------
 # Хелперы
 # ---------------------------------------------------------------------------
-def _check_secret(secret: str | None) -> None:
+def _allowed_ids() -> set[str]:
+    return {x.strip() for x in (settings.cookbook_allowed_telegram_ids or "").split(",") if x.strip()}
+
+
+async def _session_tg_id(token: str | None) -> str | None:
+    """Возвращает telegram_id по валидной сессии или None."""
+    if not token:
+        return None
+    try:
+        from core.redis import get_redis
+        redis = get_redis()
+        tg_id = await redis.get(f"cb_session:{token}")
+        if tg_id is None:
+            return None
+        return tg_id.decode() if isinstance(tg_id, bytes) else str(tg_id)
+    except Exception as e:
+        logger.warning("cookbook.session.lookup_error", error=str(e))
+        return None
+
+
+async def _authorize(session: str | None, secret: str | None) -> None:
+    """Доступ к ассистенту/импорту: валидная Telegram-сессия ИЛИ общий секрет."""
+    if await _session_tg_id(session):
+        return
     expected = settings.cookbook_secret
-    if not expected:
-        raise HTTPException(status_code=503, detail="Cookbook assistant не настроен (нет cookbook_secret)")
-    if not secret or secret != expected:
-        raise HTTPException(status_code=401, detail="Неверный код доступа")
+    if expected and secret and hmac.compare_digest(secret, expected):
+        return
+    if not expected and not _allowed_ids():
+        raise HTTPException(status_code=503, detail="Cookbook доступ не настроен")
+    raise HTTPException(status_code=401, detail="Нужна авторизация (войдите через Telegram)")
+
+
+def _verify_telegram(data: dict[str, Any]) -> str | None:
+    """Проверяет подпись Telegram Login Widget. Возвращает telegram_id (str) или None."""
+    recv_hash = data.get("hash")
+    if not recv_hash or not settings.telegram_bot_token:
+        return None
+    pairs = {k: v for k, v in data.items() if k != "hash" and v is not None}
+    check_string = "\n".join(f"{k}={pairs[k]}" for k in sorted(pairs))
+    secret_key = hashlib.sha256(settings.telegram_bot_token.encode()).digest()
+    calc = hmac.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(calc, str(recv_hash)):
+        return None
+    try:
+        if time.time() - int(data.get("auth_date", 0)) > TELEGRAM_AUTH_MAX_AGE:
+            return None
+    except (ValueError, TypeError):
+        return None
+    return str(data.get("id"))
+
+
+async def _issue_session(tg_id: str) -> str:
+    token = secrets.token_urlsafe(32)
+    from core.redis import get_redis
+    redis = get_redis()
+    await redis.setex(f"cb_session:{token}", SESSION_TTL, tg_id)
+    return token
 
 
 async def _vision_guard(n_images: int) -> None:
@@ -119,6 +177,43 @@ def _resp_text(response: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
+# GET /config — публичная конфигурация для фронта (виджет логина)
+# ---------------------------------------------------------------------------
+@router.get("/config")
+async def config() -> dict[str, Any]:
+    return {
+        "botUsername": settings.cookbook_bot_username,
+        "ssoEnabled": bool(settings.telegram_bot_token and _allowed_ids()),
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /auth/telegram — вход через Telegram Login Widget
+# ---------------------------------------------------------------------------
+@router.post("/auth/telegram")
+async def auth_telegram(request: Request) -> dict[str, Any]:
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Ожидается JSON")
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Некорректные данные")
+
+    tg_id = _verify_telegram(data)
+    if not tg_id:
+        raise HTTPException(status_code=401, detail="Подпись Telegram не подтверждена")
+
+    allowed = _allowed_ids()
+    if allowed and tg_id not in allowed:
+        logger.warning("cookbook.auth.not_allowed", tg_id=tg_id)
+        raise HTTPException(status_code=403, detail="Этому аккаунту вход не разрешён")
+
+    token = await _issue_session(tg_id)
+    name = data.get("first_name") or data.get("username") or "Повар"
+    return {"token": token, "name": name}
+
+
+# ---------------------------------------------------------------------------
 # POST /assistant — чат с фото + предложения замен
 # ---------------------------------------------------------------------------
 @router.post("/assistant")
@@ -128,8 +223,9 @@ async def assistant(
     history: str = Form("[]"),
     photos: list[UploadFile] = File(default=[]),
     x_cookbook_secret: str | None = Header(default=None),
+    x_cookbook_session: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    _check_secret(x_cookbook_secret)
+    await _authorize(x_cookbook_session, x_cookbook_secret)
 
     photo_bytes: list[tuple[bytes, str]] = []
     for up in photos or []:
@@ -206,8 +302,9 @@ async def import_recipe(
     url: str | None = Form(default=None),
     photo: UploadFile | None = File(default=None),
     x_cookbook_secret: str | None = Header(default=None),
+    x_cookbook_session: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    _check_secret(x_cookbook_secret)
+    await _authorize(x_cookbook_session, x_cookbook_secret)
 
     # Вариант JSON-body {url: ...} (если прислали application/json — Form будет пуст)
     if url:

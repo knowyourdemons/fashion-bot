@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     # Cookbook (личная поваренная книга) — общий секрет доступа к AI-ассистенту/импорту
     cookbook_secret: str = ""
     cookbook_vision_daily_cap: int = 50
+    # Telegram SSO: allowlist telegram_id (через запятую). По умолчанию — Стас + жена.
+    cookbook_allowed_telegram_ids: str = "195169,263775083"
+    # username бота для Telegram Login Widget (без @)
+    cookbook_bot_username: str = "fashion_castle_bot"
 
     @property
     def admin_ids_list(self) -> list[int]:

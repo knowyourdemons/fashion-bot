@@ -8,14 +8,64 @@
   'use strict';
 
   const API = "/api/v1/cookbook";
-  const SECRET_KEY = "cb_secret";
+  const SESSION_KEY = "cb_session_token";
+  const SECRET_KEY = "cb_secret"; // тихий фолбэк (file:// / ручная установка)
 
-  function getSecret() {
-    let s = localStorage.getItem(SECRET_KEY);
-    if (!s) { s = prompt("Код доступа к ассистенту (один раз):") || ""; if (s) localStorage.setItem(SECRET_KEY, s); }
-    return s;
+  let _config = null;
+  async function getConfig() {
+    if (_config) return _config;
+    try { const r = await fetch(API + "/config"); _config = await r.json(); }
+    catch (e) { _config = { botUsername: "", ssoEnabled: false }; }
+    return _config;
   }
-  function authHeaders() { return { "X-Cookbook-Secret": getSecret() }; }
+  function getSession() { return localStorage.getItem(SESSION_KEY) || ""; }
+  function getSecret() { return localStorage.getItem(SECRET_KEY) || ""; }
+  function isAuthed() { return !!getSession() || !!getSecret(); }
+  function authHeaders() {
+    const h = {};
+    const s = getSession(); if (s) h["X-Cookbook-Session"] = s;
+    const sec = getSecret(); if (sec) h["X-Cookbook-Secret"] = sec;
+    return h;
+  }
+  function clearSession() { localStorage.removeItem(SESSION_KEY); }
+
+  // Telegram Login Widget → /auth/telegram → сессия
+  window.onTelegramAuth = async function (user) {
+    try {
+      const r = await fetch(API + "/auth/telegram", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(user)
+      });
+      if (!r.ok) {
+        const msg = r.status === 403 ? "Этому аккаунту вход не разрешён" : "Не удалось войти";
+        alert(msg); return;
+      }
+      const data = await r.json();
+      localStorage.setItem(SESSION_KEY, data.token);
+      if (window._cbOnLogin) window._cbOnLogin(data.name);
+    } catch (e) { alert("Ошибка входа: " + e.message); }
+  };
+
+  async function renderLoginGate(chatEl, onDone) {
+    const cfg = await getConfig();
+    window._cbOnLogin = (name) => { onDone(); };
+    if (!cfg.ssoEnabled || !cfg.botUsername) {
+      chatEl.innerHTML = `<div class="msg bot">Вход недоступен: SSO не настроен на сервере. Можно задать код доступа вручную (localStorage <b>cb_secret</b>).</div>`;
+      return;
+    }
+    chatEl.innerHTML = `<div class="msg bot" style="max-width:100%">
+      Чтобы пользоваться ассистентом и импортом, войдите через Telegram — доступ только для своих.
+      <div id="tgLoginBtn" style="margin-top:12px"></div>
+    </div>`;
+    const s = document.createElement("script");
+    s.async = true;
+    s.src = "https://telegram.org/js/telegram-widget.js?22";
+    s.setAttribute("data-telegram-login", cfg.botUsername);
+    s.setAttribute("data-size", "large");
+    s.setAttribute("data-onauth", "onTelegramAuth(user)");
+    s.setAttribute("data-request-access", "write");
+    const holder = chatEl.querySelector("#tgLoginBtn");
+    if (holder) holder.appendChild(s);
+  }
 
   function loadHistory() { try { return JSON.parse(localStorage.getItem("cb_assistant") || "[]"); } catch (e) { return []; } }
   function saveHistory(h) { try { localStorage.setItem("cb_assistant", JSON.stringify(h.slice(-40))); } catch (e) {} }
@@ -33,7 +83,8 @@
     fd.append("history", JSON.stringify(payload.history || []));
     (payload.files || []).forEach((f, i) => fd.append("photos", f, f.name || ("photo" + i + ".jpg")));
     const resp = await fetch(API + "/assistant", { method: "POST", headers: authHeaders(), body: fd });
-    if (resp.status === 401) { localStorage.removeItem(SECRET_KEY); throw new Error("Неверный код доступа"); }
+    if (resp.status === 401) { clearSession(); throw new Error("Сессия истекла — войдите через Telegram заново"); }
+    if (resp.status === 403) { throw new Error("Этому аккаунту вход не разрешён"); }
     if (resp.status === 429) throw new Error("Лимит запросов на сегодня исчерпан");
     if (!resp.ok) throw new Error("Сервер недоступен (" + resp.status + ")");
     return resp.json(); // { reply, substitution? }
@@ -84,6 +135,11 @@
       </div>
       <div class="thumb-strip" id="thumbs" style="position:fixed;bottom:74px;left:16px;right:16px;max-width:760px;margin:0 auto"></div>
     `;
+    const chatEl = container.querySelector("#chat");
+    if (!isAuthed()) {
+      renderLoginGate(chatEl, () => renderView(container, ctx));
+      return;
+    }
     wireChat(container, ctx || {});
     scrollChat();
   }
@@ -105,10 +161,17 @@
     document.body.appendChild(ov);
     ov.addEventListener("click", e => { if (e.target === ov) ov.remove(); });
     document.getElementById("aClose").onclick = () => ov.remove();
-    // первичная подсказка
     const chat = ov.querySelector("#chat");
-    chat.innerHTML = msgHtml({ role: "bot", text: ctx.ingredient ? `Спросите про «${ctx.ingredient.name}» — пришлите фото товара с полки, подскажу то это или нет и чем заменить.` : "Чем помочь по рецепту?" });
-    wireChat(ov, ctx, true);
+    if (!isAuthed()) {
+      renderLoginGate(chat, () => { chat.innerHTML = ""; startOverlayChat(); });
+      return;
+    }
+    startOverlayChat();
+
+    function startOverlayChat() {
+      chat.innerHTML = msgHtml({ role: "bot", text: ctx.ingredient ? `Спросите про «${ctx.ingredient.name}» — пришлите фото товара с полки, подскажу то это или нет и чем заменить.` : "Чем помочь по рецепту?" });
+      wireChat(ov, ctx, true);
+    }
   }
 
   /* ---------- Общая логика чата ---------- */
