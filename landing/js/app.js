@@ -1,0 +1,857 @@
+/* ============================================================
+   Поваренная книга — основная логика (SPA, hash-роутер).
+   Без сборки, без fetch для данных. Работает под file:// и на хосте.
+   ============================================================ */
+(function () {
+  'use strict';
+
+  /* ---------- Константы оформления ---------- */
+  const CUISINE_COLOR = {
+    "Итальянская": "--cover-tomato", "Русская": "--cover-honey",
+    "Грузинская": "--cover-tomato", "Японская": "--cover-berry",
+    "Тайская": "--cover-grass", "Китайская": "--cover-spice",
+    "Мексиканская": "--cover-tomato", "Индийская": "--cover-spice",
+    "Французская": "--cover-plum", "Корейская": "--cover-spice",
+    "Марокканская": "--cover-spice", "Ближневосточная": "--cover-sand",
+    "Турецкая": "--cover-sand", "Греческая": "--cover-berry",
+    "Испанская": "--cover-tomato", "Вьетнамская": "--cover-grass",
+    "Узбекская": "--cover-sand", "Американская": "--cover-honey"
+  };
+  const CAT_COLOR = {
+    "Завтрак": "--cover-honey", "Суп": "--cover-grass", "Основное": "--cover-tomato",
+    "Гарнир": "--cover-sand", "Салат": "--cover-sage", "Десерт": "--cover-plum",
+    "Выпечка": "--cover-plum", "Закуска": "--cover-sand", "Напиток": "--cover-berry"
+  };
+  const CUISINE_ICON = {
+    "Итальянская": "🍝", "Русская": "🥟", "Грузинская": "🫓", "Японская": "🍣",
+    "Тайская": "🌶", "Китайская": "🥢", "Мексиканская": "🌮", "Индийская": "🍛",
+    "Французская": "🥐", "Корейская": "🍚", "Марокканская": "🍲", "Ближневосточная": "🧆",
+    "Турецкая": "🥙", "Греческая": "🫒", "Испанская": "🥘", "Вьетнамская": "🍜",
+    "Узбекская": "🍲", "Американская": "🍔"
+  };
+  const SHOP_ORDER = ["Овощи", "Мясо", "Молочное", "Бакалея", "Специи", "Заморозка", "Прочее"];
+
+  /* ---------- localStorage ---------- */
+  const LS = {
+    get(k, def) { try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+  const Store = {
+    shopping: LS.get("cb_shopping", { recipes: {}, manual: [], checked: {} }),
+    pantry:   LS.get("cb_pantry", { items: {} }),
+    memory:   LS.get("cb_memory", {}),
+    userRecipes: LS.get("cb_user_recipes", []),
+    plan:     LS.get("cb_plan", {}),
+    save(key) { LS.set("cb_" + key, Store[key]); }
+  };
+
+  /* ---------- Доступ к данным ---------- */
+  function allRecipes() { return (window.RECIPES || []).concat(Store.userRecipes || []); }
+  function getRecipe(id) { return allRecipes().find(r => r.id === id); }
+
+  /* ---------- Утилиты ---------- */
+  function $(sel, root) { return (root || document).querySelector(sel); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+  function cssVar(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim() || "#E2D4BE"; }
+
+  const FRACTIONS = [[0.125, "⅛"], [0.25, "¼"], [0.333, "⅓"], [0.5, "½"], [0.666, "⅔"], [0.75, "¾"]];
+  function fmtNum(n) {
+    if (n == null) return "";
+    const whole = Math.floor(n), frac = n - whole;
+    let best = null, bestD = 0.06;
+    for (const [v, s] of FRACTIONS) { const d = Math.abs(frac - v); if (d < bestD) { bestD = d; best = s; } }
+    if (best) return (whole ? whole + " " : "") + best;
+    if (Math.abs(frac) < 0.06) return String(whole);
+    return String(Math.round(n * 10) / 10).replace(".", ",");
+  }
+  function scaleQty(qty, servings, base) {
+    if (qty == null) return null;
+    return qty * (servings || base) / (base || 1);
+  }
+  function fmtQtyUnit(qty, unit, servings, base) {
+    if (qty == null) return unit || "";
+    const v = scaleQty(qty, servings, base);
+    return fmtNum(v) + (unit ? " " + unit : "");
+  }
+
+  let toastTimer = null;
+  function toast(msg) {
+    let t = $("#toast"); if (t) t.remove();
+    t = document.createElement("div"); t.id = "toast"; t.className = "toast"; t.textContent = msg;
+    document.body.appendChild(t);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.remove(), 2200);
+  }
+
+  function shopCount() {
+    const s = Store.shopping;
+    return Object.keys(s.recipes || {}).length + (s.manual || []).length;
+  }
+  function updateBadge() {
+    const b = $("#shopBadge"), n = shopCount();
+    if (!b) return;
+    if (n > 0) { b.textContent = n; b.classList.remove("hidden"); } else b.classList.add("hidden");
+  }
+
+  /* ---------- Обложки ---------- */
+  function coverVar(r) {
+    return CUISINE_COLOR[r.cuisine] || CAT_COLOR[r.category] || "--cover-sand";
+  }
+  function coverStyle(r) {
+    return r.photo ? "" : `background:var(${coverVar(r)});`;
+  }
+  function cardHtml(r) {
+    const mem = Store.memory[r.id];
+    const made = mem && mem.madeLog && mem.madeLog.length;
+    const cover = r.photo
+      ? `<div class="cover photo"><img src="${esc(r.photo)}" alt=""></div>`
+      : `<div class="cover" style="${coverStyle(r)}">
+           <div class="c-cat">${esc(r.category)}</div>
+           <div class="c-title">${esc(r.title)}</div>
+           <span class="c-icon">${CUISINE_ICON[r.cuisine] || "🍽"}</span>
+         </div>`;
+    return `<a class="card" href="#/recipe/${esc(r.id)}">
+      ${cover}
+      <div class="card-meta">
+        <span>${r.time} мин</span>
+        ${r.forKid ? '<span class="kid">★ дочке</span>' : ""}
+        ${made ? '<span title="готовил">✓</span>' : ""}
+      </div>
+    </a>`;
+  }
+
+  /* ---------- Личная память ---------- */
+  function getMem(id) {
+    return Store.memory[id] || (Store.memory[id] = { vote: 0, madeLog: [], notes: "", kidRating: 0, substitutions: [] });
+  }
+  function saveMem() { Store.save("memory"); }
+
+  /* ---------- Рекомендации (content-based) ---------- */
+  function recommend(limit) {
+    const recipes = allRecipes();
+    const now = Date.now();
+    // профиль вкуса из голосов с тайм-decay
+    const weights = {}; // признак -> вес
+    const tried = new Set();
+    const recentMade = new Set();
+    function bump(key, w) { weights[key] = (weights[key] || 0) + w; }
+    for (const r of recipes) {
+      const m = Store.memory[r.id]; if (!m) continue;
+      if (m.vote) tried.add(r.id);
+      if (m.madeLog && m.madeLog.length) {
+        const last = new Date(m.madeLog[m.madeLog.length - 1]).getTime();
+        if (now - last < 12 * 864e5) recentMade.add(r.id); // готовил < 12 дней
+      }
+      if (m.vote) {
+        // свежие голоса весомее (по позиции в madeLog нет даты голоса — простой decay по голосу)
+        const sign = m.vote;
+        bump("cuisine:" + r.cuisine, sign);
+        bump("category:" + r.category, sign);
+        if (r.forKid) bump("forKid", sign);
+        (r.tags || []).forEach(t => bump("tag:" + t, sign * 0.6));
+        keyIngredients(r).forEach(i => bump("ing:" + i, sign * 0.4));
+      }
+    }
+    const hasProfile = Object.keys(weights).length > 0;
+    const scored = recipes.filter(r => !tried.has(r.id) && !recentMade.has(r.id)).map(r => {
+      let s = 0;
+      s += weights["cuisine:" + r.cuisine] || 0;
+      s += weights["category:" + r.category] || 0;
+      if (r.forKid) s += weights["forKid"] || 0;
+      (r.tags || []).forEach(t => s += weights["tag:" + t] || 0);
+      keyIngredients(r).forEach(i => s += weights["ing:" + i] || 0);
+      // холодный старт: быстрые/детские
+      if (!hasProfile) s = (r.forKid ? 1.5 : 0) + (r.time <= 20 ? 1 : 0) + Math.random() * 0.5;
+      return { r, s };
+    }).filter(x => x.s > 0).sort((a, b) => b.s - a.s);
+    return scored.slice(0, limit || 6).map(x => x.r);
+  }
+  function keyIngredients(r) {
+    return (r.ingredients || []).filter(i => !i.staple).slice(0, 4).map(i => normName(i.name));
+  }
+  function normName(n) { return String(n).toLowerCase().trim().replace(/ё/g, "е"); }
+
+  /* ============================================================
+     ВЬЮХА: Список (#/)
+     ============================================================ */
+  let listState = { q: "", cuisine: "", category: "", kidOnly: false };
+
+  function renderList() {
+    const recipes = allRecipes();
+    const cuisines = [...new Set(recipes.map(r => r.cuisine))].sort();
+    const categories = [...new Set(recipes.map(r => r.category))];
+
+    const cuisineChips = cuisines.map(c =>
+      `<button class="chip ${listState.cuisine === c ? "active" : ""}" data-cuisine="${esc(c)}">${esc(c)}</button>`).join("");
+    const catChips = categories.map(c =>
+      `<button class="chip ${listState.category === c ? "active" : ""}" data-cat="${esc(c)}">${esc(c)}</button>`).join("");
+
+    const filtered = applyFilters(recipes);
+    const recs = (!listState.q && !listState.cuisine && !listState.category && !listState.kidOnly) ? recommend(6) : [];
+
+    const view = $("#view");
+    view.innerHTML = `
+      <div class="search">
+        <span>🔎</span>
+        <input id="q" type="text" placeholder="Поиск: название, тег, ингредиент…" value="${esc(listState.q)}">
+      </div>
+      <div class="chips">
+        <button class="chip accent ${listState.kidOnly ? "active" : ""}" id="kidChip">★ Дочке</button>
+        <button class="chip" id="surprise">🎲 Удиви меня</button>
+        ${cuisineChips}
+      </div>
+      <div class="chips">${catChips}</div>
+      ${recs.length ? `
+        <div class="section-head"><h2>Вам понравится</h2></div>
+        <div class="grid">${recs.map(cardHtml).join("")}</div>` : ""}
+      <div class="section-head"><h2>Рецепты</h2><span class="muted">${filtered.length}</span></div>
+      ${filtered.length ? `<div class="grid">${filtered.map(cardHtml).join("")}</div>`
+        : `<div class="empty">Ничего не найдено.<br>Сбросьте фильтры или <a href="#/add" style="color:var(--accent)">добавьте рецепт</a>.</div>`}
+    `;
+
+    $("#q").addEventListener("input", e => { listState.q = e.target.value; debouncedList(); });
+    $("#kidChip").addEventListener("click", () => { listState.kidOnly = !listState.kidOnly; renderList(); });
+    $("#surprise").addEventListener("click", () => {
+      const pool = applyFilters(recipes); if (!pool.length) return;
+      location.hash = "#/recipe/" + pool[Math.floor(Math.random() * pool.length)].id;
+    });
+    view.querySelectorAll("[data-cuisine]").forEach(b => b.addEventListener("click", () => {
+      listState.cuisine = listState.cuisine === b.dataset.cuisine ? "" : b.dataset.cuisine; renderList();
+    }));
+    view.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => {
+      listState.category = listState.category === b.dataset.cat ? "" : b.dataset.cat; renderList();
+    }));
+  }
+  let listDebTimer = null;
+  function debouncedList() { clearTimeout(listDebTimer); listDebTimer = setTimeout(renderList, 180); }
+
+  function applyFilters(recipes) {
+    const q = normName(listState.q);
+    return recipes.filter(r => {
+      if (listState.kidOnly && !r.forKid) return false;
+      if (listState.cuisine && r.cuisine !== listState.cuisine) return false;
+      if (listState.category && r.category !== listState.category) return false;
+      if (q) {
+        const hay = [r.title, ...(r.tags || []), ...(r.ingredients || []).map(i => i.name)].map(normName).join(" ");
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  /* ============================================================
+     ВЬЮХА: Карточка рецепта (#/recipe/:id)
+     ============================================================ */
+  const recipeServings = {}; // id -> текущее кол-во порций (сессия)
+
+  function renderRecipe(id) {
+    const r = getRecipe(id);
+    const view = $("#view");
+    if (!r) { view.innerHTML = `<div class="empty">Рецепт не найден. <a href="#/" style="color:var(--accent)">К списку</a></div>`; return; }
+    if (!recipeServings[id]) recipeServings[id] = r.baseServings;
+    const sv = recipeServings[id];
+    const mem = getMem(id);
+
+    const hero = r.photo
+      ? `<div class="recipe-hero photo"><img src="${esc(r.photo)}" alt=""></div>`
+      : `<div class="recipe-hero" style="background:var(${coverVar(r)});">
+           <div class="r-cat">${esc(r.cuisine)} · ${esc(r.category)}</div>
+           <h1>${esc(r.title)}</h1>
+         </div>`;
+
+    view.innerHTML = `
+      <a href="#/" class="btn ghost sm" style="margin-bottom:12px">← Назад</a>
+      ${hero}
+      ${r.photo ? `<div class="r-cat" style="margin:4px 0 6px">${esc(r.cuisine)} · ${esc(r.category)}</div><h1 style="font-size:28px;margin-bottom:10px">${esc(r.title)}</h1>` : ""}
+      <div class="r-meta">
+        <span>⏱ <b>${r.time}</b> мин</span>
+        <span>📊 сложность <b>${"●".repeat(r.difficulty)}${"○".repeat(3 - r.difficulty)}</b></span>
+        ${r.forKid ? '<span class="kid" style="color:var(--accent);font-weight:700">★ для дочки</span>' : ""}
+      </div>
+
+      <div class="servings">
+        <span class="label">Порции</span>
+        <div class="stepper">
+          <button id="svMinus">−</button><span id="svVal">${sv}</span><button id="svPlus">+</button>
+        </div>
+      </div>
+
+      <div class="label">Ингредиенты</div>
+      <ul class="ingredients" id="ings">
+        ${r.ingredients.map((ing, i) => ingredientRow(r, ing, i, sv)).join("")}
+      </ul>
+
+      <div class="btn-row" style="margin:18px 0">
+        <a class="btn primary" href="#/cook/${esc(r.id)}">🍳 Готовить</a>
+        <button class="btn" id="toShop">🛒 В список покупок</button>
+      </div>
+
+      <div class="label" style="margin-top:8px">Метод</div>
+      <ol class="steps">
+        ${r.steps.map(s => `<li><div class="step-text">${esc(s.text)}${s.timer ? `<br><span class="timer-chip">⏱ ${fmtTimer(s.timer)}</span>` : ""}</div></li>`).join("")}
+      </ol>
+
+      ${memoryBlock(r, mem)}
+    `;
+
+    $("#svMinus").onclick = () => changeServings(id, -1);
+    $("#svPlus").onclick = () => changeServings(id, +1);
+    $("#toShop").onclick = () => { addRecipeToShopping(id, recipeServings[id]); toast("Добавлено в список"); updateBadge(); };
+    bindIngredientRows(r);
+    bindMemory(r);
+  }
+
+  function ingredientRow(r, ing, i, sv) {
+    const checked = ingChecked(r.id, i);
+    return `<li class="${checked ? "checked" : ""}" data-i="${i}">
+      <button class="ing-check" data-check="${i}">${checked ? "✓" : ""}</button>
+      <span class="ing-name">${esc(ing.name)}</span>
+      <span class="ing-qty">${fmtQtyUnit(ing.qty, ing.unit, sv, r.baseServings)}</span>
+      <button class="ing-ask" data-ask="${i}" title="Спросить ассистента">✦</button>
+    </li>`;
+  }
+  const ingChecks = {}; // `${id}:${i}` -> bool (сессия)
+  function ingChecked(id, i) { return !!ingChecks[id + ":" + i]; }
+  function bindIngredientRows(r) {
+    $("#ings").querySelectorAll("[data-check]").forEach(b => b.onclick = () => {
+      const i = b.dataset.check; ingChecks[r.id + ":" + i] = !ingChecked(r.id, i);
+      b.closest("li").classList.toggle("checked"); b.textContent = ingChecked(r.id, i) ? "✓" : "";
+    });
+    $("#ings").querySelectorAll("[data-ask]").forEach(b => b.onclick = () => {
+      const ing = r.ingredients[b.dataset.ask];
+      if (window.CookAssistant) window.CookAssistant.openOverlay({ recipe: r, ingredient: ing });
+    });
+  }
+  function changeServings(id, d) {
+    const r = getRecipe(id);
+    recipeServings[id] = Math.max(1, Math.min(20, recipeServings[id] + d));
+    $("#svVal").textContent = recipeServings[id];
+    const ul = $("#ings");
+    r.ingredients.forEach((ing, i) => {
+      const cell = ul.querySelector(`li[data-i="${i}"] .ing-qty`);
+      if (cell) cell.textContent = fmtQtyUnit(ing.qty, ing.unit, recipeServings[id], r.baseServings);
+    });
+  }
+
+  function memoryBlock(r, mem) {
+    const made = mem.madeLog || [];
+    const lastMade = made.length ? new Date(made[made.length - 1]).toLocaleDateString("ru-RU") : null;
+    return `<div class="memory">
+      <div class="label">Личное</div>
+      <div class="vote-row">
+        <button class="vote up ${mem.vote === 1 ? "on" : ""}" data-vote="1">👍</button>
+        <button class="vote down ${mem.vote === -1 ? "on" : ""}" data-vote="-1">👎</button>
+        <button class="btn sm" id="madeBtn" style="margin-left:auto">✓ Готовил сегодня</button>
+      </div>
+      <div class="made-log">${made.length ? `Готовил ${made.length} раз. Последний раз: ${lastMade}.` : "Ещё не отмечал, что готовил."}</div>
+      <div style="margin-top:14px"><span class="label">Алисе зашло</span>
+        <div class="stars" id="kidStars">${[1, 2, 3, 4, 5].map(n => (n <= (mem.kidRating || 0) ? "★" : "☆")).join("")}</div>
+      </div>
+      <div style="margin-top:14px"><span class="label">Заметки и правки</span>
+        <textarea id="memNotes" placeholder="Личные правки, замены, что поменять…">${esc(mem.notes || "")}</textarea>
+      </div>
+      ${(mem.substitutions || []).length ? `<div class="made-log" style="margin-top:10px"><b>Замены:</b><br>${mem.substitutions.map(s => `${esc(s.original)} → ${esc(s.replacement)}${s.note ? " (" + esc(s.note) + ")" : ""}`).join("<br>")}</div>` : ""}
+    </div>`;
+  }
+  function bindMemory(r) {
+    const mem = getMem(r.id);
+    $("#view").querySelectorAll("[data-vote]").forEach(b => b.onclick = () => {
+      const v = parseInt(b.dataset.vote, 10);
+      mem.vote = mem.vote === v ? 0 : v; saveMem(); renderRecipe(r.id);
+    });
+    $("#madeBtn").onclick = () => { mem.madeLog = mem.madeLog || []; mem.madeLog.push(new Date().toISOString()); saveMem(); toast("Отмечено: готовил"); renderRecipe(r.id); };
+    $("#kidStars").onclick = (e) => {
+      const stars = [...$("#kidStars").childNodes];
+      const rect = $("#kidStars").getBoundingClientRect();
+      const rel = (e.clientX - rect.left) / rect.width;
+      mem.kidRating = Math.max(1, Math.min(5, Math.ceil(rel * 5))); saveMem(); renderRecipe(r.id);
+    };
+    $("#memNotes").addEventListener("change", e => { mem.notes = e.target.value.slice(0, 2000); saveMem(); toast("Заметка сохранена"); });
+  }
+
+  /* ============================================================
+     Список покупок (#/shopping)
+     ============================================================ */
+  function addRecipeToShopping(id, servings) {
+    Store.shopping.recipes[id] = servings || getRecipe(id).baseServings;
+    Store.save("shopping");
+  }
+  function aggregateShopping() {
+    const map = {}; // `${name}|${unit}` -> {name, unit, qty, group, fromStaple}
+    for (const [id, sv] of Object.entries(Store.shopping.recipes)) {
+      const r = getRecipe(id); if (!r) continue;
+      for (const ing of r.ingredients) {
+        const key = normName(ing.name) + "|" + (ing.unit || "");
+        if (!map[key]) map[key] = { name: ing.name, unit: ing.unit, qty: null, group: ing.group || "Прочее", staple: ing.staple };
+        const scaled = scaleQty(ing.qty, sv, r.baseServings);
+        if (scaled != null) map[key].qty = (map[key].qty || 0) + scaled;
+      }
+    }
+    // ручные позиции
+    (Store.shopping.manual || []).forEach((m, i) => {
+      map["manual:" + i] = { name: m.name, unit: m.unit || "", qty: m.qty, group: m.group || "Прочее", staple: false, manualIndex: i };
+    });
+    // вычесть кладовку
+    const pantry = Store.pantry.items || {};
+    const items = Object.entries(map).filter(([key, it]) => {
+      if (it.staple && pantry["staple"]) return false;
+      if (pantry[normName(it.name)]) return false;
+      return true;
+    }).map(([key, it]) => ({ key, ...it }));
+    // группировка
+    const groups = {};
+    items.forEach(it => { (groups[it.group] = groups[it.group] || []).push(it); });
+    return groups;
+  }
+
+  function renderShopping() {
+    const groups = aggregateShopping();
+    const order = SHOP_ORDER.filter(g => groups[g]).concat(Object.keys(groups).filter(g => !SHOP_ORDER.includes(g)));
+    const recipeChips = Object.keys(Store.shopping.recipes).map(id => {
+      const r = getRecipe(id); if (!r) return "";
+      return `<button class="chip active" data-rm="${esc(id)}">${esc(r.title)} ✕</button>`;
+    }).join("");
+
+    const view = $("#view");
+    view.innerHTML = `
+      <div class="section-head"><h2>Список покупок</h2></div>
+      ${recipeChips ? `<div class="chips">${recipeChips}</div>` : ""}
+      ${order.length ? order.map(g => `
+        <div class="shop-group">
+          <h3>${esc(g)}</h3>
+          ${groups[g].map(it => {
+            const done = !!Store.shopping.checked[it.key];
+            return `<div class="shop-item ${done ? "done" : ""}" data-key="${esc(it.key)}">
+              <button class="ing-check" data-toggle="${esc(it.key)}">${done ? "✓" : ""}</button>
+              <span class="si-name">${esc(it.name)}</span>
+              <span class="si-qty">${it.qty != null ? fmtNum(it.qty) + (it.unit ? " " + it.unit : "") : (it.unit || "")}</span>
+              ${it.manualIndex != null ? `<button class="ing-ask" data-delman="${it.manualIndex}">✕</button>` : `<button class="ing-ask" data-pantry="${esc(it.name)}" title="Есть дома (в кладовку)">🏠</button>`}
+            </div>`;
+          }).join("")}
+        </div>`).join("")
+        : `<div class="empty">Список пуст.<br>Добавьте ингредиенты из рецептов кнопкой «🛒 В список».</div>`}
+
+      <div class="btn-row" style="margin-top:18px">
+        <button class="btn" id="addManual">＋ Своя позиция</button>
+        <button class="btn" id="copyShop">📋 Скопировать</button>
+        ${order.length ? `<button class="btn ghost" id="clearShop">Очистить</button>` : ""}
+      </div>
+      ${pantryBlock()}
+    `;
+
+    view.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { delete Store.shopping.recipes[b.dataset.rm]; Store.save("shopping"); updateBadge(); renderShopping(); });
+    view.querySelectorAll("[data-toggle]").forEach(b => b.onclick = () => { const k = b.dataset.toggle; Store.shopping.checked[k] = !Store.shopping.checked[k]; Store.save("shopping"); b.closest(".shop-item").classList.toggle("done"); b.textContent = Store.shopping.checked[k] ? "✓" : ""; });
+    view.querySelectorAll("[data-pantry]").forEach(b => b.onclick = () => { Store.pantry.items[normName(b.dataset.pantry)] = true; Store.save("pantry"); toast("В кладовку: " + b.dataset.pantry); renderShopping(); });
+    view.querySelectorAll("[data-delman]").forEach(b => b.onclick = () => { Store.shopping.manual.splice(parseInt(b.dataset.delman, 10), 1); Store.save("shopping"); renderShopping(); });
+    $("#addManual").onclick = addManualPrompt;
+    $("#copyShop").onclick = copyShopping;
+    const cl = $("#clearShop"); if (cl) cl.onclick = () => { if (confirm("Очистить весь список?")) { Store.shopping = { recipes: {}, manual: [], checked: {} }; Store.save("shopping"); updateBadge(); renderShopping(); } };
+    bindPantry();
+  }
+
+  function pantryBlock() {
+    const items = Object.keys(Store.pantry.items || {}).filter(k => Store.pantry.items[k]);
+    return `<div class="memory" style="margin-top:22px">
+      <div class="label">🏠 Кладовка (есть дома — не попадает в список)</div>
+      ${items.length ? `<div class="chips" style="flex-wrap:wrap;padding-top:10px">${items.map(n => `<button class="chip active" data-unpantry="${esc(n)}">${esc(n)} ✕</button>`).join("")}</div>` : `<div class="made-log">Пусто. Отмечайте 🏠 на позициях, что уже есть дома.</div>`}
+      <div class="dyn-row" style="margin-top:10px"><input id="pantryAdd" placeholder="Добавить в кладовку (соль, масло…)"><button class="btn sm" id="pantryAddBtn">＋</button></div>
+    </div>`;
+  }
+  function bindPantry() {
+    $("#view").querySelectorAll("[data-unpantry]").forEach(b => b.onclick = () => { delete Store.pantry.items[b.dataset.unpantry]; Store.save("pantry"); renderShopping(); });
+    const add = () => { const v = $("#pantryAdd").value.trim(); if (v) { Store.pantry.items[normName(v)] = true; Store.save("pantry"); renderShopping(); } };
+    $("#pantryAddBtn").onclick = add;
+    $("#pantryAdd").addEventListener("keydown", e => { if (e.key === "Enter") add(); });
+  }
+  function addManualPrompt() {
+    const name = prompt("Что добавить?"); if (!name) return;
+    const qty = prompt("Количество (можно пусто):", "");
+    Store.shopping.manual.push({ name: name.trim(), qty: qty ? parseFloat(qty.replace(",", ".")) || null : null, unit: "", group: "Прочее" });
+    Store.save("shopping"); updateBadge(); renderShopping();
+  }
+  function copyShopping() {
+    const groups = aggregateShopping();
+    let text = "Список покупок\n";
+    Object.entries(groups).forEach(([g, items]) => {
+      text += "\n" + g + ":\n";
+      items.forEach(it => { if (!Store.shopping.checked[it.key]) text += "— " + it.name + (it.qty != null ? " " + fmtNum(it.qty) + (it.unit ? " " + it.unit : "") : "") + "\n"; });
+    });
+    copyText(text.trim());
+  }
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast("Скопировано"), () => fallbackCopy(text));
+    else fallbackCopy(text);
+  }
+  function fallbackCopy(text) {
+    const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); toast("Скопировано"); } catch (e) { toast("Не удалось скопировать"); }
+    ta.remove();
+  }
+
+  /* ============================================================
+     Кукинг-мод (#/cook/:id)
+     ============================================================ */
+  let cookState = null;
+  function fmtTimer(sec) { const m = Math.floor(sec / 60), s = sec % 60; return s ? `${m}:${String(s).padStart(2, "0")}` : `${m} мин`; }
+
+  function renderCook(id) {
+    const r = getRecipe(id);
+    if (!r) { location.hash = "#/"; return; }
+    cookState = { r, idx: 0, timers: {} };
+    requestWakeLock();
+    drawCook();
+  }
+  function drawCook() {
+    const { r, idx } = cookState;
+    const sv = recipeServings[r.id] || r.baseServings;
+    const view = $("#view");
+    view.innerHTML = `<div class="cook" id="cookRoot">
+      <div class="cook-top">
+        <span class="cook-progress">Шаг ${idx + 1} из ${r.steps.length}</span>
+        <button class="iconbtn" id="cookIngs" title="Ингредиенты">📋</button>
+        <button class="iconbtn" id="cookExit" title="Выйти">✕</button>
+      </div>
+      <div class="cook-body" id="cookBody">
+        ${r.steps.map((s, i) => cookStepHtml(s, i, idx, r, sv)).join("")}
+      </div>
+      <div class="cook-nav">
+        <button class="btn ghost" id="cookPrev" ${idx === 0 ? "disabled" : ""}>← Назад</button>
+        ${idx < r.steps.length - 1
+          ? `<button class="btn primary" id="cookNext">Дальше →</button>`
+          : `<button class="btn primary" id="cookDone">✓ Готово</button>`}
+      </div>
+    </div>`;
+
+    const cur = view.querySelector(".cook-step.current");
+    if (cur) cur.scrollIntoView({ block: "center" });
+
+    $("#cookExit").onclick = () => { releaseWakeLock(); clearCookTimers(); location.hash = "#/recipe/" + r.id; };
+    $("#cookIngs").onclick = () => openIngredientsSheet(r, sv);
+    const prev = $("#cookPrev"); if (prev) prev.onclick = () => { if (cookState.idx > 0) { cookState.idx--; drawCook(); } };
+    const next = $("#cookNext"); if (next) next.onclick = () => { cookState.idx++; drawCook(); };
+    const done = $("#cookDone"); if (done) done.onclick = () => {
+      const mem = getMem(r.id); mem.madeLog = mem.madeLog || []; mem.madeLog.push(new Date().toISOString()); saveMem();
+      releaseWakeLock(); clearCookTimers(); toast("Готово! Отмечено, что готовил."); location.hash = "#/recipe/" + r.id;
+    };
+    bindCookTimers(); bindCookIngTaps(r, sv);
+  }
+  function cookStepHtml(s, i, idx, r, sv) {
+    const cls = i === idx ? "current" : "dim";
+    const text = linkifyIngredients(s.text, r);
+    const timers = parseTimers(s);
+    const timerBtns = (i === idx && timers.length) ? timers.map((t, ti) => `<button class="cook-timer" data-timer="${t.sec}" data-tid="${i}_${ti}">⏱ ${fmtTimer(t.sec)}${t.label ? " · " + esc(t.label) : ""}</button>`).join(" ") : "";
+    return `<div class="cook-step ${cls}">${text}${timerBtns ? "<div>" + timerBtns + "</div>" : ""}</div>`;
+  }
+  // Линкуем названия ингредиентов в тексте шага для тапа
+  function linkifyIngredients(text, r) {
+    let out = esc(text);
+    const names = [...new Set(r.ingredients.map(i => i.name))].sort((a, b) => b.length - a.length);
+    for (const name of names) {
+      const safe = esc(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp("(" + safe + ")", "i");
+      out = out.replace(re, `<span class="ing-tap" data-ing="${esc(name)}">$1</span>`);
+    }
+    return out;
+  }
+  function bindCookIngTaps(r, sv) {
+    $("#cookBody").querySelectorAll(".ing-tap").forEach(el => el.onclick = () => {
+      const ing = r.ingredients.find(i => i.name === el.dataset.ing);
+      if (ing) toast(ing.name + ": " + fmtQtyUnit(ing.qty, ing.unit, sv, r.baseServings));
+    });
+  }
+  // Парсинг таймеров: явный step.timer + «N минут/мин/сек» из текста
+  function parseTimers(s) {
+    const res = [];
+    if (s.timer) res.push({ sec: s.timer, label: "" });
+    const re = /(\d+)\s*(минут\w*|мин|сек\w*|час\w*|ч)\b/gi;
+    let m;
+    while ((m = re.exec(s.text))) {
+      const n = parseInt(m[1], 10); const u = m[2].toLowerCase();
+      let sec = u.startsWith("сек") ? n : u.startsWith("ч") || u.startsWith("час") ? n * 3600 : n * 60;
+      if (!res.some(t => t.sec === sec)) res.push({ sec, label: "" });
+    }
+    return res;
+  }
+  function bindCookTimers() {
+    $("#cookBody").querySelectorAll("[data-timer]").forEach(btn => {
+      const tid = btn.dataset.tid;
+      btn.onclick = () => {
+        if (cookState.timers[tid]) { stopTimer(tid, btn); return; }
+        let remaining = parseInt(btn.dataset.timer, 10);
+        btn.classList.add("running");
+        const tick = () => {
+          remaining--;
+          if (remaining <= 0) { beep(); btn.textContent = "✓ Готово"; btn.classList.remove("running"); clearInterval(cookState.timers[tid]); delete cookState.timers[tid]; toast("Таймер! " + fmtTimer(parseInt(btn.dataset.timer, 10))); return; }
+          btn.textContent = "⏱ " + fmtTimer(remaining) + " · стоп";
+        };
+        btn.textContent = "⏱ " + fmtTimer(remaining) + " · стоп";
+        cookState.timers[tid] = setInterval(tick, 1000);
+      };
+    });
+  }
+  function stopTimer(tid, btn) { clearInterval(cookState.timers[tid]); delete cookState.timers[tid]; btn.classList.remove("running"); btn.textContent = "⏱ " + fmtTimer(parseInt(btn.dataset.timer, 10)); }
+  function clearCookTimers() { if (cookState) { Object.values(cookState.timers).forEach(clearInterval); cookState.timers = {}; } }
+  function openIngredientsSheet(r, sv) {
+    openSheet("Ингредиенты", `<ul class="ingredients">${r.ingredients.map(ing => `<li><span class="ing-name">${esc(ing.name)}</span><span class="ing-qty">${fmtQtyUnit(ing.qty, ing.unit, sv, r.baseServings)}</span></li>`).join("")}</ul>`);
+  }
+
+  /* Wake Lock */
+  let wakeLock = null;
+  async function requestWakeLock() {
+    try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) { /* тихий fallback */ }
+  }
+  function releaseWakeLock() { try { if (wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) {} }
+
+  /* Бип */
+  let audioCtx = null;
+  function beep() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const beepOnce = (t) => { const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.connect(g); g.connect(audioCtx.destination); o.frequency.value = 880; g.gain.value = 0.18; o.start(t); o.stop(t + 0.18); };
+      const now = audioCtx.currentTime; beepOnce(now); beepOnce(now + 0.3); beepOnce(now + 0.6);
+    } catch (e) {}
+  }
+
+  /* ============================================================
+     Шторка/оверлей
+     ============================================================ */
+  function openSheet(title, html) {
+    closeSheet();
+    const ov = document.createElement("div"); ov.className = "overlay"; ov.id = "sheet";
+    ov.innerHTML = `<div class="sheet"><button class="btn ghost sm sheet-close" id="sheetClose">Закрыть</button><h3>${esc(title)}</h3>${html}</div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener("click", e => { if (e.target === ov) closeSheet(); });
+    $("#sheetClose").onclick = closeSheet;
+    return ov;
+  }
+  function closeSheet() { const s = $("#sheet"); if (s) s.remove(); }
+
+  /* ============================================================
+     План на неделю (#/plan)
+     ============================================================ */
+  const DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+  const MEALS = ["Завтрак", "Обед", "Ужин"];
+  function renderPlan() {
+    const view = $("#view");
+    view.innerHTML = `
+      <div class="section-head"><h2>План на неделю</h2></div>
+      <p class="muted" style="margin-bottom:12px">Назначайте блюда на дни, затем соберите список покупок на всю неделю.</p>
+      ${DAYS.map(d => `
+        <div class="plan-day">
+          <h4>${d}</h4>
+          ${MEALS.map(meal => {
+            const key = d + "|" + meal; const rid = Store.plan[key]; const r = rid && getRecipe(rid);
+            return `<div class="plan-slot">
+              <span class="muted" style="width:74px">${meal}</span>
+              ${r ? `<a href="#/recipe/${esc(r.id)}" style="flex:1;color:var(--accent)">${esc(r.title)}</a><button class="del-x" data-clear="${esc(key)}">✕</button>`
+                  : `<button class="btn sm ghost" data-pick="${esc(key)}" style="flex:1">＋ выбрать</button>`}
+            </div>`;
+          }).join("")}
+        </div>`).join("")}
+      <button class="btn primary block" id="planToShop" style="margin-top:8px">🛒 Собрать список покупок на неделю</button>
+    `;
+    view.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => pickRecipeForPlan(b.dataset.pick));
+    view.querySelectorAll("[data-clear]").forEach(b => b.onclick = () => { delete Store.plan[b.dataset.clear]; Store.save("plan"); renderPlan(); });
+    $("#planToShop").onclick = () => {
+      let n = 0;
+      Object.values(Store.plan).forEach(rid => { if (getRecipe(rid)) { addRecipeToShopping(rid, getRecipe(rid).baseServings); n++; } });
+      updateBadge(); toast(n ? "Добавлено блюд: " + n : "План пуст"); if (n) location.hash = "#/shopping";
+    };
+  }
+  function pickRecipeForPlan(key) {
+    const recipes = allRecipes();
+    openSheet("Выбрать блюдо", `<div class="search"><span>🔎</span><input id="planSearch" placeholder="Поиск…"></div><div id="planResults">${recipes.map(r => `<button class="btn ghost block" style="justify-content:flex-start;margin-bottom:6px" data-rid="${esc(r.id)}">${esc(r.title)} <span class="muted">· ${esc(r.cuisine)}</span></button>`).join("")}</div>`);
+    const bind = () => $("#planResults").querySelectorAll("[data-rid]").forEach(b => b.onclick = () => { Store.plan[key] = b.dataset.rid; Store.save("plan"); closeSheet(); renderPlan(); });
+    bind();
+    $("#planSearch").addEventListener("input", e => {
+      const q = normName(e.target.value);
+      $("#planResults").innerHTML = recipes.filter(r => normName(r.title).includes(q)).map(r => `<button class="btn ghost block" style="justify-content:flex-start;margin-bottom:6px" data-rid="${esc(r.id)}">${esc(r.title)} <span class="muted">· ${esc(r.cuisine)}</span></button>`).join("");
+      bind();
+    });
+  }
+
+  /* ============================================================
+     Добавить / импорт (#/add)
+     ============================================================ */
+  function renderAdd() {
+    const view = $("#view");
+    view.innerHTML = `
+      <div class="section-head"><h2>Добавить рецепт</h2></div>
+      <div class="chips">
+        <button class="chip active" data-tab="manual">Вручную</button>
+        <button class="chip" data-tab="import">Импорт (ссылка/фото)</button>
+        <button class="chip" data-tab="backup">Бэкап / печать</button>
+      </div>
+      <div id="addBody"></div>
+    `;
+    const tabs = view.querySelectorAll("[data-tab]");
+    tabs.forEach(t => t.onclick = () => { tabs.forEach(x => x.classList.remove("active")); t.classList.add("active"); addTab(t.dataset.tab); });
+    addTab("manual");
+  }
+  function addTab(tab) {
+    if (tab === "manual") return manualForm();
+    if (tab === "import") return importForm();
+    if (tab === "backup") return backupTab();
+  }
+  function manualForm(draft) {
+    draft = draft || { title: "", cuisine: "", category: "Основное", time: 30, difficulty: 1, baseServings: 2, forKid: false, ingredients: [{}], steps: [{}], tags: [] };
+    const cats = ["Завтрак", "Суп", "Основное", "Гарнир", "Салат", "Десерт", "Выпечка", "Закуска", "Напиток"];
+    $("#addBody").innerHTML = `
+      <div class="field"><label>Название</label><input id="f_title" value="${esc(draft.title)}"></div>
+      <div class="row2">
+        <div class="field"><label>Кухня</label><input id="f_cuisine" list="cuisineList" value="${esc(draft.cuisine)}"><datalist id="cuisineList">${Object.keys(CUISINE_COLOR).map(c => `<option value="${esc(c)}">`).join("")}</datalist></div>
+        <div class="field"><label>Категория</label><select id="f_category">${cats.map(c => `<option ${draft.category === c ? "selected" : ""}>${c}</option>`).join("")}</select></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Время (мин)</label><input id="f_time" type="number" value="${draft.time}"></div>
+        <div class="field"><label>Порций</label><input id="f_servings" type="number" value="${draft.baseServings}"></div>
+      </div>
+      <div class="field"><label><input type="checkbox" id="f_kid" ${draft.forKid ? "checked" : ""}> Для дочки</label></div>
+      <div class="field"><label>Ингредиенты (название · кол-во · ед · раздел)</label><div id="f_ings"></div><button class="btn sm" id="addIng">＋ ингредиент</button></div>
+      <div class="field"><label>Шаги</label><div id="f_steps"></div><button class="btn sm" id="addStep">＋ шаг</button></div>
+      <div class="btn-row"><button class="btn primary" id="saveRecipe">Сохранить</button><button class="btn" id="exportRecipe">Экспорт JSON</button></div>
+    `;
+    const ingsBox = $("#f_ings"), stepsBox = $("#f_steps");
+    function ingRow(ing) { ing = ing || {}; const d = document.createElement("div"); d.className = "dyn-row"; d.innerHTML = `<input placeholder="название" class="i-name" value="${esc(ing.name || "")}"><input placeholder="кол-во" class="i-qty" style="max-width:70px" value="${ing.qty != null ? ing.qty : ""}"><input placeholder="ед" class="i-unit" style="max-width:60px" value="${esc(ing.unit || "")}"><input placeholder="раздел" class="i-group" style="max-width:90px" value="${esc(ing.group || "")}"><button class="del-x">✕</button>`; d.querySelector(".del-x").onclick = () => d.remove(); return d; }
+    function stepRow(s) { s = s || {}; const d = document.createElement("div"); d.className = "dyn-row"; d.innerHTML = `<textarea placeholder="что делать" class="s-text" style="flex:1">${esc(s.text || "")}</textarea><input placeholder="таймер сек" class="s-timer" style="max-width:80px" value="${s.timer || ""}"><button class="del-x">✕</button>`; d.querySelector(".del-x").onclick = () => d.remove(); return d; }
+    (draft.ingredients.length ? draft.ingredients : [{}]).forEach(i => ingsBox.appendChild(ingRow(i)));
+    (draft.steps.length ? draft.steps : [{}]).forEach(s => stepsBox.appendChild(stepRow(s)));
+    $("#addIng").onclick = () => ingsBox.appendChild(ingRow());
+    $("#addStep").onclick = () => stepsBox.appendChild(stepRow());
+
+    function collect() {
+      const title = $("#f_title").value.trim();
+      const ingredients = [...ingsBox.querySelectorAll(".dyn-row")].map(d => ({
+        name: d.querySelector(".i-name").value.trim(),
+        qty: d.querySelector(".i-qty").value ? parseFloat(d.querySelector(".i-qty").value.replace(",", ".")) : null,
+        unit: d.querySelector(".i-unit").value.trim(),
+        group: d.querySelector(".i-group").value.trim() || "Прочее",
+        staple: false
+      })).filter(i => i.name);
+      const steps = [...stepsBox.querySelectorAll(".dyn-row")].map(d => { const o = { text: d.querySelector(".s-text").value.trim() }; const t = d.querySelector(".s-timer").value; if (t) o.timer = parseInt(t, 10); return o; }).filter(s => s.text);
+      return {
+        id: (title.toLowerCase().replace(/[^a-zа-я0-9]+/gi, "-").replace(/^-|-$/g, "") || "recipe") + "-" + Math.random().toString(36).slice(2, 6),
+        title, forKid: $("#f_kid").checked, category: $("#f_category").value, cuisine: $("#f_cuisine").value.trim() || "Прочая",
+        photo: "", time: parseInt($("#f_time").value, 10) || 0, difficulty: draft.difficulty || 1,
+        baseServings: parseInt($("#f_servings").value, 10) || 1, tags: draft.tags || [], ingredients, steps, notes: ""
+      };
+    }
+    $("#saveRecipe").onclick = () => { const r = collect(); if (!r.title || !r.ingredients.length) { toast("Нужны название и ингредиенты"); return; } Store.userRecipes.push(r); Store.save("userRecipes"); toast("Рецепт сохранён"); location.hash = "#/recipe/" + r.id; };
+    $("#exportRecipe").onclick = () => copyText(JSON.stringify(collect(), null, 2));
+  }
+
+  function importForm() {
+    $("#addBody").innerHTML = `
+      <div class="field"><label>Импорт по ссылке (страница рецепта)</label>
+        <div class="dyn-row"><input id="impUrl" placeholder="https://…"><button class="btn sm" id="impUrlBtn">Импорт</button></div>
+      </div>
+      <div class="field"><label>Импорт по фото страницы / рукописи</label>
+        <input id="impPhoto" type="file" accept="image/*"><button class="btn sm" id="impPhotoBtn" style="margin-top:8px">Распознать</button>
+      </div>
+      <p class="muted">Импорт обращается к бэкенду (требуется секрет и запущенный сервер). Результат — черновик, который можно поправить и сохранить.</p>
+      <div id="impStatus"></div>
+    `;
+    $("#impUrlBtn").onclick = async () => {
+      const url = $("#impUrl").value.trim(); if (!url) return;
+      $("#impStatus").textContent = "Импортирую…";
+      try { const draft = await window.CookAssistant.importUrl(url); openDraft(draft); }
+      catch (e) { $("#impStatus").textContent = "Ошибка импорта: " + e.message; }
+    };
+    $("#impPhotoBtn").onclick = async () => {
+      const f = $("#impPhoto").files[0]; if (!f) return;
+      $("#impStatus").textContent = "Распознаю…";
+      try { const draft = await window.CookAssistant.importPhoto(f); openDraft(draft); }
+      catch (e) { $("#impStatus").textContent = "Ошибка распознавания: " + e.message; }
+    };
+    function openDraft(draft) {
+      document.querySelectorAll("[data-tab]").forEach(t => t.classList.toggle("active", t.dataset.tab === "manual"));
+      manualForm(normalizeDraft(draft)); toast("Черновик готов — проверьте и сохраните");
+    }
+  }
+  function normalizeDraft(d) {
+    return {
+      title: d.title || "", cuisine: d.cuisine || "", category: d.category || "Основное",
+      time: d.time || 30, difficulty: d.difficulty || 1, baseServings: d.baseServings || 2, forKid: !!d.forKid,
+      tags: d.tags || [],
+      ingredients: (d.ingredients || []).map(i => typeof i === "string" ? { name: i, group: "Прочее" } : i),
+      steps: (d.steps || []).map(s => typeof s === "string" ? { text: s } : s)
+    };
+  }
+
+  function backupTab() {
+    $("#addBody").innerHTML = `
+      <div class="field"><label>Резервная копия (все данные: рецепты, список, кладовка, память, план)</label>
+        <div class="btn-row"><button class="btn" id="bkExport">⬇ Экспорт JSON</button><button class="btn" id="bkImportBtn">⬆ Импорт JSON</button><input id="bkFile" type="file" accept="application/json" class="hidden"></div>
+      </div>
+      <div class="field"><label>Печать книги</label><button class="btn" id="printBook">🖨 Печать / PDF</button></div>
+    `;
+    $("#bkExport").onclick = () => {
+      const data = { v: 1, userRecipes: Store.userRecipes, shopping: Store.shopping, pantry: Store.pantry, memory: Store.memory, plan: Store.plan };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "cookbook-backup.json"; a.click();
+    };
+    $("#bkImportBtn").onclick = () => $("#bkFile").click();
+    $("#bkFile").onchange = e => {
+      const f = e.target.files[0]; if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const d = JSON.parse(reader.result);
+          ["userRecipes", "shopping", "pantry", "memory", "plan"].forEach(k => { if (d[k]) { Store[k] = d[k]; Store.save(k); } });
+          toast("Импортировано"); updateBadge();
+        } catch (err) { toast("Битый файл"); }
+      };
+      reader.readAsText(f);
+    };
+    $("#printBook").onclick = () => printBook();
+  }
+  function printBook() {
+    const recipes = allRecipes();
+    const win = $("#view");
+    const prev = win.innerHTML;
+    win.innerHTML = recipes.map(r => `<article class="recipe-print"><h1>${esc(r.title)}</h1><p class="muted">${esc(r.cuisine)} · ${esc(r.category)} · ${r.time} мин · ${r.baseServings} порц.</p><div class="label">Ингредиенты</div><ul class="ingredients">${r.ingredients.map(i => `<li><span class="ing-name">${esc(i.name)}</span><span class="ing-qty">${fmtQtyUnit(i.qty, i.unit, r.baseServings, r.baseServings)}</span></li>`).join("")}</ul><div class="label">Метод</div><ol class="steps">${r.steps.map(s => `<li><div class="step-text">${esc(s.text)}</div></li>`).join("")}</ol></article>`).join("");
+    window.print();
+    setTimeout(() => { win.innerHTML = prev; router(); }, 300);
+  }
+
+  /* ============================================================
+     Роутер
+     ============================================================ */
+  function router() {
+    closeSheet();
+    const hash = location.hash || "#/";
+    const m = hash.match(/^#\/(\w+)?\/?(.*)$/);
+    const route = m && m[1] ? m[1] : "";
+    const arg = m && m[2] ? decodeURIComponent(m[2]) : "";
+    window.scrollTo(0, 0);
+    updateBadge();
+    if (route === "recipe") return renderRecipe(arg);
+    if (route === "cook") return renderCook(arg);
+    if (route === "shopping") return renderShopping();
+    if (route === "assistant") return window.CookAssistant ? window.CookAssistant.renderView($("#view")) : null;
+    if (route === "plan") return renderPlan();
+    if (route === "add") return renderAdd();
+    return renderList();
+  }
+
+  // Экспорт для assistant.js
+  window.Cookbook = {
+    Store, getRecipe, allRecipes, applySubstitution, toast, esc, addRecipeToShopping, updateBadge, normName
+  };
+  function applySubstitution(recipeId, sub) {
+    // записать в личную память
+    if (recipeId) {
+      const mem = getMem(recipeId); mem.substitutions = mem.substitutions || [];
+      mem.substitutions.push({ original: sub.original, replacement: sub.replacement, note: sub.note || "" }); saveMem();
+    }
+    // обновить позицию в списке покупок, если есть
+    const targetKey = normName(sub.original);
+    (Store.shopping.manual || []).forEach(m => { if (normName(m.name) === targetKey) m.name = sub.replacement; });
+    Store.save("shopping");
+    toast("Замена применена: " + sub.replacement);
+  }
+
+  window.addEventListener("hashchange", router);
+  document.addEventListener("DOMContentLoaded", router);
+  if (document.readyState !== "loading") router();
+})();

@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     sentry_dsn: str = ""
     admin_telegram_ids: str = ""
 
+    # Cookbook (личная поваренная книга) — общий секрет доступа к AI-ассистенту/импорту
+    cookbook_secret: str = ""
+    cookbook_vision_daily_cap: int = 50
+
     @property
     def admin_ids_list(self) -> list[int]:
         return [int(i.strip()) for i in self.admin_telegram_ids.split(",") if i.strip()]

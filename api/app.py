@@ -10,7 +10,7 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from config import settings
 from api.middleware.rate_limit import RateLimitMiddleware
 from api.middleware.request_id import RequestIdMiddleware
-from api.routes import auth, wardrobe, brief, onboarding, billing, webhooks
+from api.routes import auth, wardrobe, brief, onboarding, billing, webhooks, cookbook
 
 
 def create_app() -> FastAPI:
@@ -46,6 +46,7 @@ def create_app() -> FastAPI:
     app.include_router(onboarding.router, prefix="/api/v1/onboarding", tags=["onboarding"])
     app.include_router(billing.router, prefix="/api/v1/billing", tags=["billing"])
     app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["webhooks"])
+    app.include_router(cookbook.router, prefix="/api/v1/cookbook", tags=["cookbook"])
 
     @app.post("/api/v1/test-survey")
     async def test_survey(request: Request) -> dict:
@@ -97,23 +98,13 @@ def create_app() -> FastAPI:
         from fastapi.responses import JSONResponse
         return JSONResponse(content=checks, status_code=status_code)
 
-    # Landing page at root
+    # Поваренная книга (SPA) — статика в корне.
+    # Монтируем ПОСЛЕ всех API-роутов: /api/* и /health объявлены выше и
+    # матчатся раньше. html=True отдаёт index.html на "/" и любой ассет по
+    # относительному пути (css/js/data) — работает и на хосте, и под file://.
+    # Старый лендинг/опросник доступны в /archive/ (test-survey API не тронут).
     landing_dir = Path(__file__).resolve().parent.parent / "landing"
     if landing_dir.is_dir():
-        from fastapi.responses import FileResponse
-
-        @app.get("/")
-        async def landing():
-            return FileResponse(landing_dir / "index.html")
-
-        @app.get("/test.html")
-        async def test_page():
-            path = landing_dir / "test.html"
-            if path.exists():
-                return FileResponse(path)
-            from fastapi.responses import PlainTextResponse
-            return PlainTextResponse("Not found", status_code=404)
-
-        app.mount("/static", StaticFiles(directory=str(landing_dir)), name="landing")
+        app.mount("/", StaticFiles(directory=str(landing_dir), html=True), name="cookbook")
 
     return app
