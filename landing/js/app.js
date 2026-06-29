@@ -104,7 +104,12 @@
     const mem = Store.memory[r.id];
     const made = mem && mem.madeLog && mem.madeLog.length;
     const cover = r.photo
-      ? `<div class="cover photo"><img src="${esc(r.photo)}" alt=""></div>`
+      ? `<div class="cover photo"><img src="${esc(r.photo)}" alt="" loading="lazy">
+           <div class="cover-cap">
+             <div class="c-cat">${esc(r.category)}</div>
+             <div class="c-title">${esc(r.title)}</div>
+           </div>
+         </div>`
       : `<div class="cover" style="${coverStyle(r)}">
            <div class="c-cat">${esc(r.category)}</div>
            <div class="c-title">${esc(r.title)}</div>
@@ -153,6 +158,8 @@
       }
     }
     const hasProfile = Object.keys(weights).length > 0;
+    // Холодный старт без оценок → курированная, стабильная и разнообразная подборка
+    if (!hasProfile) return curatedStarters(limit || 6, recentMade);
     const scored = recipes.filter(r => !tried.has(r.id) && !recentMade.has(r.id)).map(r => {
       let s = 0;
       s += weights["cuisine:" + r.cuisine] || 0;
@@ -160,11 +167,27 @@
       if (r.forKid) s += weights["forKid"] || 0;
       (r.tags || []).forEach(t => s += weights["tag:" + t] || 0);
       keyIngredients(r).forEach(i => s += weights["ing:" + i] || 0);
-      // холодный старт: быстрые/детские
-      if (!hasProfile) s = (r.forKid ? 1.5 : 0) + (r.time <= 20 ? 1 : 0) + Math.random() * 0.5;
       return { r, s };
     }).filter(x => x.s > 0).sort((a, b) => b.s - a.s);
     return scored.slice(0, limit || 6).map(x => x.r);
+  }
+  function hasTasteProfile() {
+    return Object.values(Store.memory || {}).some(m => m && m.vote);
+  }
+  // Курированный холодный старт: детское → быстрое → простое, по одному на кухню (разнообразие), стабильно (без random)
+  function curatedStarters(limit, recentMade) {
+    recentMade = recentMade || new Set();
+    const ranked = allRecipes()
+      .filter(r => !recentMade.has(r.id))
+      .map(r => ({
+        r,
+        s: (r.forKid ? 3 : 0) + (r.time <= 20 ? 2 : r.time <= 35 ? 1 : 0) + (3 - (r.difficulty || 2)) * 0.5
+      }))
+      .sort((a, b) => b.s - a.s || a.r.time - b.r.time || a.r.title.localeCompare(b.r.title));
+    const out = [], seen = new Set();
+    for (const { r } of ranked) { if (out.length >= limit) break; if (seen.has(r.cuisine)) continue; seen.add(r.cuisine); out.push(r); }
+    for (const { r } of ranked) { if (out.length >= limit) break; if (!out.includes(r)) out.push(r); }
+    return out;
   }
   function keyIngredients(r) {
     return (r.ingredients || []).filter(i => !i.staple).slice(0, 4).map(i => normName(i.name));
@@ -174,20 +197,17 @@
   /* ============================================================
      ВЬЮХА: Список (#/)
      ============================================================ */
-  let listState = { q: "", cuisine: "", category: "", kidOnly: false };
+  let listState = { q: "", cuisine: "", category: "", kidOnly: false, time: "", difficulty: "" };
+  const DIFF_LABEL = ["", "просто", "средне", "сложно"];
 
   function renderList() {
     const recipes = allRecipes();
     const cuisines = [...new Set(recipes.map(r => r.cuisine))].sort();
     const categories = [...new Set(recipes.map(r => r.category))];
 
-    const cuisineChips = cuisines.map(c =>
-      `<button class="chip ${listState.cuisine === c ? "active" : ""}" data-cuisine="${esc(c)}">${esc(c)}</button>`).join("");
-    const catChips = categories.map(c =>
-      `<button class="chip ${listState.category === c ? "active" : ""}" data-cat="${esc(c)}">${esc(c)}</button>`).join("");
-
-    const filtered = applyFilters(recipes);
-    const recs = (!listState.q && !listState.cuisine && !listState.category && !listState.kidOnly) ? recommend(6) : [];
+    const catChips = `<button class="chip ${!listState.category ? "active" : ""}" data-cat="">Все</button>` +
+      categories.map(c => `<button class="chip ${listState.category === c ? "active" : ""}" data-cat="${esc(c)}">${esc(c)}</button>`).join("");
+    const fcount = filterCount();
 
     const view = $("#view");
     view.innerHTML = `
@@ -195,35 +215,108 @@
         <span>🔎</span>
         <input id="q" type="text" placeholder="Поиск: название, тег, ингредиент…" value="${esc(listState.q)}">
       </div>
-      <div class="chips">
-        <button class="chip accent ${listState.kidOnly ? "active" : ""}" id="kidChip">★ Дочке</button>
-        <button class="chip" id="surprise">🎲 Удиви меня</button>
-        ${cuisineChips}
+      <div class="active-filters" id="activeFilters">${activeFilterChips()}</div>
+      <div class="chips wrap">${catChips}</div>
+      <div class="toolbar">
+        <button class="btn ghost sm" id="openFilters">⚙ Фильтры${fcount ? ` · ${fcount}` : ""}</button>
+        <button class="btn ghost sm ${listState.kidOnly ? "on" : ""}" id="kidChip">★ Дочке</button>
+        <button class="btn ghost sm" id="surprise">🎲 Удиви меня</button>
       </div>
-      <div class="chips">${catChips}</div>
-      ${recs.length ? `
-        <div class="section-head"><h2>Вам понравится</h2></div>
-        <div class="grid">${recs.map(cardHtml).join("")}</div>` : ""}
-      <div class="section-head"><h2>Рецепты</h2><span class="muted">${filtered.length}</span></div>
-      ${filtered.length ? `<div class="grid">${filtered.map(cardHtml).join("")}</div>`
-        : `<div class="empty">Ничего не найдено.<br>Сбросьте фильтры или <a href="#/add" style="color:var(--accent)">добавьте рецепт</a>.</div>`}
+      <div id="listResults"></div>
     `;
+    renderResults(recipes);
 
-    $("#q").addEventListener("input", e => { listState.q = e.target.value; debouncedList(); });
+    $("#q").addEventListener("input", e => { listState.q = e.target.value; debouncedResults(); });
     $("#kidChip").addEventListener("click", () => { listState.kidOnly = !listState.kidOnly; renderList(); });
     $("#surprise").addEventListener("click", () => {
       const pool = applyFilters(recipes); if (!pool.length) return;
       location.hash = "#/recipe/" + pool[Math.floor(Math.random() * pool.length)].id;
     });
-    view.querySelectorAll("[data-cuisine]").forEach(b => b.addEventListener("click", () => {
-      listState.cuisine = listState.cuisine === b.dataset.cuisine ? "" : b.dataset.cuisine; renderList();
-    }));
+    $("#openFilters").addEventListener("click", () => openFilterSheet(recipes, cuisines));
     view.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => {
-      listState.category = listState.category === b.dataset.cat ? "" : b.dataset.cat; renderList();
+      listState.category = b.dataset.cat; renderList();
+    }));
+    view.querySelectorAll("#activeFilters [data-clear]").forEach(b => b.addEventListener("click", () => {
+      const k = b.dataset.clear; listState[k] = (k === "kidOnly") ? false : ""; renderList();
     }));
   }
+
+  function filterCount() {
+    return (listState.cuisine ? 1 : 0) + (listState.time ? 1 : 0) + (listState.difficulty ? 1 : 0);
+  }
+  // Активные фильтры из листа «Фильтры» → съёмные чипы под поиском
+  function activeFilterChips() {
+    const chips = [];
+    if (listState.cuisine) chips.push(["cuisine", listState.cuisine]);
+    if (listState.time) chips.push(["time", "≤ " + listState.time + " мин"]);
+    if (listState.difficulty) chips.push(["difficulty", DIFF_LABEL[listState.difficulty] || ""]);
+    return chips.map(([k, label]) => `<button class="afilter" data-clear="${k}">${esc(label)} ✕</button>`).join("");
+  }
+
+  // Лист «Фильтры»: все кухни сеткой (+ поиск по кухне), время, сложность
+  function openFilterSheet(recipes, cuisines) {
+    const html = `
+      <div class="filter-group">
+        <div class="label">Кухня</div>
+        <input id="cuisineSearch" class="mini-search" placeholder="Найти кухню…">
+        <div class="chips wrap" id="cuisineGrid">
+          ${cuisines.map(c => `<button class="chip ${listState.cuisine === c ? "active" : ""}" data-fc="${esc(c)}">${esc(c)}</button>`).join("")}
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="label">Время</div>
+        <div class="chips" id="timeGrid">${[15, 30, 60].map(t => `<button class="chip ${listState.time == t ? "active" : ""}" data-ft="${t}">≤ ${t} мин</button>`).join("")}</div>
+      </div>
+      <div class="filter-group">
+        <div class="label">Сложность</div>
+        <div class="chips" id="diffGrid">${[1, 2, 3].map(d => `<button class="chip ${listState.difficulty == d ? "active" : ""}" data-fd="${d}">${DIFF_LABEL[d]}</button>`).join("")}</div>
+      </div>
+      <div class="sheet-actions">
+        <button class="btn ghost" id="fReset">Сбросить</button>
+        <button class="btn primary" id="fApply"></button>
+      </div>`;
+    const ov = openSheet("Фильтры", html);
+    const root = ov.querySelector(".sheet");
+    const updateCount = () => { $("#fApply").textContent = "Показать " + applyFilters(recipes).length; };
+    const single = (grid, attr, key) => grid.querySelectorAll("[" + attr + "]").forEach(b => b.addEventListener("click", () => {
+      const v = b.getAttribute(attr);
+      listState[key] = (String(listState[key]) === v) ? "" : v;
+      grid.querySelectorAll("[" + attr + "]").forEach(x => x.classList.toggle("active", String(listState[key]) === x.getAttribute(attr)));
+      updateCount();
+    }));
+    single(root.querySelector("#cuisineGrid"), "data-fc", "cuisine");
+    single(root.querySelector("#timeGrid"), "data-ft", "time");
+    single(root.querySelector("#diffGrid"), "data-fd", "difficulty");
+    $("#cuisineSearch").addEventListener("input", e => {
+      const q = normName(e.target.value);
+      root.querySelectorAll("#cuisineGrid [data-fc]").forEach(b => {
+        b.style.display = (!q || normName(b.getAttribute("data-fc")).includes(q)) ? "" : "none";
+      });
+    });
+    $("#fReset").onclick = () => { listState.cuisine = ""; listState.time = ""; listState.difficulty = ""; closeSheet(); renderList(); };
+    $("#fApply").onclick = () => { closeSheet(); renderList(); };
+    updateCount();
+  }
+  // Перерисовываем ТОЛЬКО результаты — поле поиска и чипы не трогаем (фокус не теряется)
+  function renderResults(recipes) {
+    recipes = recipes || allRecipes();
+    const el = $("#listResults");
+    if (!el) return;
+    const filtered = applyFilters(recipes);
+    const anyFilter = listState.q || listState.cuisine || listState.category || listState.kidOnly || listState.time || listState.difficulty;
+    const recs = anyFilter ? [] : recommend(6);
+    const recsHead = hasTasteProfile() ? "Вам понравится" : "С чего начать";
+    el.innerHTML = `
+      ${recs.length ? `
+        <div class="section-head"><h2>${recsHead}</h2></div>
+        <div class="grid">${recs.map(cardHtml).join("")}</div>` : ""}
+      <div class="section-head"><h2>Рецепты</h2><span class="muted">${filtered.length}</span></div>
+      ${filtered.length ? `<div class="grid">${filtered.map(cardHtml).join("")}</div>`
+        : `<div class="empty">Ничего не найдено.<br>Сбросьте фильтры или <a href="#/add" style="color:var(--accent)">добавьте рецепт</a>.</div>`}
+    `;
+  }
   let listDebTimer = null;
-  function debouncedList() { clearTimeout(listDebTimer); listDebTimer = setTimeout(renderList, 180); }
+  function debouncedResults() { clearTimeout(listDebTimer); listDebTimer = setTimeout(() => renderResults(), 180); }
 
   function applyFilters(recipes) {
     const q = normName(listState.q);
@@ -231,6 +324,8 @@
       if (listState.kidOnly && !r.forKid) return false;
       if (listState.cuisine && r.cuisine !== listState.cuisine) return false;
       if (listState.category && r.category !== listState.category) return false;
+      if (listState.time && r.time > +listState.time) return false;
+      if (listState.difficulty && r.difficulty !== +listState.difficulty) return false;
       if (q) {
         const hay = [r.title, ...(r.tags || []), ...(r.ingredients || []).map(i => i.name)].map(normName).join(" ");
         if (!hay.includes(q)) return false;
@@ -265,7 +360,7 @@
       ${r.photo ? `<div class="r-cat" style="margin:4px 0 6px">${esc(r.cuisine)} · ${esc(r.category)}</div><h1 style="font-size:28px;margin-bottom:10px">${esc(r.title)}</h1>` : ""}
       <div class="r-meta">
         <span>⏱ <b>${r.time}</b> мин</span>
-        <span>📊 сложность <b>${"●".repeat(r.difficulty)}${"○".repeat(3 - r.difficulty)}</b></span>
+        <span>📊 сложность <b>${DIFF_LABEL[r.difficulty] || "просто"}</b></span>
         ${r.forKid ? '<span class="kid" style="color:var(--accent);font-weight:700">★ для дочки</span>' : ""}
       </div>
 
@@ -504,43 +599,65 @@
   function drawCook() {
     const { r, idx } = cookState;
     const sv = recipeServings[r.id] || r.baseServings;
+    const serve = r.serveWith || r.notes || "";
+    const hasServe = !!serve;
+    const total = r.steps.length + (hasServe ? 1 : 0);
+    const onServe = hasServe && idx === r.steps.length;
     const view = $("#view");
     view.innerHTML = `<div class="cook" id="cookRoot">
       <div class="cook-top">
-        <span class="cook-progress">Шаг ${idx + 1} из ${r.steps.length}</span>
+        <span class="cook-progress">${onServe ? "Подача" : `Шаг ${idx + 1} из ${total}`}</span>
         <button class="iconbtn" id="cookIngs" title="Ингредиенты">📋</button>
         <button class="iconbtn" id="cookExit" title="Выйти">✕</button>
       </div>
       <div class="cook-body" id="cookBody">
-        ${r.steps.map((s, i) => cookStepHtml(s, i, idx, r, sv)).join("")}
+        ${onServe ? cookServeHtml(serve, true) : cookStepHtml(r.steps[idx], idx, idx, r, sv)}
       </div>
       <div class="cook-nav">
         <button class="btn ghost" id="cookPrev" ${idx === 0 ? "disabled" : ""}>← Назад</button>
-        ${idx < r.steps.length - 1
+        ${idx < total - 1
           ? `<button class="btn primary" id="cookNext">Дальше →</button>`
           : `<button class="btn primary" id="cookDone">✓ Готово</button>`}
       </div>
     </div>`;
 
-    const cur = view.querySelector(".cook-step.current");
-    if (cur) cur.scrollIntoView({ block: "center" });
-
     $("#cookExit").onclick = () => { releaseWakeLock(); clearCookTimers(); location.hash = "#/recipe/" + r.id; };
     $("#cookIngs").onclick = () => openIngredientsSheet(r, sv);
     const prev = $("#cookPrev"); if (prev) prev.onclick = () => { if (cookState.idx > 0) { cookState.idx--; drawCook(); } };
-    const next = $("#cookNext"); if (next) next.onclick = () => { cookState.idx++; drawCook(); };
+    const next = $("#cookNext"); if (next) next.onclick = () => { if (cookState.idx < total - 1) { cookState.idx++; drawCook(); } };
     const done = $("#cookDone"); if (done) done.onclick = () => {
       const mem = getMem(r.id); mem.madeLog = mem.madeLog || []; mem.madeLog.push(new Date().toISOString()); saveMem();
       releaseWakeLock(); clearCookTimers(); toast("Готово! Отмечено, что готовил."); location.hash = "#/recipe/" + r.id;
     };
-    bindCookTimers(); bindCookIngTaps(r, sv);
+    bindCookTimers(); bindCookIngTaps(r, sv); bindCookSwipe(total);
   }
   function cookStepHtml(s, i, idx, r, sv) {
     const cls = i === idx ? "current" : "dim";
+    const title = s.title ? `<div class="cook-step-title">${esc(s.title)}</div>` : "";
     const text = linkifyIngredients(s.text, r);
     const timers = parseTimers(s);
     const timerBtns = (i === idx && timers.length) ? timers.map((t, ti) => `<button class="cook-timer" data-timer="${t.sec}" data-tid="${i}_${ti}">⏱ ${fmtTimer(t.sec)}${t.label ? " · " + esc(t.label) : ""}</button>`).join(" ") : "";
-    return `<div class="cook-step ${cls}">${text}${timerBtns ? "<div>" + timerBtns + "</div>" : ""}</div>`;
+    return `<div class="cook-step ${cls}">${title}<div class="cook-step-text">${text}</div>${timerBtns ? "<div>" + timerBtns + "</div>" : ""}</div>`;
+  }
+  function cookServeHtml(serve, isCurrent) {
+    return `<div class="cook-step cook-serve ${isCurrent ? "current" : "dim"}">
+      <div class="cook-step-title">С чем подавать</div>
+      <div class="cook-step-text">${esc(serve)}</div>
+    </div>`;
+  }
+  // Свайп влево/вправо = следующий/предыдущий шаг
+  function bindCookSwipe(total) {
+    const body = $("#cookBody");
+    let x0 = null, y0 = null;
+    body.addEventListener("touchstart", e => { x0 = e.changedTouches[0].clientX; y0 = e.changedTouches[0].clientY; }, { passive: true });
+    body.addEventListener("touchend", e => {
+      if (x0 == null) return;
+      const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+      x0 = null;
+      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return; // горизонтальный жест
+      if (dx < 0 && cookState.idx < total - 1) { cookState.idx++; drawCook(); }
+      else if (dx > 0 && cookState.idx > 0) { cookState.idx--; drawCook(); }
+    }, { passive: true });
   }
   // Линкуем названия ингредиентов в тексте шага для тапа
   function linkifyIngredients(text, r) {
