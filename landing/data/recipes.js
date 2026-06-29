@@ -191,7 +191,7 @@ window.RECIPES = [
   {
     id: "pizza-margherita", title: "Пицца Маргарита", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Итальянская", photo: "",
-    prepTime: 20, cookTime: 12, time: 40, difficulty: 2, baseServings: 2, kcal: 590,
+    prepTime: 20, cookTime: 12, time: 32, difficulty: 2, baseServings: 2, kcal: 590,
     equipment: ["духовка", "противень"], allergens: ["глютен", "молоко"], tags: ["тесто", "сыр", "детское"],
     ingredients: [
       { name: "Мука", qty: 300, unit: "г", group: "Бакалея", staple: true },
@@ -366,7 +366,7 @@ window.RECIPES = [
   {
     id: "khachapuri-imeruli", title: "Хачапури по-имеретински", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Грузинская", photo: "",
-    prepTime: 20, cookTime: 15, time: 60, difficulty: 2, baseServings: 4, kcal: 480,
+    prepTime: 20, cookTime: 15, time: 35, difficulty: 2, baseServings: 4, kcal: 480,
     equipment: ["духовка", "противень"], allergens: ["глютен", "молоко", "яйца"], tags: ["сыр", "тесто"],
     ingredients: [
       { name: "Мука", qty: 400, unit: "г", group: "Бакалея", staple: true },
@@ -387,7 +387,7 @@ window.RECIPES = [
   {
     id: "khinkali", title: "Хинкали", forKid: true, kidNote: "Внутри горячий бульон — малышам подавайте слегка остывшими и надкусанными, чтобы не обжечься.",
     category: "Основное", cuisine: "Грузинская", photo: "",
-    prepTime: 65, cookTime: 15, time: 90, difficulty: 3, baseServings: 4, kcal: 420,
+    prepTime: 65, cookTime: 15, time: 80, difficulty: 3, baseServings: 4, kcal: 420,
     equipment: ["плита", "кастрюля"], allergens: ["глютен"], tags: ["тесто", "мясо", "пряное"],
     ingredients: [
       { name: "Мука", qty: 500, unit: "г", group: "Бакалея", staple: true },
@@ -1313,7 +1313,7 @@ window.RECIPES = [
   {
     id: "samsa", title: "Самса", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Узбекская", photo: "",
-    prepTime: 40, cookTime: 35, time: 80, difficulty: 2, baseServings: 6, kcal: 420,
+    prepTime: 40, cookTime: 35, time: 75, difficulty: 2, baseServings: 6, kcal: 420,
     equipment: ["духовка", "противень"], allergens: ["глютен", "яйца"], tags: ["выпечка", "мясо"],
     ingredients: [
       { name: "Слоёное тесто", qty: 500, unit: "г", group: "Заморозка", staple: false },
@@ -1354,7 +1354,7 @@ window.RECIPES = [
   {
     id: "lahmacun", title: "Лахмаджун", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Турецкая", photo: "",
-    prepTime: 30, cookTime: 10, time: 50, difficulty: 2, baseServings: 4, kcal: 350,
+    prepTime: 30, cookTime: 10, time: 40, difficulty: 2, baseServings: 4, kcal: 350,
     equipment: ["духовка", "блендер"], allergens: ["глютен"], tags: ["лепёшка", "мясо"],
     ingredients: [
       { name: "Мука", qty: 300, unit: "г", group: "Бакалея", staple: true },
@@ -1577,7 +1577,7 @@ window.RECIPES = [
   {
     id: "brownie", title: "Брауни", forKid: true, kidNote: "",
     category: "Десерт", cuisine: "Американская", photo: "",
-    prepTime: 15, cookTime: 25, time: 45, difficulty: 1, baseServings: 8, kcal: 340,
+    prepTime: 15, cookTime: 25, time: 40, difficulty: 1, baseServings: 8, kcal: 340,
     equipment: ["духовка", "форма"], allergens: ["глютен", "яйца", "молоко"], tags: ["детское", "шоколад", "сладкое"],
     ingredients: [
       { name: "Тёмный шоколад", qty: 200, unit: "г", group: "Бакалея", staple: false },
@@ -1770,7 +1770,7 @@ window.RECIPES = [
   {
     id: "focaccia", title: "Фокачча", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Итальянская", photo: "",
-    prepTime: 20, cookTime: 25, time: 150, difficulty: 2, baseServings: 8, kcal: 280,
+    prepTime: 20, cookTime: 25, time: 45, difficulty: 2, baseServings: 8, kcal: 280,
     equipment: ["духовка", "противень"], allergens: ["глютен"], tags: ["выпечка", "хлеб", "дрожжевое"],
     ingredients: [
       { name: "Мука пшеничная", qty: 500, unit: "г", group: "Бакалея", staple: true },
@@ -2102,7 +2102,7 @@ window.RECIPES = [
   {
     id: "madeleines", title: "Мадлен", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Французская", photo: "",
-    prepTime: 15, cookTime: 12, time: 40, difficulty: 2, baseServings: 20, kcal: 90,
+    prepTime: 15, cookTime: 12, time: 27, difficulty: 2, baseServings: 20, kcal: 90,
     equipment: ["духовка", "форма-ракушки"], allergens: ["глютен", "яйца", "молоко"], tags: ["выпечка", "печенье", "к чаю"],
     ingredients: [
       { name: "Яйца", qty: 2, unit: "шт", group: "Молочное", staple: false },
@@ -2190,7 +2190,7 @@ window.RECIPES = [
   {
     id: "omelette-aux-fines-herbes", title: "Французский омлет с травами", forKid: true, kidNote: "",
     category: "Завтрак", cuisine: "Французская", photo: "",
-    prepTime: 3, cookTime: 5, time: 10, difficulty: 2, baseServings: 1, kcal: 320,
+    prepTime: 3, cookTime: 5, time: 8, difficulty: 2, baseServings: 1, kcal: 320,
     equipment: ["плита", "сковорода"], allergens: ["яйца", "молоко"], tags: ["завтрак", "яйца", "быстро"],
     ingredients: [
       { name: "Яйца", qty: 3, unit: "шт", group: "Молочное", staple: false },
@@ -2209,7 +2209,7 @@ window.RECIPES = [
   {
     id: "vichyssoise", title: "Вишисуаз", forKid: true, kidNote: "",
     category: "Суп", cuisine: "Французская", photo: "",
-    prepTime: 10, cookTime: 25, time: 45, difficulty: 1, baseServings: 4, kcal: 220,
+    prepTime: 10, cookTime: 25, time: 35, difficulty: 1, baseServings: 4, kcal: 220,
     equipment: ["плита", "блендер"], allergens: ["молоко"], tags: ["суп", "холодное", "картофель"],
     ingredients: [
       { name: "Лук-порей", qty: 3, unit: "шт", group: "Овощи", staple: false },
@@ -3523,7 +3523,7 @@ window.RECIPES = [
   {
     id: "naan", title: "Наан", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Индийская", photo: "",
-    prepTime: 20, cookTime: 15, time: 120, difficulty: 2, baseServings: 6, kcal: 280,
+    prepTime: 20, cookTime: 15, time: 35, difficulty: 2, baseServings: 6, kcal: 280,
     equipment: ["плита", "сковорода"], allergens: ["глютен", "молоко"], tags: ["хлеб", "дрожжевое", "лепёшка"],
     ingredients: [
       { name: "Мука пшеничная", qty: 400, unit: "г", group: "Бакалея", staple: true },
@@ -3546,7 +3546,7 @@ window.RECIPES = [
   {
     id: "chapati", title: "Чапати", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Индийская", photo: "",
-    prepTime: 20, cookTime: 15, time: 40, difficulty: 1, baseServings: 6, kcal: 120,
+    prepTime: 20, cookTime: 15, time: 35, difficulty: 1, baseServings: 6, kcal: 120,
     equipment: ["плита", "сковорода"], allergens: ["глютен"], tags: ["хлеб", "лепёшка", "без дрожжей"],
     ingredients: [
       { name: "Цельнозерновая мука", qty: 300, unit: "г", group: "Бакалея", staple: true },
@@ -3746,7 +3746,7 @@ window.RECIPES = [
   {
     id: "manakish-zaatar", title: "Манакиш с заатаром", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Ближневосточная", photo: "",
-    prepTime: 20, cookTime: 12, time: 120, difficulty: 2, baseServings: 4, kcal: 320,
+    prepTime: 20, cookTime: 12, time: 32, difficulty: 2, baseServings: 4, kcal: 320,
     equipment: ["духовка"], allergens: ["глютен", "кунжут"], tags: ["лепёшка", "заатар", "завтрак"],
     ingredients: [
       { name: "Мука пшеничная", qty: 400, unit: "г", group: "Бакалея", staple: true },
@@ -3768,7 +3768,7 @@ window.RECIPES = [
   {
     id: "chicken-shawarma", title: "Куриная шаурма", forKid: true, kidNote: "",
     category: "Основное", cuisine: "Ближневосточная", photo: "",
-    prepTime: 15, cookTime: 25, time: 60, difficulty: 2, baseServings: 4, kcal: 450,
+    prepTime: 15, cookTime: 25, time: 40, difficulty: 2, baseServings: 4, kcal: 450,
     equipment: ["плита", "сковорода"], allergens: ["молоко", "глютен", "кунжут"], tags: ["курица", "маринад", "лаваш"],
     ingredients: [
       { name: "Куриное бедро", qty: 700, unit: "г", group: "Мясо", staple: false },
@@ -3948,7 +3948,7 @@ window.RECIPES = [
   {
     id: "baklava", title: "Пахлава", forKid: true, kidNote: "Содержит грецкие орехи (орехи); измельчены, но учитывайте при аллергии.",
     category: "Десерт", cuisine: "Ближневосточная", photo: "",
-    prepTime: 30, cookTime: 40, time: 90, difficulty: 3, baseServings: 8, kcal: 420,
+    prepTime: 30, cookTime: 40, time: 70, difficulty: 3, baseServings: 8, kcal: 420,
     equipment: ["духовка"], allergens: ["глютен", "молоко", "орехи"], tags: ["сладкое", "орехи", "слоёное"],
     ingredients: [
       { name: "Тесто фило", qty: 400, unit: "г", group: "Заморозка", staple: false },
@@ -4372,7 +4372,7 @@ window.RECIPES = [
   {
     id: "pirozhki-s-kapustoy", title: "Пирожки с капустой жареные", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Русская", photo: "",
-    prepTime: 40, cookTime: 30, time: 120, difficulty: 3, baseServings: 6, kcal: 280,
+    prepTime: 40, cookTime: 30, time: 70, difficulty: 3, baseServings: 6, kcal: 280,
     equipment: ["плита", "сковорода"], allergens: ["глютен", "молоко", "яйца"], tags: ["выпечка", "капуста", "дрожжевое"],
     ingredients: [
       { name: "Мука пшеничная", qty: 600, unit: "г", group: "Бакалея", staple: true },
@@ -4396,7 +4396,7 @@ window.RECIPES = [
   {
     id: "vatrushki-s-tvorogom", title: "Ватрушки с творогом", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Русская", photo: "",
-    prepTime: 30, cookTime: 25, time: 120, difficulty: 2, baseServings: 8, kcal: 280,
+    prepTime: 30, cookTime: 25, time: 55, difficulty: 2, baseServings: 8, kcal: 280,
     equipment: ["духовка", "противень"], allergens: ["глютен", "молоко", "яйца"], tags: ["выпечка", "творог", "сладкое"],
     ingredients: [
       { name: "Мука пшеничная", qty: 500, unit: "г", group: "Бакалея", staple: true },
@@ -4562,7 +4562,7 @@ window.RECIPES = [
   {
     id: "khachapuri-adjaruli", title: "Хачапури по-аджарски", forKid: true, kidNote: "Если боитесь жидкого желтка — допеките яйцо до плотности.",
     category: "Выпечка", cuisine: "Грузинская", photo: "",
-    prepTime: 20, cookTime: 18, time: 100, difficulty: 3, baseServings: 4, kcal: 550,
+    prepTime: 20, cookTime: 18, time: 38, difficulty: 3, baseServings: 4, kcal: 550,
     equipment: ["духовка", "противень"], allergens: ["глютен", "молоко", "яйца"], tags: ["выпечка", "сыр", "лодочка"],
     ingredients: [
       { name: "Мука пшеничная", qty: 400, unit: "г", group: "Бакалея", staple: true },
@@ -4605,7 +4605,7 @@ window.RECIPES = [
   {
     id: "manty", title: "Манты с мясом", forKid: true, kidNote: "",
     category: "Основное", cuisine: "Узбекская", photo: "",
-    prepTime: 60, cookTime: 45, time: 120, difficulty: 3, baseServings: 5, kcal: 420,
+    prepTime: 60, cookTime: 45, time: 105, difficulty: 3, baseServings: 5, kcal: 420,
     equipment: ["мантоварка", "плита"], allergens: ["глютен"], tags: ["мясное", "тесто", "на пару"],
     ingredients: [
       { name: "Мука пшеничная", qty: 500, unit: "г", group: "Бакалея", staple: true },
@@ -5246,7 +5246,7 @@ window.RECIPES = [
   {
     id: "ceviche", title: "Севиче из белой рыбы", forKid: false, kidNote: "Сырая рыба и чили — детям не подходит.",
     category: "Закуска", cuisine: "Латиноамериканская", photo: "",
-    prepTime: 15, cookTime: 0, time: 30, difficulty: 2, baseServings: 4, kcal: 140,
+    prepTime: 15, cookTime: 0, time: 15, difficulty: 2, baseServings: 4, kcal: 140,
     equipment: ["миска"], allergens: ["рыба"], tags: ["рыба", "свежее", "острое"],
     ingredients: [
       { name: "Филе белой рыбы", qty: 400, unit: "г", group: "Мясо", staple: false },
@@ -5514,7 +5514,7 @@ window.RECIPES = [
   {
     id: "salmorejo", title: "Сальморехо", forKid: true, kidNote: "Сырой чеснок можно уменьшить для малышей.",
     category: "Суп", cuisine: "Испанская", photo: "",
-    prepTime: 10, cookTime: 0, time: 20, difficulty: 1, baseServings: 4, kcal: 220,
+    prepTime: 10, cookTime: 0, time: 10, difficulty: 1, baseServings: 4, kcal: 220,
     equipment: ["блендер"], allergens: ["глютен", "яйца"], tags: ["холодный суп", "томаты", "лето"],
     ingredients: [
       { name: "Помидоры спелые", qty: 1000, unit: "г", group: "Овощи", staple: false },
@@ -5648,7 +5648,7 @@ window.RECIPES = [
   {
     id: "pide", title: "Турецкая пиде", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Турецкая", photo: "",
-    prepTime: 25, cookTime: 15, time: 90, difficulty: 3, baseServings: 4, kcal: 480,
+    prepTime: 25, cookTime: 15, time: 40, difficulty: 3, baseServings: 4, kcal: 480,
     equipment: ["духовка"], allergens: ["глютен", "молоко", "яйца"], tags: ["тесто", "сыр", "лодочка"],
     ingredients: [
       { name: "Мука", qty: 400, unit: "г", group: "Бакалея", staple: true },
@@ -6189,7 +6189,7 @@ window.RECIPES = [
   {
     id: "carrot-garlic-salad", title: "Морковный салат с чесноком", forKid: true, kidNote: "Сырой чеснок можно уменьшить для малышей.",
     category: "Салат", cuisine: "Русская", photo: "",
-    prepTime: 10, cookTime: 0, time: 12, difficulty: 1, baseServings: 3, kcal: 120,
+    prepTime: 10, cookTime: 0, time: 10, difficulty: 1, baseServings: 3, kcal: 120,
     equipment: ["тёрка"], allergens: ["молоко"], tags: ["быстро", "острое", "витамины"],
     ingredients: [
       { name: "Морковь", qty: 3, unit: "шт", group: "Овощи", staple: false },
@@ -6319,7 +6319,7 @@ window.RECIPES = [
   {
     id: "scones", title: "Скоунзы", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Британская", photo: "",
-    prepTime: 15, cookTime: 15, time: 35, difficulty: 1, baseServings: 8, kcal: 240,
+    prepTime: 15, cookTime: 15, time: 30, difficulty: 1, baseServings: 8, kcal: 240,
     equipment: ["духовка", "противень"], allergens: ["глютен", "молоко", "яйца"], tags: ["выпечка", "к чаю", "булочки"],
     ingredients: [
       { name: "Мука пшеничная", qty: 350, unit: "г", group: "Бакалея", staple: true },
@@ -6340,7 +6340,7 @@ window.RECIPES = [
   {
     id: "victoria-sponge", title: "Бисквит Виктория", forKid: true, kidNote: "",
     category: "Десерт", cuisine: "Британская", photo: "",
-    prepTime: 20, cookTime: 25, time: 50, difficulty: 2, baseServings: 8, kcal: 380,
+    prepTime: 20, cookTime: 25, time: 45, difficulty: 2, baseServings: 8, kcal: 380,
     equipment: ["духовка", "миксер"], allergens: ["глютен", "молоко", "яйца"], tags: ["бисквит", "к чаю", "джем"],
     ingredients: [
       { name: "Мука пшеничная", qty: 200, unit: "г", group: "Бакалея", staple: true },
@@ -6634,7 +6634,7 @@ window.RECIPES = [
   {
     id: "brezel", title: "Брецель", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Немецкая", photo: "",
-    prepTime: 30, cookTime: 15, time: 90, difficulty: 3, baseServings: 6, kcal: 280,
+    prepTime: 30, cookTime: 15, time: 45, difficulty: 3, baseServings: 6, kcal: 280,
     equipment: ["духовка", "плита"], allergens: ["глютен", "молоко"], tags: ["выпечка", "дрожжевое", "солёное"],
     ingredients: [
       { name: "Мука пшеничная", qty: 500, unit: "г", group: "Бакалея", staple: true },
@@ -6846,7 +6846,7 @@ window.RECIPES = [
   {
     id: "paczki", title: "Пончки", forKid: true, kidNote: "",
     category: "Десерт", cuisine: "Польская", photo: "",
-    prepTime: 30, cookTime: 30, time: 120, difficulty: 2, baseServings: 6, kcal: 320,
+    prepTime: 30, cookTime: 30, time: 60, difficulty: 2, baseServings: 6, kcal: 320,
     equipment: ["плита"], allergens: ["глютен", "молоко", "яйца"], tags: ["выпечка", "сладкое", "дрожжевое"],
     ingredients: [
       { name: "Мука", qty: 500, unit: "г", group: "Бакалея", staple: true },
@@ -6922,7 +6922,7 @@ window.RECIPES = [
   {
     id: "langos", title: "Лангош", forKid: true, kidNote: "",
     category: "Закуска", cuisine: "Венгерская", photo: "",
-    prepTime: 20, cookTime: 25, time: 90, difficulty: 2, baseServings: 4, kcal: 420,
+    prepTime: 20, cookTime: 25, time: 45, difficulty: 2, baseServings: 4, kcal: 420,
     equipment: ["плита"], allergens: ["глютен", "молоко"], tags: ["тесто", "жареное", "уличная еда"],
     ingredients: [
       { name: "Мука", qty: 400, unit: "г", group: "Бакалея", staple: true },
@@ -7045,7 +7045,7 @@ window.RECIPES = [
   {
     id: "knedliky", title: "Кнедлики", forKid: true, kidNote: "",
     category: "Гарнир", cuisine: "Чешская", photo: "",
-    prepTime: 20, cookTime: 25, time: 60, difficulty: 2, baseServings: 4, kcal: 260,
+    prepTime: 20, cookTime: 25, time: 45, difficulty: 2, baseServings: 4, kcal: 260,
     equipment: ["плита", "кастрюля"], allergens: ["глютен", "молоко", "яйца"], tags: ["гарнир", "тесто", "хлебное"],
     ingredients: [
       { name: "Мука", qty: 400, unit: "г", group: "Бакалея", staple: true },
@@ -7093,7 +7093,7 @@ window.RECIPES = [
   {
     id: "trdelnik", title: "Трдельник", forKid: true, kidNote: "Содержит грецкие орехи (орехи) в посыпке — учитывайте при аллергии.",
     category: "Десерт", cuisine: "Чешская", photo: "",
-    prepTime: 30, cookTime: 20, time: 120, difficulty: 3, baseServings: 6, kcal: 380,
+    prepTime: 30, cookTime: 20, time: 50, difficulty: 3, baseServings: 6, kcal: 380,
     equipment: ["духовка"], allergens: ["глютен", "молоко", "яйца", "орехи"], tags: ["выпечка", "сладкое", "уличная еда"],
     ingredients: [
       { name: "Мука", qty: 450, unit: "г", group: "Бакалея", staple: true },
@@ -7284,7 +7284,7 @@ window.RECIPES = [
   {
     id: "gravlaks", title: "Гравлакс (маринованный лосось)", forKid: false, kidNote: "Сырая маринованная рыба — детям не подходит.",
     category: "Закуска", cuisine: "Шведская", photo: "",
-    prepTime: 15, cookTime: 0, time: 30, difficulty: 2, baseServings: 6, kcal: 180,
+    prepTime: 15, cookTime: 0, time: 15, difficulty: 2, baseServings: 6, kcal: 180,
     equipment: ["форма"], allergens: ["рыба"], tags: ["рыба", "холодное", "праздничное"],
     ingredients: [
       { name: "филе лосося на коже", qty: 600, unit: "г", group: "Мясо", staple: false },
@@ -7324,7 +7324,7 @@ window.RECIPES = [
   {
     id: "kanelbullar", title: "Булочки канельбуллар с корицей", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Шведская", photo: "",
-    prepTime: 30, cookTime: 15, time: 120, difficulty: 3, baseServings: 12, kcal: 280,
+    prepTime: 30, cookTime: 15, time: 45, difficulty: 3, baseServings: 12, kcal: 280,
     equipment: ["духовка", "противень"], allergens: ["глютен", "молоко", "яйца"], tags: ["сладкое", "дрожжевое", "к чаю"],
     ingredients: [
       { name: "мука", qty: 500, unit: "г", group: "Бакалея", staple: true },
@@ -7375,7 +7375,7 @@ window.RECIPES = [
   {
     id: "karjalanpiirakka", title: "Карельские пирожки", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Финская", photo: "",
-    prepTime: 40, cookTime: 20, time: 90, difficulty: 3, baseServings: 10, kcal: 220,
+    prepTime: 40, cookTime: 20, time: 60, difficulty: 3, baseServings: 10, kcal: 220,
     equipment: ["плита", "духовка"], allergens: ["глютен", "молоко", "яйца"], tags: ["выпечка", "рис", "к чаю"],
     ingredients: [
       { name: "ржаная мука", qty: 150, unit: "г", group: "Бакалея", staple: false },
@@ -7548,7 +7548,7 @@ window.RECIPES = [
   {
     id: "mustikkapiirakka", title: "Финский черничный пирог", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Финская", photo: "",
-    prepTime: 20, cookTime: 35, time: 70, difficulty: 2, baseServings: 8, kcal: 320,
+    prepTime: 20, cookTime: 35, time: 55, difficulty: 2, baseServings: 8, kcal: 320,
     equipment: ["духовка", "форма"], allergens: ["глютен", "молоко", "яйца"], tags: ["сладкое", "ягоды", "к чаю"],
     ingredients: [
       { name: "мука", qty: 250, unit: "г", group: "Бакалея", staple: true },
@@ -7709,7 +7709,7 @@ window.RECIPES = [
   {
     id: "tortellini-in-brodo", title: "Тортеллини в бульоне", forKid: true, kidNote: "",
     category: "Суп", cuisine: "Итальянская", photo: "",
-    prepTime: 5, cookTime: 15, time: 30, difficulty: 1, baseServings: 4, kcal: 320,
+    prepTime: 5, cookTime: 15, time: 20, difficulty: 1, baseServings: 4, kcal: 320,
     equipment: ["плита", "кастрюля"], allergens: ["глютен", "яйца", "молоко"], tags: ["паста", "бульон", "согревающее"],
     ingredients: [
       { name: "тортеллини с мясом", qty: 400, unit: "г", group: "Заморозка", staple: false },
@@ -8094,7 +8094,7 @@ window.RECIPES = [
   {
     id: "kotlety-po-kievski", title: "Котлеты по-киевски", forKid: true, kidNote: "",
     category: "Основное", cuisine: "Украинская", photo: "",
-    prepTime: 30, cookTime: 25, time: 70, difficulty: 3, baseServings: 4, kcal: 520,
+    prepTime: 30, cookTime: 25, time: 55, difficulty: 3, baseServings: 4, kcal: 520,
     equipment: ["плита", "духовка"], allergens: ["молоко", "яйца", "глютен"], tags: ["курица", "масло", "праздничное"],
     ingredients: [
       { name: "Куриное филе", qty: 4, unit: "шт", group: "Мясо", staple: false },
@@ -8379,7 +8379,7 @@ window.RECIPES = [
   {
     id: "char-siu", title: "Чар сиу (свинина по-кантонски)", forKid: true, kidNote: "",
     category: "Основное", cuisine: "Китайская", photo: "",
-    prepTime: 15, cookTime: 45, time: 70, difficulty: 2, baseServings: 4, kcal: 420,
+    prepTime: 15, cookTime: 45, time: 60, difficulty: 2, baseServings: 4, kcal: 420,
     equipment: ["духовка"], allergens: ["соя", "мёд"], tags: ["мясное", "маринад", "запечённое"],
     ingredients: [
       { name: "Свиная шея", qty: 600, unit: "г", group: "Мясо", staple: false },
@@ -8629,7 +8629,7 @@ window.RECIPES = [
   {
     id: "gai-yang", title: "Гай янг (тайская курица-гриль)", forKid: true, kidNote: "",
     category: "Основное", cuisine: "Тайская", photo: "",
-    prepTime: 20, cookTime: 25, time: 55, difficulty: 2, baseServings: 4, kcal: 360,
+    prepTime: 20, cookTime: 25, time: 45, difficulty: 2, baseServings: 4, kcal: 360,
     equipment: ["плита", "сковорода"], allergens: ["рыба", "соя"], tags: ["мясное", "гриль", "маринад"],
     ingredients: [
       { name: "Куриные бёдра", qty: 600, unit: "г", group: "Мясо", staple: false },
@@ -8696,7 +8696,7 @@ window.RECIPES = [
   {
     id: "tandoori-chicken", title: "Тандури чикен", forKid: true, kidNote: "",
     category: "Основное", cuisine: "Индийская", photo: "",
-    prepTime: 20, cookTime: 30, time: 60, difficulty: 2, baseServings: 4, kcal: 320,
+    prepTime: 20, cookTime: 30, time: 50, difficulty: 2, baseServings: 4, kcal: 320,
     equipment: ["духовка"], allergens: ["молоко"], tags: ["мясное", "маринад", "запечённое"],
     ingredients: [
       { name: "Куриные бёдра", qty: 600, unit: "г", group: "Мясо", staple: false },
@@ -9003,7 +9003,7 @@ window.RECIPES = [
   {
     id: "adjika", title: "Аджика красная", forKid: false, kidNote: "Очень острая паста из чили — детям не подходит.",
     category: "Закуска", cuisine: "Грузинская", photo: "",
-    prepTime: 20, cookTime: 0, time: 25, difficulty: 1, baseServings: 8, kcal: 80,
+    prepTime: 20, cookTime: 0, time: 20, difficulty: 1, baseServings: 8, kcal: 80,
     equipment: ["блендер"], allergens: ["орехи"], tags: ["острое", "соус", "перец"],
     ingredients: [
       { name: "перец чили красный", qty: 200, unit: "г", group: "Овощи", staple: false },
@@ -9074,7 +9074,7 @@ window.RECIPES = [
   {
     id: "gata", title: "Гата", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Армянская", photo: "",
-    prepTime: 30, cookTime: 35, time: 80, difficulty: 3, baseServings: 8, kcal: 420,
+    prepTime: 30, cookTime: 35, time: 65, difficulty: 3, baseServings: 8, kcal: 420,
     equipment: ["духовка", "противень"], allergens: ["глютен", "молоко", "яйца"], tags: ["сладкое", "к чаю", "слоёное"],
     ingredients: [
       { name: "мука", qty: 500, unit: "г", group: "Бакалея", staple: true },
@@ -9098,7 +9098,7 @@ window.RECIPES = [
   {
     id: "khorovats", title: "Хоровац (армянский шашлык)", forKid: true, kidNote: "",
     category: "Основное", cuisine: "Армянская", photo: "",
-    prepTime: 20, cookTime: 25, time: 60, difficulty: 2, baseServings: 4, kcal: 480,
+    prepTime: 20, cookTime: 25, time: 45, difficulty: 2, baseServings: 4, kcal: 480,
     equipment: ["мангал"], allergens: [], tags: ["мангал", "свинина", "маринад"],
     ingredients: [
       { name: "свинина (шея)", qty: 1, unit: "кг", group: "Мясо", staple: false },
@@ -9258,7 +9258,7 @@ window.RECIPES = [
   {
     id: "shekerbura", title: "Шекербура", forKid: true, kidNote: "Начинка из молотого фундука (орехи) — учитывайте при аллергии.",
     category: "Десерт", cuisine: "Азербайджанская", photo: "",
-    prepTime: 40, cookTime: 25, time: 120, difficulty: 3, baseServings: 10, kcal: 360,
+    prepTime: 40, cookTime: 25, time: 65, difficulty: 3, baseServings: 10, kcal: 360,
     equipment: ["духовка", "противень"], allergens: ["глютен", "молоко", "яйца", "орехи"], tags: ["орехи", "новруз", "сладкое"],
     ingredients: [
       { name: "мука", qty: 500, unit: "г", group: "Бакалея", staple: true },
@@ -9281,7 +9281,7 @@ window.RECIPES = [
   {
     id: "shish-taouk", title: "Шиш-таук", forKid: true, kidNote: "",
     category: "Основное", cuisine: "Ближневосточная", photo: "",
-    prepTime: 20, cookTime: 15, time: 50, difficulty: 2, baseServings: 4, kcal: 320,
+    prepTime: 20, cookTime: 15, time: 35, difficulty: 2, baseServings: 4, kcal: 320,
     equipment: ["плита", "сковорода"], allergens: ["молоко"], tags: ["курица", "маринад", "гриль"],
     ingredients: [
       { name: "куриное филе", qty: 800, unit: "г", group: "Мясо", staple: false },
@@ -9375,7 +9375,7 @@ window.RECIPES = [
   {
     id: "chak-chak", title: "Чак-чак", forKid: true, kidNote: "",
     category: "Десерт", cuisine: "Узбекская", photo: "",
-    prepTime: 30, cookTime: 25, time: 70, difficulty: 2, baseServings: 8, kcal: 420,
+    prepTime: 30, cookTime: 25, time: 55, difficulty: 2, baseServings: 8, kcal: 420,
     equipment: ["плита"], allergens: ["глютен", "яйца", "мёд"], tags: ["мёд", "сладкое", "к чаю"],
     ingredients: [
       { name: "мука", qty: 400, unit: "г", group: "Бакалея", staple: true },
@@ -9397,7 +9397,7 @@ window.RECIPES = [
   {
     id: "non-tandoor", title: "Узбекская лепёшка нон", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Узбекская", photo: "",
-    prepTime: 30, cookTime: 20, time: 150, difficulty: 2, baseServings: 4, kcal: 280,
+    prepTime: 30, cookTime: 20, time: 50, difficulty: 2, baseServings: 4, kcal: 280,
     equipment: ["духовка", "противень"], allergens: ["глютен", "кунжут"], tags: ["хлеб", "дрожжевое", "к плову"],
     ingredients: [
       { name: "мука", qty: 500, unit: "г", group: "Бакалея", staple: true },
@@ -9506,7 +9506,7 @@ window.RECIPES = [
   {
     id: "cinnamon-rolls", title: "Булочки с корицей", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Американская", photo: "",
-    prepTime: 30, cookTime: 25, time: 150, difficulty: 2, baseServings: 9, kcal: 380,
+    prepTime: 30, cookTime: 25, time: 55, difficulty: 2, baseServings: 9, kcal: 380,
     equipment: ["духовка", "противень"], allergens: ["глютен", "молоко", "яйца"], tags: ["булочки", "корица", "дрожжевое"],
     ingredients: [
       { name: "Мука", qty: 450, unit: "г", group: "Бакалея", staple: true },
@@ -9530,7 +9530,7 @@ window.RECIPES = [
   {
     id: "gingerbread-men", title: "Пряничные человечки", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Британская", photo: "",
-    prepTime: 40, cookTime: 12, time: 90, difficulty: 2, baseServings: 20, kcal: 110,
+    prepTime: 40, cookTime: 12, time: 52, difficulty: 2, baseServings: 20, kcal: 110,
     equipment: ["духовка", "противень"], allergens: ["глютен", "яйца", "молоко", "мёд"], tags: ["печенье", "имбирь", "новый год"],
     ingredients: [
       { name: "Мука", qty: 350, unit: "г", group: "Бакалея", staple: true },
@@ -9593,7 +9593,7 @@ window.RECIPES = [
   {
     id: "financier", title: "Финансье", forKid: true, kidNote: "Содержит миндальную муку (орехи) — учитывайте при аллергии.",
     category: "Выпечка", cuisine: "Французская", photo: "",
-    prepTime: 15, cookTime: 20, time: 40, difficulty: 2, baseServings: 10, kcal: 200,
+    prepTime: 15, cookTime: 20, time: 35, difficulty: 2, baseServings: 10, kcal: 200,
     equipment: ["плита", "духовка"], allergens: ["яйца", "орехи", "глютен", "молоко"], tags: ["миндаль", "пирожное", "французское"],
     ingredients: [
       { name: "Яичные белки", qty: 4, unit: "шт", group: "Молочное", staple: false },
@@ -9632,7 +9632,7 @@ window.RECIPES = [
   {
     id: "chocolate-fondant", title: "Шоколадный фондан", forKid: true, kidNote: "",
     category: "Десерт", cuisine: "Французская", photo: "",
-    prepTime: 15, cookTime: 12, time: 30, difficulty: 2, baseServings: 4, kcal: 420,
+    prepTime: 15, cookTime: 12, time: 27, difficulty: 2, baseServings: 4, kcal: 420,
     equipment: ["плита", "духовка"], allergens: ["молоко", "яйца", "глютен"], tags: ["шоколад", "тёплый десерт", "жидкий центр"],
     ingredients: [
       { name: "Тёмный шоколад", qty: 150, unit: "г", group: "Бакалея", staple: false },
@@ -9674,7 +9674,7 @@ window.RECIPES = [
   {
     id: "praga-cake", title: "Торт «Прага»", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Русская", photo: "",
-    prepTime: 40, cookTime: 40, time: 120, difficulty: 3, baseServings: 10, kcal: 460,
+    prepTime: 40, cookTime: 40, time: 80, difficulty: 3, baseServings: 10, kcal: 460,
     equipment: ["духовка", "миксер"], allergens: ["глютен", "яйца", "молоко"], tags: ["торт", "шоколад", "праздничный"],
     ingredients: [
       { name: "Мука", qty: 150, unit: "г", group: "Бакалея", staple: true },
@@ -9697,7 +9697,7 @@ window.RECIPES = [
   {
     id: "chocolate-truffles", title: "Шоколадные трюфели", forKid: true, kidNote: "",
     category: "Десерт", cuisine: "Французская", photo: "",
-    prepTime: 20, cookTime: 0, time: 40, difficulty: 1, baseServings: 20, kcal: 90,
+    prepTime: 20, cookTime: 0, time: 20, difficulty: 1, baseServings: 20, kcal: 90,
     equipment: ["плита"], allergens: ["молоко"], tags: ["шоколад", "конфеты", "без выпечки"],
     ingredients: [
       { name: "Тёмный шоколад", qty: 200, unit: "г", group: "Бакалея", staple: false },
@@ -9715,7 +9715,7 @@ window.RECIPES = [
   {
     id: "donuts", title: "Пончики донатсы", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Американская", photo: "",
-    prepTime: 30, cookTime: 20, time: 120, difficulty: 3, baseServings: 12, kcal: 320,
+    prepTime: 30, cookTime: 20, time: 50, difficulty: 3, baseServings: 12, kcal: 320,
     equipment: ["плита"], allergens: ["глютен", "молоко", "яйца"], tags: ["пончики", "дрожжевое", "глазурь"],
     ingredients: [
       { name: "Мука", qty: 400, unit: "г", group: "Бакалея", staple: true },
@@ -9757,7 +9757,7 @@ window.RECIPES = [
   {
     id: "pumpkin-pie", title: "Тыквенный пирог", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Американская", photo: "",
-    prepTime: 20, cookTime: 50, time: 90, difficulty: 2, baseServings: 8, kcal: 320,
+    prepTime: 20, cookTime: 50, time: 70, difficulty: 2, baseServings: 8, kcal: 320,
     equipment: ["духовка", "форма"], allergens: ["глютен", "молоко", "яйца"], tags: ["тыква", "пирог", "осенний"],
     ingredients: [
       { name: "Тесто песочное", qty: 300, unit: "г", group: "Заморозка", staple: false },
@@ -10015,7 +10015,7 @@ window.RECIPES = [
   {
     id: "morkov-po-koreyski", title: "Морковь по-корейски", forKid: false, kidNote: "Острая от красного перца и уксуса закуска — детям не подходит.",
     category: "Салат", cuisine: "Международная", photo: "",
-    prepTime: 15, cookTime: 5, time: 30, difficulty: 2, baseServings: 4, kcal: 140,
+    prepTime: 15, cookTime: 5, time: 20, difficulty: 2, baseServings: 4, kcal: 140,
     equipment: ["плита", "тёрка"], allergens: [], tags: ["острый", "пикантный"],
     ingredients: [
       { name: "Морковь", qty: 500, unit: "г", group: "Овощи", staple: false },
@@ -10120,7 +10120,7 @@ window.RECIPES = [
   {
     id: "kuskus-garnir", title: "Кускус", forKid: true, kidNote: "",
     category: "Гарнир", cuisine: "Средиземноморская", photo: "",
-    prepTime: 3, cookTime: 5, time: 10, difficulty: 1, baseServings: 3, kcal: 240,
+    prepTime: 3, cookTime: 5, time: 8, difficulty: 1, baseServings: 3, kcal: 240,
     equipment: ["миска"], allergens: ["глютен"], tags: ["быстрый", "базовый", "детский"],
     ingredients: [
       { name: "Кускус", qty: 200, unit: "г", group: "Бакалея", staple: false },
@@ -10194,7 +10194,7 @@ window.RECIPES = [
   {
     id: "yaytsa-pashot", title: "Яйца пашот", forKid: false, kidNote: "Жидкий желток — малышам яйцо лучше готовить до плотного желтка.",
     category: "Завтрак", cuisine: "Французская", photo: "",
-    prepTime: 3, cookTime: 5, time: 10, difficulty: 3, baseServings: 2, kcal: 80,
+    prepTime: 3, cookTime: 5, time: 8, difficulty: 3, baseServings: 2, kcal: 80,
     equipment: ["плита", "кастрюля"], allergens: ["яйца"], tags: ["белковый", "классика"],
     ingredients: [
       { name: "Яйца", qty: 2, unit: "шт", group: "Молочное", staple: false },
@@ -10250,7 +10250,7 @@ window.RECIPES = [
   {
     id: "kalakukko", title: "Калакукко", forKid: true, kidNote: "Перед подачей убедитесь, что в порции нет крупных косточек.",
     category: "Выпечка", cuisine: "Финская", photo: "",
-    prepTime: 0, cookTime: 0, time: 60, difficulty: 3, baseServings: 6, kcal: 0,
+    prepTime: 12, cookTime: 48, time: 60, difficulty: 3, baseServings: 6, kcal: 0,
     equipment: [], allergens: ["рыба", "глютен", "молоко"], tags: ["рыба", "хлеб", "Саво"],
     ingredients: [
       { name: "Ржаная мука", qty: 400, unit: "г", group: "Бакалея", staple: true },
@@ -10274,7 +10274,7 @@ window.RECIPES = [
   {
     id: "hernekeytto-gorohovyy-sup", title: "Хернекейтто (гороховый суп)", forKid: true, kidNote: "Горчицу подавайте отдельно, ребёнку — без неё.",
     category: "Суп", cuisine: "Финская", photo: "",
-    prepTime: 0, cookTime: 0, time: 40, difficulty: 1, baseServings: 4, kcal: 0,
+    prepTime: 8, cookTime: 32, time: 40, difficulty: 1, baseServings: 4, kcal: 0,
     equipment: [], allergens: [], tags: ["горох", "сытное", "четверг"],
     ingredients: [
       { name: "Сухой жёлтый горох", qty: 300, unit: "г", group: "Бакалея", staple: true },
@@ -10297,7 +10297,7 @@ window.RECIPES = [
   {
     id: "karyalanpaisti-karelskoe-zharkoe", title: "Карьяланпаисти (карельское жаркое)", forKid: true, kidNote: "",
     category: "Основное", cuisine: "Финская", photo: "",
-    prepTime: 0, cookTime: 0, time: 30, difficulty: 1, baseServings: 4, kcal: 0,
+    prepTime: 6, cookTime: 24, time: 30, difficulty: 1, baseServings: 4, kcal: 0,
     equipment: [], allergens: [], tags: ["мясо", "жаркое", "Карелия"],
     ingredients: [
       { name: "Говядина (лопатка)", qty: 400, unit: "г", group: "Мясо", staple: false },
@@ -10321,7 +10321,7 @@ window.RECIPES = [
   {
     id: "graavilohi-solenyy-losos-s-ukropom", title: "Граавилохи (солёный лосось с укропом)", forKid: true, kidNote: "Это сырая солёная рыба — предлагайте ребёнку небольшими порциями и только свежую.",
     category: "Закуска", cuisine: "Финская", photo: "",
-    prepTime: 0, cookTime: 0, time: 20, difficulty: 1, baseServings: 6, kcal: 0,
+    prepTime: 5, cookTime: 15, time: 20, difficulty: 1, baseServings: 6, kcal: 0,
     equipment: [], allergens: ["рыба"], tags: ["лосось", "холодная закуска", "укроп"],
     ingredients: [
       { name: "Филе лосося с кожей", qty: 800, unit: "г", group: "Рыба", staple: false },
@@ -10342,7 +10342,7 @@ window.RECIPES = [
   {
     id: "riyspuuro-risovaya-kasha", title: "Рийспууро (рисовая каша)", forKid: true, kidNote: "",
     category: "Завтрак", cuisine: "Финская", photo: "",
-    prepTime: 0, cookTime: 0, time: 40, difficulty: 1, baseServings: 4, kcal: 0,
+    prepTime: 8, cookTime: 32, time: 40, difficulty: 1, baseServings: 4, kcal: 0,
     equipment: [], allergens: ["молоко"], tags: ["каша", "завтрак", "рождество"],
     ingredients: [
       { name: "Круглозёрный рис", qty: 200, unit: "г", group: "Бакалея", staple: true },
@@ -10365,7 +10365,7 @@ window.RECIPES = [
   {
     id: "korvapuusti-bulochki-s-koricey", title: "Корвапуусти (булочки с корицей)", forKid: true, kidNote: "",
     category: "Выпечка", cuisine: "Финская", photo: "",
-    prepTime: 0, cookTime: 0, time: 50, difficulty: 2, baseServings: 12, kcal: 0,
+    prepTime: 10, cookTime: 40, time: 50, difficulty: 2, baseServings: 12, kcal: 0,
     equipment: [], allergens: ["глютен", "молоко", "яйцо"], tags: ["булочки", "корица", "кофе"],
     ingredients: [
       { name: "Пшеничная мука", qty: 500, unit: "г", group: "Бакалея", staple: true },
@@ -10391,7 +10391,7 @@ window.RECIPES = [
   {
     id: "mustikkakeytto-chernichnyy-kisel", title: "Мустиккакейтто (черничный кисель)", forKid: true, kidNote: "",
     category: "Десерт", cuisine: "Финская", photo: "",
-    prepTime: 0, cookTime: 0, time: 15, difficulty: 1, baseServings: 4, kcal: 0,
+    prepTime: 10, cookTime: 5, time: 15, difficulty: 1, baseServings: 4, kcal: 0,
     equipment: [], allergens: [], tags: ["черника", "кисель", "ягоды"],
     ingredients: [
       { name: "Черника свежая или замороженная", qty: 400, unit: "г", group: "Заморозка", staple: false },
@@ -10411,7 +10411,7 @@ window.RECIPES = [
   {
     id: "lantulaatikko-zapekanka-iz-bryukvy", title: "Лантулаатикко (запеканка из брюквы)", forKid: true, kidNote: "",
     category: "Гарнир", cuisine: "Финская", photo: "",
-    prepTime: 0, cookTime: 0, time: 30, difficulty: 2, baseServings: 6, kcal: 0,
+    prepTime: 6, cookTime: 24, time: 30, difficulty: 2, baseServings: 6, kcal: 0,
     equipment: [], allergens: ["молоко", "яйцо", "глютен"], tags: ["брюква", "рождество", "запеканка"],
     ingredients: [
       { name: "Брюква", qty: 1000, unit: "г", group: "Овощи", staple: false },
@@ -10574,7 +10574,7 @@ window.RECIPES = [
   {
     id: "mustamakkara-finskaya-krovyanaya-kolbasa", title: "Мустамаккара (финская кровяная колбаса по-тамперски)", forKid: false, kidNote: "",
     category: "Закуска", cuisine: "Финская", photo: "",
-    prepTime: 15, cookTime: 15, time: 25, difficulty: 3, baseServings: 4, kcal: 380,
+    prepTime: 15, cookTime: 15, time: 30, difficulty: 3, baseServings: 4, kcal: 380,
     equipment: ["сковорода", "духовка"], allergens: ["глютен"], tags: ["традиционное", "региональное"],
     ingredients: [
       { name: "мустамаккара (кровяная колбаса)", qty: 600, unit: "г", group: "Мясо", staple: false },
@@ -10612,7 +10612,7 @@ window.RECIPES = [
   {
     id: "kalaroymu-zapechennyy-sig-po-finski", title: "Каларойму (запечённый сиг по-фински)", forKid: true, kidNote: "Тщательно проверьте рыбу на наличие костей перед подачей ребёнку.",
     category: "Основное", cuisine: "Финская", photo: "",
-    prepTime: 15, cookTime: 35, time: 30, difficulty: 2, baseServings: 4, kcal: 320,
+    prepTime: 15, cookTime: 35, time: 50, difficulty: 2, baseServings: 4, kcal: 320,
     equipment: ["духовка", "форма для запекания"], allergens: ["рыба", "молоко"], tags: ["рыба", "северная кухня", "запекание"],
     ingredients: [
       { name: "Сиг (или форель) филе", qty: 800, unit: "г", group: "Рыба", staple: false },
@@ -10638,7 +10638,7 @@ window.RECIPES = [
   {
     id: "bun-bo-hyue", title: "Бун бо Хюэ", forKid: false, kidNote: "Слишком острое для ребёнка.",
     category: "Суп", cuisine: "Вьетнамская", photo: "",
-    prepTime: 30, cookTime: 180, time: 90, difficulty: 3, baseServings: 4, kcal: 520,
+    prepTime: 30, cookTime: 180, time: 210, difficulty: 3, baseServings: 4, kcal: 520,
     equipment: ["большая кастрюля", "сито"], allergens: ["рыба", "глютен"], tags: ["острое", "говядина", "лапша"],
     ingredients: [
       { name: "Говяжья голяшка", qty: 700, unit: "г", group: "Мясо", staple: false },
@@ -10693,7 +10693,7 @@ window.RECIPES = [
   {
     id: "goy-kuon-svezhie-rolly-s-krevetkami", title: "Гой куон (свежие роллы с креветками)", forKid: true, kidNote: "Подходит, если нет аллергии на арахис и морепродукты.",
     category: "Закуска", cuisine: "Вьетнамская", photo: "",
-    prepTime: 30, cookTime: 10, time: 35, difficulty: 2, baseServings: 4, kcal: 220,
+    prepTime: 30, cookTime: 10, time: 40, difficulty: 2, baseServings: 4, kcal: 220,
     equipment: ["миска с тёплой водой", "кастрюля"], allergens: ["морепродукты", "арахис"], tags: ["свежее", "лёгкое", "креветки"],
     ingredients: [
       { name: "Рисовая бумага", qty: 12, unit: "листов", group: "Бакалея", staple: false },
@@ -10766,7 +10766,7 @@ window.RECIPES = [
   {
     id: "ban-bao-parovye-bulochki-s-nachinkoy", title: "Бань бао (паровые булочки с начинкой)", forKid: true, kidNote: "Убедитесь, что начинка не острая.",
     category: "Выпечка", cuisine: "Вьетнамская", photo: "",
-    prepTime: 40, cookTime: 25, time: 70, difficulty: 3, baseServings: 8, kcal: 290,
+    prepTime: 40, cookTime: 25, time: 65, difficulty: 3, baseServings: 8, kcal: 290,
     equipment: ["пароварка", "миска", "пергамент"], allergens: ["глютен", "яйца"], tags: ["на пару", "свинина", "яйцо"],
     ingredients: [
       { name: "Пшеничная мука", qty: 400, unit: "г", group: "Бакалея", staple: true },
@@ -10954,5 +10954,2845 @@ window.RECIPES = [
     ],
     serveWith: "Подавайте тёплым или охлаждённым в небольших пиалах как лёгкий десерт после острых блюд.",
     notes: "Берите спелые ароматные бананы — лучше всего подходят небольшие сорта. Не переваривайте, чтобы бананы не расползлись."
+  },
+  {
+    id: "rendang-iz-govyadiny", title: "Ренданг по-малайзийски", forKid: false, kidNote: "Острое из-за чили — для детей сократите количество перца в разы.",
+    category: "Основное", cuisine: "Малайзийская", photo: "",
+    prepTime: 25, cookTime: 150, time: 175, difficulty: 3, baseServings: 4, kcal: 520,
+    equipment: ["казан или толстодонная кастрюля", "блендер"], allergens: ["орехи"], tags: ["острое", "праздничное", "тушёное"],
+    ingredients: [
+      { name: "Говядина (лопатка или грудинка)", qty: 800, unit: "г", group: "Мясо", staple: false },
+      { name: "Кокосовое молоко", qty: 400, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Тёртый кокос (для керисик)", qty: 50, unit: "г", group: "Бакалея", staple: false },
+      { name: "Лук-шалот", qty: 8, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 5, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Имбирь", qty: 30, unit: "г", group: "Овощи", staple: false },
+      { name: "Галангал", qty: 30, unit: "г", group: "Овощи", staple: false },
+      { name: "Сушёный чили", qty: 10, unit: "шт", group: "Специи", staple: false },
+      { name: "Лемонграсс", qty: 2, unit: "стебель", group: "Зелень", staple: false },
+      { name: "Листья кафрского лайма", qty: 4, unit: "шт", group: "Зелень", staple: false },
+      { name: "Лист куркумы", qty: 1, unit: "шт", group: "Зелень", staple: false },
+      { name: "Пальмовый сахар", qty: 1, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Тамаринд", qty: 1, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Растительное масло", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true }
+    ],
+    steps: [
+      { title: "Керисик", text: "На сухой сковороде обжарьте тёртый кокос до тёмно-золотистого цвета, затем растолките в пасту в ступке или блендере.", timer: 480 },
+      { title: "Паста ремпах", text: "Замочите сушёный чили в горячей воде, измельчите в блендере с шалотом, чесноком, имбирём, галангалом и нижней частью лемонграсса до гладкой пасты." },
+      { title: "Обжарка", text: "Разогрейте масло, обжарьте пасту с листьями лайма и куркумы и расплющенными стеблями лемонграсса до ароматности и потемнения.", timer: 600 },
+      { title: "Мясо", text: "Добавьте нарезанную кубиками говядину, обжарьте до изменения цвета со всех сторон." },
+      { title: "Тушение", text: "Влейте кокосовое молоко, добавьте тамаринд, пальмовый сахар и соль. Тушите на медленном огне, помешивая, пока соус не загустеет.", timer: 5400 },
+      { title: "Финал", text: "Вмешайте керисик и тушите ещё, пока ренданг не станет тёмным, сухим и блестящим. Уберите грубые листья." }
+    ],
+    serveWith: "Подавайте с белым рисом на пару или клейким рисом, можно с овощным салатом ачар. Идеально для праздничного стола во время Хари Рая.",
+    notes: "Ренданг должен томиться долго на минимальном огне — соус почти полностью выпаривается и обволакивает мясо. На следующий день вкус ещё насыщеннее."
+  },
+  {
+    id: "satay-s-arahisovym-sousom", title: "Сатай с арахисовым соусом", forKid: true, kidNote: "Соус можно сделать без чили; следите на наличие аллергии на арахис.",
+    category: "Закуска", cuisine: "Малайзийская", photo: "",
+    prepTime: 30, cookTime: 15, time: 45, difficulty: 2, baseServings: 4, kcal: 380,
+    equipment: ["мангал или гриль", "деревянные шпажки", "блендер"], allergens: ["арахис"], tags: ["гриль", "уличная еда", "шашлычки"],
+    ingredients: [
+      { name: "Куриное бедро без кости", qty: 600, unit: "г", group: "Мясо", staple: false },
+      { name: "Лемонграсс", qty: 2, unit: "стебель", group: "Зелень", staple: false },
+      { name: "Куркума молотая", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Кориандр молотый", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Зира молотая", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Лук-шалот", qty: 4, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 3, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Пальмовый сахар", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Жареный арахис", qty: 150, unit: "г", group: "Бакалея", staple: false },
+      { name: "Паста чили (самбал)", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Кокосовое молоко", qty: 100, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Тамаринд", qty: 1, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Растительное масло", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Маринад", text: "Измельчите шалот, чеснок и лемонграсс, смешайте с куркумой, кориандром, зирой, частью сахара, маслом и солью." },
+      { title: "Маринование", text: "Нарежьте курицу полосками, замаринуйте и оставьте минимум на час, лучше на ночь." },
+      { title: "Соус", text: "Измельчите арахис, обжарьте пасту чили на масле, добавьте арахис, кокосовое молоко, тамаринд и сахар. Тушите до густоты.", timer: 600 },
+      { title: "Нанизывание", text: "Нанижите мясо на замоченные шпажки плотными складками." },
+      { title: "Гриль", text: "Жарьте над углями или на гриле, переворачивая и смазывая маслом, до румяных краёв.", timer: 720 }
+    ],
+    serveWith: "Подавайте горячими с арахисовым соусом, дольками лука, огурцом и кубиками отварного риса кетупат.",
+    notes: "Деревянные шпажки замочите в воде на 30 минут, чтобы они не горели. Не пересушите мясо — бёдра сочнее грудки."
+  },
+  {
+    id: "bak-kut-teh", title: "Бак кут тех", forKid: true, kidNote: "Уберите острый соус-дип, бульон сам по себе мягкий и ароматный.",
+    category: "Суп", cuisine: "Малайзийская", photo: "",
+    prepTime: 20, cookTime: 120, time: 140, difficulty: 2, baseServings: 4, kcal: 410,
+    equipment: ["большая кастрюля"], allergens: ["соя"], tags: ["суп", "травяной", "согревающий"],
+    ingredients: [
+      { name: "Свиные рёбрышки", qty: 800, unit: "г", group: "Мясо", staple: false },
+      { name: "Чеснок (целые головки)", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Готовая смесь специй бак кут тех", qty: 1, unit: "пакет", group: "Специи", staple: false },
+      { name: "Соевый соус тёмный", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Соевый соус светлый", qty: 3, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Устричный соус", qty: 1, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Белый перец горошком", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Грибы шиитаке сушёные", qty: 6, unit: "шт", group: "Бакалея", staple: false },
+      { name: "Тофу-пафф", qty: 8, unit: "шт", group: "Прочее", staple: false },
+      { name: "Салат-латук или энтоки", qty: 100, unit: "г", group: "Овощи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Бланширование", text: "Залейте рёбрышки холодной водой, доведите до кипения и слейте, промойте от пены.", timer: 300 },
+      { title: "Сборка бульона", text: "Положите рёбра в чистую воду, добавьте пакет специй, головки чеснока, перец горошком и замоченные шиитаке." },
+      { title: "Томление", text: "Варите на медленном огне под крышкой до мягкости мяса.", timer: 6000 },
+      { title: "Приправы", text: "Добавьте светлый и тёмный соевый соус, устричный соус, посолите по вкусу." },
+      { title: "Овощи и тофу", text: "Добавьте тофу-пафф и зелень за несколько минут до подачи.", timer: 300 }
+    ],
+    serveWith: "Подавайте с белым рисом, обжаренными хлебцами ютиао и соусом из нарезанного чили с тёмным соевым соусом.",
+    notes: "Готовая травяная смесь сильно упрощает рецепт. Чеснок добавляйте целыми головками — он становится сладким и мягким."
+  },
+  {
+    id: "char-kvay-teu", title: "Чар квай теу", forKid: false, kidNote: "Острое из-за самбала и есть креветки — учитывайте аллергию на морепродукты.",
+    category: "Основное", cuisine: "Малайзийская", photo: "",
+    prepTime: 20, cookTime: 10, time: 30, difficulty: 2, baseServings: 2, kcal: 560,
+    equipment: ["вок", "лопатка"], allergens: ["соя", "морепродукты", "яйца"], tags: ["вок", "уличная еда", "лапша"],
+    ingredients: [
+      { name: "Широкая рисовая лапша (квай теу)", qty: 400, unit: "г", group: "Бакалея", staple: false },
+      { name: "Креветки очищенные", qty: 150, unit: "г", group: "Рыба", staple: false },
+      { name: "Колбаски ляп чонг", qty: 1, unit: "шт", group: "Мясо", staple: false },
+      { name: "Яйца", qty: 2, unit: "шт", group: "Молочное", staple: false },
+      { name: "Ростки фасоли (маш)", qty: 100, unit: "г", group: "Овощи", staple: false },
+      { name: "Зелёный лук", qty: 3, unit: "стебель", group: "Зелень", staple: false },
+      { name: "Чеснок", qty: 3, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Соевый соус тёмный", qty: 1.5, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Соевый соус светлый", qty: 1, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Паста чили (самбал)", qty: 1, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Растительное масло", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true }
+    ],
+    steps: [
+      { title: "Подготовка", text: "Разделите лапшу руками, нарежьте ляп чонг тонкими ломтиками, измельчите чеснок, нарежьте зелёный лук." },
+      { title: "Раскал вока", text: "Сильно разогрейте вок с маслом, обжарьте чеснок и колбаски до аромата." },
+      { title: "Креветки", text: "Добавьте креветки и обжарьте до розового цвета на сильном огне." },
+      { title: "Лапша и соусы", text: "Всыпьте лапшу, влейте оба соевых соуса и пасту чили, быстро перемешивайте на максимальном огне.", timer: 120 },
+      { title: "Яйцо и ростки", text: "Сдвиньте лапшу, разбейте яйца, дайте схватиться, перемешайте. Добавьте ростки и зелёный лук, прогрейте 30 секунд.", timer: 60 }
+    ],
+    serveWith: "Подавайте сразу, горячим, с долькой лайма и дополнительной пастой чили по желанию.",
+    notes: "Главное — очень сильный огонь и быстрая работа, чтобы появился характерный аромат вока «вок хей». Не перемешивайте слишком долго, иначе лапша поломается."
+  },
+  {
+    id: "kari-debal-dyavolskoe-karri", title: "Кари дебал (дьявольское карри)", forKid: false, kidNote: "Очень острое — не для маленьких детей.",
+    category: "Основное", cuisine: "Малайзийская", photo: "",
+    prepTime: 30, cookTime: 40, time: 70, difficulty: 3, baseServings: 4, kcal: 480,
+    equipment: ["блендер", "толстодонная кастрюля"], allergens: ["горчица"], tags: ["острое", "евразийская кухня", "карри"],
+    ingredients: [
+      { name: "Курица (кусочки)", qty: 800, unit: "г", group: "Мясо", staple: false },
+      { name: "Сушёный чили", qty: 12, unit: "шт", group: "Специи", staple: false },
+      { name: "Лук-шалот", qty: 10, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 6, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Имбирь", qty: 30, unit: "г", group: "Овощи", staple: false },
+      { name: "Галангал", qty: 20, unit: "г", group: "Овощи", staple: false },
+      { name: "Лемонграсс", qty: 2, unit: "стебель", group: "Зелень", staple: false },
+      { name: "Семена горчицы", qty: 1, unit: "ст.л.", group: "Специи", staple: false },
+      { name: "Куркума молотая", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Картофель", qty: 3, unit: "шт", group: "Овощи", staple: false },
+      { name: "Капуста", qty: 200, unit: "г", group: "Овощи", staple: false },
+      { name: "Уксус", qty: 3, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Сахар", qty: 1, unit: "ч.л.", group: "Бакалея", staple: true },
+      { name: "Растительное масло", qty: 4, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Паста ремпах", text: "Замочите чили, измельчите в блендере с шалотом, чесноком, имбирём, галангалом и лемонграссом до пасты." },
+      { title: "Горчица", text: "Растолките семена горчицы с уксусом до пасты — это даёт фирменную остринку." },
+      { title: "Обжарка пасты", text: "Обжарьте рембах с куркумой на масле до выделения масла и потемнения.", timer: 600 },
+      { title: "Курица и картофель", text: "Добавьте курицу, обжарьте, влейте немного воды, добавьте картофель. Тушите до мягкости.", timer: 1500 },
+      { title: "Финал", text: "Добавьте капусту, горчичную пасту, сахар и соль. Готовьте ещё несколько минут до баланса остро-кисло.", timer: 300 }
+    ],
+    serveWith: "Подавайте с белым рисом. Традиционно готовится из остатков рождественского стола в португальско-евразийских семьях Малакки.",
+    notes: "Блюдо должно быть острым, кислым и насыщенным. На следующий день становится вкуснее. Уксус добавляйте в конце, чтобы сохранить яркость."
+  },
+  {
+    id: "kayya-kokosovo-yaichnyy-dzhem", title: "Кайя — кокосово-яичный джем", forKid: true, kidNote: "",
+    category: "Десерт", cuisine: "Малайзийская", photo: "",
+    prepTime: 15, cookTime: 60, time: 75, difficulty: 2, baseServings: 6, kcal: 180,
+    equipment: ["водяная баня", "венчик", "сито"], allergens: ["яйца"], tags: ["завтрак", "сладкое", "паста"],
+    ingredients: [
+      { name: "Яйца", qty: 4, unit: "шт", group: "Молочное", staple: false },
+      { name: "Кокосовое молоко", qty: 250, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Пальмовый сахар", qty: 150, unit: "г", group: "Бакалея", staple: false },
+      { name: "Сахар обычный", qty: 50, unit: "г", group: "Бакалея", staple: true },
+      { name: "Листья пандана", qty: 4, unit: "шт", group: "Зелень", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Сахарный сироп", text: "Растопите пальмовый сахар с небольшим количеством воды до карамельного сиропа, остудите." },
+      { title: "Яичная смесь", text: "Взбейте яйца с обычным сахаром и щепоткой соли, влейте кокосовое молоко и остывший сироп, перемешайте." },
+      { title: "Процеживание", text: "Процедите смесь через сито, чтобы джем был гладким. Завяжите листья пандана узлом и опустите в смесь." },
+      { title: "Варка на бане", text: "Готовьте на водяной бане, постоянно помешивая, пока масса не загустеет до консистенции крема.", timer: 3600 },
+      { title: "Охлаждение", text: "Уберите панданы, остудите и переложите в банку. Храните в холодильнике." }
+    ],
+    serveWith: "Намазывайте на поджаренный хлеб с кусочком сливочного масла — классический малайзийский завтрак каятост. Хорошо к чаю или копи.",
+    notes: "Готовьте на минимальном огне и непрерывно мешайте, иначе яйца свернутся. Для зелёного цвета можно добавить сок пандана."
+  },
+  {
+    id: "nasi-goreng-kampung", title: "Наси горенг кампунг", forKid: false, kidNote: "Для детей убавьте чили и пасту белачан, добавьте больше яйца и риса.",
+    category: "Основное", cuisine: "Малайзийская", photo: "",
+    prepTime: 15, cookTime: 15, time: 30, difficulty: 2, baseServings: 4, kcal: 520,
+    equipment: ["вок", "сковорода"], allergens: ["рыба", "соя"], tags: ["рис", "острое", "вок"],
+    ingredients: [
+      { name: "Варёный рис (холодный)", qty: 600, unit: "г", group: "Бакалея", staple: true },
+      { name: "Икан билис (сушёные анчоусы)", qty: 40, unit: "г", group: "Рыба", staple: false },
+      { name: "Креветочная паста белачан", qty: 1, unit: "ч.л.", group: "Прочее", staple: false },
+      { name: "Лук-шалот", qty: 4, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 3, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Красный чили", qty: 3, unit: "шт", group: "Овощи", staple: false },
+      { name: "Яйца", qty: 4, unit: "шт", group: "Молочное", staple: false },
+      { name: "Зелёная фасоль", qty: 100, unit: "г", group: "Овощи", staple: false },
+      { name: "Соевый соус", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Кетчап манис (сладкий соевый)", qty: 1, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Растительное масло", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Паста", text: "В ступке или блендере измельчите лук-шалот, чеснок, чили и белачан в грубую пасту." },
+      { title: "Анчоусы", text: "Разогрейте масло в воке и обжарьте икан билис до золотистой хрусткости, выньте часть для подачи.", timer: 180 },
+      { title: "Зажарка", text: "Обжарьте пасту на сильном огне до аромата, добавьте нарезанную фасоль.", timer: 120 },
+      { title: "Рис", text: "Выложите холодный рис, перемешайте с соевым соусом и кетчап манис, прогрейте на сильном огне.", timer: 240 },
+      { title: "Яйца", text: "Сдвиньте рис, разбейте яйца, дайте схватиться и вмешайте в рис. Посолите по вкусу.", timer: 120 }
+    ],
+    serveWith: "Подавайте с ломтиками огурца, обжаренными анчоусами сверху и крекерами крупук.",
+    notes: "Используйте именно вчерашний холодный рис — свежий тёплый рис размякнет и слипнется. Белачан можно слегка обжарить заранее для более глубокого аромата."
+  },
+  {
+    id: "soto-ayam", title: "Сото аям", forKid: true, kidNote: "Не острое; подайте без чили-самбала отдельно.",
+    category: "Суп", cuisine: "Малайзийская", photo: "",
+    prepTime: 20, cookTime: 30, time: 50, difficulty: 2, baseServings: 4, kcal: 320,
+    equipment: ["кастрюля", "блендер"], allergens: [], tags: ["курица", "суп", "пряный"],
+    ingredients: [
+      { name: "Куриные бёдра", qty: 600, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук-шалот", qty: 5, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 4, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Имбирь", qty: 3, unit: "см", group: "Овощи", staple: false },
+      { name: "Куркума (свежая или молотая)", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Лемонграсс", qty: 2, unit: "стебель", group: "Зелень", staple: false },
+      { name: "Кориандр молотый", qty: 1, unit: "ст.л.", group: "Специи", staple: false },
+      { name: "Рисовая вермишель", qty: 200, unit: "г", group: "Бакалея", staple: false },
+      { name: "Ростки маша", qty: 100, unit: "г", group: "Овощи", staple: false },
+      { name: "Зелёный лук", qty: 2, unit: "стебель", group: "Зелень", staple: false },
+      { name: "Растительное масло", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Бульон", text: "Отварите курицу в 1,5 л воды с раздавленным лемонграссом 25 минут. Выньте курицу, остудите и разберите на волокна.", timer: 1500 },
+      { title: "Паста", text: "Измельчите шалот, чеснок, имбирь и куркуму в пасту." },
+      { title: "Зажарка", text: "Обжарьте пасту на масле с кориандром до аромата.", timer: 180 },
+      { title: "Соединение", text: "Влейте процеженный бульон, посолите и проварите 10 минут.", timer: 600 },
+      { title: "Сборка", text: "В пиалы разложите вермишель, ростки, курицу, залейте бульоном, посыпьте зелёным луком." }
+    ],
+    serveWith: "Подавайте с прессованным рисом (нази химпит), жареным луком-шалотом и долькой лайма.",
+    notes: "Свежая куркума даёт более яркий цвет и аромат. Для остроты подайте самбал из чили отдельно."
+  },
+  {
+    id: "popiya-basah-svezhie-rolly", title: "Попия басах (свежие роллы)", forKid: true, kidNote: "Острый соус подайте отдельно, чтобы ребёнок не брал его.",
+    category: "Закуска", cuisine: "Малайзийская", photo: "",
+    prepTime: 30, cookTime: 15, time: 45, difficulty: 2, baseServings: 4, kcal: 240,
+    equipment: ["сковорода"], allergens: ["глютен", "соя", "арахис"], tags: ["роллы", "овощи", "перанакан"],
+    ingredients: [
+      { name: "Листы для попия (тонкие блинчики)", qty: 8, unit: "шт", group: "Бакалея", staple: false },
+      { name: "Брюква турнепс (сенгкуанг/бамбанган)", qty: 400, unit: "г", group: "Овощи", staple: false },
+      { name: "Морковь", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Тофу твёрдый", qty: 150, unit: "г", group: "Прочее", staple: false },
+      { name: "Креветки варёные", qty: 100, unit: "г", group: "Рыба", staple: false },
+      { name: "Чеснок", qty: 3, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Салат-латук", qty: 8, unit: "лист", group: "Овощи", staple: false },
+      { name: "Сладкий соевый соус (тим)", qty: 3, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Арахис молотый", qty: 3, unit: "ст.л.", group: "Прочее", staple: false },
+      { name: "Растительное масло", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Начинка", text: "Натрите брюкву и морковь соломкой. Обжарьте чеснок на масле, добавьте овощи и тофу, тушите до мягкости.", timer: 600 },
+      { title: "Приправа", text: "Посолите, при желании добавьте немного воды и тушите ещё, пока овощи не станут нежными. Остудите.", timer: 300 },
+      { title: "Сборка", text: "На лист положите салат, смажьте сладким соусом, выложите начинку, креветки и арахис." },
+      { title: "Заворачивание", text: "Сверните плотным рулетом, подвернув края. Разрежьте пополам наискось." }
+    ],
+    serveWith: "Подавайте сразу со сладким соусом и острым чили-соусом для макания.",
+    notes: "Не заворачивайте слишком много начинки и подавайте свежими — листы быстро размокают. Начинка должна быть остывшей и не слишком влажной."
+  },
+  {
+    id: "chendol", title: "Чендол", forKid: true, kidNote: "Сладкий и не острый, дети любят. Следите за льдом.",
+    category: "Десерт", cuisine: "Малайзийская", photo: "",
+    prepTime: 20, cookTime: 20, time: 40, difficulty: 2, baseServings: 4, kcal: 360,
+    equipment: ["кастрюля", "сито с крупными отверстиями", "блендер"], allergens: [], tags: ["холодный", "кокос", "пандан"],
+    ingredients: [
+      { name: "Рисовая мука", qty: 100, unit: "г", group: "Бакалея", staple: false },
+      { name: "Мука тапиоки", qty: 30, unit: "г", group: "Бакалея", staple: false },
+      { name: "Листья пандана", qty: 5, unit: "шт", group: "Зелень", staple: false },
+      { name: "Кокосовое молоко", qty: 400, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Пальмовый сахар (гула мелака)", qty: 150, unit: "г", group: "Бакалея", staple: false },
+      { name: "Колотый лёд", qty: 4, unit: "стакан", group: "Заморозка", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Вода", qty: 500, unit: "мл", group: "Прочее", staple: true }
+    ],
+    steps: [
+      { title: "Сок пандана", text: "Измельчите пандан с небольшим количеством воды в блендере и процедите, получив зелёный сок." },
+      { title: "Тесто-желе", text: "Смешайте рисовую и тапиоковую муку с водой и соком пандана, варите на среднем огне, помешивая, до густого прозрачно-зелёного теста.", timer: 420 },
+      { title: "Формовка", text: "Протрите горячее тесто через крупное сито в миску с ледяной водой — получатся зелёные «червячки». Слейте.", timer: 120 },
+      { title: "Сироп", text: "Растопите пальмовый сахар с небольшим количеством воды до густого сиропа, процедите.", timer: 300 },
+      { title: "Сборка", text: "В стакан положите чендол, колотый лёд, залейте кокосовым молоком со щепоткой соли и сиропом гула мелака." }
+    ],
+    serveWith: "Подавайте сразу же охлаждённым, можно с добавлением красной фасоли или кукурузы.",
+    notes: "Кокосовое молоко слегка подсолите — это подчёркивает сладость и карамельный вкус гула мелака. Готовый чендол хранится недолго, лучше есть свежим."
+  },
+  {
+    id: "kari-paff-karri-paff", title: "Кари пафф (карри-пафф)", forKid: true, kidNote: "Уменьшите карри-порошок и чили — получится мягкая ароматная начинка.",
+    category: "Выпечка", cuisine: "Малайзийская", photo: "",
+    prepTime: 45, cookTime: 30, time: 75, difficulty: 3, baseServings: 6, kcal: 290,
+    equipment: ["сковорода", "скалка", "фритюрница или казан"], allergens: ["глютен"], tags: ["слоёное", "карри", "жареное"],
+    ingredients: [
+      { name: "Мука пшеничная", qty: 300, unit: "г", group: "Бакалея", staple: true },
+      { name: "Маргарин или сливочное масло", qty: 100, unit: "г", group: "Молочное", staple: false },
+      { name: "Картофель", qty: 300, unit: "г", group: "Овощи", staple: false },
+      { name: "Куриный фарш", qty: 200, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 2, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Карри-порошок (для мяса)", qty: 2, unit: "ст.л.", group: "Специи", staple: false },
+      { name: "Яйцо варёное", qty: 2, unit: "шт", group: "Молочное", staple: false },
+      { name: "Растительное масло для фритюра", qty: 500, unit: "мл", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Вода", qty: 120, unit: "мл", group: "Прочее", staple: true }
+    ],
+    steps: [
+      { title: "Тесто", text: "Вотрите масло в муку с щепоткой соли, добавьте воду и замесите гладкое тесто. Дайте отдохнуть 30 минут.", timer: 1800 },
+      { title: "Начинка", text: "Обжарьте лук и чеснок, добавьте фарш и карри-порошок, затем кубики картофеля и немного воды. Тушите до готовности картофеля, посолите.", timer: 900 },
+      { title: "Лепка", text: "Раскатайте кружки теста, выложите начинку и дольку варёного яйца, защипните край косичкой." },
+      { title: "Жарка", text: "Обжаривайте во фритюре на среднем огне до золотистого цвета, переворачивая.", timer: 360 },
+      { title: "Обсушка", text: "Выложите на бумажное полотенце, дайте стечь маслу." }
+    ],
+    serveWith: "Подавайте горячими как закуску к чаю, с острым чили-соусом для макания.",
+    notes: "Жарьте на среднем огне, чтобы тесто пропеклось внутри и не подгорело. Начинка должна быть остывшей перед лепкой, иначе тесто порвётся."
+  },
+  {
+    id: "ayam-masak-merah", title: "Аям масак мерах", forKid: true, kidNote: "Сладко-томатный соус нравится детям; убавьте чили в пасте.",
+    category: "Основное", cuisine: "Малайзийская", photo: "",
+    prepTime: 20, cookTime: 30, time: 50, difficulty: 2, baseServings: 4, kcal: 480,
+    equipment: ["сковорода", "блендер"], allergens: [], tags: ["курица", "томатный", "праздничное"],
+    ingredients: [
+      { name: "Курица кусками", qty: 800, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук-шалот", qty: 6, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 4, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Имбирь", qty: 3, unit: "см", group: "Овощи", staple: false },
+      { name: "Сухой чили (паста)", qty: 3, unit: "ст.л.", group: "Специи", staple: false },
+      { name: "Томатная паста", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Помидоры", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лук репчатый (кольцами)", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Зелёный горошек", qty: 100, unit: "г", group: "Заморозка", staple: false },
+      { name: "Сахар", qty: 1, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Растительное масло", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Обжарка курицы", text: "Посолите курицу и слегка обжарьте до румяной корочки. Отложите.", timer: 480 },
+      { title: "Паста", text: "Измельчите шалот, чеснок и имбирь в пасту, обжарьте на масле до аромата с чили-пастой.", timer: 240 },
+      { title: "Томаты", text: "Добавьте томатную пасту и нарезанные помидоры, тушите до маслянистой массы.", timer: 300 },
+      { title: "Тушение", text: "Верните курицу, влейте немного воды, добавьте сахар и соль, тушите под крышкой до готовности.", timer: 1200 },
+      { title: "Финал", text: "Добавьте кольца лука и горошек, прогрейте пару минут.", timer: 180 }
+    ],
+    serveWith: "Подавайте с белым рисом или с праздничным рисом нази минак.",
+    notes: "Чтобы убрать сырость томата, как следует протушите пасту до выделения масла. Это праздничное блюдо часто готовят на малайские свадьбы."
+  },
+  {
+    id: "mee-goreng-mamak", title: "Мее горенг мамак", forKid: false, kidNote: "Острое из-за самбала; для ребёнка уберите чили.",
+    category: "Основное", cuisine: "Малайзийская", photo: "",
+    prepTime: 23, cookTime: 7, time: 30, difficulty: 2, baseServings: 2, kcal: 620,
+    equipment: [], allergens: [], tags: ["лапша", "стрит-фуд", "мамак"],
+    ingredients: [
+      { name: "Жёлтая пшеничная лапша (хоккиен)", qty: 300, unit: "г", group: "Бакалея", staple: false },
+      { name: "Куриное филе", qty: 150, unit: "г", group: "Мясо", staple: false },
+      { name: "Креветки очищенные", qty: 100, unit: "г", group: "Рыба", staple: false },
+      { name: "Тофу плотный", qty: 100, unit: "г", group: "Прочее", staple: false },
+      { name: "Яйцо", qty: 2, unit: "шт", group: "Молочное", staple: false },
+      { name: "Картофель отварной", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Ростки сои (бобовые)", qty: 100, unit: "г", group: "Овощи", staple: false },
+      { name: "Зелёный лук", qty: 2, unit: "шт", group: "Зелень", staple: false },
+      { name: "Чеснок", qty: 3, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Томатная паста", qty: 1, unit: "ст.л.", group: "Бакал가", staple: false },
+      { name: "Кетчуп", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Соевый соус", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Острый соус самбал/чили", qty: 1, unit: "ст.л.", group: "Специи", staple: false },
+      { name: "Растительное масло", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Лайм", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Подготовка", text: "Нарежьте курицу и тофу кубиками, картофель — дольками. Лапшу при необходимости ошпарьте кипятком и откиньте." },
+      { title: "Обжарка белка", text: "Разогрейте масло в воке, обжарьте чеснок, добавьте курицу и креветки, жарьте до готовности.", timer: 240 },
+      { title: "Тофу и яйцо", text: "Добавьте тофу, отодвиньте к краю, разбейте яйца и слегка поджарьте, размешивая." },
+      { title: "Соусы", text: "Введите томатную пасту, кетчуп, соевый соус и самбал, прогрейте до ароматной массы." },
+      { title: "Лапша", text: "Добавьте лапшу, картофель и ростки сои, энергично обжаривайте на сильном огне.", timer: 180 },
+      { title: "Финал", text: "Посыпьте зелёным луком, подайте с долькой лайма." }
+    ],
+    serveWith: "Подавайте горячей с долькой лайма и дополнительным самбалом сбоку. Хорошо идёт с прохладным напитком вроде тэх таре.",
+    notes: "Готовьте на максимально сильном огне небольшими порциями — так лапша получит характерный «дымный» аромат wok hei. Острый соус регулируйте по вкусу."
+  },
+  {
+    id: "asam-ped-kislyy-rybnyy-sup", title: "Асам пед (кислый рыбный суп)", forKid: false, kidNote: "Острый и кислый суп, не для маленьких детей.",
+    category: "Суп", cuisine: "Малайзийская", photo: "",
+    prepTime: 23, cookTime: 17, time: 40, difficulty: 2, baseServings: 4, kcal: 280,
+    equipment: [], allergens: [], tags: ["рыба", "острое", "перанакан"],
+    ingredients: [
+      { name: "Скумбрия или ставрида", qty: 600, unit: "г", group: "Рыба", staple: false },
+      { name: "Тамариндовая паста", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Сушёный чили", qty: 6, unit: "шт", group: "Специи", staple: false },
+      { name: "Лук-шалот", qty: 4, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 3, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Креветочная паста (белачан)", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Помидоры", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Бамия (окра)", qty: 6, unit: "шт", group: "Овощи", staple: false },
+      { name: "Имбирный цветок (букв торч джинджер)", qty: 1, unit: "шт", group: "Зелень", staple: false },
+      { name: "Вьетнамский кориандр (дон лоам)", qty: 1, unit: "пучок", group: "Зелень", staple: false },
+      { name: "Сахар", qty: 1, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Растительное масло", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Паста чили", text: "Замочите сушёный чили в кипятке, измельчите вместе с шалотом, чесноком и белачаном в пасту." },
+      { title: "Тамаринд", text: "Размешайте тамариндовую пасту в 1,2 л воды, процедите от косточек." },
+      { title: "Обжарка", text: "Обжарьте пасту чили на масле до аромата.", timer: 240 },
+      { title: "Бульон", text: "Влейте тамариндовую воду, добавьте сахар и соль, доведите до кипения.", timer: 300 },
+      { title: "Овощи и рыба", text: "Добавьте помидоры и окру, через пару минут опустите куски рыбы и имбирный цветок, варите на медленном огне.", timer: 480 },
+      { title: "Зелень", text: "В конце добавьте вьетнамский кориандр, выключите огонь." }
+    ],
+    serveWith: "Подавайте с большим количеством отварного белого риса, который смягчает кислоту и остроту бульона.",
+    notes: "Не переваривайте рыбу, чтобы куски не разваливались. Баланс кисло-острого регулируйте тамариндом и сахаром."
+  },
+  {
+    id: "achar-marinovannye-ovoschi", title: "Ачар (маринованные овощи)", forKid: false, kidNote: "Острое из-за чили; не для малышей.",
+    category: "Закуска", cuisine: "Малайзийская", photo: "",
+    prepTime: 11, cookTime: 24, time: 35, difficulty: 2, baseServings: 6, kcal: 180,
+    equipment: [], allergens: ["арахис", "кунжут"], tags: ["соленье", "гарнир", "веган"],
+    ingredients: [
+      { name: "Огурцы", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Морковь", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Капуста", qty: 200, unit: "г", group: "Овощи", staple: false },
+      { name: "Стручковая фасоль", qty: 100, unit: "г", group: "Овощи", staple: false },
+      { name: "Сушёный чили", qty: 5, unit: "шт", group: "Специи", staple: false },
+      { name: "Лук-шалот", qty: 4, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 3, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Куркума молотая", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Арахис жареный", qty: 80, unit: "г", group: "Бакалея", staple: false },
+      { name: "Кунжут", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Уксус белый", qty: 100, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Сахар", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Растительное масло", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Овощи", text: "Нарежьте огурцы, морковь, капусту и фасоль брусочками. Присыпьте солью и дайте пустить сок 20 минут, затем отожмите.", timer: 1200 },
+      { title: "Паста", text: "Измельчите чили, шалот, чеснок и куркуму в пасту." },
+      { title: "Обжарка", text: "Обжарьте пасту на масле до аромата.", timer: 240 },
+      { title: "Заправка", text: "Добавьте уксус, сахар и соль, прогрейте до растворения сахара." },
+      { title: "Смешивание", text: "Снимите с огня, вмешайте овощи, толчёный арахис и кунжут." },
+      { title: "Настаивание", text: "Дайте остыть и пропитаться. Подавайте охлаждённым." }
+    ],
+    serveWith: "Подавайте как пикантный гарнир к рису, наси лемак или жареной курице. Хорошо хранится в холодильнике несколько дней.",
+    notes: "Для лучшего вкуса дайте ачару настояться минимум 4 часа, а лучше — ночь в холодильнике. Содержит арахис и кунжут."
+  },
+  {
+    id: "ayam-perchik-kurica-v-kokosovom-souse", title: "Аям перчик (курица в кокосовом соусе)", forKid: false, kidNote: "Острое блюдо; для детей уменьшите количество чили.",
+    category: "Основное", cuisine: "Малайзийская", photo: "",
+    prepTime: 14, cookTime: 36, time: 50, difficulty: 2, baseServings: 4, kcal: 480,
+    equipment: [], allergens: [], tags: ["курица", "кокос", "острое"],
+    ingredients: [
+      { name: "Куриные бёдра", qty: 800, unit: "г", group: "Мясо", staple: false },
+      { name: "Кокосовое молоко", qty: 400, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Сушёный чили", qty: 8, unit: "шт", group: "Специи", staple: false },
+      { name: "Лук-шалот", qty: 6, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 4, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Имбирь", qty: 20, unit: "г", group: "Овощи", staple: false },
+      { name: "Лемонграсс", qty: 2, unit: "шт", group: "Зелень", staple: false },
+      { name: "Галангал", qty: 15, unit: "г", group: "Овощи", staple: false },
+      { name: "Куркума молотая", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Листья кафрского лайма", qty: 3, unit: "шт", group: "Зелень", staple: false },
+      { name: "Растительное масло", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Сахар", qty: 1, unit: "ч.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Паста", text: "Замочите чили, измельчите его с шалотом, чесноком, имбирём, галангалом, лемонграссом и куркумой в гладкую пасту." },
+      { title: "Обжарка пасты", text: "Обжарьте пасту на масле на среднем огне до тёмного аромата.", timer: 360 },
+      { title: "Курица", text: "Добавьте куски курицы, обжарьте, чтобы покрылись пастой.", timer: 300 },
+      { title: "Тушение", text: "Влейте кокосовое молоко, добавьте листья лайма, сахар и соль, тушите на медленном огне.", timer: 1500 },
+      { title: "Загустение", text: "Готовьте до мягкости курицы и густого соуса, периодически помешивая." }
+    ],
+    serveWith: "Подавайте с белым рисом и свежими огурцами. Густой пряный соус отлично сочетается с рисом.",
+    notes: "Тушите на слабом огне, чтобы кокосовое молоко не свернулось. Чем дольше уваривается соус, тем насыщеннее вкус."
+  },
+  {
+    id: "kuh-dadar-zelenye-blinchiki-s-kokosom", title: "Кух дадар (зелёные блинчики с кокосом)", forKid: true, kidNote: "",
+    category: "Десерт", cuisine: "Малайзийская", photo: "",
+    prepTime: 28, cookTime: 12, time: 40, difficulty: 2, baseServings: 4, kcal: 360,
+    equipment: [], allergens: ["глютен", "яйцо"], tags: ["пандан", "кокос", "ньонья"],
+    ingredients: [
+      { name: "Пшеничная мука", qty: 150, unit: "г", group: "Бакалея", staple: true },
+      { name: "Яйцо", qty: 1, unit: "шт", group: "Молочное", staple: false },
+      { name: "Кокосовое молоко", qty: 300, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Сок пандана (или паста)", qty: 2, unit: "ст.л.", group: "Прочее", staple: false },
+      { name: "Кокосовая стружка свежая", qty: 200, unit: "г", group: "Бакалея", staple: false },
+      { name: "Пальмовый сахар (гула мелака)", qty: 120, unit: "г", group: "Бакалея", staple: false },
+      { name: "Лист пандана", qty: 1, unit: "шт", group: "Зелень", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Масло для жарки", qty: 1, unit: "ст.л.", group: "Бакалея", staple: true }
+    ],
+    steps: [
+      { title: "Начинка", text: "Растопите пальмовый сахар с небольшим количеством воды и листом пандана, добавьте кокосовую стружку, выпарите влагу.", timer: 600 },
+      { title: "Тесто", text: "Смешайте муку, яйцо, кокосовое молоко, сок пандана и щепотку соли в гладкое жидкое тесто." },
+      { title: "Блинчики", text: "На смазанной сковороде выпекайте тонкие зелёные блинчики с обеих сторон.", timer: 120 },
+      { title: "Сборка", text: "На каждый блинчик выложите кокосовую начинку, заверните конвертом или рулетом." },
+      { title: "Подача", text: "Подавайте тёплыми или комнатной температуры." }
+    ],
+    serveWith: "Подавайте к чаю или кофе как сладкую закуску. Вкусно с чашкой малайзийского кофе копи.",
+    notes: "Если нет свежего сока пандана, используйте экстракт пандана. Начинка не должна быть слишком влажной, иначе блинчики размокнут."
+  },
+  {
+    id: "roti-dzhala-kruzhevnye-bliny", title: "Роти джала (кружевные блины)", forKid: true, kidNote: "Подавайте с неострым соусом для детей.",
+    category: "Выпечка", cuisine: "Малайзийская", photo: "",
+    prepTime: 19, cookTime: 16, time: 35, difficulty: 2, baseServings: 4, kcal: 240,
+    equipment: [], allergens: ["глютен", "яйцо", "лактоза"], tags: ["блины", "к карри", "хлеб"],
+    ingredients: [
+      { name: "Пшеничная мука", qty: 250, unit: "г", group: "Бакалея", staple: true },
+      { name: "Яйцо", qty: 1, unit: "шт", group: "Молочное", staple: false },
+      { name: "Молоко", qty: 250, unit: "мл", group: "Молочное", staple: false },
+      { name: "Вода", qty: 250, unit: "мл", group: "Прочее", staple: true },
+      { name: "Куркума молотая", qty: 0.5, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Масло для смазки", qty: 1, unit: "ст.л.", group: "Бакалея", staple: true }
+    ],
+    steps: [
+      { title: "Тесто", text: "Взбейте муку, яйцо, молоко, воду, куркуму и соль в однородное жидкое тесто без комков." },
+      { title: "Отдых", text: "Дайте тесту постоять, чтобы мука разошлась.", timer: 900 },
+      { title: "Заливка узора", text: "Налейте тесто в специальную чашку с носиками (или бутылку) и круговыми движениями нарисуйте кружевной узор на тёплой сковороде." },
+      { title: "Выпекание", text: "Готовьте до схватывания, не переворачивая, блин должен остаться светлым.", timer: 60 },
+      { title: "Сложение", text: "Снимите и сложите блин треугольником или рулетом." }
+    ],
+    serveWith: "Подавайте с куриным или говяжьим карри — кружевные блины идеально впитывают соус. Также сочетаются с густым соусом ренданг.",
+    notes: "Тесто должно быть жидким, как для блинов. Сковорода не должна быть слишком горячей, иначе узор пригорит. Куркума придаёт золотистый цвет."
+  },
+  {
+    id: "haynanskiy-kurinyy-ris-nasi-ayam", title: "Хайнаньский куриный рис (Наси аям)", forKid: true, kidNote: "Острый соус подавайте отдельно",
+    category: "Основное", cuisine: "Малайзийская", photo: "",
+    prepTime: 20, cookTime: 40, time: 60, difficulty: 2, baseServings: 4, kcal: 620,
+    equipment: ["Большая кастрюля", "Сковорода", "Шумовка"], allergens: ["соя", "кунжут"], tags: ["курица", "рис", "классика"],
+    ingredients: [
+      { name: "Курица целая", qty: 1.4, unit: "кг", group: "Мясо", staple: false },
+      { name: "Рис жасминовый", qty: 400, unit: "г", group: "Бакалея", staple: true },
+      { name: "Имбирь", qty: 60, unit: "г", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 6, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Зелёный лук", qty: 4, unit: "шт", group: "Зелень", staple: false },
+      { name: "Кунжутное масло", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Соевый соус", qty: 3, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Огурец", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Отварить курицу", text: "В большой кастрюле доведите воду до кипения, добавьте половину имбиря, зелёный лук и соль. Опустите курицу, варите на слабом огне.", timer: 2100 },
+      { title: "Ледяная баня", text: "Достаньте курицу и погрузите в ледяную воду на 5 минут — мясо станет упругим, а кожа желатиновой. Бульон не выливайте.", timer: 300 },
+      { title: "Приготовить рис", text: "Обжарьте измельчённый чеснок и имбирь на кунжутном масле, добавьте промытый рис, прогрейте и залейте куриным бульоном. Варите под крышкой до готовности.", timer: 1080 },
+      { title: "Соус и подача", text: "Смешайте соевый соус с кунжутным маслом и рубленым зелёным луком. Курицу нарежьте, выложите с рисом, огурцом и соусом." }
+    ],
+    serveWith: "Подавайте с пиалой горячего куриного бульона и чесночно-имбирным соусом, а также со сладким соевым соусом. Ломтики огурца обязательны.",
+    notes: "Ледяная баня — ключ к шелковистой коже. Жир, снятый с бульона, можно добавить в рис для аромата. Острый соус чили подайте отдельно — для детей не острый."
+  },
+  {
+    id: "laksam-rybnaya-laksa-iz-kelantana", title: "Лаксам (рыбная лакса из Келантана)", forKid: true, kidNote: "Мягкий некислый вкус, подходит детям",
+    category: "Суп", cuisine: "Малайзийская", photo: "",
+    prepTime: 30, cookTime: 40, time: 70, difficulty: 3, baseServings: 4, kcal: 480,
+    equipment: ["Блендер", "Кастрюля", "Сито"], allergens: ["рыба"], tags: ["рыба", "кокос", "лапша"],
+    ingredients: [
+      { name: "Скумбрия", qty: 500, unit: "г", group: "Рыба", staple: false },
+      { name: "Кокосовое молоко", qty: 400, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Рисовая мука", qty: 250, unit: "г", group: "Бакалея", staple: false },
+      { name: "Лемонграсс", qty: 2, unit: "стебель", group: "Зелень", staple: false },
+      { name: "Галангал", qty: 30, unit: "г", group: "Овощи", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Огурец", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Проростки фасоли", qty: 100, unit: "г", group: "Овощи", staple: false },
+      { name: "Мята свежая", qty: 20, unit: "г", group: "Зелень", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Отварить рыбу", text: "Отварите скумбрию до готовности, удалите кости и кожу, мясо разомните в пюре.", timer: 600 },
+      { title: "Тесто для лапши", text: "Смешайте рисовую муку с водой до густого теста, проварите при помешивании до загустения, затем продавите через формочку в кипяток для толстой лапши.", timer: 480 },
+      { title: "Сварить соус", text: "Измельчите лемонграсс, галангал и лук в пасту, обжарьте, добавьте рыбное пюре и кокосовое молоко. Томите на слабом огне.", timer: 900 },
+      { title: "Собрать блюдо", text: "Выложите лапшу в миску, залейте горячим рыбно-кокосовым соусом, украсьте огурцом, проростками и мятой." }
+    ],
+    serveWith: "Подавайте с тёртым огурцом, свежей мятой и проростками фасоли поверх лапши. Хорошо дополнить дольками лайма и сладким соусом из креветочной пасты.",
+    notes: "Лаксам из Келантана отличается толстой свёрнутой рисовой лапшой и мягким, не острым вкусом. Если нет формочки для лапши, раскатайте тесто и сверните в рулетики, нарезав лентами."
+  },
+  {
+    id: "otak-otak-rybnye-kotletki-v-bananovom-li", title: "Отак-отак (рыбные котлетки в банановом листе)", forKid: false, kidNote: "Содержит чили — уменьшите для детей",
+    category: "Закуска", cuisine: "Малайзийская", photo: "",
+    prepTime: 30, cookTime: 15, time: 45, difficulty: 2, baseServings: 4, kcal: 220,
+    equipment: ["Блендер", "Гриль или сковорода"], allergens: ["рыба"], tags: ["рыба", "на гриле", "кокос"],
+    ingredients: [
+      { name: "Филе белой рыбы", qty: 400, unit: "г", group: "Рыба", staple: false },
+      { name: "Кокосовое молоко", qty: 150, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Яйцо", qty: 1, unit: "шт", group: "Молочное", staple: false },
+      { name: "Перец чили", qty: 3, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лемонграсс", qty: 1, unit: "стебель", group: "Зелень", staple: false },
+      { name: "Куркума", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Лук-шалот", qty: 4, unit: "шт", group: "Овощи", staple: false },
+      { name: "Банановые листья", qty: 8, unit: "шт", group: "Прочее", staple: false },
+      { name: "Сахар", qty: 1, unit: "ч.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Сделать пасту", text: "Измельчите в блендере чили, лемонграсс, куркуму и шалот в ароматную пасту." },
+      { title: "Рыбная масса", text: "Пюрируйте рыбное филе, смешайте с пастой, кокосовым молоком, яйцом, сахаром и солью до однородной липкой массы." },
+      { title: "Завернуть", text: "Выложите ложку массы на банановый лист, заверните конвертиком и закрепите зубочисткой." },
+      { title: "Приготовить", text: "Обжарьте свёртки на гриле или сухой сковороде с двух сторон до подпекания листа и упругости начинки.", timer: 900 }
+    ],
+    serveWith: "Подавайте горячими прямо в листе как закуску или дополнение к рису. Хорошо с долькой лайма и рисом наси лемак.",
+    notes: "Банановый лист придаёт аромат — перед использованием прогрейте его над огнём, чтобы стал гибким. Для детей уменьшите количество чили вдвое."
+  },
+  {
+    id: "kuh-seri-muka-dvuhsloynyy-desert", title: "Кух сери мука (двухслойный десерт)", forKid: true, kidNote: "",
+    category: "Десерт", cuisine: "Малайзийская", photo: "",
+    prepTime: 25, cookTime: 25, time: 50, difficulty: 2, baseServings: 6, kcal: 280,
+    equipment: ["Пароварка", "Форма квадратная"], allergens: [], tags: ["клейкий рис", "кокос", "пандан"],
+    ingredients: [
+      { name: "Клейкий рис", qty: 300, unit: "г", group: "Бакалея", staple: false },
+      { name: "Кокосовое молоко", qty: 400, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Сахар", qty: 120, unit: "г", group: "Бакалея", staple: true },
+      { name: "Яйцо", qty: 3, unit: "шт", group: "Молочное", staple: false },
+      { name: "Листья пандана", qty: 4, unit: "шт", group: "Зелень", staple: false },
+      { name: "Рисовая мука", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Замочить рис", text: "Промойте клейкий рис и замочите минимум на 2 часа, затем откиньте." },
+      { title: "Слой риса", text: "Смешайте рис с частью кокосового молока и солью, выложите в форму и готовьте на пару до мягкости.", timer: 1200 },
+      { title: "Заварной слой", text: "Взбейте яйца с сахаром, добавьте кокосовое молоко, сок пандана и рисовую муку. Процедите." },
+      { title: "Запарить десерт", text: "Утрамбуйте слой риса, залейте сверху зелёной заварной смесью и готовьте на пару до схватывания.", timer: 1500 }
+    ],
+    serveWith: "Подавайте охлаждённым, нарезав на аккуратные квадраты, к чаю или кофе. Отлично сочетается с чёрным малайзийским кофе копи.",
+    notes: "Замачивание риса (около 2 часов) не входит в активное время. Сок пандана даёт натуральный зелёный цвет и аромат — отжимайте измельчённые листья через марлю."
+  },
+  {
+    id: "roti-chanay", title: "Роти чанай", forKid: true, kidNote: "Карри подавайте отдельно для ребёнка",
+    category: "Выпечка", cuisine: "Малайзийская", photo: "",
+    prepTime: 30, cookTime: 10, time: 40, difficulty: 3, baseServings: 4, kcal: 350,
+    equipment: ["Сковорода плоская", "Миска"], allergens: ["глютен", "молоко"], tags: ["лепёшка", "слоёное", "завтрак"],
+    ingredients: [
+      { name: "Мука пшеничная", qty: 400, unit: "г", group: "Бакалея", staple: true },
+      { name: "Сгущённое молоко", qty: 2, unit: "ст.л.", group: "Молочное", staple: false },
+      { name: "Топлёное масло гхи", qty: 60, unit: "г", group: "Молочное", staple: false },
+      { name: "Яйцо", qty: 1, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сахар", qty: 1, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Вода тёплая", qty: 180, unit: "мл", group: "Прочее", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Замесить тесто", text: "Смешайте муку, соль, сахар, яйцо, сгущёнку и воду, вымешивайте до гладкого эластичного теста.", timer: 600 },
+      { title: "Отдых теста", text: "Разделите на шарики, обильно смажьте гхи и оставьте отдыхать под плёнкой.", timer: 3600 },
+      { title: "Растянуть", text: "Растяните каждый шарик в тонкий полупрозрачный лист, затем сложите гармошкой и сверните в спираль." },
+      { title: "Обжарить", text: "Жарьте на горячей сковороде с гхи до золотистых хрустящих слоёв с двух сторон, затем смните руками для воздушности.", timer: 300 }
+    ],
+    serveWith: "Подавайте горячим с чечевичным даал или куриным карри для макания. На завтрак хорошо со сгущёнкой или сахаром.",
+    notes: "Отдых теста минимум 1 час (можно на ночь в холодильнике) делает его эластичным для тонкого растягивания — это пассивное время, не входит в активное. Смятие после жарки даёт фирменную слоистость."
+  },
+  {
+    id: "tako-al-pastor", title: "Тако аль пастор", forKid: false, kidNote: "Острое и кислое — для детей лучше отдельно прогреть мясо без чили.",
+    category: "Основное", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 30, cookTime: 15, time: 45, difficulty: 2, baseServings: 4, kcal: 480,
+    equipment: ["сковорода", "блендер"], allergens: ["глютен"], tags: ["Мексика", "острое", "стрит-фуд"],
+    ingredients: [
+      { name: "Свиная шея", qty: 600, unit: "г", group: "Мясо", staple: false },
+      { name: "Ананас свежий", qty: 200, unit: "г", group: "Овощи", staple: false },
+      { name: "Сушёный перец чили гуахильо", qty: 3, unit: "шт", group: "Специи", staple: false },
+      { name: "Чеснок", qty: 3, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Ачиоте (паста аннато)", qty: 1, unit: "ст.л.", group: "Специи", staple: false },
+      { name: "Уксус яблочный", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Кукурузные тортильи", qty: 12, unit: "шт", group: "Бакалея", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Кинза", qty: 1, unit: "пучок", group: "Зелень", staple: false },
+      { name: "Лайм", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Растительное масло", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true }
+    ],
+    steps: [
+      { title: "Маринад", text: "Чили залейте кипятком на 10 минут, затем взбейте в блендере с чесноком, ачиоте, уксусом и солью до густого соуса.", timer: 600 },
+      { title: "Маринуем мясо", text: "Свинину нарежьте тонкими ломтиками, залейте маринадом и оставьте минимум на 2 часа (лучше на ночь)." },
+      { title: "Обжарка", text: "Обжарьте мясо на раскалённой сковороде с маслом до карамельной корочки, нарежьте мелко.", timer: 480 },
+      { title: "Ананас", text: "Кусочки ананаса обжарьте на той же сковороде до подпалин.", timer: 240 },
+      { title: "Сборка", text: "Прогрейте тортильи, выложите мясо, ананас, рубленый лук и кинзу. Подавайте с долькой лайма." }
+    ],
+    serveWith: "Подавайте с дольками лайма, острым соусом сальса верде и холодным напитком агуа фреска.",
+    notes: "Чем дольше маринуется свинина, тем ярче вкус. Идеально оставить на ночь в холодильнике."
+  },
+  {
+    id: "sup-pozole-roho", title: "Суп позоле рохо", forKid: true, kidNote: "Соус из чили подайте отдельно, ребёнку — просто бульон с мясом и кукурузой.",
+    category: "Суп", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 25, cookTime: 90, time: 115, difficulty: 2, baseServings: 6, kcal: 420,
+    equipment: ["большая кастрюля", "блендер"], allergens: [], tags: ["Мексика", "сытный", "праздничный"],
+    ingredients: [
+      { name: "Свиная лопатка", qty: 800, unit: "г", group: "Мясо", staple: false },
+      { name: "Кукуруза посоле (гоминьо)", qty: 500, unit: "г", group: "Бакалея", staple: false },
+      { name: "Сушёный перец гуахильо", qty: 4, unit: "шт", group: "Специи", staple: false },
+      { name: "Сушёный перец анчо", qty: 2, unit: "шт", group: "Специи", staple: false },
+      { name: "Чеснок", qty: 4, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Орегано сушёный", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Капуста белокочанная", qty: 200, unit: "г", group: "Овощи", staple: false },
+      { name: "Редис", qty: 6, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лайм", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Варим мясо", text: "Свинину с луком и чесноком залейте водой, посолите и варите до мягкости.", timer: 3600 },
+      { title: "Соус из чили", text: "Перцы залейте кипятком на 15 минут, взбейте в блендере с частью бульона до гладкости.", timer: 900 },
+      { title: "Соединяем", text: "Процедите соус в бульон, добавьте кукурузу посоле и орегано, томите ещё 30 минут.", timer: 1800 },
+      { title: "Разбираем мясо", text: "Достаньте свинину, разберите на волокна и верните в суп. Доведите до вкуса солью." },
+      { title: "Подача", text: "Разлейте по тарелкам, подавайте с гарнирами из шинкованной капусты, редиса и лайма." }
+    ],
+    serveWith: "Подавайте с тарелкой свежих гарниров: шинкованная капуста, редис, лук, орегано и дольки лайма, а также тостадас.",
+    notes: "Гоминьо (нихтамализованная кукуруза) — ключевой ингредиент; консервированная экономит время."
+  },
+  {
+    id: "flan-karamelnyy-puding", title: "Флан (карамельный пудинг)", forKid: true, kidNote: "",
+    category: "Десерт", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 15, cookTime: 50, time: 65, difficulty: 2, baseServings: 6, kcal: 320,
+    equipment: ["форма для флана", "духовка", "сотейник"], allergens: ["яйца", "молоко"], tags: ["десерт", "классика", "запекание"],
+    ingredients: [
+      { name: "Яйца", qty: 5, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сгущённое молоко", qty: 400, unit: "г", group: "Молочное", staple: false },
+      { name: "Молоко цельное", qty: 250, unit: "мл", group: "Молочное", staple: false },
+      { name: "Сахар", qty: 150, unit: "г", group: "Бакалея", staple: true },
+      { name: "Ванильный экстракт", qty: 1, unit: "ч.л.", group: "Бакалея", staple: false }
+    ],
+    steps: [
+      { title: "Карамель", text: "Растопите сахар в сотейнике до янтарного цвета и быстро вылейте на дно формы.", timer: 360 },
+      { title: "Смесь", text: "Взбейте яйца со сгущённым и обычным молоком и ванилью до однородности." },
+      { title: "Заливка", text: "Процедите смесь в форму поверх карамели." },
+      { title: "Водяная баня", text: "Поставьте форму в противень с горячей водой и запекайте при 160°C около 50 минут.", timer: 3000 },
+      { title: "Охлаждение", text: "Остудите и уберите в холодильник минимум на 4 часа, затем переверните на блюдо." }
+    ],
+    serveWith: "Подавайте холодным, полив вытекшей карамелью; хорошо сочетается с чашкой кофе.",
+    notes: "Флан должен полностью остыть в холодильнике (лучше ночь), иначе не выйдет аккуратно из формы."
+  },
+  {
+    id: "brazilskoe-syrnoe-pechene-pan-di-keyzhu", title: "Бразильское сырное печенье пан-ди-кейжу", forKid: true, kidNote: "",
+    category: "Выпечка", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 15, cookTime: 25, time: 40, difficulty: 1, baseServings: 4, kcal: 280,
+    equipment: ["духовка", "миска", "противень"], allergens: ["молоко", "яйца"], tags: ["Бразилия", "безглютеновое", "выпечка"],
+    ingredients: [
+      { name: "Тапиоковый крахмал", qty: 250, unit: "г", group: "Бакалея", staple: false },
+      { name: "Молоко", qty: 120, unit: "мл", group: "Молочное", staple: false },
+      { name: "Растительное масло", qty: 80, unit: "мл", group: "Бакалея", staple: true },
+      { name: "Яйца", qty: 2, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сыр пармезан тёртый", qty: 100, unit: "г", group: "Молочное", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Кипячение", text: "Доведите молоко с маслом и солью до кипения, снимите с огня.", timer: 240 },
+      { title: "Заваривание", text: "Влейте горячую смесь в тапиоковый крахмал и перемешайте до влажной крошки." },
+      { title: "Тесто", text: "Когда остынет, вмешайте яйца и тёртый сыр до мягкого липкого теста." },
+      { title: "Формовка", text: "Влажными руками скатайте небольшие шарики и выложите на противень с бумагой." },
+      { title: "Выпечка", text: "Выпекайте при 190°C около 20–25 минут до золотистости и воздушности.", timer: 1500 }
+    ],
+    serveWith: "Подавайте тёплыми к кофе или как закуску к завтраку.",
+    notes: "Используйте только тапиоковый (маниоковый) крахмал — обычная мука не даст характерной тягучести."
+  },
+  {
+    id: "argentinskiy-steyk-s-sousom-chimichurri", title: "Аргентинский стейк с соусом чимичурри", forKid: true, kidNote: "Соус чимичурри слегка острый — детям подайте чистый стейк без соуса.",
+    category: "Основное", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 15, cookTime: 12, time: 27, difficulty: 2, baseServings: 4, kcal: 560,
+    equipment: ["сковорода-гриль", "миска"], allergens: [], tags: ["Аргентина", "гриль", "мясо"],
+    ingredients: [
+      { name: "Говяжий стейк (рибай или толстый край)", qty: 800, unit: "г", group: "Мясо", staple: false },
+      { name: "Петрушка", qty: 1, unit: "пучок", group: "Зелень", staple: false },
+      { name: "Орегано сушёный", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Чеснок", qty: 4, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Перец чили хлопья", qty: 0.5, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Винный уксус", qty: 3, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Оливковое масло", qty: 120, unit: "мл", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Чёрный перец", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Чимичурри", text: "Мелко порубите петрушку и чеснок, смешайте с орегано, чили, уксусом, маслом и солью. Дайте настояться.", timer: 1800 },
+      { title: "Подготовка мяса", text: "Стейки обсушите, посолите и поперчите, дайте полежать при комнатной температуре." },
+      { title: "Жарка", text: "Обжарьте на раскалённой сковороде-гриль по 3–4 минуты с каждой стороны до желаемой прожарки.", timer: 420 },
+      { title: "Отдых", text: "Дайте мясу отдохнуть 5 минут под фольгой, затем нарежьте.", timer: 300 },
+      { title: "Подача", text: "Полейте стейк соусом чимичурри или подайте его отдельно." }
+    ],
+    serveWith: "Подавайте с печёным картофелем, зелёным салатом и бокалом красного вина мальбек.",
+    notes: "Чимичурри лучше приготовить заранее — за 30–60 минут вкус становится насыщеннее."
+  },
+  {
+    id: "arros-kon-pollo", title: "Аррос кон полло", forKid: true, kidNote: "Для ребёнка не добавляйте острый соус при подаче.",
+    category: "Основное", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 15, cookTime: 35, time: 50, difficulty: 2, baseServings: 4, kcal: 560,
+    equipment: ["глубокая сковорода с крышкой", "нож"], allergens: [], tags: ["курица", "рис", "одно блюдо"],
+    ingredients: [
+      { name: "Куриные бёдра", qty: 800, unit: "г", group: "Мясо", staple: false },
+      { name: "Рис длиннозёрный", qty: 300, unit: "г", group: "Бакалея", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Болгарский перец", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 3, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Помидоры", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Зелёный горошек", qty: 100, unit: "г", group: "Заморозка", staple: false },
+      { name: "Куриный бульон", qty: 600, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Куркума", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Кумин", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Растительное масло", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Чёрный перец", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Кинза", qty: 1, unit: "пучок", group: "Зелень", staple: false }
+    ],
+    steps: [
+      { title: "Обжарить курицу", text: "Куриные бёдра посолить, поперчить и обжарить на масле до золотистой корочки с двух сторон. Вынуть.", timer: 480 },
+      { title: "Овощи", text: "В той же сковороде обжарить лук, чеснок, болгарский перец и помидоры до мягкости.", timer: 360 },
+      { title: "Рис и специи", text: "Добавить рис, куркуму и кумин, перемешать, чтобы рис пропитался маслом и специями." },
+      { title: "Тушить", text: "Влить горячий бульон, вернуть курицу, довести до кипения, накрыть крышкой и готовить на слабом огне.", timer: 1200 },
+      { title: "Горошек", text: "За 5 минут до готовности добавить зелёный горошек. В конце посыпать кинзой.", timer: 300 }
+    ],
+    serveWith: "Подавайте с долькой лайма и острым соусом, хорошо дополнит охлаждённый салат из авокадо.",
+    notes: "Не перемешивайте рис во время варки — так он останется рассыпчатым. Куркуму можно заменить шафраном для более насыщенного цвета."
+  },
+  {
+    id: "lokro-tykvenno-kukuruznoe-ragu", title: "Локро (тыквенно-кукурузное рагу)", forKid: true, kidNote: "Используйте неострые колбаски и не добавляйте острую пасту порции ребёнка.",
+    category: "Суп", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 20, cookTime: 90, time: 110, difficulty: 2, baseServings: 6, kcal: 420,
+    equipment: ["большая кастрюля", "нож"], allergens: [], tags: ["рагу", "тыква", "сытное", "зима"],
+    ingredients: [
+      { name: "Тыква", qty: 600, unit: "г", group: "Овощи", staple: false },
+      { name: "Кукуруза в зёрнах", qty: 400, unit: "г", group: "Заморозка", staple: false },
+      { name: "Белая фасоль варёная", qty: 400, unit: "г", group: "Бакалея", staple: false },
+      { name: "Свиная грудинка", qty: 300, unit: "г", group: "Мясо", staple: false },
+      { name: "Колбаски чоризо", qty: 200, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 3, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Паприка копчёная", qty: 1, unit: "ст.л.", group: "Специи", staple: false },
+      { name: "Кумин", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Вода", qty: 1500, unit: "мл", group: "Прочее", staple: true },
+      { name: "Растительное масло", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Зелёный лук", qty: 1, unit: "пучок", group: "Зелень", staple: false }
+    ],
+    steps: [
+      { title: "Обжарить мясо", text: "Свиную грудинку и чоризо нарезать кусочками, обжарить в кастрюле до румяности.", timer: 480 },
+      { title: "Лук и чеснок", text: "Добавить лук и чеснок, готовить до мягкости, всыпать паприку и кумин." },
+      { title: "Овощи и вода", text: "Добавить нарезанную тыкву, кукурузу и фасоль, залить водой, посолить." },
+      { title: "Варить", text: "Довести до кипения и томить на слабом огне, пока тыква не разварится и не загустит рагу.", timer: 4500 },
+      { title: "Подача", text: "Часть тыквы размять для густоты. Подавать, посыпав зелёным луком." }
+    ],
+    serveWith: "Сверху полейте острой пастой из жареного зелёного лука с паприкой и маслом, подавайте с деревенским хлебом.",
+    notes: "Локро — традиционное блюдо к национальным праздникам Аргентины. Чем дольше томится, тем гуще и вкуснее."
+  },
+  {
+    id: "arepas-s-syrom", title: "Арепас с сыром", forKid: true, kidNote: "",
+    category: "Закуска", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 15, cookTime: 15, time: 30, difficulty: 1, baseServings: 4, kcal: 280,
+    equipment: ["миска", "сковорода"], allergens: ["молоко"], tags: ["кукуруза", "без глютена", "вегетарианское"],
+    ingredients: [
+      { name: "Кукурузная мука масарепа", qty: 250, unit: "г", group: "Бакалея", staple: false },
+      { name: "Тёплая вода", qty: 300, unit: "мл", group: "Прочее", staple: true },
+      { name: "Сыр моцарелла", qty: 150, unit: "г", group: "Молочное", staple: false },
+      { name: "Соль", qty: 1, unit: "ч.л.", group: "Специи", staple: true },
+      { name: "Сливочное масло", qty: 20, unit: "г", group: "Молочное", staple: false },
+      { name: "Растительное масло", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true }
+    ],
+    steps: [
+      { title: "Замесить тесто", text: "Смешать кукурузную муку с солью, постепенно влить тёплую воду и замесить мягкое тесто. Дать постоять.", timer: 300 },
+      { title: "Сформировать", text: "Разделить тесто на шарики и сплющить в лепёшки толщиной около 1 см." },
+      { title: "Обжарить", text: "Жарить на сухой или слегка смазанной сковороде до золотистой корочки с обеих сторон.", timer: 600 },
+      { title: "Начинить", text: "Разрезать тёплую арепу пополам и вложить кусочек сыра и масла, чтобы они расплавились." }
+    ],
+    serveWith: "Подавайте тёплыми на завтрак или как закуску, дополните авокадо, яичницей или фасолью.",
+    notes: "Используйте только предварительно обработанную кукурузную муку (масарепа), обычная кукурузная мука не подойдёт. Тесто не должно трескаться — если суховато, добавьте воды."
+  },
+  {
+    id: "tres-leches-tort-na-treh-molokah", title: "Трес лечес (торт на трёх молоках)", forKid: true, kidNote: "",
+    category: "Десерт", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 30, cookTime: 30, time: 60, difficulty: 2, baseServings: 8, kcal: 380,
+    equipment: ["миксер", "форма для запекания", "духовка"], allergens: ["глютен", "яйца", "молоко"], tags: ["торт", "пропитанный", "праздничный"],
+    ingredients: [
+      { name: "Мука пшеничная", qty: 200, unit: "г", group: "Бакалея", staple: true },
+      { name: "Яйца", qty: 5, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сахар", qty: 200, unit: "г", group: "Бакалея", staple: true },
+      { name: "Разрыхлитель", qty: 1.5, unit: "ч.л.", group: "Бакалея", staple: false },
+      { name: "Сгущённое молоко", qty: 400, unit: "г", group: "Молочное", staple: false },
+      { name: "Сгущённые сливки (evaporated milk)", qty: 350, unit: "мл", group: "Молочное", staple: false },
+      { name: "Сливки 33%", qty: 250, unit: "мл", group: "Молочное", staple: false },
+      { name: "Ванильный экстракт", qty: 1, unit: "ч.л.", group: "Бакалея", staple: false },
+      { name: "Сахарная пудра", qty: 50, unit: "г", group: "Бакалея", staple: false }
+    ],
+    steps: [
+      { title: "Взбить яйца", text: "Взбить яйца с сахаром до пышной светлой массы, добавить ваниль." },
+      { title: "Тесто", text: "Аккуратно вмешать просеянную муку с разрыхлителем, выложить в форму." },
+      { title: "Выпечь", text: "Выпекать бисквит в разогретой до 180°C духовке до сухой шпажки.", timer: 1500 },
+      { title: "Три молока", text: "Смешать сгущённое молоко, сгущённые сливки и часть сливок. Остывший бисквит проколоть вилкой и пропитать смесью." },
+      { title: "Охладить", text: "Убрать торт в холодильник, чтобы он полностью впитал молоко.", timer: 14400 },
+      { title: "Украсить", text: "Взбить оставшиеся сливки с сахарной пудрой и покрыть торт сверху." }
+    ],
+    serveWith: "Подавайте охлаждённым, можно украсить корицей или свежими ягодами.",
+    notes: "Пропитка минимум 4 часа, лучше на ночь — торт должен стать сочным, но не разваливаться. Бисквит специально пористый, чтобы хорошо впитывал молоко."
+  },
+  {
+    id: "alfahores-s-dulse-de-leche", title: "Альфахорес с дульсе-де-лече", forKid: true, kidNote: "",
+    category: "Выпечка", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 30, cookTime: 12, time: 42, difficulty: 2, baseServings: 6, kcal: 220,
+    equipment: ["миксер", "духовка", "формочка-кружок"], allergens: ["глютен", "яйца", "молоко"], tags: ["печенье", "сэндвич", "кокос"],
+    ingredients: [
+      { name: "Кукурузный крахмал", qty: 200, unit: "г", group: "Бакалея", staple: false },
+      { name: "Мука пшеничная", qty: 150, unit: "г", group: "Бакалея", staple: true },
+      { name: "Сливочное масло", qty: 150, unit: "г", group: "Молочное", staple: false },
+      { name: "Сахар", qty: 100, unit: "г", group: "Бакалея", staple: true },
+      { name: "Желтки", qty: 3, unit: "шт", group: "Молочное", staple: false },
+      { name: "Разрыхлитель", qty: 1, unit: "ч.л.", group: "Бакалея", staple: false },
+      { name: "Ванильный экстракт", qty: 1, unit: "ч.л.", group: "Бакалея", staple: false },
+      { name: "Варёная сгущёнка (дульсе-де-лече)", qty: 250, unit: "г", group: "Молочное", staple: false },
+      { name: "Кокосовая стружка", qty: 50, unit: "г", group: "Бакалея", staple: false }
+    ],
+    steps: [
+      { title: "Тесто", text: "Взбить масло с сахаром, добавить желтки и ваниль. Вмешать крахмал, муку и разрыхлитель в гладкое тесто." },
+      { title: "Охладить", text: "Завернуть тесто в плёнку и убрать в холодильник.", timer: 1800 },
+      { title: "Вырезать", text: "Раскатать тесто, вырезать кружочки и выложить на противень." },
+      { title: "Выпечь", text: "Выпекать при 170°C до светло-золотистого низа, не пересушивая.", timer: 720 },
+      { title: "Собрать", text: "Остывшие печенья смазать дульсе-де-лече и соединить попарно." },
+      { title: "Кокос", text: "Обвалять края начинки в кокосовой стружке." }
+    ],
+    serveWith: "Подавайте к кофе или чаю мате, печенье особенно вкусно слегка охлаждённым.",
+    notes: "Печенье должно остаться очень нежным и почти не румяниться. Дульсе-де-лече можно сделать самостоятельно, проварив банку сгущёнки."
+  },
+  {
+    id: "meksikanskiy-sup-tortilya", title: "Мексиканский суп тортилья", forKid: false, kidNote: "Для детей уберите чили и подавайте без острых добавок.",
+    category: "Суп", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 15, cookTime: 25, time: 40, difficulty: 2, baseServings: 4, kcal: 340,
+    equipment: ["кастрюля", "блендер", "сковорода"], allergens: [], tags: ["томатный", "острый", "курица"],
+    ingredients: [
+      { name: "Помидоры", qty: 500, unit: "г", group: "Овощи", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 2, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Перец чили чипотле", qty: 1, unit: "шт", group: "Специи", staple: false },
+      { name: "Куриное филе", qty: 300, unit: "г", group: "Мясо", staple: false },
+      { name: "Куриный бульон", qty: 1000, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Кукурузные тортильи", qty: 4, unit: "шт", group: "Бакалея", staple: false },
+      { name: "Авокадо", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Сыр котиха или фета", qty: 80, unit: "г", group: "Молочное", staple: false },
+      { name: "Лайм", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Кинза", qty: 1, unit: "пучок", group: "Зелень", staple: false },
+      { name: "Растительное масло", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Основа", text: "Обжарить лук и чеснок, добавить помидоры и чипотле, потушить до мягкости." },
+      { title: "Пюре", text: "Пробить смесь блендером до однородности и вернуть в кастрюлю." },
+      { title: "Бульон и курица", text: "Влить бульон, добавить куриное филе, варить до готовности, затем разобрать на волокна.", timer: 1200 },
+      { title: "Чипсы", text: "Тортильи нарезать полосками и обжарить в масле до хрустящей корочки.", timer: 300 },
+      { title: "Подача", text: "Разлить суп по тарелкам, сверху выложить курицу, чипсы, авокадо, сыр и кинзу, сбрызнуть лаймом." }
+    ],
+    serveWith: "Подавайте с долькой лайма и сметаной, хрустящие полоски тортильи добавляйте прямо перед едой.",
+    notes: "Чипотле даёт характерный копчёный аромат — регулируйте количество под остроту. Чипсы кладите в самый последний момент, чтобы они не размокли."
+  },
+  {
+    id: "meksikanskie-enchilady-s-kuricey-v-souse", title: "Мексиканские энчилады с курицей в соусе моле", forKid: false, kidNote: "Острый соус — для детей уменьшите количество чили.",
+    category: "Основное", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 25, cookTime: 35, time: 60, difficulty: 3, baseServings: 4, kcal: 520,
+    equipment: ["сковорода", "блендер", "форма для запекания"], allergens: ["глютен", "орехи"], tags: ["мексиканская кухня", "острое", "сытное"],
+    ingredients: [
+      { name: "Кукурузные тортильи", qty: 8, unit: "шт", group: "Бакалея", staple: false },
+      { name: "Куриное филе", qty: 500, unit: "г", group: "Мясо", staple: false },
+      { name: "Перец чили сушёный анчо", qty: 3, unit: "шт", group: "Специи", staple: false },
+      { name: "Помидоры", qty: 3, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 3, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Тёмный шоколад", qty: 30, unit: "г", group: "Бакалея", staple: false },
+      { name: "Миндаль", qty: 30, unit: "г", group: "Бакалея", staple: false },
+      { name: "Кунжут", qty: 1, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Корица молотая", qty: 0.5, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Куриный бульон", qty: 400, unit: "мл", group: "Прочее", staple: false },
+      { name: "Сыр (типа кесо фреско)", qty: 100, unit: "г", group: "Молочное", staple: false },
+      { name: "Растительное масло", qty: null, unit: "по вкусу", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Отварить курицу", text: "Куриное филе отварите в подсолённой воде до готовности, остудите и разберите на волокна.", timer: 1200 },
+      { title: "Замочить чили", text: "Сушёные перцы анчо очистите от семян, залейте кипятком и оставьте размягчаться.", timer: 900 },
+      { title: "Обжарить овощи", text: "Помидоры, лук и чеснок обжарьте на сухой сковороде до подпалин." },
+      { title: "Сделать соус моле", text: "В блендере соедините чили, обжаренные овощи, миндаль, кунжут, корицу, шоколад и часть бульона. Пробейте до гладкости.", timer: 120 },
+      { title: "Проварить соус", text: "Перелейте соус в сотейник, добавьте остаток бульона и томите, помешивая.", timer: 600 },
+      { title: "Свернуть энчилады", text: "Тортильи слегка прогрейте, наполните курицей, сверните рулетами и выложите в форму." },
+      { title: "Запечь", text: "Залейте энчилады соусом моле, посыпьте сыром и запеките в духовке при 180°C.", timer: 900 }
+    ],
+    serveWith: "Подавайте с порцией риса по-мексикански и долькой лайма. Хорошо дополнить сметаной и свежей кинзой.",
+    notes: "Соус моле получается насыщеннее, если дать ему настояться. Шоколад берите без добавок, минимум 70% какао."
+  },
+  {
+    id: "peruanskiy-kartofelnyy-sup-chupe", title: "Перуанский картофельный суп чупе", forKid: true, kidNote: "Для детей не кладите острую пасту и подавайте без перца.",
+    category: "Суп", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 15, cookTime: 30, time: 45, difficulty: 2, baseServings: 4, kcal: 380,
+    equipment: ["кастрюля"], allergens: ["молоко", "ракообразные"], tags: ["перуанская кухня", "сытное", "согревающее"],
+    ingredients: [
+      { name: "Картофель", qty: 600, unit: "г", group: "Овощи", staple: false },
+      { name: "Креветки", qty: 300, unit: "г", group: "Рыба", staple: false },
+      { name: "Кукуруза в початках", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 2, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Паста ахи амарилло", qty: 1, unit: "ст.л.", group: "Специи", staple: false },
+      { name: "Молоко", qty: 250, unit: "мл", group: "Молочное", staple: false },
+      { name: "Рис", qty: 50, unit: "г", group: "Бакалея", staple: false },
+      { name: "Яйца", qty: 4, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сыр свежий", qty: 80, unit: "г", group: "Молочное", staple: false },
+      { name: "Растительное масло", qty: null, unit: "по вкусу", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Сделать зажарку", text: "Обжарьте мелко нарезанный лук, чеснок и пасту ахи амарилло на масле до мягкости." },
+      { title: "Добавить основу", text: "Влейте воду, добавьте нарезанный картофель, кусочки кукурузы и рис. Варите.", timer: 1200 },
+      { title: "Положить креветки", text: "Добавьте очищенные креветки и варите до их готовности.", timer: 300 },
+      { title: "Влить молоко", text: "Влейте молоко, добавьте кубики сыра, прогрейте не доводя до бурного кипения." },
+      { title: "Припустить яйца", text: "Аккуратно вбейте яйца в суп и дайте им свернуться.", timer: 240 },
+      { title: "Приправить", text: "Посолите по вкусу и сразу подавайте горячим." }
+    ],
+    serveWith: "Подавайте с хрустящим хлебом и долькой лайма. Хорошо посыпать свежей кинзой.",
+    notes: "Паста ахи амарилло даёт перуанский характер; при отсутствии замените мягким жёлтым перцем с щепоткой куркумы."
+  },
+  {
+    id: "venesuelskie-tekenos-syrnye-palochki-v-t", title: "Венесуэльские тэкеньос (сырные палочки в тесте)", forKid: true, kidNote: "Давайте слегка остывшими — расплавленный сыр внутри очень горячий.",
+    category: "Закуска", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 25, cookTime: 15, time: 40, difficulty: 2, baseServings: 4, kcal: 320,
+    equipment: ["сковорода", "миска"], allergens: ["глютен", "молоко", "яйцо"], tags: ["венесуэльская кухня", "жареное", "вечеринка"],
+    ingredients: [
+      { name: "Мука пшеничная", qty: 300, unit: "г", group: "Бакалея", staple: true },
+      { name: "Сыр полутвёрдый белый", qty: 400, unit: "г", group: "Молочное", staple: false },
+      { name: "Яйцо", qty: 1, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сливочное масло", qty: 50, unit: "г", group: "Молочное", staple: false },
+      { name: "Вода", qty: 100, unit: "мл", group: "Прочее", staple: true },
+      { name: "Сахар", qty: 1, unit: "ч.л.", group: "Бакалея", staple: true },
+      { name: "Растительное масло для фритюра", qty: 500, unit: "мл", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Замесить тесто", text: "Смешайте муку, размягчённое масло, яйцо, сахар, соль и воду. Замесите гладкое эластичное тесто." },
+      { title: "Дать отдохнуть", text: "Накройте тесто и оставьте отдохнуть.", timer: 900 },
+      { title: "Нарезать сыр", text: "Сыр нарежьте брусочками длиной около 7 см." },
+      { title: "Обернуть сыр", text: "Раскатайте тесто и нарежьте полосками, по спирали оберните каждый брусок сыра, закрывая концы." },
+      { title: "Разогреть масло", text: "Разогрейте масло во фритюре до 175°C." },
+      { title: "Обжарить", text: "Жарьте тэкеньос порциями до золотистой корочки, обсушите на салфетке.", timer: 240 }
+    ],
+    serveWith: "Подавайте горячими с соусом гуаса (на основе авокадо) или сладким чесночным соусом.",
+    notes: "Сыр должен быть плотным и не слишком солёным, иначе вытечет при жарке. Полностью закрывайте концы тестом."
+  },
+  {
+    id: "kolumbiyskoe-bandeha-paysa", title: "Колумбийское бандеха пайса", forKid: true, kidNote: "Чорисо может быть острым — для детей выбирайте мягкий вариант.",
+    category: "Основное", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 30, cookTime: 60, time: 90, difficulty: 2, baseServings: 4, kcal: 850,
+    equipment: ["кастрюля", "сковорода"], allergens: ["яйцо"], tags: ["колумбийская кухня", "сытное", "комплексное блюдо"],
+    ingredients: [
+      { name: "Красная фасоль", qty: 300, unit: "г", group: "Бакалея", staple: false },
+      { name: "Фарш говяжий", qty: 400, unit: "г", group: "Мясо", staple: false },
+      { name: "Свиная грудинка", qty: 200, unit: "г", group: "Мясо", staple: false },
+      { name: "Колбаса чорисо", qty: 200, unit: "г", group: "Мясо", staple: false },
+      { name: "Рис", qty: 250, unit: "г", group: "Бакалея", staple: false },
+      { name: "Бананы платано", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Яйца", qty: 4, unit: "шт", group: "Молочное", staple: false },
+      { name: "Авокадо", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Помидоры", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Растительное масло", qty: null, unit: "по вкусу", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Сварить фасоль", text: "Замоченную фасоль отварите с кусочком грудинки до мягкости.", timer: 3600 },
+      { title: "Отварить рис", text: "Сварите рассыпчатый белый рис.", timer: 900 },
+      { title: "Сделать огрео", text: "Обжарьте лук и помидоры, добавьте к фасоли для вкуса." },
+      { title: "Обжарить мясо", text: "Обжарьте фарш с луком и помидором, отдельно обжарьте чорисо и оставшуюся грудинку до хруста." },
+      { title: "Пожарить платано", text: "Бананы платано нарежьте и обжарьте до золотистого цвета.", timer: 360 },
+      { title: "Пожарить яйца", text: "Пожарьте глазунью по одному яйцу на порцию." },
+      { title: "Собрать тарелку", text: "Выложите на большую тарелку рис, фасоль, мясо, чорисо, грудинку, платано, яйцо и дольки авокадо." }
+    ],
+    serveWith: "Подавайте с кукурузной лепёшкой арепой и долькой лайма. Это сытное блюдо для большого обеда.",
+    notes: "Бандеха пайса — праздничная тарелка из региона Антьокия. Все компоненты выкладывают рядом, не смешивая."
+  },
+  {
+    id: "brazilskiy-tort-bolu-di-senoura-s-shokol", title: "Бразильский торт болу-ди-сеноура с шоколадной глазурью", forKid: true, kidNote: "",
+    category: "Выпечка", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 20, cookTime: 40, time: 60, difficulty: 2, baseServings: 8, kcal: 420,
+    equipment: ["блендер", "форма для выпечки", "духовка"], allergens: ["глютен", "яйцо", "молоко"], tags: ["бразильская кухня", "морковный пирог", "к чаю"],
+    ingredients: [
+      { name: "Морковь", qty: 300, unit: "г", group: "Овощи", staple: false },
+      { name: "Яйца", qty: 3, unit: "шт", group: "Молочное", staple: false },
+      { name: "Растительное масло", qty: 150, unit: "мл", group: "Бакалея", staple: true },
+      { name: "Сахар", qty: 250, unit: "г", group: "Бакалея", staple: true },
+      { name: "Мука пшеничная", qty: 250, unit: "г", group: "Бакалея", staple: true },
+      { name: "Разрыхлитель", qty: 1, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Какао-порошок", qty: 4, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Молоко", qty: 100, unit: "мл", group: "Молочное", staple: false },
+      { name: "Сливочное масло", qty: 30, unit: "г", group: "Молочное", staple: false }
+    ],
+    steps: [
+      { title: "Пробить основу", text: "Очищенную морковь, яйца, масло и сахар взбейте в блендере до однородности.", timer: 120 },
+      { title: "Замесить тесто", text: "Перелейте в миску, добавьте просеянную муку и разрыхлитель, аккуратно перемешайте." },
+      { title: "Выпечь", text: "Вылейте тесто в смазанную форму и выпекайте при 180°C до сухой зубочистки.", timer: 2100 },
+      { title: "Сварить глазурь", text: "Прогрейте какао, сахар, молоко и сливочное масло до загустения.", timer: 300 },
+      { title: "Полить торт", text: "Тёплую шоколадную глазурь вылейте на остывший корж и дайте схватиться." }
+    ],
+    serveWith: "Подавайте с чашкой кофе или стаканом холодного молока. Классика бразильского полдника.",
+    notes: "Морковь придаёт нежный цвет и влажность; в Бразилии её именно пробивают в блендере, а не трут на тёрке."
+  },
+  {
+    id: "meksikanskiy-desert-arroz-kon-leche", title: "Мексиканский десерт арроз кон лече", forKid: true, kidNote: "",
+    category: "Десерт", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 5, cookTime: 35, time: 40, difficulty: 1, baseServings: 4, kcal: 290,
+    equipment: ["кастрюля"], allergens: ["молоко"], tags: ["мексиканская кухня", "рисовый пудинг", "детям"],
+    ingredients: [
+      { name: "Рис круглозёрный", qty: 200, unit: "г", group: "Бакалея", staple: false },
+      { name: "Молоко", qty: 1000, unit: "мл", group: "Молочное", staple: false },
+      { name: "Сгущённое молоко", qty: 200, unit: "мл", group: "Молочное", staple: false },
+      { name: "Палочка корицы", qty: 1, unit: "шт", group: "Специи", staple: false },
+      { name: "Цедра лимона", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Изюм", qty: 50, unit: "г", group: "Бакалея", staple: false },
+      { name: "Корица молотая", qty: null, unit: "по вкусу", group: "Специи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Проварить рис", text: "Залейте рис водой с палочкой корицы и цедрой, варите до полувпитывания жидкости.", timer: 600 },
+      { title: "Добавить молоко", text: "Влейте молоко и варите на слабом огне, помешивая, пока рис не станет мягким.", timer: 1200 },
+      { title: "Подсластить", text: "Добавьте сгущённое молоко и изюм, прогрейте до густоты.", timer: 300 },
+      { title: "Остудить и подать", text: "Разложите по креманкам, посыпьте молотой корицей. Подавайте тёплым или холодным." }
+    ],
+    serveWith: "Подавайте тёплым или охлаждённым, посыпав корицей. Хорошо сочетается с горячим какао.",
+    notes: "Удалите палочку корицы и цедру перед подачей. Для более кремовой текстуры можно влить немного сливок."
+  },
+  {
+    id: "feyzhoada", title: "Фейжоада", forKid: true, kidNote: "Для ребёнка выберите менее острые колбаски и порцию без жгучих специй.",
+    category: "Основное", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 20, cookTime: 120, time: 140, difficulty: 2, baseServings: 6, kcal: 620,
+    equipment: ["большая кастрюля", "сковорода"], allergens: [], tags: ["бразильская", "сытное", "фасоль"],
+    ingredients: [
+      { name: "Чёрная фасоль", qty: 500, unit: "г", group: "Бакалея", staple: false },
+      { name: "Свиная грудинка копчёная", qty: 300, unit: "г", group: "Мясо", staple: false },
+      { name: "Свиные рёбрышки", qty: 400, unit: "г", group: "Мясо", staple: false },
+      { name: "Колбаски копчёные (лингуиса)", qty: 250, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук репчатый", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 4, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Лавровый лист", qty: 2, unit: "шт", group: "Специи", staple: true },
+      { name: "Апельсин", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Растительное масло", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Чёрный перец", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Замочить фасоль", text: "Промойте чёрную фасоль и замочите в холодной воде минимум на 8 часов или на ночь.", timer: 28800 },
+      { title: "Отварить мясо", text: "В большой кастрюле залейте рёбрышки и грудинку водой, добавьте лавровый лист и варите 40 минут.", timer: 2400 },
+      { title: "Добавить фасоль", text: "Добавьте слитую фасоль, долейте воды, чтобы покрывала. Варите на медленном огне до мягкости.", timer: 3600 },
+      { title: "Обжарить основу", text: "На сковороде обжарьте лук и чеснок на масле, добавьте нарезанные колбаски, подрумяньте." },
+      { title: "Соединить", text: "Переложите зажарку в кастрюлю с фасолью, посолите, поперчите и томите ещё 20 минут до густоты.", timer: 1200 },
+      { title: "Подать", text: "Подавайте с дольками апельсина, который помогает пищеварению." }
+    ],
+    serveWith: "Подавайте с рассыпчатым белым рисом, обжаренной мукой фарофа и нарезанной зеленью капусты. Дольки свежего апельсина — обязательны.",
+    notes: "Классика бразильской кухни. Пассивное время: замачивание фасоли на ночь (8+ часов). Чем дольше томится — тем насыщеннее вкус."
+  },
+  {
+    id: "peruanskoe-seviche-iz-kalmarov-i-kreveto", title: "Перуанское севиче из кальмаров и креветок (мариско)", forKid: false, kidNote: "Острое из-за чили и кислый маринад — не для маленьких детей.",
+    category: "Закуска", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 25, cookTime: 0, time: 25, difficulty: 1, baseServings: 4, kcal: 210,
+    equipment: ["миска", "соковыжималка для цитрусов"], allergens: ["морепродукты"], tags: ["перуанская", "морепродукты", "свежее"],
+    ingredients: [
+      { name: "Креветки очищенные", qty: 300, unit: "г", group: "Рыба", staple: false },
+      { name: "Кальмары", qty: 200, unit: "г", group: "Рыба", staple: false },
+      { name: "Лайм", qty: 8, unit: "шт", group: "Овощи", staple: false },
+      { name: "Красный лук", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Перец чили ахи-лимо", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Кинза", qty: 1, unit: "пучок", group: "Зелень", staple: false },
+      { name: "Сельдерей", qty: 1, unit: "стебель", group: "Овощи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Подготовить морепродукты", text: "Кальмары нарежьте кольцами, бланшируйте 30 секунд в кипятке. Креветки отварите 1 минуту и остудите.", timer: 60 },
+      { title: "Выжать сок", text: "Выжмите сок из лаймов. Тонко нарежьте красный лук и чили, измельчите сельдерей." },
+      { title: "Замариновать", text: "Смешайте морепродукты с соком лайма, луком, чили и солью. Оставьте на 10 минут.", timer: 600 },
+      { title: "Добавить зелень", text: "Перед подачей добавьте рубленую кинзу и перемешайте." }
+    ],
+    serveWith: "Подавайте с отварным сладким бататом, кукурузой чокло и листьями салата. Сок «лече-де-тигре» пьют отдельно.",
+    notes: "В отличие от классики из белой рыбы, тут морепродукты слегка отваривают. Используйте только свежайшие морепродукты."
+  },
+  {
+    id: "meksikanskiy-sup-sopa-de-tortilya-net", title: "Мексиканский суп сопа де тортилья... нет", forKid: true, kidNote: "",
+    category: "Суп", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 20, cookTime: 30, time: 50, difficulty: 2, baseServings: 4, kcal: 320,
+    equipment: ["кастрюля"], allergens: [], tags: ["суп", "курица", "домашнее"],
+    ingredients: [
+      { name: "Куриная грудка", qty: 400, unit: "г", group: "Мясо", staple: false },
+      { name: "Кукуруза в початках", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Картофель", qty: 3, unit: "шт", group: "Овощи", staple: false },
+      { name: "Морковь", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Кабачок", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 3, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Кинза", qty: 1, unit: "пучок", group: "Зелень", staple: false },
+      { name: "Рис", qty: 100, unit: "г", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Чёрный перец", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Сварить бульон", text: "Залейте куриную грудку водой с луком и чесноком, варите 20 минут, снимая пену.", timer: 1200 },
+      { title: "Подготовить овощи", text: "Картофель и морковь нарежьте крупно, кукурузу разрежьте на колечки, кабачок кубиками." },
+      { title: "Добавить овощи", text: "Достаньте курицу, в бульон положите картофель, морковь, кукурузу и рис. Варите 15 минут.", timer: 900 },
+      { title: "Завершить", text: "Курицу разберите на кусочки, верните в суп с кабачком, посолите и варите ещё 5 минут.", timer: 300 },
+      { title: "Подать", text: "Посыпьте свежей кинзой перед подачей." }
+    ],
+    serveWith: "Подавайте с дольками лайма, ломтиками авокадо и тёплыми кукурузными тортильяс.",
+    notes: "Колумбийско-мексиканский домашний суп «кальдо». Сытный и нежный, отлично восстанавливает силы."
+  },
+  {
+    id: "churros-s-shokoladnym-sousom", title: "Чуррос с шоколадным соусом", forKid: true, kidNote: "Жарьте сами — детям только готовое и остывшее, чтобы не обжечься.",
+    category: "Десерт", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 15, cookTime: 20, time: 35, difficulty: 2, baseServings: 4, kcal: 450,
+    equipment: ["кондитерский мешок", "сотейник", "глубокая сковорода"], allergens: ["глютен", "молоко"], tags: ["десерт", "сладкое", "жареное"],
+    ingredients: [
+      { name: "Мука пшеничная", qty: 250, unit: "г", group: "Бакалея", staple: true },
+      { name: "Вода", qty: 250, unit: "мл", group: "Прочее", staple: true },
+      { name: "Сливочное масло", qty: 30, unit: "г", group: "Молочное", staple: false },
+      { name: "Сахар", qty: 100, unit: "г", group: "Бакалея", staple: true },
+      { name: "Корица молотая", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Тёмный шоколад", qty: 150, unit: "г", group: "Бакалея", staple: false },
+      { name: "Молоко", qty: 150, unit: "мл", group: "Молочное", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Масло для фритюра", qty: 500, unit: "мл", group: "Бакалея", staple: true }
+    ],
+    steps: [
+      { title: "Сделать тесто", text: "Доведите воду с маслом и щепоткой соли до кипения, всыпьте муку и быстро размешайте до однородного теста." },
+      { title: "Остудить", text: "Дайте тесту немного остыть, переложите в кондитерский мешок с фигурной насадкой." },
+      { title: "Разогреть масло", text: "Разогрейте масло во фритюре до 180°C." },
+      { title: "Жарить чуррос", text: "Выдавливайте полоски теста в масло, жарьте до золотистой корочки около 3 минут, обсушите.", timer: 180 },
+      { title: "Обвалять", text: "Смешайте сахар с корицей и обваляйте горячие чуррос." },
+      { title: "Сделать соус", text: "Растопите шоколад с тёплым молоком до гладкого густого соуса." }
+    ],
+    serveWith: "Подавайте горячими, обмакивая в густой горячий шоколад. Идеально к чашке кофе.",
+    notes: "Классика испано-мексиканской традиции. Тесто выдавливайте сразу в масло — так чуррос получаются хрустящими."
+  },
+  {
+    id: "venesuelskie-kukuruznye-oladi-kashapas-s", title: "Венесуэльские кукурузные оладьи кашапас с сыром", forKid: true, kidNote: "",
+    category: "Выпечка", cuisine: "Латиноамериканская", photo: "",
+    prepTime: 15, cookTime: 15, time: 30, difficulty: 1, baseServings: 4, kcal: 380,
+    equipment: ["блендер", "сковорода"], allergens: ["молоко"], tags: ["венесуэльская", "кукуруза", "сыр"],
+    ingredients: [
+      { name: "Кукуруза сладкая (зёрна)", qty: 500, unit: "г", group: "Заморозка", staple: false },
+      { name: "Кукурузная мука", qty: 3, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Молоко", qty: 100, unit: "мл", group: "Молочное", staple: false },
+      { name: "Сахар", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Сливочное масло", qty: 30, unit: "г", group: "Молочное", staple: false },
+      { name: "Сыр мягкий (моцарелла или фета)", qty: 200, unit: "г", group: "Молочное", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Сделать тесто", text: "Измельчите кукурузу с молоком в блендере до густой массы, добавьте муку, сахар и соль." },
+      { title: "Дать загустеть", text: "Оставьте тесто на 10 минут, чтобы мука набухла.", timer: 600 },
+      { title: "Жарить", text: "На сковороде с маслом выложите порции теста, жарьте по 3-4 минуты с каждой стороны до золотистости.", timer: 240 },
+      { title: "Наполнить", text: "На горячую кашапу положите ломтик сыра, сложите пополам, чтобы сыр расплавился." }
+    ],
+    serveWith: "Подавайте сложенными пополам с тающим сыром внутри, можно сбрызнуть мёдом или подать со сметаной.",
+    notes: "Венесуэльские сладко-солёные кукурузные оладьи. Тесто должно быть густым, как для оладий, а не жидким."
+  },
+  {
+    id: "banica", title: "Баница", forKid: true, kidNote: "",
+    category: "Выпечка", cuisine: "Болгарская", photo: "",
+    prepTime: 20, cookTime: 40, time: 60, difficulty: 2, baseServings: 6, kcal: 380,
+    equipment: ["Духовка", "Круглая форма"], allergens: ["глютен", "яйца", "молоко"], tags: ["болгарская кухня", "завтрак", "слоёное тесто"],
+    ingredients: [
+      { name: "Тесто фило", qty: 400, unit: "г", group: "Заморозка", staple: false },
+      { name: "Брынза болгарская (сирене)", qty: 400, unit: "г", group: "Молочное", staple: false },
+      { name: "Яйца", qty: 4, unit: "шт", group: "Молочное", staple: false },
+      { name: "Йогурт натуральный", qty: 200, unit: "г", group: "Молочное", staple: false },
+      { name: "Сливочное масло", qty: 80, unit: "г", group: "Молочное", staple: true },
+      { name: "Подсолнечное масло", qty: 50, unit: "мл", group: "Бакалея", staple: true },
+      { name: "Сода", qty: 0.5, unit: "ч.л.", group: "Бакалея", staple: true }
+    ],
+    steps: [
+      { title: "Начинка", text: "Раскрошите брынзу вилкой, добавьте взбитые яйца, йогурт и соду. Хорошо перемешайте в однородную массу." },
+      { title: "Сборка", text: "Растопите сливочное масло, смешайте с подсолнечным. Смажьте лист фило, выложите начинку полоской, сверните рулетом." },
+      { title: "Укладка", text: "Уложите рулеты спиралью в смазанную круглую форму. Смажьте сверху оставшимся маслом." },
+      { title: "Выпечка", text: "Выпекайте в разогретой до 180°C духовке до золотистой румяной корочки.", timer: 2400 }
+    ],
+    serveWith: "Подавайте тёплой с айраном или болгарским йогуртом, можно с чашкой чая на завтрак.",
+    notes: "Классически в баницу прячут записочки с пожеланиями на Новый год. Дайте слегка остыть перед нарезкой, чтобы начинка схватилась."
+  },
+  {
+    id: "bob-chorba-fasolevyy-sup", title: "Боб чорба (фасолевый суп)", forKid: true, kidNote: "Для ребёнка не добавляйте острый перец.",
+    category: "Суп", cuisine: "Болгарская", photo: "",
+    prepTime: 15, cookTime: 90, time: 105, difficulty: 1, baseServings: 4, kcal: 260,
+    equipment: ["Кастрюля"], allergens: [], tags: ["болгарская кухня", "постное", "суп"],
+    ingredients: [
+      { name: "Белая фасоль сухая", qty: 300, unit: "г", group: "Бакалея", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Морковь", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Помидоры", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Перец сладкий красный", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Мята сушёная (джоджен)", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Паприка молотая", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Подсолнечное масло", qty: 50, unit: "мл", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Замачивание", text: "Замочите фасоль в холодной воде на ночь, затем слейте воду." },
+      { title: "Варка фасоли", text: "Залейте фасоль свежей водой и варите до полуготовности, первую воду после закипания можно слить.", timer: 3600 },
+      { title: "Овощи", text: "Нарежьте лук, морковь, перец и помидоры. Добавьте в суп вместе с маслом и паприкой." },
+      { title: "Доводка", text: "Варите до мягкости фасоли, посолите. В конце добавьте сушёную мяту.", timer: 1800 }
+    ],
+    serveWith: "Подавайте горячим со свежим деревенским хлебом и острым перчиком для любителей.",
+    notes: "Сушёная мята (джоджен) — обязательный аутентичный акцент болгарской боб чорбы. Не солите фасоль в начале варки, иначе она будет жёсткой."
+  },
+  {
+    id: "kyufte-po-bolgarski", title: "Кюфте по-болгарски", forKid: true, kidNote: "Уменьшите чёрный перец для детской порции.",
+    category: "Основное", cuisine: "Болгарская", photo: "",
+    prepTime: 20, cookTime: 15, time: 35, difficulty: 2, baseServings: 4, kcal: 340,
+    equipment: ["Сковорода"], allergens: ["глютен", "яйца"], tags: ["болгарская кухня", "мясное", "гриль"],
+    ingredients: [
+      { name: "Фарш свино-говяжий", qty: 500, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Хлеб белый чёрствый", qty: 50, unit: "г", group: "Бакалея", staple: false },
+      { name: "Чубрица (чабер)", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Зира молотая", qty: 0.5, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Яйцо", qty: 1, unit: "шт", group: "Молочное", staple: false },
+      { name: "Подсолнечное масло", qty: 40, unit: "мл", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Перец чёрный", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Замес", text: "Замочите хлеб в воде и отожмите. Смешайте фарш с тёртым луком, хлебом, яйцом, чубрицей, зирой, солью и перцем." },
+      { title: "Отдых", text: "Хорошо вымесите и оставьте фарш в холодильнике, чтобы вкусы соединились.", timer: 1800 },
+      { title: "Формовка", text: "Сформируйте плоские круглые котлеты толщиной около 1,5 см." },
+      { title: "Жарка", text: "Обжарьте кюфте на разогретой сковороде или гриле с двух сторон до румяной корочки.", timer: 720 }
+    ],
+    serveWith: "Подавайте с картофелем фри, лютеницей и свежими овощами, посыпав зеленью.",
+    notes: "Чубрица (чабер) — ключевая болгарская специя для кюфте. Можно жарить на углях для аутентичного аромата."
+  },
+  {
+    id: "lyutenica", title: "Лютеница", forKid: true, kidNote: "",
+    category: "Закуска", cuisine: "Болгарская", photo: "",
+    prepTime: 20, cookTime: 80, time: 100, difficulty: 2, baseServings: 6, kcal: 120,
+    equipment: ["Духовка", "Блендер", "Кастрюля"], allergens: [], tags: ["болгарская кухня", "овощное", "заготовка"],
+    ingredients: [
+      { name: "Перец сладкий красный", qty: 1, unit: "кг", group: "Овощи", staple: false },
+      { name: "Помидоры", qty: 0.5, unit: "кг", group: "Овощи", staple: false },
+      { name: "Баклажаны", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 3, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Подсолнечное масло", qty: 100, unit: "мл", group: "Бакалея", staple: true },
+      { name: "Сахар", qty: 1, unit: "ч.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Запекание", text: "Запеките перец и баклажаны в духовке до мягкости и подпалин, затем накройте и дайте остыть.", timer: 2400 },
+      { title: "Очистка", text: "Снимите кожицу с перца и баклажанов, удалите семена." },
+      { title: "Измельчение", text: "Прокрутите овощи и помидоры через мясорубку или измельчите блендером." },
+      { title: "Уваривание", text: "Тушите массу с маслом, чесноком, сахаром и солью на медленном огне до загустения, помешивая.", timer: 2700 }
+    ],
+    serveWith: "Подавайте намазав на свежий хлеб, как соус к мясу или с брынзой на завтрак.",
+    notes: "Чем дольше увариваете, тем гуще и насыщеннее лютеница. Готовую можно закатать в банки на зиму."
+  },
+  {
+    id: "gyuvech", title: "Гювеч", forKid: true, kidNote: "",
+    category: "Основное", cuisine: "Болгарская", photo: "",
+    prepTime: 25, cookTime: 60, time: 85, difficulty: 2, baseServings: 4, kcal: 400,
+    equipment: ["Глиняный горшок", "Духовка"], allergens: [], tags: ["болгарская кухня", "запеканка", "мясное"],
+    ingredients: [
+      { name: "Свинина", qty: 500, unit: "г", group: "Мясо", staple: false },
+      { name: "Картофель", qty: 4, unit: "шт", group: "Овощи", staple: false },
+      { name: "Перец сладкий", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Баклажан", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Помидоры", qty: 3, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чубрица (чабер)", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Паприка молотая", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Подсолнечное масло", qty: 60, unit: "мл", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Обжарка мяса", text: "Нарежьте свинину кубиками и обжарьте с луком в глиняном горшке или сотейнике до румянца." },
+      { title: "Овощи", text: "Нарежьте кубиками картофель, перец, баклажан и помидоры, добавьте к мясу с паприкой и чубрицей." },
+      { title: "Заливка", text: "Посолите, влейте немного воды или томатного сока, перемешайте." },
+      { title: "Запекание", text: "Тушите в духовке под крышкой при 180°C до мягкости овощей и мяса.", timer: 3600 }
+    ],
+    serveWith: "Подавайте прямо в горшочке с деревенским хлебом и стаканом красного вина.",
+    notes: "Традиционно гювеч готовят в глиняной посуде, которая даёт особый аромат. Овощи можно менять по сезону."
+  },
+  {
+    id: "garash-shokoladnyy-tort", title: "Гараш (шоколадный торт)", forKid: true, kidNote: "Содержит орехи — не давайте детям с аллергией.",
+    category: "Десерт", cuisine: "Болгарская", photo: "",
+    prepTime: 30, cookTime: 20, time: 50, difficulty: 3, baseServings: 8, kcal: 520,
+    equipment: ["Духовка", "Миксер"], allergens: ["орехи", "яйца", "молоко", "глютен"], tags: ["болгарская кухня", "торт", "шоколад"],
+    ingredients: [
+      { name: "Грецкие орехи молотые", qty: 250, unit: "г", group: "Бакалея", staple: false },
+      { name: "Яйца", qty: 8, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сахар", qty: 200, unit: "г", group: "Бакалея", staple: true },
+      { name: "Тёмный шоколад", qty: 200, unit: "г", group: "Бакалея", staple: false },
+      { name: "Сливочное масло", qty: 200, unit: "г", group: "Молочное", staple: true },
+      { name: "Мука", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Сливки 33%", qty: 100, unit: "мл", group: "Молочное", staple: false }
+    ],
+    steps: [
+      { title: "Коржи", text: "Взбейте белки с сахаром в пышную массу, аккуратно вмешайте молотые орехи, желтки и муку." },
+      { title: "Выпечка", text: "Выпекайте тонкие ореховые коржи по очереди при 170°C до готовности.", timer: 900 },
+      { title: "Крем", text: "Растопите шоколад со сливками, остудите и взбейте с мягким сливочным маслом до пышного крема." },
+      { title: "Сборка", text: "Промажьте коржи кремом, соберите торт и покройте сверху шоколадной глазурью. Охладите.", timer: 7200 }
+    ],
+    serveWith: "Подавайте тонкими ломтиками с чашкой кофе эспрессо.",
+    notes: "Гараш — болгарский безмучной (почти) ореховый торт, придуманный венским кондитером в Софии. Дайте торту настояться в холодильнике несколько часов перед подачей."
+  },
+  {
+    id: "kavrma", title: "Кавърма", forKid: true, kidNote: "Для детей уменьшите количество красного перца.",
+    category: "Основное", cuisine: "Болгарская", photo: "",
+    prepTime: 15, cookTime: 50, time: 65, difficulty: 2, baseServings: 4, kcal: 480,
+    equipment: ["Глиняные горшочки", "Сковорода"], allergens: [], tags: ["мясо", "тушёное", "сытное"],
+    ingredients: [
+      { name: "Свинина (лопатка)", qty: 600, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук репчатый", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Болгарский перец", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Помидоры", qty: 3, unit: "шт", group: "Овощи", staple: false },
+      { name: "Грибы шампиньоны", qty: 200, unit: "г", group: "Овощи", staple: false },
+      { name: "Чабер (чубрица)", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Красный молотый перец", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Растительное масло", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Чёрный перец", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Обжарить мясо", text: "Свинину нарежьте кубиками и обжарьте на масле до румяной корочки.", timer: 600 },
+      { title: "Добавить овощи", text: "Добавьте нарезанный лук, перец и грибы, обжаривайте до мягкости.", timer: 480 },
+      { title: "Томаты и специи", text: "Влейте протёртые помидоры, всыпьте чабер, красный перец, соль и чёрный перец." },
+      { title: "Тушить", text: "Переложите всё в горшочки и тушите в духовке при 180°C до готовности.", timer: 1800 }
+    ],
+    serveWith: "Подавайте прямо в горшочках с ломтём свежего хлеба и бокалом красного вина.",
+    notes: "Классически кавърму готовят в индивидуальных глиняных горшочках; иногда сверху запекают яйцо."
+  },
+  {
+    id: "kurban-chorba", title: "Курбан чорба", forKid: true, kidNote: "Уберите острый перец из детской порции.",
+    category: "Суп", cuisine: "Болгарская", photo: "",
+    prepTime: 20, cookTime: 90, time: 110, difficulty: 2, baseServings: 6, kcal: 320,
+    equipment: ["Большая кастрюля"], allergens: [], tags: ["суп", "мясной", "праздничный"],
+    ingredients: [
+      { name: "Баранина на кости", qty: 800, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук репчатый", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Морковь", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Болгарский перец", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Помидоры", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Рис", qty: 80, unit: "г", group: "Бакалея", staple: false },
+      { name: "Красный молотый перец", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Чабер (чубрица)", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Растительное масло", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Петрушка", qty: 1, unit: "пучок", group: "Зелень", staple: false }
+    ],
+    steps: [
+      { title: "Сварить мясо", text: "Баранину залейте холодной водой, доведите до кипения и снимите пену, варите до мягкости.", timer: 3600 },
+      { title: "Поджарка", text: "Обжарьте лук, морковь и перец на масле, добавьте красный перец и помидоры." },
+      { title: "Соединить", text: "Снимите мясо с кости, нарежьте и верните в бульон вместе с поджаркой и рисом." },
+      { title: "Доварить", text: "Варите до готовности риса, посолите, добавьте чабер.", timer: 1200 },
+      { title: "Подача", text: "Посыпьте свежей петрушкой перед подачей." }
+    ],
+    serveWith: "Подавайте горячей с белым хлебом и острым перцем для любителей.",
+    notes: "Курбан чорба — традиционный ритуальный суп, который готовят на праздники и сельские торжества."
+  },
+  {
+    id: "kopoolu", title: "Кьопоолу", forKid: true, kidNote: "",
+    category: "Закуска", cuisine: "Болгарская", photo: "",
+    prepTime: 15, cookTime: 40, time: 55, difficulty: 1, baseServings: 4, kcal: 180,
+    equipment: ["Духовка", "Блендер"], allergens: [], tags: ["закуска", "овощи", "веган"],
+    ingredients: [
+      { name: "Баклажаны", qty: 3, unit: "шт", group: "Овощи", staple: false },
+      { name: "Болгарский перец", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 3, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Помидор", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Оливковое масло", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Винный уксус", qty: 1, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Петрушка", qty: 0.5, unit: "пучок", group: "Зелень", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Запечь овощи", text: "Баклажаны и перцы запеките в духовке при 220°C до мягкости и обугленной кожуры.", timer: 2400 },
+      { title: "Очистить", text: "Дайте остыть, снимите кожуру и удалите семена из перцев." },
+      { title: "Измельчить", text: "Мякоть мелко порубите ножом или пробейте блендером с чесноком." },
+      { title: "Заправить", text: "Добавьте масло, уксус, соль, рубленую петрушку и тёртый помидор, перемешайте." }
+    ],
+    serveWith: "Подавайте как намазку на свежий хлеб или гарнир к мясу на гриле.",
+    notes: "Не пробивайте слишком сильно — кьопоолу должно сохранять лёгкую текстуру."
+  },
+  {
+    id: "mlechna-banica-mlechnica", title: "Млечна баница (млечница)", forKid: true, kidNote: "",
+    category: "Десерт", cuisine: "Болгарская", photo: "",
+    prepTime: 20, cookTime: 45, time: 65, difficulty: 2, baseServings: 6, kcal: 360,
+    equipment: ["Форма для запекания", "Духовка"], allergens: ["глютен", "молоко", "яйца"], tags: ["десерт", "сладкое", "молочное"],
+    ingredients: [
+      { name: "Тесто фило", qty: 400, unit: "г", group: "Заморозка", staple: false },
+      { name: "Молоко", qty: 700, unit: "мл", group: "Молочное", staple: false },
+      { name: "Яйца", qty: 4, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сахар", qty: 150, unit: "г", group: "Бакалея", staple: true },
+      { name: "Сливочное масло", qty: 80, unit: "г", group: "Молочное", staple: false },
+      { name: "Ванильный сахар", qty: 1, unit: "ч.л.", group: "Бакалея", staple: false }
+    ],
+    steps: [
+      { title: "Выложить тесто", text: "Листы фило слегка скомкайте и уложите в смазанную маслом форму." },
+      { title: "Залить", text: "Взбейте яйца с сахаром, молоком и ванилью, равномерно залейте тесто." },
+      { title: "Пропитать", text: "Дайте постоять 10 минут, чтобы тесто впитало заливку.", timer: 600 },
+      { title: "Запечь", text: "Сбрызните растопленным маслом и выпекайте при 180°C до золотистой корочки.", timer: 2700 }
+    ],
+    serveWith: "Подавайте тёплой или холодной, присыпав сахарной пудрой, с чашкой чая.",
+    notes: "Млечница вкусна и на следующий день; храните в холодильнике под плёнкой."
+  },
+  {
+    id: "tutmanik", title: "Тутманик", forKid: true, kidNote: "",
+    category: "Выпечка", cuisine: "Болгарская", photo: "",
+    prepTime: 30, cookTime: 40, time: 70, difficulty: 2, baseServings: 8, kcal: 320,
+    equipment: ["Форма для запекания", "Духовка"], allergens: ["глютен", "молоко", "яйца"], tags: ["выпечка", "хлеб", "сыр"],
+    ingredients: [
+      { name: "Мука", qty: 500, unit: "г", group: "Бакалея", staple: true },
+      { name: "Молоко", qty: 250, unit: "мл", group: "Молочное", staple: false },
+      { name: "Сухие дрожжи", qty: 7, unit: "г", group: "Бакалея", staple: false },
+      { name: "Брынза (сирене)", qty: 250, unit: "г", group: "Молочное", staple: false },
+      { name: "Яйца", qty: 2, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сливочное масло", qty: 70, unit: "г", group: "Молочное", staple: false },
+      { name: "Сахар", qty: 1, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: 1, unit: "ч.л.", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Опара", text: "Разведите дрожжи в тёплом молоке с сахаром, оставьте на 10 минут.", timer: 600 },
+      { title: "Замесить тесто", text: "Смешайте муку, соль, яйцо, опару и мягкое масло, замесите мягкое тесто." },
+      { title: "Расстойка", text: "Накройте и дайте подойти в тёплом месте до увеличения вдвое." },
+      { title: "Сформировать", text: "Тесто разделите на кусочки, обмакните в масло, выложите в форму, переслаивая раскрошенной брынзой." },
+      { title: "Выпечь", text: "Смажьте взбитым яйцом и выпекайте при 180°C до румяности.", timer: 2400 }
+    ],
+    serveWith: "Подавайте тёплым на завтрак с айраном или болгарским кислым молоком.",
+    notes: "Расстойка занимает около часа — это пассивное время, не входит в активное."
+  },
+  {
+    id: "sarmi-s-vinogradnymi-listyami", title: "Сарми с виноградными листьями", forKid: true, kidNote: "Для детей уменьшите красный перец и мяту.",
+    category: "Основное", cuisine: "Болгарская", photo: "",
+    prepTime: 40, cookTime: 60, time: 100, difficulty: 3, baseServings: 5, kcal: 290,
+    equipment: ["Кастрюля с толстым дном"], allergens: [], tags: ["голубцы", "рис", "традиционное"],
+    ingredients: [
+      { name: "Виноградные листья", qty: 40, unit: "шт", group: "Овощи", staple: false },
+      { name: "Рис", qty: 250, unit: "г", group: "Бакалея", staple: false },
+      { name: "Фарш свино-говяжий", qty: 400, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук репчатый", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чабер (чубрица)", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Мята сушёная", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Красный молотый перец", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Растительное масло", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Подготовить листья", text: "Виноградные листья ошпарьте кипятком, чтобы стали эластичными.", timer: 120 },
+      { title: "Начинка", text: "Обжарьте лук, смешайте с рисом, фаршем, специями и солью." },
+      { title: "Завернуть", text: "На каждый лист положите немного начинки и сверните плотным рулетиком." },
+      { title: "Уложить", text: "Плотно уложите сармы в кастрюлю, залейте водой почти до верха." },
+      { title: "Тушить", text: "Накройте тарелкой-гнётом и томите на медленном огне до готовности.", timer: 3000 }
+    ],
+    serveWith: "Подавайте тёплыми с ложкой густого болгарского йогурта.",
+    notes: "Гнёт-тарелка сверху не даёт сармам развернуться при варке."
+  },
+  {
+    id: "musaka-po-bolgarski", title: "Мусака по-болгарски", forKid: true, kidNote: "Уменьшите количество перца для детей.",
+    category: "Основное", cuisine: "Болгарская", photo: "",
+    prepTime: 20, cookTime: 50, time: 70, difficulty: 2, baseServings: 6, kcal: 360,
+    equipment: ["форма для запекания", "сковорода"], allergens: ["яйца", "молоко", "глютен"], tags: ["запеканка", "сытное", "семейное"],
+    ingredients: [
+      { name: "Картофель", qty: 1000, unit: "г", group: "Овощи", staple: false },
+      { name: "Свино-говяжий фарш", qty: 600, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук репчатый", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Помидоры", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Морковь", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Йогурт натуральный", qty: 400, unit: "г", group: "Молочное", staple: false },
+      { name: "Яйца", qty: 2, unit: "шт", group: "Молочное", staple: false },
+      { name: "Мука", qty: 1, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Паприка молотая", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Растительное масло", qty: 4, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Чёрный перец", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Обжарить лук", text: "Лук и морковь мелко нарежьте, обжарьте на масле до мягкости в большой сковороде." },
+      { title: "Добавить фарш", text: "Выложите фарш, обжаривайте, разбивая комки, до изменения цвета. Добавьте паприку, соль и перец." },
+      { title: "Помидоры", text: "Добавьте тёртые помидоры, тушите 5 минут.", timer: 300 },
+      { title: "Картофель", text: "Картофель нарежьте кубиками, смешайте с фаршем и выложите в форму. Влейте немного воды." },
+      { title: "Запекание", text: "Запекайте при 200°C около 35 минут, пока картофель не станет мягким.", timer: 2100 },
+      { title: "Заливка", text: "Взбейте йогурт с яйцами и мукой, посолите. Залейте мусаку и верните в духовку на 15 минут до золотистой корочки.", timer: 900 }
+    ],
+    serveWith: "Подавайте горячей со свежим салатом из помидоров и огурцов или со стаканом айрана.",
+    notes: "Картофельную мусаку часто готовят с молодым картофелем. Дайте блюду постоять 10 минут перед нарезкой."
+  },
+  {
+    id: "bob-yahniya-tushenaya-fasol", title: "Боб яхния (тушёная фасоль)", forKid: true, kidNote: "",
+    category: "Основное", cuisine: "Болгарская", photo: "",
+    prepTime: 15, cookTime: 90, time: 105, difficulty: 1, baseServings: 4, kcal: 290,
+    equipment: ["кастрюля", "сковорода"], allergens: [], tags: ["постное", "веган", "бобовые"],
+    ingredients: [
+      { name: "Фасоль белая сухая", qty: 400, unit: "г", group: "Бакалея", staple: false },
+      { name: "Лук репчатый", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Морковь", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Помидоры", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Перец сладкий красный", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Паприка молотая", qty: 1, unit: "ст.л.", group: "Специи", staple: false },
+      { name: "Мята сушёная", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Растительное масло", qty: 4, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Чубрица (чабер)", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Замочить фасоль", text: "Замочите фасоль на ночь, затем отварите до полуготовности в свежей воде около 1 часа.", timer: 3600 },
+      { title: "Обжарка", text: "Лук, морковь и перец нарежьте, обжарьте на масле до мягкости." },
+      { title: "Паприка и томаты", text: "Добавьте паприку, тёртые помидоры, чубрицу и мяту. Прогрейте пару минут." },
+      { title: "Тушение", text: "Соедините фасоль с зажаркой, добавьте немного отвара, тушите 25 минут на медленном огне.", timer: 1500 },
+      { title: "Готовность", text: "Посолите в конце, дайте настояться под крышкой 10 минут." }
+    ],
+    serveWith: "Подавайте с ломтем деревенского хлеба и маринованными перцами или луком.",
+    notes: "Чубрица — ключевая болгарская специя для фасоли. Солите только в конце, иначе фасоль будет жёсткой."
+  },
+  {
+    id: "snezhanka-salat-iz-yogurta-s-ogurcom", title: "Снежанка (салат из йогурта с огурцом)", forKid: true, kidNote: "Можно уменьшить чеснок.",
+    category: "Закуска", cuisine: "Болгарская", photo: "",
+    prepTime: 15, cookTime: 0, time: 15, difficulty: 1, baseServings: 4, kcal: 180,
+    equipment: ["миска", "тёрка"], allergens: ["молоко", "орехи"], tags: ["холодное", "вегетарианское", "йогурт"],
+    ingredients: [
+      { name: "Йогурт густой (цеженый)", qty: 500, unit: "г", group: "Молочное", staple: false },
+      { name: "Огурцы", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Чеснок", qty: 2, unit: "зубчик", group: "Овощи", staple: false },
+      { name: "Грецкие орехи", qty: 50, unit: "г", group: "Бакалея", staple: false },
+      { name: "Укроп", qty: 1, unit: "пучок", group: "Зелень", staple: false },
+      { name: "Оливковое масло", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Отцедить йогурт", text: "Если йогурт жидкий, откиньте его на марлю на 2 часа, чтобы стал густым.", timer: 7200 },
+      { title: "Огурцы", text: "Огурцы очистите и натрите или мелко нарежьте, слегка отожмите лишний сок." },
+      { title: "Смешать", text: "Соедините йогурт, огурцы, измельчённый чеснок, рубленый укроп и орехи." },
+      { title: "Заправить", text: "Добавьте оливковое масло, посолите, перемешайте и охладите перед подачей." }
+    ],
+    serveWith: "Подавайте охлаждённой как закуску с лепёшкой или к мясу на гриле.",
+    notes: "Снежанка — густая версия таратора. Чем гуще йогурт, тем лучше. Можно добавить щепотку молотых орехов сверху."
+  },
+  {
+    id: "chushki-byurek-farshirovannyy-perec-syro", title: "Чушки бюрек (фаршированный перец сыром)", forKid: true, kidNote: "",
+    category: "Закуска", cuisine: "Болгарская", photo: "",
+    prepTime: 20, cookTime: 30, time: 50, difficulty: 2, baseServings: 4, kcal: 320,
+    equipment: ["сковорода", "духовка"], allergens: ["молоко", "яйца", "глютен"], tags: ["сыр", "перец", "жареное"],
+    ingredients: [
+      { name: "Перец сладкий", qty: 8, unit: "шт", group: "Овощи", staple: false },
+      { name: "Сыр брынза", qty: 300, unit: "г", group: "Молочное", staple: false },
+      { name: "Яйца", qty: 2, unit: "шт", group: "Молочное", staple: false },
+      { name: "Петрушка", qty: 1, unit: "пучок", group: "Зелень", staple: false },
+      { name: "Мука", qty: 100, unit: "г", group: "Бакалея", staple: true },
+      { name: "Растительное масло", qty: 200, unit: "мл", group: "Бакалея", staple: true },
+      { name: "Чёрный перец", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Запечь перцы", text: "Запеките перцы при 220°C до мягкости, остудите и снимите кожицу, оставив плодоножку.", timer: 1500 },
+      { title: "Начинка", text: "Разомните брынзу вилкой, смешайте с одним яйцом, рубленой петрушкой и перцем." },
+      { title: "Наполнить", text: "Аккуратно надрежьте перцы и нафаршируйте сырной массой." },
+      { title: "Кляр", text: "Обваляйте перцы в муке, затем во взбитом яйце." },
+      { title: "Обжарка", text: "Обжарьте перцы в разогретом масле до золотистой корочки со всех сторон.", timer: 240 }
+    ],
+    serveWith: "Подавайте горячими как закуску с долькой лимона или ложкой густого йогурта.",
+    notes: "Берите мясистые красные перцы. Можно запекать перцы заранее и хранить очищенными."
+  },
+  {
+    id: "banica-s-tykvoy-tikvenik", title: "Баница с тыквой (тиквеник)", forKid: true, kidNote: "",
+    category: "Выпечка", cuisine: "Болгарская", photo: "",
+    prepTime: 25, cookTime: 40, time: 65, difficulty: 2, baseServings: 8, kcal: 330,
+    equipment: ["форма для запекания", "тёрка"], allergens: ["глютен", "орехи", "молоко"], tags: ["сладкое", "тыква", "к чаю"],
+    ingredients: [
+      { name: "Тесто фило", qty: 500, unit: "г", group: "Заморозка", staple: false },
+      { name: "Тыква", qty: 800, unit: "г", group: "Овощи", staple: false },
+      { name: "Сахар", qty: 150, unit: "г", group: "Бакалея", staple: true },
+      { name: "Грецкие орехи", qty: 100, unit: "г", group: "Бакалея", staple: false },
+      { name: "Корица молотая", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Сливочное масло", qty: 100, unit: "г", group: "Молочное", staple: true },
+      { name: "Сахарная пудра", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false }
+    ],
+    steps: [
+      { title: "Натереть тыкву", text: "Тыкву очистите и натрите на крупной тёрке. Слегка отожмите лишний сок." },
+      { title: "Начинка", text: "Смешайте тыкву с сахаром, рублеными орехами и корицей." },
+      { title: "Собрать", text: "Лист фило смажьте растопленным маслом, выложите начинку, сверните в рулет. Повторите со всеми листами." },
+      { title: "Уложить", text: "Уложите рулеты спиралью в смазанную форму, смажьте маслом сверху." },
+      { title: "Выпечка", text: "Выпекайте при 180°C около 40 минут до золотистого цвета.", timer: 2400 },
+      { title: "Подача", text: "Остудите и присыпьте сахарной пудрой." }
+    ],
+    serveWith: "Подавайте тёплым или холодным к чаю, можно с ложкой йогурта.",
+    notes: "Тиквеник — традиционная осенне-зимняя сладкая баница. Не отжимайте тыкву слишком сильно, иначе будет суховато."
+  },
+  {
+    id: "krem-karamel-po-bolgarski", title: "Крем карамел по-болгарски", forKid: true, kidNote: "",
+    category: "Десерт", cuisine: "Болгарская", photo: "",
+    prepTime: 15, cookTime: 45, time: 60, difficulty: 2, baseServings: 6, kcal: 220,
+    equipment: ["формочки", "противень", "сковорода"], allergens: ["яйца", "молоко"], tags: ["сладкое", "молочное", "холодное"],
+    ingredients: [
+      { name: "Молоко", qty: 500, unit: "мл", group: "Молочное", staple: false },
+      { name: "Яйца", qty: 4, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сахар", qty: 150, unit: "г", group: "Бакалея", staple: true },
+      { name: "Сахар для карамели", qty: 120, unit: "г", group: "Бакалея", staple: true },
+      { name: "Ванильный сахар", qty: 1, unit: "пакетик", group: "Бакалея", staple: false }
+    ],
+    steps: [
+      { title: "Карамель", text: "Растопите сахар для карамели на сковороде до янтарного цвета, разлейте по формочкам.", timer: 240 },
+      { title: "Смешать основу", text: "Взбейте яйца с сахаром и ванилью, влейте тёплое молоко, размешайте." },
+      { title: "Залить", text: "Процедите смесь и разлейте по формочкам поверх карамели." },
+      { title: "Водяная баня", text: "Поставьте формочки в противень с водой, выпекайте при 160°C около 40 минут.", timer: 2400 },
+      { title: "Охладить", text: "Остудите и уберите в холодильник минимум на 3 часа, затем переверните на тарелку." }
+    ],
+    serveWith: "Подавайте холодным, перевернув на тарелку, чтобы карамель стекла сверху.",
+    notes: "Крем карамел очень популярен в Болгарии. Готовность проверяйте лёгким покачиванием — центр должен слегка дрожать. Охлаждение от 3 часов обязательно."
+  },
+  {
+    id: "kebapche", title: "Кебапче", forKid: true, kidNote: "Для ребёнка уменьшите количество перца и зиры.",
+    category: "Основное", cuisine: "Болгарская", photo: "",
+    prepTime: 20, cookTime: 12, time: 32, difficulty: 2, baseServings: 4, kcal: 380,
+    equipment: ["Гриль или сковорода-гриль", "Миска"], allergens: [], tags: ["гриль", "мясо", "болгарская кухня"],
+    ingredients: [
+      { name: "Свиной фарш", qty: 400, unit: "г", group: "Мясо", staple: false },
+      { name: "Говяжий фарш", qty: 400, unit: "г", group: "Мясо", staple: false },
+      { name: "Зира (кумин) молотая", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Чёрный перец молотый", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Сода пищевая", qty: 0.5, unit: "ч.л.", group: "Бакалея", staple: true },
+      { name: "Вода", qty: 50, unit: "мл", group: "Прочее", staple: true }
+    ],
+    steps: [
+      { title: "Замесить фарш", text: "Смешайте свиной и говяжий фарш, добавьте зиру, соль, чёрный перец, соду и воду. Тщательно вымесите руками 5–7 минут до однородной липкой массы." },
+      { title: "Охладить", text: "Накройте миску плёнкой и уберите фарш в холодильник минимум на 2 часа (лучше на ночь), чтобы специи раскрылись.", timer: 7200 },
+      { title: "Сформировать", text: "Из охлаждённого фарша смоченными руками скатайте удлинённые колбаски длиной 8–10 см и толщиной около 2,5 см." },
+      { title: "Обжарить", text: "Жарьте на хорошо разогретом гриле или сковороде-гриль на среднем огне, переворачивая, около 10–12 минут до румяной корочки и полной готовности.", timer: 720 }
+    ],
+    serveWith: "Подавайте с картофелем фри или печёным перцем, шопским гарниром из свежих овощей и горчицей. Отлично сочетается с холодным айраном или пивом.",
+    notes: "Сода и обязательное вызревание фарша в холоде дают сочную и пышную текстуру — не пропускайте этот этап. Классически кебапче делают из смеси свинины и говядины 1:1."
+  },
+  {
+    id: "chorba-ot-pile-kurinyy-sup-po-bolgarski", title: "Чорба от пиле (куриный суп по-болгарски)", forKid: true, kidNote: "Подавайте без острого перца.",
+    category: "Суп", cuisine: "Болгарская", photo: "",
+    prepTime: 15, cookTime: 30, time: 45, difficulty: 1, baseServings: 4, kcal: 220,
+    equipment: ["Кастрюля", "Венчик", "Миска"], allergens: ["яйцо", "молоко"], tags: ["суп", "курица", "застройка"],
+    ingredients: [
+      { name: "Куриные бёдра или окорочка", qty: 500, unit: "г", group: "Мясо", staple: false },
+      { name: "Морковь", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Рис", qty: 50, unit: "г", group: "Бакалея", staple: true },
+      { name: "Яйцо", qty: 1, unit: "шт", group: "Молочное", staple: false },
+      { name: "Йогурт натуральный", qty: 150, unit: "г", group: "Молочное", staple: false },
+      { name: "Мука", qty: 1, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Сухая мята", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Паприка сладкая", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Сливочное масло", qty: 20, unit: "г", group: "Молочное", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Сварить курицу", text: "Залейте курицу 1,5 л холодной воды, доведите до кипения, снимите пену. Добавьте целую морковь и луковицу, варите 25 минут.", timer: 1500 },
+      { title: "Разобрать мясо", text: "Достаньте курицу, отделите мясо от костей и нарежьте кусочками. Морковь нарежьте кубиками и верните в бульон." },
+      { title: "Добавить рис", text: "Верните мясо в бульон, всыпьте промытый рис, посолите и варите до готовности риса 12–15 минут.", timer: 900 },
+      { title: "Сделать застройку", text: "В миске взбейте яйцо с йогуртом и мукой. Постепенно введите несколько половников горячего бульона, постоянно мешая, затем влейте смесь в суп при слабом нагреве, не доводя до кипения." },
+      { title: "Заправить", text: "Растопите масло с паприкой и влейте в суп. Добавьте сухую мяту, перемешайте и снимите с огня." }
+    ],
+    serveWith: "Подавайте горячим со свежим деревенским хлебом и щепоткой острого красного перца для любителей. Хорошо дополнить долькой лимона.",
+    notes: "Застройку (яично-йогуртовую заправку) обязательно темперируйте горячим бульоном, иначе яйцо свернётся хлопьями. Суп после застройки нельзя кипятить."
+  },
+  {
+    id: "sirene-po-shopski", title: "Сирене по шопски", forKid: false, kidNote: "Для детей готовьте без острого перца.",
+    category: "Закуска", cuisine: "Болгарская", photo: "",
+    prepTime: 10, cookTime: 15, time: 25, difficulty: 1, baseServings: 2, kcal: 320,
+    equipment: ["Глиняные горшочки", "Духовка"], allergens: ["молоко", "яйцо"], tags: ["запеканка", "сыр", "яйцо", "глиняный горшочек"],
+    ingredients: [
+      { name: "Брынза (сирене)", qty: 200, unit: "г", group: "Молочное", staple: false },
+      { name: "Помидоры", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Перец сладкий", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Острый перец", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Яйцо", qty: 2, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сливочное масло", qty: 20, unit: "г", group: "Молочное", staple: true },
+      { name: "Паприка сладкая", qty: 0.5, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Чёрный перец молотый", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Подготовить овощи", text: "Помидоры обдайте кипятком, снимите кожицу и нарежьте кубиками. Сладкий и острый перец очистите от семян и мелко нарежьте." },
+      { title: "Уложить начинку", text: "Смажьте горшочки маслом. На дно выложите овощи, сверху раскрошите большую часть брынзы, посыпьте паприкой и чёрным перцем." },
+      { title: "Запечь", text: "Поставьте горшочки в разогретую до 200°C духовку на 10 минут, пока овощи не дадут сок.", timer: 600 },
+      { title: "Добавить яйцо", text: "Достаньте горшочки, вбейте в каждый по яйцу, посыпьте оставшейся брынзой и верните в духовку ещё на 5–7 минут, пока белок не схватится.", timer: 420 }
+    ],
+    serveWith: "Подавайте горячим прямо в горшочке со свежим хлебом, чтобы макать в сырно-овощной соус. Хорошо идёт как закуска под ракию.",
+    notes: "Брынзу можно частично заменить на жёлтый сыр кашкавал для более тягучей текстуры. Степень остроты регулируйте количеством острого перца."
+  },
+  {
+    id: "mekici", title: "Мекици", forKid: true, kidNote: "Подавайте с мёдом или вареньем — дети обожают.",
+    category: "Выпечка", cuisine: "Болгарская", photo: "",
+    prepTime: 25, cookTime: 15, time: 40, difficulty: 2, baseServings: 4, kcal: 290,
+    equipment: ["Глубокая сковорода", "Миска"], allergens: ["глютен", "молоко", "яйцо"], tags: ["завтрак", "жареное тесто", "дрожжевое"],
+    ingredients: [
+      { name: "Мука пшеничная", qty: 400, unit: "г", group: "Бакалея", staple: true },
+      { name: "Йогурт натуральный", qty: 200, unit: "г", group: "Молочное", staple: false },
+      { name: "Яйцо", qty: 1, unit: "шт", group: "Молочное", staple: false },
+      { name: "Дрожжи сухие", qty: 7, unit: "г", group: "Бакалея", staple: false },
+      { name: "Сахар", qty: 1, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: 0.5, unit: "ч.л.", group: "Специи", staple: true },
+      { name: "Тёплая вода", qty: 50, unit: "мл", group: "Прочее", staple: true },
+      { name: "Масло растительное для жарки", qty: 400, unit: "мл", group: "Бакалея", staple: true },
+      { name: "Сахарная пудра", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true }
+    ],
+    steps: [
+      { title: "Активировать дрожжи", text: "Растворите дрожжи и сахар в тёплой воде, оставьте на 10 минут до появления пены.", timer: 600 },
+      { title: "Замесить тесто", text: "Смешайте муку, соль, йогурт, яйцо и опару. Замесите мягкое, чуть липкое тесто." },
+      { title: "Дать подняться", text: "Накройте миску и оставьте тесто в тепле на 1 час, пока оно не увеличится вдвое.", timer: 3600 },
+      { title: "Сформировать и жарить", text: "Смоченными в масле руками отрывайте кусочки теста, растягивайте в лепёшки и жарьте в раскалённом масле по 1–2 минуты с каждой стороны до золотистого цвета.", timer: 120 },
+      { title: "Обсушить", text: "Выкладывайте мекици на бумажные полотенца, затем посыпьте сахарной пудрой." }
+    ],
+    serveWith: "Подавайте тёплыми с брынзой, мёдом, вареньем или просто с сахарной пудрой. Идеальны на завтрак с чашкой чая.",
+    notes: "Масло должно быть хорошо разогретым (около 180°C), иначе мекици впитают жир. Тесто удобнее формовать мокрыми или смазанными маслом руками."
+  },
+  {
+    id: "griska-halva", title: "Гриска халва", forKid: true, kidNote: "Полностью подходит детям.",
+    category: "Десерт", cuisine: "Болгарская", photo: "",
+    prepTime: 5, cookTime: 25, time: 30, difficulty: 1, baseServings: 6, kcal: 340,
+    equipment: ["Кастрюля", "Сотейник"], allergens: ["глютен"], tags: ["десерт", "манка", "сироп"],
+    ingredients: [
+      { name: "Манная крупа", qty: 200, unit: "г", group: "Бакалея", staple: false },
+      { name: "Сахар", qty: 250, unit: "г", group: "Бакалея", staple: true },
+      { name: "Вода", qty: 600, unit: "мл", group: "Прочее", staple: true },
+      { name: "Сливочное масло", qty: 100, unit: "г", group: "Молочное", staple: true },
+      { name: "Грецкие орехи", qty: 80, unit: "г", group: "Бакалея", staple: false },
+      { name: "Лимон", qty: 0.5, unit: "шт", group: "Овощи", staple: false },
+      { name: "Корица молотая", qty: 0.5, unit: "ч.л.", group: "Специи", staple: false }
+    ],
+    steps: [
+      { title: "Сварить сироп", text: "В кастрюле соедините воду, сахар и сок половины лимона, доведите до кипения и варите 5 минут. Снимите с огня.", timer: 300 },
+      { title: "Обжарить манку", text: "В сотейнике растопите сливочное масло, всыпьте манку и обжаривайте на среднем огне, помешивая, 8–10 минут до золотистого цвета и орехового аромата.", timer: 600 },
+      { title: "Добавить орехи", text: "Всыпьте в манку рубленые грецкие орехи и прогрейте ещё минуту." },
+      { title: "Соединить с сиропом", text: "Аккуратно влейте горячий сироп в манку (осторожно — будет шипеть), быстро перемешайте и варите на слабом огне 2–3 минуты, пока масса не загустеет.", timer: 180 },
+      { title: "Настоять", text: "Снимите с огня, накройте крышкой и дайте халве настояться 15 минут, чтобы манка набухла.", timer: 900 }
+    ],
+    serveWith: "Разложите по формочкам или порционно, посыпьте корицей и рублеными орехами. Подавайте тёплой или охлаждённой с чашкой кофе.",
+    notes: "Сироп можно ароматизировать ванилью или цедрой апельсина. Чем дольше обжаривается манка, тем насыщеннее ореховый вкус халвы."
+  },
+  {
+    id: "frikadeller-datskie-myasnye-kotletki", title: "Фрикаделлер (датские мясные котлетки)", forKid: true, kidNote: "",
+    category: "Основное", cuisine: "Датская", photo: "",
+    prepTime: 15, cookTime: 20, time: 35, difficulty: 1, baseServings: 4, kcal: 420,
+    equipment: ["сковорода", "тёрка", "миска"], allergens: ["яйца", "молоко", "глютен"], tags: ["мясное", "классика", "будни"],
+    ingredients: [
+      { name: "Свиной фарш", qty: 500, unit: "г", group: "Мясо", staple: false },
+      { name: "Телячий или говяжий фарш", qty: 250, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Яйцо", qty: 1, unit: "шт", group: "Молочное", staple: false },
+      { name: "Молоко", qty: 100, unit: "мл", group: "Молочное", staple: false },
+      { name: "Мука пшеничная", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Перец чёрный молотый", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Сливочное масло для жарки", qty: 50, unit: "г", group: "Молочное", staple: true }
+    ],
+    steps: [
+      { title: "Смешать фарш", text: "Соедините оба вида фарша, натрите туда лук на мелкой тёрке, добавьте яйцо, муку, соль и перец." },
+      { title: "Развести молоком", text: "Влейте молоко и тщательно вымешайте массу до однородности. Дайте постоять 15 минут.", timer: 900 },
+      { title: "Формовать", text: "Смоченной в воде столовой ложкой формируйте продолговатые котлетки." },
+      { title: "Жарить", text: "Растопите масло на сковороде и обжаривайте фрикадельки на среднем огне по 4-5 минут с каждой стороны до румяной корочки.", timer: 600 }
+    ],
+    serveWith: "Подавайте с отварным картофелем и коричневым соусом, либо с картофельным салатом. Хороши и холодными на ржаном хлебе.",
+    notes: "Классика будней Дании. Масса должна получиться чуть липкой — если слишком жидкая, добавьте ложку муки."
+  },
+  {
+    id: "gulensuppe-datskiy-zheltyy-gorohovyy-sup", title: "Гуленсуппе (датский жёлтый гороховый суп)", forKid: true, kidNote: "Подавайте без горчицы для ребёнка.",
+    category: "Суп", cuisine: "Датская", photo: "",
+    prepTime: 20, cookTime: 120, time: 140, difficulty: 1, baseServings: 6, kcal: 380,
+    equipment: ["кастрюля большая"], allergens: ["сельдерей"], tags: ["суп", "зимнее", "сытное"],
+    ingredients: [
+      { name: "Сухой колотый жёлтый горох", qty: 500, unit: "г", group: "Бакалея", staple: false },
+      { name: "Свиная рулька или копчёная грудинка", qty: 600, unit: "г", group: "Мясо", staple: false },
+      { name: "Морковь", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лук-порей", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Сельдерей корневой", qty: 200, unit: "г", group: "Овощи", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Тимьян", qty: null, unit: "по вкусу", group: "Специи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Перец чёрный молотый", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Замочить горох", text: "Залейте горох холодной водой и оставьте на ночь." },
+      { title: "Варить мясо", text: "Залейте мясо водой, доведите до кипения, снимите пену и варите около часа.", timer: 3600 },
+      { title: "Добавить горох", text: "Слейте воду с гороха, добавьте его в бульон и варите до мягкости, около 45 минут.", timer: 2700 },
+      { title: "Овощи", text: "Нарежьте морковь, порей, сельдерей и лук, добавьте в суп, приправьте тимьяном и варите ещё 20 минут.", timer: 1200 },
+      { title: "Подача", text: "Достаньте мясо, нарежьте кусочками и верните в суп или подайте отдельно. Посолите и поперчите." }
+    ],
+    serveWith: "Традиционно подают с ржаным хлебом, горчицей и копчёными сосисками. Хорошо согревает зимой.",
+    notes: "Горох обязательно замачивать заранее — без этого он не разварится. Время замачивания (ночь) не входит в активное время."
+  },
+  {
+    id: "leferdzh-datskiy-pechenochnyy-pashtet", title: "Лефердж (датский печёночный паштет)", forKid: true, kidNote: "Подавайте просто на хлебе, без острых добавок.",
+    category: "Закуска", cuisine: "Датская", photo: "",
+    prepTime: 25, cookTime: 75, time: 100, difficulty: 2, baseServings: 8, kcal: 290,
+    equipment: ["мясорубка", "форма для запекания", "противень"], allergens: ["яйца", "молоко", "глютен", "рыба"], tags: ["паштет", "закуска", "смёрребрёд"],
+    ingredients: [
+      { name: "Свиная печень", qty: 500, unit: "г", group: "Мясо", staple: false },
+      { name: "Сало свиное", qty: 250, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Анчоусы", qty: 4, unit: "шт", group: "Рыба", staple: false },
+      { name: "Яйцо", qty: 2, unit: "шт", group: "Молочное", staple: false },
+      { name: "Молоко", qty: 250, unit: "мл", group: "Молочное", staple: false },
+      { name: "Мука пшеничная", qty: 50, unit: "г", group: "Бакалея", staple: true },
+      { name: "Сливочное масло", qty: 50, unit: "г", group: "Молочное", staple: true },
+      { name: "Душистый перец молотый", qty: null, unit: "по вкусу", group: "Специи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Измельчить", text: "Печень, сало, лук и анчоусы пропустите дважды через мясорубку до однородной массы." },
+      { title: "Соус бешамель", text: "Растопите масло, вмешайте муку, влейте молоко и проварите до загустения.", timer: 300 },
+      { title: "Смешать", text: "Соедините печёночную массу с соусом, добавьте яйца, душистый перец и соль, хорошо перемешайте." },
+      { title: "Выпекать", text: "Выложите в форму, поставьте в водяную баню и запекайте при 180°C около 75 минут.", timer: 4500 },
+      { title: "Остудить", text: "Дайте паштету полностью остыть перед нарезкой." }
+    ],
+    serveWith: "Подавайте на ржаном хлебе с маринованными огурчиками и жареными грибами или беконом — классический смёрребрёд леверпостай.",
+    notes: "Лучше готовить заранее: ночь в холодильнике делает текстуру плотнее. Охлаждение не входит в активное время."
+  },
+  {
+    id: "redgred-med-flede-krasnyy-yagodnyy-kisel", title: "Рёдгрёд мед флёде (красный ягодный кисель со сливками)", forKid: true, kidNote: "",
+    category: "Десерт", cuisine: "Датская", photo: "",
+    prepTime: 10, cookTime: 10, time: 20, difficulty: 1, baseServings: 4, kcal: 220,
+    equipment: ["кастрюля", "сито"], allergens: ["молоко"], tags: ["десерт", "ягоды", "национальное"],
+    ingredients: [
+      { name: "Клубника", qty: 250, unit: "г", group: "Заморозка", staple: false },
+      { name: "Малина", qty: 150, unit: "г", group: "Заморозка", staple: false },
+      { name: "Красная смородина", qty: 150, unit: "г", group: "Заморозка", staple: false },
+      { name: "Сахар", qty: 120, unit: "г", group: "Бакалея", staple: true },
+      { name: "Картофельный крахмал", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Вода", qty: 400, unit: "мл", group: "Прочее", staple: true },
+      { name: "Сливки 10-20%", qty: 200, unit: "мл", group: "Молочное", staple: false },
+      { name: "Ваниль", qty: null, unit: "по вкусу", group: "Специи", staple: false }
+    ],
+    steps: [
+      { title: "Варить ягоды", text: "Положите ягоды в кастрюлю с водой и сахаром, доведите до кипения и варите 5 минут.", timer: 300 },
+      { title: "Протереть", text: "Протрите массу через сито, чтобы убрать косточки, верните в кастрюлю." },
+      { title: "Загустить", text: "Разведите крахмал в холодной воде, влейте в кипящий сок, помешивая, до загустения. Не кипятите долго." },
+      { title: "Охладить", text: "Разлейте по креманкам, присыпьте сахаром, чтобы не образовалась плёнка, и охладите." }
+    ],
+    serveWith: "Подавайте холодным, обильно полив холодными сливками. Это национальный десерт Дании.",
+    notes: "Можно использовать любые красные ягоды. Сахар сверху не даёт затвердеть поверхности. Охлаждение не входит в активное время."
+  },
+  {
+    id: "kelerboller-datskie-kardamonovye-bulochk", title: "Кёлерболлер (датские кардамоновые булочки)", forKid: true, kidNote: "",
+    category: "Выпечка", cuisine: "Датская", photo: "",
+    prepTime: 30, cookTime: 15, time: 45, difficulty: 2, baseServings: 12, kcal: 250,
+    equipment: ["миска", "противень", "духовка"], allergens: ["глютен", "молоко", "яйца"], tags: ["выпечка", "булочки", "завтрак"],
+    ingredients: [
+      { name: "Мука пшеничная", qty: 500, unit: "г", group: "Бакалея", staple: true },
+      { name: "Молоко", qty: 250, unit: "мл", group: "Молочное", staple: false },
+      { name: "Дрожжи свежие", qty: 25, unit: "г", group: "Бакалея", staple: false },
+      { name: "Сливочное масло", qty: 75, unit: "г", group: "Молочное", staple: true },
+      { name: "Сахар", qty: 50, unit: "г", group: "Бакалея", staple: true },
+      { name: "Яйцо", qty: 1, unit: "шт", group: "Молочное", staple: false },
+      { name: "Кардамон молотый", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Соль", qty: 1, unit: "ч.л.", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Опара", text: "Растворите дрожжи в тёплом молоке с сахаром, дайте постоять 10 минут.", timer: 600 },
+      { title: "Замесить", text: "Добавьте мягкое масло, яйцо, кардамон, соль и муку. Замесите мягкое эластичное тесто." },
+      { title: "Расстойка", text: "Накройте и оставьте подходить в тепле около часа до удвоения объёма.", timer: 3600 },
+      { title: "Формовать", text: "Разделите тесто на 12 шариков, выложите на противень, дайте подойти ещё 20 минут.", timer: 1200 },
+      { title: "Выпекать", text: "Смажьте взбитым яйцом и выпекайте при 220°C около 12-15 минут до золотистости.", timer: 900 }
+    ],
+    serveWith: "Подавайте тёплыми со сливочным маслом, сыром и джемом — типичный датский завтрак или полдник.",
+    notes: "Кардамон — ключевой аромат скандинавской выпечки. Время расстойки не входит в активное время готовки."
+  },
+  {
+    id: "stegt-flesk-med-persillesovs-zharenaya-s", title: "Стегт флэск мед персиллесовс (жареная свинина в петрушечном соусе)", forKid: true, kidNote: "",
+    category: "Основное", cuisine: "Датская", photo: "",
+    prepTime: 15, cookTime: 25, time: 40, difficulty: 2, baseServings: 4, kcal: 560,
+    equipment: ["противень", "духовка", "кастрюля", "сотейник"], allergens: ["молоко", "глютен"], tags: ["мясное", "национальное", "сытное"],
+    ingredients: [
+      { name: "Свиная грудинка ломтиками", qty: 800, unit: "г", group: "Мясо", staple: false },
+      { name: "Картофель", qty: 1, unit: "кг", group: "Овощи", staple: false },
+      { name: "Молоко", qty: 500, unit: "мл", group: "Молочное", staple: false },
+      { name: "Сливочное масло", qty: 50, unit: "г", group: "Молочное", staple: true },
+      { name: "Мука пшеничная", qty: 50, unit: "г", group: "Бакалея", staple: true },
+      { name: "Петрушка свежая", qty: 1, unit: "пучок", group: "Зелень", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Перец чёрный молотый", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Варить картофель", text: "Отварите картофель в подсоленной воде до готовности, около 20 минут.", timer: 1200 },
+      { title: "Запечь свинину", text: "Выложите ломтики грудинки на противень, посолите, поперчите и запекайте при 220°C до хрустящей корочки, около 20-25 минут.", timer: 1500 },
+      { title: "Основа соуса", text: "Растопите масло, вмешайте муку и обжарьте минуту, затем постепенно влейте молоко, помешивая до загустения.", timer: 300 },
+      { title: "Добавить петрушку", text: "Мелко нарубите петрушку и вмешайте в соус, посолите и поперчите." },
+      { title: "Подача", text: "Подавайте хрустящую свинину с отварным картофелем, щедро полив петрушечным соусом." }
+    ],
+    serveWith: "Подавайте с варёным картофелем и петрушечным соусом — это неофициальное национальное блюдо Дании. По желанию добавьте свёклу.",
+    notes: "Свинина должна получиться максимально хрустящей. Можно жарить ломтики на сковороде, если нет духовки."
+  },
+  {
+    id: "flaskesteg-datskaya-zharenaya-svinina-s-", title: "Фласкестег (датская жареная свинина с хрустящей корочкой)", forKid: true, kidNote: "Детям дайте мягкое мясо без острой корочки, если она слишком солёная.",
+    category: "Основное", cuisine: "Датская", photo: "",
+    prepTime: 8, cookTime: 32, time: 40, difficulty: 2, baseServings: 6, kcal: 620,
+    equipment: [], allergens: [], tags: ["датская кухня", "рождество", "свинина"],
+    ingredients: [
+      { name: "Свиная грудинка с кожей (на ребрах)", qty: 2, unit: "кг", group: "Мясо", staple: false },
+      { name: "Соль крупная", qty: 2, unit: "ст.л.", group: "Специи", staple: true },
+      { name: "Лавровый лист", qty: 6, unit: "шт", group: "Специи", staple: true },
+      { name: "Гвоздика", qty: 8, unit: "шт", group: "Специи", staple: false },
+      { name: "Чёрный перец горошком", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Вода", qty: 300, unit: "мл", group: "Прочее", staple: true }
+    ],
+    steps: [
+      { title: "Надрезать кожу", text: "Острым ножом надрежьте кожу свинины полосками шириной около 1 см, не доходя до мяса. Чем ровнее надрезы, тем лучше получится корочка." },
+      { title: "Посолить", text: "Тщательно вотрите крупную соль в надрезы и по всей коже. Вставьте в прорези лавровый лист и гвоздику." },
+      { title: "Запекать", text: "Уложите мясо кожей вверх на решётку над противнем с водой. Запекайте при 200°C около 1,5 часа, чтобы кожа вздулась и стала хрустящей.", timer: 5400 },
+      { title: "Поднять жар", text: "Если корочка не хрустит, включите верхний гриль на несколько минут, внимательно следя, чтобы кожа не сгорела." },
+      { title: "Отдых", text: "Дайте мясу отдохнуть 10–15 минут под фольгой, затем нарежьте порционно вместе с корочкой.", timer: 900 }
+    ],
+    serveWith: "Подавайте с отварным картофелем, тушёной красной капустой (рёдкол) и коричневой подливкой. Классика рождественского стола.",
+    notes: "Для идеальной корочки кожа должна быть сухой — промокните её бумажным полотенцем перед посолом. Если кожа подсыхает неравномерно, выровняйте уровень противня, чтобы он стоял ровно."
+  },
+  {
+    id: "hensekedssuppe-datskiy-kurinyy-sup-s-kle", title: "Хёнсекёдссуппе (датский куриный суп с клёцками)", forKid: true, kidNote: "Идеальный суп для детей — мягкий и неострый.",
+    category: "Суп", cuisine: "Датская", photo: "",
+    prepTime: 10, cookTime: 40, time: 50, difficulty: 2, baseServings: 6, kcal: 320,
+    equipment: [], allergens: [], tags: ["датская кухня", "суп", "курица"],
+    ingredients: [
+      { name: "Курица целая", qty: 1.5, unit: "кг", group: "Мясо", staple: false },
+      { name: "Морковь", qty: 3, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лук-порей", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Сельдерей корневой", qty: 200, unit: "г", group: "Овощи", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: true },
+      { name: "Лавровый лист", qty: 2, unit: "шт", group: "Специи", staple: true },
+      { name: "Сливочное масло", qty: 50, unit: "г", group: "Молочное", staple: true },
+      { name: "Мука пшеничная", qty: 75, unit: "г", group: "Бакалея", staple: true },
+      { name: "Яйца", qty: 2, unit: "шт", group: "Молочное", staple: true },
+      { name: "Молоко", qty: 100, unit: "мл", group: "Молочное", staple: false },
+      { name: "Петрушка свежая", qty: null, unit: "по вкусу", group: "Зелень", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Сварить бульон", text: "Положите курицу в большую кастрюлю, залейте холодной водой, добавьте лук, лавровый лист и соль. Доведите до кипения и снимите пену.", timer: 600 },
+      { title: "Томить", text: "Варите на медленном огне около 1 часа, пока курица не станет мягкой. Достаньте птицу, бульон процедите.", timer: 3600 },
+      { title: "Тесто для клёцок", text: "Растопите масло с молоком и щепоткой соли, всыпьте муку и заварите тесто. Снимите с огня, остудите и вмешайте яйца до гладкости." },
+      { title: "Отварить клёцки", text: "Двумя чайными ложками формируйте маленькие клёцки и опускайте в кипящий бульон. Варите 5–7 минут до всплытия.", timer: 420 },
+      { title: "Овощи и сборка", text: "Нарежьте морковь, порей и сельдерей, отварите в бульоне до мягкости. Добавьте кусочки курицы и подавайте с рубленой петрушкой.", timer: 600 }
+    ],
+    serveWith: "Подавайте горячим с хрустящим хлебом. Часто к супу отдельно подают отварное куриное мясо с овощами как второе блюдо.",
+    notes: "Клёцки (melboller) можно приготовить заранее и хранить в бульоне. Не давайте им долго кипеть, иначе развалятся."
+  },
+  {
+    id: "lebeskovse-datskoe-ragu-iz-govyadiny-v-s", title: "Лебесковсе (датское рагу из говядины в светлой подливке)", forKid: true, kidNote: "",
+    category: "Основное", cuisine: "Датская", photo: "",
+    prepTime: 12, cookTime: 48, time: 60, difficulty: 2, baseServings: 4, kcal: 480,
+    equipment: [], allergens: [], tags: ["датская кухня", "говядина", "рагу"],
+    ingredients: [
+      { name: "Говядина для тушения", qty: 700, unit: "г", group: "Мясо", staple: false },
+      { name: "Картофель", qty: 1, unit: "кг", group: "Овощи", staple: false },
+      { name: "Лук репчатый", qty: 3, unit: "шт", group: "Овощи", staple: true },
+      { name: "Сливочное масло", qty: 40, unit: "г", group: "Молочное", staple: true },
+      { name: "Лавровый лист", qty: 2, unit: "шт", group: "Специи", staple: true },
+      { name: "Тимьян сушёный", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Чёрный перец горошком", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Бульон говяжий", qty: 500, unit: "мл", group: "Прочее", staple: false }
+    ],
+    steps: [
+      { title: "Обжарить мясо", text: "Нарежьте говядину кубиками и обжарьте на масле до румяной корочки. Добавьте нарезанный лук и обжарьте до прозрачности." },
+      { title: "Тушить", text: "Залейте бульоном, добавьте лавровый лист, тимьян и перец. Тушите под крышкой около 1 часа до мягкости мяса.", timer: 3600 },
+      { title: "Добавить картофель", text: "Очистите и нарежьте картофель кубиками, добавьте в кастрюлю. Варите ещё 25–30 минут.", timer: 1800 },
+      { title: "Загустить", text: "Часть картофеля разварится и загустит подливку. Помешивайте, чтобы получилась густая кремовая консистенция." },
+      { title: "Приправить", text: "Доведите до вкуса солью и перцем. Дайте настояться пару минут перед подачей." }
+    ],
+    serveWith: "Подавайте горячим с маринованной красной свёклой и ржаным хлебом. Сверху можно посыпать молотым перцем.",
+    notes: "Lebbeskovs — традиционное «домашнее» блюдо без муки: загуститель — сам картофель. Чем дольше тушится мясо, тем нежнее результат."
+  },
+  {
+    id: "kranskage-datskoe-mindalnoe-marcipanovoe", title: "Кранскаге (датское миндальное марципановое кольцо)", forKid: true, kidNote: "Сладко и без алкоголя — детям нравится, но десерт очень сладкий.",
+    category: "Выпечка", cuisine: "Датская", photo: "",
+    prepTime: 28, cookTime: 12, time: 40, difficulty: 3, baseServings: 12, kcal: 410,
+    equipment: [], allergens: [], tags: ["датская кухня", "праздник", "марципан"],
+    ingredients: [
+      { name: "Миндальная мука", qty: 500, unit: "г", group: "Бакалея", staple: false },
+      { name: "Сахарная пудра", qty: 500, unit: "г", group: "Бакалея", staple: true },
+      { name: "Яичные белки", qty: 3, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сахарная пудра для глазури", qty: 150, unit: "г", group: "Бакалея", staple: true },
+      { name: "Яичный белок для глазури", qty: 1, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сок лимона", qty: 1, unit: "ч.л.", group: "Прочее", staple: false }
+    ],
+    steps: [
+      { title: "Замесить тесто", text: "Смешайте миндальную муку, сахарную пудру и яичные белки в плотное марципановое тесто. Оно должно держать форму." },
+      { title: "Сформировать кольца", text: "Скатайте из теста колбаски разной длины и сформируйте кольца разного диаметра — от большого к маленькому." },
+      { title: "Выпекать", text: "Выпекайте кольца на пергаменте при 200°C около 10–12 минут до золотистости снаружи и мягкости внутри.", timer: 720 },
+      { title: "Глазурь", text: "Взбейте сахарную пудру с белком и лимонным соком до густой белой массы. Переложите в кондитерский мешок." },
+      { title: "Собрать башню", text: "Остудите кольца, затем установите их друг на друга, формируя конус. Украсьте зигзагами из глазури." }
+    ],
+    serveWith: "Подавайте на праздничный стол — Новый год, свадьбы и юбилеи. Хорошо сочетается с игристым вином или кофе.",
+    notes: "Kransekage традиционно собирают в высокую башню и украшают флажками. Кольца должны оставаться чуть влажными внутри — не пересушите."
+  },
+  {
+    id: "leverpostay-teplyy-datskiy-zapechennyy-p", title: "Леверпостай (тёплый датский запечённый паштет)", forKid: true, kidNote: "Уберите анчоусы или добавьте меньше — детям так привычнее по вкусу.",
+    category: "Закуска", cuisine: "Датская", photo: "",
+    prepTime: 6, cookTime: 24, time: 30, difficulty: 2, baseServings: 8, kcal: 350,
+    equipment: [], allergens: [], tags: ["датская кухня", "паштет", "закуска"],
+    ingredients: [
+      { name: "Свиная печень", qty: 500, unit: "г", group: "Мясо", staple: false },
+      { name: "Свиное сало", qty: 250, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: true },
+      { name: "Анчоусы", qty: 4, unit: "шт", group: "Рыба", staple: false },
+      { name: "Яйца", qty: 2, unit: "шт", group: "Молочное", staple: true },
+      { name: "Мука пшеничная", qty: 40, unit: "г", group: "Бакалея", staple: true },
+      { name: "Сливки 38%", qty: 250, unit: "мл", group: "Молочное", staple: false },
+      { name: "Душистый перец молотый", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Измельчить", text: "Пропустите через мясорубку печень, сало, лук и анчоусы дважды до однородной пасты." },
+      { title: "Смешать массу", text: "Добавьте яйца, муку, сливки, душистый перец и соль. Тщательно вымешайте до гладкости." },
+      { title: "Разлить в форму", text: "Выложите массу в форму для запекания, выстеленную тонкими ломтиками сала." },
+      { title: "Запекать на водяной бане", text: "Поставьте форму в противень с горячей водой и запекайте при 180°C около 1 часа.", timer: 3600 },
+      { title: "Остудить", text: "Дайте паштету остыть в форме, затем подавайте тёплым или холодным." }
+    ],
+    serveWith: "Классически намазывают на тёплый ржаной хлеб и подают с маринованными огурцами и обжаренными грибами или беконом.",
+    notes: "Этот паштет — основа датского бутерброда. После остывания он отлично хранится в холодильнике до 4 дней."
+  },
+  {
+    id: "risalama-nde-datskiy-risovyy-puding-s-vi", title: "Рисалама́нде (датский рисовый пудинг с вишнёвым соусом)", forKid: true, kidNote: "Будьте внимательны — целая миндалина может стать сюрпризом для маленького ребёнка.",
+    category: "Десерт", cuisine: "Датская", photo: "",
+    prepTime: 7, cookTime: 28, time: 35, difficulty: 1, baseServings: 6, kcal: 430,
+    equipment: [], allergens: [], tags: ["датская кухня", "рождество", "десерт"],
+    ingredients: [
+      { name: "Рис круглозёрный", qty: 150, unit: "г", group: "Бакалея", staple: false },
+      { name: "Молоко", qty: 1, unit: "л", group: "Молочное", staple: false },
+      { name: "Сливки 38%", qty: 400, unit: "мл", group: "Молочное", staple: false },
+      { name: "Сахар", qty: 60, unit: "г", group: "Бакалея", staple: true },
+      { name: "Миндаль очищенный", qty: 100, unit: "г", group: "Бакалея", staple: false },
+      { name: "Ванильный сахар", qty: 1, unit: "ч.л.", group: "Бакалея", staple: false },
+      { name: "Вишня замороженная", qty: 400, unit: "г", group: "Заморозка", staple: false },
+      { name: "Крахмал картофельный", qty: 1, unit: "ст.л.", group: "Бакалея", staple: true }
+    ],
+    steps: [
+      { title: "Сварить рис", text: "Промойте рис, залейте молоком и варите на медленном огне, помешивая, около 35–40 минут до густой каши.", timer: 2100 },
+      { title: "Остудить", text: "Дайте рисовой каше полностью остыть. Добавьте ванильный сахар и сахар." },
+      { title: "Миндаль", text: "Бланшируйте миндаль, очистите и порубите. Вмешайте в остывшую кашу, оставив одну целую миндалину «на счастье»." },
+      { title: "Взбить сливки", text: "Взбейте сливки до мягких пиков и аккуратно вмешайте в рисовую массу до воздушной консистенции." },
+      { title: "Вишнёвый соус", text: "Прогрейте вишню с сахаром, добавьте крахмал, разведённый водой, и доведите до загустения.", timer: 300 }
+    ],
+    serveWith: "Подавайте холодным, полив тёплым вишнёвым соусом. Это главный рождественский десерт Дании.",
+    notes: "Тот, кому достанется целая миндалина, получает «подарок за миндаль» (mandelgave). Кашу лучше сварить накануне и охладить на ночь."
+  },
+  {
+    id: "bulef-datskoe-govyazhe-ragu-s-pivom", title: "Булёф (датское говяжье рагу с пивом)", forKid: true, kidNote: "Алкоголь из пива полностью выпаривается при долгом тушении.",
+    category: "Основное", cuisine: "Датская", photo: "",
+    prepTime: 20, cookTime: 120, time: 140, difficulty: 2, baseServings: 4, kcal: 520,
+    equipment: ["казан или толстостенная кастрюля"], allergens: ["глютен"], tags: ["тушёное", "пиво", "сытное", "зима"],
+    ingredients: [
+      { name: "Говядина (лопатка или огузок)", qty: 800, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук репчатый", qty: 500, unit: "г", group: "Овощи", staple: false },
+      { name: "Тёмное пиво", qty: 330, unit: "мл", group: "Прочее", staple: false },
+      { name: "Говяжий бульон", qty: 300, unit: "мл", group: "Прочее", staple: false },
+      { name: "Тимьян", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Лавровый лист", qty: 2, unit: "шт", group: "Специи", staple: false },
+      { name: "Мука пшеничная", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Сливочное масло", qty: 30, unit: "г", group: "Молочное", staple: true },
+      { name: "Сахар", qty: 1, unit: "ч.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Перец чёрный", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Подготовка", text: "Говядину нарежьте крупными кубиками по 4 см, обсушите, посолите и поперчите, обваляйте в муке." },
+      { title: "Обжарка мяса", text: "Растопите масло в казане и обжарьте мясо со всех сторон до румяной корочки, затем выньте.", timer: 600 },
+      { title: "Лук", text: "Лук нарежьте полукольцами, добавьте сахар и пассеруйте в той же посуде до мягкости и золотистости.", timer: 600 },
+      { title: "Тушение", text: "Верните мясо к луку, влейте пиво и бульон, добавьте тимьян и лавровый лист. Доведите до кипения, накройте и тушите на слабом огне до мягкости.", timer: 5400 },
+      { title: "Финал", text: "Снимите крышку, выпарите соус до нужной густоты, удалите лавровый лист, отрегулируйте соль и перец." }
+    ],
+    serveWith: "Подавайте с отварным картофелем или картофельным пюре и ржаным хлебом. Хорошо дополнить маринованной свёклой.",
+    notes: "Чем дольше тушится — тем нежнее мясо. Можно готовить заранее: на следующий день блюдо становится только вкуснее."
+  },
+  {
+    id: "gule-sov-datskiy-slivochnyy-kurinyy-sup-", title: "Гуле сов (датский сливочный куриный суп с фрикадельками)", forKid: true, kidNote: "",
+    category: "Суп", cuisine: "Датская", photo: "",
+    prepTime: 20, cookTime: 25, time: 45, difficulty: 2, baseServings: 4, kcal: 380,
+    equipment: ["кастрюля", "венчик"], allergens: ["глютен", "молоко", "яйцо"], tags: ["суп", "сливочный", "курица", "уютный"],
+    ingredients: [
+      { name: "Куриный фарш", qty: 300, unit: "г", group: "Мясо", staple: false },
+      { name: "Куриный бульон", qty: 1200, unit: "мл", group: "Прочее", staple: false },
+      { name: "Морковь", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лук-порей", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Сельдерей стеблевой", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Сливки 20%", qty: 150, unit: "мл", group: "Молочное", staple: false },
+      { name: "Сливочное масло", qty: 40, unit: "г", group: "Молочное", staple: true },
+      { name: "Мука пшеничная", qty: 40, unit: "г", group: "Бакалея", staple: true },
+      { name: "Яйцо", qty: 1, unit: "шт", group: "Молочное", staple: false },
+      { name: "Мускатный орех", qty: null, unit: "по вкусу", group: "Специи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Перец чёрный", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Фрикадельки", text: "Смешайте куриный фарш с яйцом, щепоткой соли и мускатного ореха. Сформируйте мелкие фрикадельки чайной ложкой." },
+      { title: "Варка фрикаделек", text: "Доведите бульон до лёгкого кипения и отварите фрикадельки порциями до всплытия, выньте шумовкой.", timer: 300 },
+      { title: "Овощи", text: "Морковь, порей и сельдерей нарежьте мелкими кубиками и проварите в бульоне до мягкости.", timer: 480 },
+      { title: "Заправка (ру)", text: "В отдельной кастрюле растопите масло, всыпьте муку и прогрейте 1–2 минуты, постепенно влейте часть бульона, размешивая венчиком до гладкости.", timer: 120 },
+      { title: "Соединение", text: "Влейте заправку в суп, добавьте сливки и верните фрикадельки. Прогрейте, не доводя до бурного кипения, приправьте." }
+    ],
+    serveWith: "Подавайте горячим со свежим хлебом или булочками. Можно посыпать рубленой петрушкой.",
+    notes: "Не кипятите суп после добавления сливок, иначе они могут свернуться. Густоту регулируйте количеством бульона."
+  },
+  {
+    id: "danso-rulle-datskiy-myasnoy-rulet-s-prya", title: "Дансо рулле (датский мясной рулет с пряностями)", forKid: true, kidNote: "Пряности умеренные, не острые — подходит детям.",
+    category: "Закуска", cuisine: "Датская", photo: "",
+    prepTime: 30, cookTime: 90, time: 120, difficulty: 3, baseServings: 6, kcal: 290,
+    equipment: ["кулинарный шпагат", "большая кастрюля", "пресс или тяжёлая доска"], allergens: [], tags: ["холодная закуска", "к хлебу", "пряное"],
+    ingredients: [
+      { name: "Свиная грудинка (пласт без костей)", qty: 800, unit: "г", group: "Мясо", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Душистый перец молотый", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Гвоздика молотая", qty: 0.5, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Тимьян сушёный", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Лавровый лист", qty: 2, unit: "шт", group: "Специи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Перец чёрный", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Разметка", text: "Разложите пласт грудинки, посолите и поперчите, равномерно посыпьте душистым перцем, гвоздикой и тимьяном." },
+      { title: "Начинка", text: "Лук нарежьте тонкими полукольцами и разложите по поверхности мяса." },
+      { title: "Скрутка", text: "Плотно сверните грудинку в рулет и туго перевяжите кулинарным шпагатом по всей длине." },
+      { title: "Варка", text: "Опустите рулет в кипящую подсоленную воду с лавровым листом и варите на слабом огне до мягкости.", timer: 5400 },
+      { title: "Под пресс", text: "Достаньте рулет, оберните и поставьте под пресс. Полностью охладите в холодильнике, затем снимите шпагат и нарежьте тонко." }
+    ],
+    serveWith: "Подавайте тонкими ломтиками на ржаном хлебе с горчицей и кольцами маринованного лука как смёрребрёд.",
+    notes: "Под прессом рулет держите в холодильнике минимум 8 часов (лучше ночь) — так он хорошо нарежется. Это активное время без учёта прессовки."
+  },
+  {
+    id: "koldskol-datskiy-holodnyy-pahtovyy-sup", title: "Кольдсколь (датский холодный пахтовый суп)", forKid: true, kidNote: "Из-за сырых желтков давайте детям с осторожностью; можно заменить покупным заварным кремом.",
+    category: "Десерт", cuisine: "Датская", photo: "",
+    prepTime: 15, cookTime: 0, time: 15, difficulty: 1, baseServings: 4, kcal: 240,
+    equipment: ["венчик", "миска"], allergens: ["молоко", "яйцо", "глютен"], tags: ["холодное", "лето", "молочное", "освежающее"],
+    ingredients: [
+      { name: "Пахта", qty: 1000, unit: "мл", group: "Молочное", staple: false },
+      { name: "Яичные желтки", qty: 2, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сахар", qty: 80, unit: "г", group: "Бакалея", staple: true },
+      { name: "Ванильный сахар", qty: 1, unit: "ч.л.", group: "Бакалея", staple: false },
+      { name: "Лимон (сок и цедра)", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Печенье (кammerjunkere или галеты)", qty: 150, unit: "г", group: "Бакалея", staple: false }
+    ],
+    steps: [
+      { title: "Желтковая основа", text: "Взбейте желтки с сахаром и ванильным сахаром добела до пышной светлой массы." },
+      { title: "Лимон", text: "Добавьте сок и мелко натёртую цедру лимона, перемешайте." },
+      { title: "Пахта", text: "Постепенно влейте холодную пахту, постоянно взбивая венчиком до однородности." },
+      { title: "Охлаждение", text: "Поставьте суп в холодильник, чтобы он стал хорошо холодным перед подачей.", timer: 1800 }
+    ],
+    serveWith: "Разлейте по тарелкам и подавайте с хрустящим печеньем (классически — каммерюнкере) прямо в супе.",
+    notes: "Используйте только свежие яйца, так как желтки не подвергаются термообработке. По желанию добавьте свежие ягоды."
+  },
+  {
+    id: "brunekager-datskoe-rozhdestvenskoe-pryan", title: "Брунекагер (датское рождественское пряное печенье)", forKid: true, kidNote: "Содержит орехи (миндаль) — учитывайте при аллергии.",
+    category: "Выпечка", cuisine: "Датская", photo: "",
+    prepTime: 25, cookTime: 10, time: 35, difficulty: 2, baseServings: 6, kcal: 410,
+    equipment: ["миска", "противень", "пергамент", "скалка"], allergens: ["глютен", "молоко", "орехи"], tags: ["печенье", "рождество", "пряное", "хрустящее"],
+    ingredients: [
+      { name: "Мука пшеничная", qty: 350, unit: "г", group: "Бакалея", staple: true },
+      { name: "Сахар коричневый", qty: 200, unit: "г", group: "Бакалея", staple: false },
+      { name: "Сироп тёмный (или мёд)", qty: 100, unit: "г", group: "Бакалея", staple: false },
+      { name: "Сливочное масло", qty: 125, unit: "г", group: "Молочное", staple: true },
+      { name: "Корица молотая", qty: 2, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Гвоздика молотая", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Имбирь молотый", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Сода пищевая", qty: 1, unit: "ч.л.", group: "Бакалея", staple: true },
+      { name: "Миндаль (лепестки)", qty: 60, unit: "г", group: "Бакалея", staple: false },
+      { name: "Цедра апельсина", qty: 1, unit: "ч.л.", group: "Специи", staple: false }
+    ],
+    steps: [
+      { title: "Сироп с маслом", text: "Прогрейте сироп, коричневый сахар и масло в кастрюле до растворения сахара, не доводя до кипения. Слегка остудите." },
+      { title: "Замес теста", text: "Смешайте муку с содой, специями и цедрой, влейте тёплую сиропную массу и быстро замесите гладкое тесто." },
+      { title: "Формовка", text: "Сформируйте из теста плотный брусок, заверните в плёнку и охладите, чтобы оно затвердело.", timer: 7200 },
+      { title: "Нарезка", text: "Нарежьте охлаждённый брусок на тонкие ломтики, выложите на противень с пергаментом, вдавите в каждый миндальный лепесток." },
+      { title: "Выпечка", text: "Выпекайте в разогретой до 180°C духовке до золотисто-коричневого цвета и хрусткости.", timer: 600 }
+    ],
+    serveWith: "Подавайте к глинтвейну (gløgg), кофе или чаю в холодное время года.",
+    notes: "Тесто должно как следует охладиться (минимум 2 часа, лучше ночь) — тогда печенье нарежется тонко и получится хрустящим. Это пассивное время не входит в активное."
+  },
+  {
+    id: "redkol-datskaya-tushenaya-krasnaya-kapus", title: "Рёдкол (датская тушёная красная капуста)", forKid: true, kidNote: "",
+    category: "Гарнир", cuisine: "Датская", photo: "",
+    prepTime: 15, cookTime: 60, time: 75, difficulty: 1, baseServings: 6, kcal: 150,
+    equipment: ["кастрюля с крышкой"], allergens: [], tags: ["гарнир", "рождество", "кисло-сладкое", "капуста"],
+    ingredients: [
+      { name: "Капуста краснокочанная", qty: 1000, unit: "г", group: "Овощи", staple: false },
+      { name: "Яблоко кислое", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Уксус яблочный", qty: 60, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Сахар", qty: 3, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Сливочное масло", qty: 30, unit: "г", group: "Молочное", staple: true },
+      { name: "Смородиновое желе (или сок)", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Гвоздика", qty: 3, unit: "шт", group: "Специи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Нарезка", text: "Капусту нашинкуйте тонкой соломкой, яблоко натрите на крупной тёрке." },
+      { title: "Начало тушения", text: "Растопите масло в кастрюле, добавьте капусту, яблоко, уксус, сахар и гвоздику, перемешайте." },
+      { title: "Тушение", text: "Накройте крышкой и тушите на слабом огне, периодически помешивая, до мягкости капусты.", timer: 3600 },
+      { title: "Финал", text: "В конце вмешайте смородиновое желе, посолите и при необходимости отрегулируйте кисло-сладкий баланс уксусом и сахаром." }
+    ],
+    serveWith: "Классический гарнир к жареной свинине, утке или гусю, особенно на рождественский стол.",
+    notes: "Блюдо вкуснее на следующий день. Готовьте заранее и разогревайте — вкус станет насыщеннее."
+  },
+  {
+    id: "frikadeyler-datskoe-rybnoe-file", title: "Фрикадейлер (датское рыбное филе)", forKid: true, kidNote: "Уберите острый перец для малышей.",
+    category: "Основное", cuisine: "Датская", photo: "",
+    prepTime: 15, cookTime: 20, time: 35, difficulty: 2, baseServings: 4, kcal: 290,
+    equipment: ["сковорода", "мясорубка"], allergens: ["рыба", "яйцо", "молоко", "глютен"], tags: ["рыба", "ужин"],
+    ingredients: [
+      { name: "Филе трески", qty: 600, unit: "г", group: "Рыба", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Яйцо", qty: 1, unit: "шт", group: "Молочное", staple: false },
+      { name: "Мука пшеничная", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Молоко", qty: 80, unit: "мл", group: "Молочное", staple: false },
+      { name: "Сливочное масло", qty: 50, unit: "г", group: "Молочное", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Перец чёрный", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Измельчить рыбу", text: "Филе трески и лук пропустите через мясорубку или измельчите блендером в однородную массу." },
+      { title: "Замесить фарш", text: "Добавьте яйцо, муку, молоко, соль и перец. Тщательно вымешайте до пышной липкой массы, дайте постоять 10 минут.", timer: 600 },
+      { title: "Сформировать", text: "Двумя ложками формуйте овальные котлетки, как клёцки." },
+      { title: "Обжарить", text: "Растопите масло на сковороде и жарьте фискефрикадейлер по 4–5 минут с каждой стороны до золотистой корочки.", timer: 300 }
+    ],
+    serveWith: "Подавайте с отварным картофелем и сливочно-горчичным соусом ремуладе. Хорошо сочетается со свежим зелёным горошком.",
+    notes: "Фарш должен немного отдохнуть, чтобы загустеть — тогда котлетки не разваливаются. Можно добавить щепотку мускатного ореха."
+  },
+  {
+    id: "birnsuppe-datskiy-temnyy-pivnoy-sup", title: "Бирнсуппе (датский тёмный пивной суп)", forKid: false, kidNote: "Содержит пиво (алкоголь), не для детей.",
+    category: "Суп", cuisine: "Датская", photo: "",
+    prepTime: 10, cookTime: 15, time: 25, difficulty: 1, baseServings: 4, kcal: 240,
+    equipment: ["кастрюля", "блендер"], allergens: ["глютен", "яйцо", "молоко"], tags: ["суп", "зима", "пиво"],
+    ingredients: [
+      { name: "Тёмное пиво", qty: 500, unit: "мл", group: "Прочее", staple: false },
+      { name: "Ржаной хлеб", qty: 150, unit: "г", group: "Бакалея", staple: false },
+      { name: "Сахар", qty: 60, unit: "г", group: "Бакалея", staple: true },
+      { name: "Яйцо", qty: 2, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сливки 20%", qty: 100, unit: "мл", group: "Молочное", staple: false },
+      { name: "Цедра лимона", qty: 1, unit: "ч.л.", group: "Прочее", staple: false },
+      { name: "Корица", qty: null, unit: "по вкусу", group: "Специи", staple: false }
+    ],
+    steps: [
+      { title: "Замочить хлеб", text: "Ржаной хлеб залейте пивом и оставьте размокать на 15 минут.", timer: 900 },
+      { title: "Проварить", text: "Доведите смесь до кипения, добавьте сахар, цедру лимона и корицу, варите 10 минут, помешивая.", timer: 600 },
+      { title: "Протереть", text: "Протрите суп через сито или пробейте блендером до гладкости." },
+      { title: "Заправить", text: "Взбейте яйца со сливками и, постоянно мешая, влейте в тёплый (не кипящий!) суп, прогрейте до загустения." }
+    ],
+    serveWith: "Подавайте тёплым со взбитыми сливками или ложкой густой сметаны и сухариками из ржаного хлеба.",
+    notes: "Не доводите суп до кипения после добавления яиц, иначе они свернутся. Традиционно это согревающее зимнее блюдо."
+  },
+  {
+    id: "tartaletki-s-kurinym-ragu-tarteletter", title: "Тарталетки с куриным рагу (Тартелеттер)", forKid: true, kidNote: "",
+    category: "Закуска", cuisine: "Датская", photo: "",
+    prepTime: 15, cookTime: 15, time: 30, difficulty: 2, baseServings: 4, kcal: 320,
+    equipment: ["кастрюля", "сотейник"], allergens: ["глютен", "молоко"], tags: ["закуска", "праздник"],
+    ingredients: [
+      { name: "Готовые тарталетки из слоёного теста", qty: 8, unit: "шт", group: "Бакалея", staple: false },
+      { name: "Куриное филе", qty: 300, unit: "г", group: "Мясо", staple: false },
+      { name: "Спаржа консервированная", qty: 150, unit: "г", group: "Бакалея", staple: false },
+      { name: "Сливочное масло", qty: 30, unit: "г", group: "Молочное", staple: true },
+      { name: "Мука пшеничная", qty: 30, unit: "г", group: "Бакалея", staple: true },
+      { name: "Молоко", qty: 300, unit: "мл", group: "Молочное", staple: false },
+      { name: "Куриный бульон", qty: 100, unit: "мл", group: "Прочее", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Перец белый", qty: null, unit: "по вкусу", group: "Специи", staple: false }
+    ],
+    steps: [
+      { title: "Отварить курицу", text: "Отварите куриное филе в подсоленной воде 12–15 минут, остудите и нарежьте кубиками.", timer: 780 },
+      { title: "Сделать соус", text: "Растопите масло, всыпьте муку, обжарьте минуту. Постепенно влейте молоко и бульон, варите до загустения соуса бешамель." },
+      { title: "Собрать начинку", text: "Добавьте в соус курицу и нарезанную спаржу, прогрейте, посолите и поперчите." },
+      { title: "Наполнить", text: "Прогрейте тарталетки в духовке 3–4 минуты и наполните горячим рагу перед подачей.", timer: 240 }
+    ],
+    serveWith: "Подавайте сразу горячими как закуску или лёгкий обед, с бокалом белого вина или зелёным салатом.",
+    notes: "Классическая праздничная закуска. Тарталетки наполняйте перед подачей, чтобы тесто оставалось хрустящим."
+  },
+  {
+    id: "dremmekage-datskiy-tort-mechty", title: "Дрёммекаге (датский торт мечты)", forKid: true, kidNote: "",
+    category: "Выпечка", cuisine: "Датская", photo: "",
+    prepTime: 15, cookTime: 25, time: 40, difficulty: 2, baseServings: 8, kcal: 380,
+    equipment: ["духовка", "форма для выпечки", "миксер"], allergens: ["глютен", "яйцо", "молоко"], tags: ["выпечка", "к чаю", "торт"],
+    ingredients: [
+      { name: "Мука пшеничная", qty: 200, unit: "г", group: "Бакалея", staple: true },
+      { name: "Сахар", qty: 200, unit: "г", group: "Бакалея", staple: true },
+      { name: "Яйцо", qty: 3, unit: "шт", group: "Молочное", staple: false },
+      { name: "Молоко", qty: 150, unit: "мл", group: "Молочное", staple: false },
+      { name: "Разрыхлитель", qty: 2, unit: "ч.л.", group: "Бакалея", staple: false },
+      { name: "Сливочное масло", qty: 75, unit: "г", group: "Молочное", staple: true },
+      { name: "Кокосовая стружка", qty: 100, unit: "г", group: "Бакалея", staple: false },
+      { name: "Коричневый сахар", qty: 150, unit: "г", group: "Бакалея", staple: false }
+    ],
+    steps: [
+      { title: "Взбить основу", text: "Взбейте яйца с белым сахаром до пышности. Растопите 50 г масла." },
+      { title: "Замесить тесто", text: "Смешайте муку с разрыхлителем, вмешайте в яичную массу попеременно с молоком и растопленным маслом." },
+      { title: "Выпечь корж", text: "Вылейте тесто в форму и выпекайте при 200°C около 20 минут.", timer: 1200 },
+      { title: "Сделать топпинг", text: "Растопите 25 г масла с коричневым сахаром и кокосом, добавьте ложку молока. Намажьте на корж." },
+      { title: "Запечь верх", text: "Верните торт в духовку ещё на 5 минут, пока топпинг не карамелизуется.", timer: 300 }
+    ],
+    serveWith: "Подавайте остывшим к чаю или кофе, нарезав квадратами. Хорош со стаканом холодного молока.",
+    notes: "Карамельный кокосовый верх — визитная карточка этого торта. Не пересушите при втором запекании."
+  },
+  {
+    id: "kebenhavner-datskiy-sloenyy-krem-desert", title: "Кёбенхавнер (датский слоёный крем-десерт)", forKid: false, kidNote: "Содержит кофе; для детей замените на молоко.",
+    category: "Десерт", cuisine: "Датская", photo: "",
+    prepTime: 25, cookTime: 0, time: 25, difficulty: 2, baseServings: 4, kcal: 410,
+    equipment: ["миксер", "бокалы"], allergens: ["молоко", "глютен"], tags: ["десерт", "шоколад", "без выпечки"],
+    ingredients: [
+      { name: "Сливки 33%", qty: 300, unit: "мл", group: "Молочное", staple: false },
+      { name: "Сахар", qty: 80, unit: "г", group: "Бакалея", staple: true },
+      { name: "Макароны амаретти или печенье", qty: 100, unit: "г", group: "Бакалея", staple: false },
+      { name: "Шоколад тёмный", qty: 80, unit: "г", group: "Бакалея", staple: false },
+      { name: "Кофе крепкий", qty: 50, unit: "мл", group: "Прочее", staple: false },
+      { name: "Ванильный сахар", qty: 1, unit: "ч.л.", group: "Бакалея", staple: false }
+    ],
+    steps: [
+      { title: "Взбить сливки", text: "Взбейте холодные сливки с сахаром и ванилью до устойчивых пиков." },
+      { title: "Подготовить печенье", text: "Раскрошите печенье и слегка пропитайте крошку остывшим кофе." },
+      { title: "Растопить шоколад", text: "Растопите шоколад на водяной бане и дайте слегка остыть." },
+      { title: "Собрать слоями", text: "В бокалах чередуйте слои взбитых сливок, печенья и тёртого шоколада." },
+      { title: "Охладить", text: "Уберите в холодильник минимум на 2 часа, чтобы десерт пропитался." }
+    ],
+    serveWith: "Подавайте охлаждённым в порционных бокалах, украсив шоколадной стружкой и ягодами.",
+    notes: "Пассивное время охлаждения — 2 часа, лучше оставить на ночь. Для детской версии замените кофе молоком."
+  },
+  {
+    id: "fiskesuppe-norvezhskiy-rybnyy-sup", title: "Фискесуппе (норвежский рыбный суп)", forKid: true, kidNote: "Уберите перец для детской порции и проверьте отсутствие косточек.",
+    category: "Суп", cuisine: "Норвежская", photo: "",
+    prepTime: 15, cookTime: 25, time: 40, difficulty: 2, baseServings: 4, kcal: 380,
+    equipment: ["кастрюля", "нож", "разделочная доска"], allergens: ["рыба", "ракообразные", "молоко"], tags: ["рыба", "суп", "сливочный"],
+    ingredients: [
+      { name: "Филе трески", qty: 300, unit: "г", group: "Рыба", staple: false },
+      { name: "Филе лосося", qty: 200, unit: "г", group: "Рыба", staple: false },
+      { name: "Креветки очищенные", qty: 150, unit: "г", group: "Рыба", staple: false },
+      { name: "Картофель", qty: 300, unit: "г", group: "Овощи", staple: false },
+      { name: "Морковь", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лук-порей", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Сливки 20%", qty: 200, unit: "мл", group: "Молочное", staple: false },
+      { name: "Рыбный бульон", qty: 800, unit: "мл", group: "Прочее", staple: false },
+      { name: "Сливочное масло", qty: 30, unit: "г", group: "Молочное", staple: true },
+      { name: "Укроп", qty: 1, unit: "пучок", group: "Зелень", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Чёрный перец", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Овощи", text: "Картофель и морковь нарежьте кубиками, лук-порей — кольцами. Обжарьте порей на сливочном масле 2 минуты." },
+      { title: "Варка основы", text: "Влейте рыбный бульон, добавьте картофель и морковь. Варите до мягкости овощей.", timer: 900 },
+      { title: "Сливки", text: "Влейте сливки, прогрейте, не доводя до бурного кипения." },
+      { title: "Рыба", text: "Нарежьте треску и лосось кусочками, опустите в суп. Варите 4 минуты, добавьте креветки на последнюю минуту.", timer: 300 },
+      { title: "Подача", text: "Приправьте солью и перцем, посыпьте рубленым укропом." }
+    ],
+    serveWith: "Подавайте с хрустящим деревенским хлебом и сливочным маслом.",
+    notes: "Не кипятите суп после добавления сливок — они могут свернуться. Рыбу кладите в конце, чтобы не разварилась."
+  },
+  {
+    id: "kettkaker-norvezhskie-myasnye-kotlety-v-", title: "Кьётткакер (норвежские мясные котлеты в подливе)", forKid: true, kidNote: "",
+    category: "Основное", cuisine: "Норвежская", photo: "",
+    prepTime: 20, cookTime: 25, time: 45, difficulty: 2, baseServings: 4, kcal: 520,
+    equipment: ["сковорода", "миска"], allergens: ["глютен", "молоко"], tags: ["мясо", "котлеты", "ужин"],
+    ingredients: [
+      { name: "Фарш говяжий", qty: 600, unit: "г", group: "Мясо", staple: false },
+      { name: "Молоко", qty: 150, unit: "мл", group: "Молочное", staple: false },
+      { name: "Картофельный крахмал", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Имбирь молотый", qty: 0.5, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Мускатный орех", qty: null, unit: "по вкусу", group: "Специи", staple: false },
+      { name: "Говяжий бульон", qty: 500, unit: "мл", group: "Прочее", staple: false },
+      { name: "Мука пшеничная", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Сливочное масло", qty: 40, unit: "г", group: "Молочное", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Чёрный перец", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Фарш", text: "Смешайте фарш с тёртым луком, крахмалом, солью, перцем, имбирём и мускатом. Постепенно вмешайте молоко до однородной массы." },
+      { title: "Формовка", text: "Сформуйте крупные плоские котлеты, по размеру чуть больше биточков." },
+      { title: "Обжарка", text: "Обжарьте котлеты на сливочном масле до румяной корочки с обеих сторон.", timer: 600 },
+      { title: "Подлива", text: "В сковороде спассеруйте муку на масле, влейте бульон, размешивая до загустения.", timer: 300 },
+      { title: "Тушение", text: "Верните котлеты в подливу и тушите под крышкой 15 минут.", timer: 900 }
+    ],
+    serveWith: "Подавайте с отварным картофелем, брусничным вареньем и тушёным горошком.",
+    notes: "Классически в подливу добавляют немного коричневого сыра (брюнуст) для характерного карамельного оттенка."
+  },
+  {
+    id: "gravlaks-marinovannyy-losos-s-ukropom", title: "Гравлакс (маринованный лосось с укропом)", forKid: false, kidNote: "Сырая маринованная рыба не рекомендована маленьким детям.",
+    category: "Закуска", cuisine: "Норвежская", photo: "",
+    prepTime: 20, cookTime: 0, time: 20, difficulty: 1, baseServings: 6, kcal: 240,
+    equipment: ["форма", "пищевая плёнка", "острый нож"], allergens: ["рыба"], tags: ["рыба", "закуска", "холодное"],
+    ingredients: [
+      { name: "Филе лосося с кожей", qty: 800, unit: "г", group: "Рыба", staple: false },
+      { name: "Соль крупная", qty: 80, unit: "г", group: "Специи", staple: true },
+      { name: "Сахар", qty: 80, unit: "г", group: "Бакалея", staple: true },
+      { name: "Укроп", qty: 2, unit: "пучок", group: "Зелень", staple: false },
+      { name: "Чёрный перец молотый", qty: 1, unit: "ст.л.", group: "Специи", staple: false }
+    ],
+    steps: [
+      { title: "Засолка", text: "Смешайте соль, сахар и перец. Натрите этой смесью филе лосося со всех сторон." },
+      { title: "Укроп", text: "Обильно покройте рыбу рубленым укропом." },
+      { title: "Гнёт", text: "Заверните в плёнку, положите в форму, сверху поставьте груз и уберите в холодильник." },
+      { title: "Выдержка", text: "Маринуйте 2 суток, переворачивая рыбу дважды в день." },
+      { title: "Нарезка", text: "Соскребите укроп и соль, нарежьте тонкими ломтиками наискось." }
+    ],
+    serveWith: "Подавайте с горчично-укропным соусом, ржаным хлебом и ломтиком лимона.",
+    notes: "Активное время мало, но рыба должна мариноваться 48 часов в холодильнике под гнётом. Используйте свежайший лосось."
+  },
+  {
+    id: "raskruchennyy-korichnevyy-sup-follebidde", title: "Раскручённый коричневый суп Фоллебиддер... Бломкольсуппе (норвежский суп из цветной капусты)", forKid: true, kidNote: "",
+    category: "Суп", cuisine: "Норвежская", photo: "",
+    prepTime: 10, cookTime: 20, time: 30, difficulty: 1, baseServings: 4, kcal: 260,
+    equipment: ["кастрюля", "блендер"], allergens: ["молоко"], tags: ["суп", "овощной", "вегетарианское"],
+    ingredients: [
+      { name: "Цветная капуста", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Картофель", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Овощной бульон", qty: 700, unit: "мл", group: "Прочее", staple: false },
+      { name: "Сливки 20%", qty: 150, unit: "мл", group: "Молочное", staple: false },
+      { name: "Сливочное масло", qty: 30, unit: "г", group: "Молочное", staple: true },
+      { name: "Мускатный орех", qty: null, unit: "по вкусу", group: "Специи", staple: false },
+      { name: "Петрушка", qty: 1, unit: "пучок", group: "Зелень", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Чёрный перец", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Подготовка", text: "Разберите капусту на соцветия, картофель и лук нарежьте кубиками." },
+      { title: "Пассеровка", text: "Обжарьте лук на сливочном масле до прозрачности." },
+      { title: "Варка", text: "Добавьте капусту и картофель, влейте бульон, варите до мягкости.", timer: 1200 },
+      { title: "Пюрирование", text: "Пробейте суп блендером до гладкости, влейте сливки, приправьте мускатом, солью и перцем." },
+      { title: "Подача", text: "Разлейте по тарелкам, посыпьте петрушкой." }
+    ],
+    serveWith: "Подавайте с гренками из ржаного хлеба и щепоткой тёртого сыра.",
+    notes: "Оставьте несколько соцветий капусты целыми и добавьте в конце для текстуры."
+  },
+  {
+    id: "skullebuller-norvezhskie-bulochki-s-kard", title: "Скуллебуллер (норвежские булочки с кардамоном)", forKid: true, kidNote: "",
+    category: "Выпечка", cuisine: "Норвежская", photo: "",
+    prepTime: 30, cookTime: 15, time: 45, difficulty: 2, baseServings: 12, kcal: 290,
+    equipment: ["миска", "противень", "духовка"], allergens: ["глютен", "молоко", "яйцо"], tags: ["выпечка", "булочки", "кардамон"],
+    ingredients: [
+      { name: "Мука пшеничная", qty: 500, unit: "г", group: "Бакалея", staple: true },
+      { name: "Молоко", qty: 250, unit: "мл", group: "Молочное", staple: false },
+      { name: "Дрожжи сухие", qty: 7, unit: "г", group: "Бакалея", staple: false },
+      { name: "Сахар", qty: 80, unit: "г", group: "Бакалея", staple: true },
+      { name: "Сливочное масло", qty: 80, unit: "г", group: "Молочное", staple: true },
+      { name: "Яйцо", qty: 1, unit: "шт", group: "Молочное", staple: false },
+      { name: "Кардамон молотый", qty: 2, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Изюм", qty: 80, unit: "г", group: "Бакалея", staple: false },
+      { name: "Соль", qty: 0.5, unit: "ч.л.", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Опара", text: "Подогрейте молоко до тёплого, растворите дрожжи и ложку сахара, оставьте на 10 минут.", timer: 600 },
+      { title: "Тесто", text: "Смешайте муку, сахар, кардамон, соль. Добавьте опару, яйцо и мягкое масло, замесите гладкое тесто." },
+      { title: "Расстойка", text: "Вмешайте изюм, накройте и дайте подойти в тепле до удвоения." },
+      { title: "Формовка", text: "Разделите тесто на 12 шариков, выложите на противень и дайте подойти ещё 20 минут.", timer: 1200 },
+      { title: "Выпечка", text: "Смажьте взбитым яйцом и выпекайте при 220°C до золотистости.", timer: 900 }
+    ],
+    serveWith: "Подавайте тёплыми со сливочным маслом и чашкой кофе.",
+    notes: "Тесто должно подняться дважды — первый раз около 1 часа в тепле, это пассивное время. Кардамон — обязательная нота скандинавской выпечки."
+  },
+  {
+    id: "tilslerte-bondepiker-norvezhskiy-yabloch", title: "Тильслёрте бондепикер (норвежский яблочный десерт)", forKid: true, kidNote: "",
+    category: "Десерт", cuisine: "Норвежская", photo: "",
+    prepTime: 15, cookTime: 10, time: 25, difficulty: 1, baseServings: 4, kcal: 320,
+    equipment: ["кастрюля", "сковорода", "миксер", "стаканы"], allergens: ["глютен", "молоко"], tags: ["десерт", "яблоки", "холодное"],
+    ingredients: [
+      { name: "Яблоки", qty: 4, unit: "шт", group: "Овощи", staple: false },
+      { name: "Сахар", qty: 60, unit: "г", group: "Бакалея", staple: true },
+      { name: "Сухари панировочные", qty: 100, unit: "г", group: "Бакалея", staple: false },
+      { name: "Сливочное масло", qty: 50, unit: "г", group: "Молочное", staple: true },
+      { name: "Сливки для взбивания 33%", qty: 200, unit: "мл", group: "Молочное", staple: false },
+      { name: "Корица молотая", qty: 0.5, unit: "ч.л.", group: "Специи", staple: false }
+    ],
+    steps: [
+      { title: "Яблочное пюре", text: "Очистите и нарежьте яблоки, потушите с половиной сахара до мягкости, разомните в пюре.", timer: 600 },
+      { title: "Сухари", text: "Обжарьте сухари на масле с оставшимся сахаром и корицей до карамельной хрусткости." },
+      { title: "Сливки", text: "Взбейте сливки до мягких пиков." },
+      { title: "Сборка", text: "В стаканы выложите слоями яблочное пюре, сухари и взбитые сливки." },
+      { title: "Охлаждение", text: "Уберите в холодильник минимум на 30 минут перед подачей." }
+    ],
+    serveWith: "Подавайте холодным в порционных стаканах, украсив крошкой сухарей и ягодами.",
+    notes: "Название переводится как «деревенские девушки под вуалью». Дайте десерту настояться в холоде, чтобы вкусы соединились."
+  },
+  {
+    id: "for-o-rovn-zapechennaya-baranina-s-kapus", title: "Фор о ровн (запечённая баранина с капустой)", forKid: true, kidNote: "Для детей убавьте перец-горошек или подавайте без него.",
+    category: "Основное", cuisine: "Норвежская", photo: "",
+    prepTime: 20, cookTime: 120, time: 140, difficulty: 2, baseServings: 4, kcal: 620,
+    equipment: ["казан или толстостенная кастрюля"], allergens: [], tags: ["норвежская кухня", "осень", "томлёное"],
+    ingredients: [
+      { name: "Баранина на кости (лопатка/шея)", qty: 1200, unit: "г", group: "Мясо", staple: false },
+      { name: "Белокочанная капуста", qty: 1, unit: "кочан", group: "Овощи", staple: false },
+      { name: "Чёрный перец горошком", qty: 1, unit: "ст.л.", group: "Специи", staple: false },
+      { name: "Мука пшеничная", qty: 1, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Вода", qty: 400, unit: "мл", group: "Прочее", staple: true }
+    ],
+    steps: [
+      { title: "Нарезка", text: "Баранину нарежьте крупными кусками, капусту — дольками примерно 3–4 см." },
+      { title: "Укладка слоями", text: "В кастрюлю выкладывайте слоями мясо и капусту, пересыпая солью, мукой и перцем горошком." },
+      { title: "Залить водой", text: "Влейте воду, доведите до кипения на сильном огне." },
+      { title: "Томление", text: "Накройте крышкой и тушите на слабом огне до мягкости мяса.", timer: 7200 },
+      { title: "Подача", text: "Дайте постоять 10 минут, подавайте прямо в бульоне." }
+    ],
+    serveWith: "Подавайте с отварным картофелем и свежим хлебом, полив бульоном из кастрюли.",
+    notes: "Классическое осеннее блюдо «får i kål». Чем дольше томится, тем нежнее мясо — можно держать на огне до 2,5 часов."
+  },
+  {
+    id: "ertesuppe-norvezhskiy-gorohovyy-sup-s-ko", title: "Эртесуппе (норвежский гороховый суп с копчёностями)", forKid: true, kidNote: "",
+    category: "Суп", cuisine: "Норвежская", photo: "",
+    prepTime: 15, cookTime: 90, time: 105, difficulty: 1, baseServings: 4, kcal: 410,
+    equipment: ["большая кастрюля"], allergens: [], tags: ["норвежская кухня", "сытный суп", "зима"],
+    ingredients: [
+      { name: "Жёлтый колотый горох", qty: 350, unit: "г", group: "Бакалея", staple: false },
+      { name: "Копчёная свиная рулька или грудинка", qty: 500, unit: "г", group: "Мясо", staple: false },
+      { name: "Морковь", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Лук-порей", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Тимьян сушёный", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Вода", qty: 2, unit: "л", group: "Прочее", staple: true }
+    ],
+    steps: [
+      { title: "Замочить горох", text: "Залейте горох холодной водой и оставьте на ночь, затем слейте." },
+      { title: "Варка мяса", text: "Положите горох и копчёность в кастрюлю, залейте водой, доведите до кипения и снимите пену.", timer: 600 },
+      { title: "Овощи", text: "Добавьте нарезанные морковь, лук и порей, тимьян. Варите до разваривания гороха.", timer: 4500 },
+      { title: "Разобрать мясо", text: "Достаньте мясо, снимите с кости, нарежьте и верните в суп." },
+      { title: "Досолить", text: "Посолите по вкусу — учитывайте солёность копчёностей." }
+    ],
+    serveWith: "Подавайте с ржаным хлебом и горчицей; традиционно — в четверг перед постным днём.",
+    notes: "Не солите в начале — копчёное мясо уже отдаёт соль. Замачивание гороха обязательно сократит время варки."
+  },
+  {
+    id: "sildesalat-norvezhskiy-salat-iz-seldi-i-", title: "Сильдесалат (норвежский салат из сельди и свёклы)", forKid: false, kidNote: "Содержит солёную сельдь — не для маленьких детей.",
+    category: "Закуска", cuisine: "Норвежская", photo: "",
+    prepTime: 25, cookTime: 0, time: 25, difficulty: 1, baseServings: 4, kcal: 240,
+    equipment: ["миска"], allergens: ["рыба", "яйцо"], tags: ["норвежская кухня", "праздничный стол", "рождество"],
+    ingredients: [
+      { name: "Филе солёной сельди", qty: 250, unit: "г", group: "Рыба", staple: false },
+      { name: "Свёкла варёная", qty: 300, unit: "г", group: "Овощи", staple: false },
+      { name: "Яблоко кисло-сладкое", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Картофель варёный", qty: 200, unit: "г", group: "Овощи", staple: false },
+      { name: "Маринованный огурец", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Сметана", qty: 100, unit: "мл", group: "Молочное", staple: false },
+      { name: "Яйцо варёное", qty: 2, unit: "шт", group: "Молочное", staple: false },
+      { name: "Уксус", qty: 1, unit: "ст.л.", group: "Бакалея", staple: true }
+    ],
+    steps: [
+      { title: "Нарезка кубиком", text: "Нарежьте сельдь, свёклу, яблоко, картофель и огурец мелким кубиком." },
+      { title: "Смешать", text: "Соедините всё в миске, добавьте уксус." },
+      { title: "Заправка", text: "Вмешайте сметану, перемешайте до однородного розового цвета." },
+      { title: "Охлаждение", text: "Уберите в холодильник на час, чтобы вкусы соединились.", timer: 3600 },
+      { title: "Подача", text: "Украсьте дольками варёного яйца." }
+    ],
+    serveWith: "Подавайте охлаждённым на ржаном хлебе как часть рождественского стола (julebord).",
+    notes: "Если сельдь очень солёная, вымочите её в молоке 30 минут перед нарезкой."
+  },
+  {
+    id: "kransekake-norvezhskiy-mindalnyy-tort-ba", title: "Крансекаке (норвежский миндальный торт-башня)", forKid: true, kidNote: "Содержит орехи — проверьте на аллергию у ребёнка.",
+    category: "Десерт", cuisine: "Норвежская", photo: "",
+    prepTime: 40, cookTime: 15, time: 55, difficulty: 3, baseServings: 8, kcal: 480,
+    equipment: ["формы для колец крансекаке", "миксер", "кондитерский мешок"], allergens: ["орехи", "яйцо"], tags: ["норвежская кухня", "праздничный", "17 мая"],
+    ingredients: [
+      { name: "Миндальная мука", qty: 500, unit: "г", group: "Бакалея", staple: false },
+      { name: "Сахарная пудра", qty: 500, unit: "г", group: "Бакалея", staple: false },
+      { name: "Яичные белки", qty: 3, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сахарная пудра для глазури", qty: 150, unit: "г", group: "Бакалея", staple: false },
+      { name: "Яичный белок для глазури", qty: 1, unit: "шт", group: "Молочное", staple: false }
+    ],
+    steps: [
+      { title: "Замес массы", text: "Смешайте миндальную муку и сахарную пудру, добавьте белки до плотного теста." },
+      { title: "Отдых теста", text: "Заверните в плёнку и охладите.", timer: 3600 },
+      { title: "Формовка колец", text: "Раскатайте жгуты разного диаметра и уложите в формы для колец." },
+      { title: "Выпечка", text: "Выпекайте при 200°C до светло-золотистого цвета.", timer: 900 },
+      { title: "Глазурь и сборка", text: "Взбейте белок с пудрой, нанесите зигзагом и соберите кольца в башню от большего к меньшему." }
+    ],
+    serveWith: "Подавайте на праздники с шампанским или морсом, украсив флажками и марципановыми фигурками.",
+    notes: "Крансекаке готовят на свадьбы, Рождество и День Конституции 17 мая. Кольца должны остыть в формах, иначе сломаются."
+  },
+  {
+    id: "skillingsboller-norvezhskie-korichnye-bu", title: "Скиллингсболлер (норвежские коричные булочки)", forKid: true, kidNote: "",
+    category: "Выпечка", cuisine: "Норвежская", photo: "",
+    prepTime: 40, cookTime: 18, time: 58, difficulty: 2, baseServings: 12, kcal: 320,
+    equipment: ["миксер с крюком", "противень", "скалка"], allergens: ["глютен", "молоко", "яйцо"], tags: ["норвежская кухня", "к кофе", "сладкая выпечка"],
+    ingredients: [
+      { name: "Мука пшеничная", qty: 500, unit: "г", group: "Бакалея", staple: true },
+      { name: "Молоко", qty: 250, unit: "мл", group: "Молочное", staple: false },
+      { name: "Сливочное масло", qty: 100, unit: "г", group: "Молочное", staple: false },
+      { name: "Сахар", qty: 80, unit: "г", group: "Бакалея", staple: true },
+      { name: "Свежие дрожжи", qty: 25, unit: "г", group: "Прочее", staple: false },
+      { name: "Кардамон молотый", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Корица молотая", qty: 2, unit: "ст.л.", group: "Специи", staple: false },
+      { name: "Коричневый сахар", qty: 100, unit: "г", group: "Бакалея", staple: false },
+      { name: "Яйцо", qty: 1, unit: "шт", group: "Молочное", staple: false }
+    ],
+    steps: [
+      { title: "Тесто", text: "Растворите дрожжи в тёплом молоке, добавьте сахар, кардамон, мягкое масло и муку, замесите гладкое тесто." },
+      { title: "Расстойка", text: "Накройте и дайте подойти в тепле вдвое.", timer: 3600 },
+      { title: "Начинка", text: "Раскатайте пласт, смажьте маслом, посыпьте коричным сахаром, сверните рулетом." },
+      { title: "Формовка", text: "Нарежьте на кусочки, выложите на противень, дайте подойти.", timer: 1800 },
+      { title: "Выпечка", text: "Смажьте яйцом и выпекайте при 220°C до румяности.", timer: 1080 }
+    ],
+    serveWith: "Подавайте тёплыми к чашке кофе — классическая норвежская традиция «kos».",
+    notes: "Кардамон в тесте — обязательный норвежский акцент. Не пересушите: булочки должны остаться мягкими внутри."
+  },
+  {
+    id: "lapskaus-norvezhskoe-ragu-s-govyadinoy-i", title: "Лапскаус (норвежское рагу с говядиной и картофелем)", forKid: true, kidNote: "",
+    category: "Основное", cuisine: "Норвежская", photo: "",
+    prepTime: 20, cookTime: 75, time: 95, difficulty: 1, baseServings: 4, kcal: 480,
+    equipment: ["большая кастрюля"], allergens: [], tags: ["норвежская кухня", "домашнее", "сытное"],
+    ingredients: [
+      { name: "Говядина для тушения", qty: 600, unit: "г", group: "Мясо", staple: false },
+      { name: "Картофель", qty: 600, unit: "г", group: "Овощи", staple: false },
+      { name: "Морковь", qty: 3, unit: "шт", group: "Овощи", staple: false },
+      { name: "Брюква", qty: 200, unit: "г", group: "Овощи", staple: false },
+      { name: "Лук-порей", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Мясной бульон", qty: 800, unit: "мл", group: "Прочее", staple: false },
+      { name: "Лавровый лист", qty: 2, unit: "шт", group: "Специи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Чёрный перец", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Обжарка мяса", text: "Нарежьте говядину кубиком и обжарьте в кастрюле до румянца." },
+      { title: "Тушение мяса", text: "Залейте бульоном, добавьте лавровый лист, тушите до мягкости.", timer: 2700 },
+      { title: "Овощи", text: "Добавьте кубики картофеля, моркови и брюквы, варите до готовности.", timer: 1500 },
+      { title: "Загустение", text: "Часть картофеля разомните прямо в рагу, чтобы получился густой соус." },
+      { title: "Финал", text: "Добавьте нарезанный порей, посолите и поперчите, прогрейте пару минут." }
+    ],
+    serveWith: "Подавайте с ломтём ржаного хлеба с маслом и брусничным вареньем.",
+    notes: "«Brun lapskaus» — коричневый вариант с обжаренным мясом; для светлого («lys») мясо не зажаривают. Отличный способ использовать остатки варёного мяса."
+  },
+  {
+    id: "forenikar-norvezhskie-barani-frikadelki-", title: "Фореникар (норвежские бараньи фрикадельки в белом соусе)", forKid: true, kidNote: "Для детей сократите перец.",
+    category: "Основное", cuisine: "Норвежская", photo: "",
+    prepTime: 20, cookTime: 30, time: 50, difficulty: 2, baseServings: 4, kcal: 480,
+    equipment: ["кастрюля", "сотейник"], allergens: ["глютен", "молоко"], tags: ["норвежская кухня", "баранина"],
+    ingredients: [
+      { name: "Баранина (лопатка), фарш", qty: 600, unit: "г", group: "Мясо", staple: false },
+      { name: "Картофельный крахмал", qty: 2, unit: "ст.л.", group: "Бакалея", staple: false },
+      { name: "Молоко", qty: 150, unit: "мл", group: "Молочное", staple: false },
+      { name: "Лук репчатый", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Имбирь молотый", qty: 0.5, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Сливочное масло", qty: 40, unit: "г", group: "Молочное", staple: true },
+      { name: "Мука пшеничная", qty: 2, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Бульон мясной", qty: 400, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Перец чёрный", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Замесить фарш", text: "Смешайте бараний фарш с тёртым луком, крахмалом, имбирём, солью и перцем. Постепенно влейте молоко и вымешивайте до однородной вязкой массы." },
+      { title: "Сформировать", text: "Влажными руками или ложкой сформируйте крупные фрикадельки размером с мяч для гольфа." },
+      { title: "Отварить", text: "Опустите фрикадельки в кипящий подсоленный бульон и варите на тихом огне до готовности.", timer: 900 },
+      { title: "Соус", text: "Растопите масло, вмешайте муку, влейте часть бульона из-под фрикаделек и проварите до загустения соуса.", timer: 300 },
+      { title: "Подача", text: "Верните фрикадельки в соус, прогрейте пару минут и подавайте." }
+    ],
+    serveWith: "Подавайте с отварным картофелем и тушёной морковью или брюквенным пюре.",
+    notes: "Имбирь — классическая пряность для норвежских фореникар, не пропускайте его. Соус должен быть бархатистым, при необходимости разбавьте молоком."
+  },
+  {
+    id: "betasuppe-norvezhskiy-gustoy-myasnoy-sup", title: "Бетасуппе (норвежский густой мясной суп с овощами)", forKid: true, kidNote: "",
+    category: "Суп", cuisine: "Норвежская", photo: "",
+    prepTime: 20, cookTime: 90, time: 110, difficulty: 1, baseServings: 4, kcal: 320,
+    equipment: ["большая кастрюля"], allergens: [], tags: ["норвежская кухня", "суп"],
+    ingredients: [
+      { name: "Говядина на кости", qty: 600, unit: "г", group: "Мясо", staple: false },
+      { name: "Картофель", qty: 400, unit: "г", group: "Овощи", staple: false },
+      { name: "Морковь", qty: 2, unit: "шт", group: "Овощи", staple: false },
+      { name: "Брюква", qty: 200, unit: "г", group: "Овощи", staple: false },
+      { name: "Лук-порей", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Сельдерей корневой", qty: 150, unit: "г", group: "Овощи", staple: false },
+      { name: "Капуста белокочанная", qty: 200, unit: "г", group: "Овощи", staple: false },
+      { name: "Петрушка свежая", qty: null, unit: "по вкусу", group: "Зелень", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Перец чёрный", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Сварить бульон", text: "Залейте говядину холодной водой, доведите до кипения, снимите пену и варите на медленном огне, посолив.", timer: 3600 },
+      { title: "Подготовить овощи", text: "Нарежьте картофель, морковь, брюкву, сельдерей и капусту крупными кусками, порей — кольцами." },
+      { title: "Добавить овощи", text: "Достаньте мясо, отделите от кости и нарежьте. Положите в бульон корнеплоды и варите 15 минут.", timer: 900 },
+      { title: "Доварить", text: "Добавьте капусту, порей и мясо, варите до мягкости овощей.", timer: 600 },
+      { title: "Подача", text: "Приправьте перцем, посыпьте петрушкой и подавайте горячим." }
+    ],
+    serveWith: "Подавайте с свежим хлебом грубого помола и сливочным маслом.",
+    notes: "Бетасуппе — сытный деревенский суп, в котором мясо и овощи варятся вместе. Чем дольше томится говядина, тем насыщеннее вкус."
+  },
+  {
+    id: "rake-norvezhskaya-seld-po-domashnemu-na-", title: "Раке (норвежская сельдь по-домашнему на хлебе)", forKid: false, kidNote: "Солёная рыба не рекомендуется маленьким детям.",
+    category: "Закуска", cuisine: "Норвежская", photo: "",
+    prepTime: 15, cookTime: 0, time: 15, difficulty: 1, baseServings: 4, kcal: 240,
+    equipment: ["доска", "нож"], allergens: ["рыба", "молоко", "глютен"], tags: ["норвежская кухня", "закуска"],
+    ingredients: [
+      { name: "Сельдь солёная (филе)", qty: 300, unit: "г", group: "Рыба", staple: false },
+      { name: "Лук красный", qty: 1, unit: "шт", group: "Овощи", staple: false },
+      { name: "Сметана", qty: 100, unit: "г", group: "Молочное", staple: false },
+      { name: "Хлеб ржаной", qty: 4, unit: "ломтик", group: "Бакалея", staple: false },
+      { name: "Сливочное масло", qty: 30, unit: "г", group: "Молочное", staple: true },
+      { name: "Укроп свежий", qty: null, unit: "по вкусу", group: "Зелень", staple: false },
+      { name: "Перец чёрный", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Нарезать сельдь", text: "Нарежьте филе сельди небольшими кусочками, удалив все косточки." },
+      { title: "Лук и соус", text: "Тонко нашинкуйте красный лук. Смешайте сметану с измельчённым укропом и перцем." },
+      { title: "Собрать", text: "Намажьте ломтики ржаного хлеба маслом, выложите сельдь, лук и ложку сметанного соуса." },
+      { title: "Подача", text: "Украсьте веточкой укропа и сразу подавайте." }
+    ],
+    serveWith: "Подавайте как смёрребрёд к отварному картофелю или к рюмке аквавита для взрослых.",
+    notes: "Если сельдь слишком солёная, вымочите её в холодном молоке 30 минут перед нарезкой — вкус станет мягче."
+  },
+  {
+    id: "trolkrem-norvezhskiy-vozdushnyy-krem-iz-", title: "Тролькрем (норвежский воздушный крем из брусники)", forKid: false, kidNote: "Содержит сырые яичные белки — не давайте маленьким детям.",
+    category: "Десерт", cuisine: "Норвежская", photo: "",
+    prepTime: 20, cookTime: 0, time: 20, difficulty: 1, baseServings: 4, kcal: 180,
+    equipment: ["миксер", "глубокая миска"], allergens: ["яйцо"], tags: ["норвежская кухня", "десерт"],
+    ingredients: [
+      { name: "Брусника (свежая или замороженная)", qty: 250, unit: "г", group: "Заморозка", staple: false },
+      { name: "Сахар", qty: 120, unit: "г", group: "Бакалея", staple: true },
+      { name: "Яичный белок", qty: 2, unit: "шт", group: "Молочное", staple: false },
+      { name: "Ванильный сахар", qty: 1, unit: "ч.л.", group: "Бакалея", staple: false }
+    ],
+    steps: [
+      { title: "Подготовить ягоды", text: "Разморозьте бруснику при необходимости и слегка разомните вилкой, оставив часть ягод целыми." },
+      { title: "Взбить", text: "В большой чистой миске соедините белки, сахар, ванильный сахар и бруснику. Взбивайте миксером на высокой скорости.", timer: 480 },
+      { title: "До пышности", text: "Продолжайте взбивать, пока масса не станет светло-розовой, густой и пышной, увеличившись в объёме." },
+      { title: "Подача", text: "Разложите крем по креманкам и сразу подавайте." }
+    ],
+    serveWith: "Подавайте с хрустящим печеньем или ванильным соусом и свежими ягодами.",
+    notes: "Используйте только очень свежие яйца и абсолютно сухую миску — иначе крем не взобьётся. Можно заменить бруснику клюквой."
+  },
+  {
+    id: "lefse-kleyne-norvezhskoe-obzharennoe-pec", title: "Лефсе-клейне (норвежское обжаренное печенье)", forKid: true, kidNote: "",
+    category: "Выпечка", cuisine: "Норвежская", photo: "",
+    prepTime: 30, cookTime: 20, time: 50, difficulty: 2, baseServings: 6, kcal: 290,
+    equipment: ["скалка", "кастрюля для фритюра"], allergens: ["глютен", "яйцо", "молоко"], tags: ["норвежская кухня", "рождество", "выпечка"],
+    ingredients: [
+      { name: "Мука пшеничная", qty: 400, unit: "г", group: "Бакалея", staple: true },
+      { name: "Сахар", qty: 100, unit: "г", group: "Бакалея", staple: true },
+      { name: "Яйца", qty: 2, unit: "шт", group: "Молочное", staple: false },
+      { name: "Сливки 33%", qty: 100, unit: "мл", group: "Молочное", staple: false },
+      { name: "Сливочное масло", qty: 40, unit: "г", group: "Молочное", staple: true },
+      { name: "Кардамон молотый", qty: 1, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Разрыхлитель", qty: 1, unit: "ч.л.", group: "Бакалея", staple: false },
+      { name: "Масло растительное (для фритюра)", qty: 500, unit: "мл", group: "Бакалея", staple: true },
+      { name: "Сахарная пудра", qty: null, unit: "по вкусу", group: "Бакалея", staple: false }
+    ],
+    steps: [
+      { title: "Замесить тесто", text: "Взбейте яйца с сахаром, добавьте сливки, растопленное масло, кардамон. Всыпьте муку с разрыхлителем и замесите мягкое тесто." },
+      { title: "Раскатать", text: "Раскатайте тесто тонко и нарежьте ромбами. В центре каждого сделайте надрез и протяните уголок, скрутив фигуру." },
+      { title: "Разогреть масло", text: "Разогрейте растительное масло во фритюре до 180°C." },
+      { title: "Обжарить", text: "Обжаривайте клейне порциями до золотистого цвета, переворачивая.", timer: 120 },
+      { title: "Обсушить и подать", text: "Выложите на бумажные полотенца, остудите и посыпьте сахарной пудрой." }
+    ],
+    serveWith: "Подавайте к кофе или какао — это традиционное рождественское угощение.",
+    notes: "Тесто не должно быть слишком мягким, иначе клейне впитают много масла. Лучше работать с охлаждённым тестом."
+  },
+  {
+    id: "braunkol-norvezhskaya-tushenaya-kapusta-", title: "Браункол (норвежская тушёная капуста со сливками)", forKid: true, kidNote: "",
+    category: "Гарнир", cuisine: "Норвежская", photo: "",
+    prepTime: 10, cookTime: 25, time: 35, difficulty: 1, baseServings: 4, kcal: 210,
+    equipment: ["сковорода с крышкой"], allergens: ["глютен", "молоко"], tags: ["норвежская кухня", "гарнир", "овощи"],
+    ingredients: [
+      { name: "Капуста белокочанная", qty: 700, unit: "г", group: "Овощи", staple: false },
+      { name: "Сливочное масло", qty: 40, unit: "г", group: "Молочное", staple: true },
+      { name: "Сахар", qty: 1, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Мука пшеничная", qty: 1, unit: "ст.л.", group: "Бакалея", staple: true },
+      { name: "Сливки 20%", qty: 150, unit: "мл", group: "Молочное", staple: false },
+      { name: "Бульон овощной", qty: 100, unit: "мл", group: "Бакалея", staple: false },
+      { name: "Тмин", qty: 0.5, unit: "ч.л.", group: "Специи", staple: false },
+      { name: "Соль", qty: null, unit: "по вкусу", group: "Специи", staple: true },
+      { name: "Перец чёрный", qty: null, unit: "по вкусу", group: "Специи", staple: true }
+    ],
+    steps: [
+      { title: "Нашинковать", text: "Тонко нашинкуйте капусту." },
+      { title: "Карамелизовать", text: "Растопите масло, добавьте сахар и капусту, обжаривайте до лёгкого золотистого оттенка.", timer: 600 },
+      { title: "Загустить", text: "Присыпьте мукой, перемешайте, влейте бульон и сливки, добавьте тмин." },
+      { title: "Потушить", text: "Тушите под крышкой на слабом огне до мягкости капусты, приправив солью и перцем.", timer: 900 },
+      { title: "Подача", text: "Подавайте горячей как гарнир." }
+    ],
+    serveWith: "Идеально подходит к жареной свинине, сосискам или мясным фрикаделькам.",
+    notes: "Лёгкая карамелизация сахаром придаёт капусте характерный мягко-сладкий вкус. Не пережаривайте, чтобы блюдо не горчило."
   }
 ];

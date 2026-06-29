@@ -25,6 +25,10 @@ const ONLY = args.only ? String(args.only).split(",").map(s => s.trim()).filter(
 const DRY = !!args.dry;
 const PER_CALL = parseInt(args.batch || "6", 10);
 const MODEL = args.model || "claude-opus-4-8";
+const MAJOR_CAP = parseInt(args.majorcap || "80", 10); // потолок для крупных кухонь (страховка от «скрести по сусекам»)
+// Крупные мировые кухни с обширным репертуаром → генерим до естественного предела (пока модель даёт новое)
+const MAJORS = new Set(["Русская", "Итальянская", "Французская", "Китайская", "Японская", "Индийская", "Тайская", "Вьетнамская", "Мексиканская", "Американская", "Грузинская", "Ближневосточная", "Корейская", "Испанская", "Турецкая", "Греческая", "Узбекская", "Британская"]);
+const targetFor = c => MAJORS.has(c) ? MAJOR_CAP : FLOOR;
 
 // ── API key ──
 function apiKey() {
@@ -174,12 +178,12 @@ function cleanTitle(t) {
   const counts = cuisineCounts(recipes);
   let cuisines = Object.keys(counts).sort((a, b) => counts[a] - counts[b]);
   if (ONLY) cuisines = cuisines.filter(c => ONLY.includes(c));
-  const targets = cuisines.filter(c => counts[c] < FLOOR);
+  const targets = cuisines.filter(c => counts[c] < targetFor(c));
 
-  console.log(`Floor=${FLOOR}, модель=${MODEL}. Кухонь под добор: ${targets.length}`);
+  console.log(`Floor(нишевые)=${FLOOR}, крупные→до ${MAJOR_CAP} (или предел), модель=${MODEL}. Кухонь под добор: ${targets.length}`);
   let totalNeed = 0;
-  for (const c of targets) { console.log(`  ${c}: ${counts[c]} → +${FLOOR - counts[c]}`); totalNeed += FLOOR - counts[c]; }
-  console.log(`Итого новых: ~${totalNeed}`);
+  for (const c of targets) { const need = targetFor(c) - counts[c]; console.log(`  ${c}${MAJORS.has(c) ? " [крупная]" : ""}: ${counts[c]} → +${need}`); totalNeed += need; }
+  console.log(`Итого новых (верхняя оценка): ~${totalNeed}`);
   if (DRY || !targets.length) return;
 
   const usedIds = new Set(recipes.map(r => r.id));
@@ -187,10 +191,10 @@ function cleanTitle(t) {
   for (const cuisine of targets) {
     const have = recipes.filter(r => r.cuisine === cuisine).map(r => r.title);
     const seen = new Set(have.map(norm));
-    let need = FLOOR - counts[cuisine];
+    let need = targetFor(cuisine) - counts[cuisine];
     const fresh = [];
     let guard = 0;
-    while (need > 0 && guard++ < 6) {
+    while (need > 0 && guard++ < 40) {
       const ask = Math.min(need, PER_CALL);
       let gen;
       try { gen = await callOpus(cuisine, ask, [...have, ...fresh.map(r => r.title)]); }
