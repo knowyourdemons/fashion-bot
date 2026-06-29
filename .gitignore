@@ -218,3 +218,7 @@ node_modules/
 # Renderer test artifacts
 renderer/*.png
 renderer/test*.mjs
+
+# Recipe photo pipeline scratch
+.photo_tmp/
+.gen_tmp/

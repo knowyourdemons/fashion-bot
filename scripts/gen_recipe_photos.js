@@ -27,8 +27,12 @@ const args = Object.fromEntries(process.argv.slice(2).map(a => {
 const ONLY = args.only ? String(args.only).split(",").map(s => s.trim()).filter(Boolean) : null;
 const LIMIT = args.limit ? parseInt(args.limit, 10) : Infinity;
 const DRY = !!args.dry;
+const FETCH = !!args.fetch;   // этап 1: скачать кандидатов + manifest.json (без API)
+const APPLY = !!args.apply;   // этап 3: по verdicts.json вписать фото (без API)
 const QA_MODEL = args.model || "claude-sonnet-4-6";
-const N_CAND = 4;
+const N_CAND = args.cand ? parseInt(args.cand, 10) : 4;
+const MANIFEST = path.join(TMP, "manifest.json");
+const VERDICTS = path.join(TMP, "verdicts.json");
 
 function apiKey() {
   const env = fs.readFileSync(path.join(ROOT, ".env"), "utf8");
@@ -36,7 +40,8 @@ function apiKey() {
   if (!m) throw new Error("ANTHROPIC_API_KEYS не найден в .env");
   return m[1].trim().replace(/^["']|["']$/g, "").split(",")[0].trim();
 }
-const KEY = DRY ? "" : apiKey();
+// ключ нужен только старому API-режиму QA; fetch/apply/dry работают на Max через Claude Code
+const KEY = (DRY || FETCH || APPLY) ? "" : apiKey();
 
 function loadRecipes() {
   global.window = {};
@@ -68,20 +73,29 @@ async function getJSON(url) {
   return res.json();
 }
 async function download(url, dest) {
-  const res = await fetch(url, { headers: { "User-Agent": UA } });
-  if (!res.ok) throw new Error("dl HTTP " + res.status);
-  const buf = Buffer.from(await res.arrayBuffer());
-  fs.writeFileSync(dest, buf);
-  return buf;
+  // upload.wikimedia.org троттлит — ретраи с бэкоффом на 429/5xx
+  for (let a = 1; a <= 5; a++) {
+    const res = await fetch(url, { headers: { "User-Agent": UA } });
+    if (res.ok) {
+      const buf = Buffer.from(await res.arrayBuffer());
+      fs.writeFileSync(dest, buf);
+      return buf;
+    }
+    if ((res.status === 429 || res.status >= 500) && a < 5) { await sleep(1200 * a); continue; }
+    throw new Error("dl HTTP " + res.status);
+  }
 }
 
 // ── Wikimedia Commons: кандидаты по названию блюда ──
 const coreTitle = t => String(t).replace(/\(.*?\)/g, "").replace(/[«»"]/g, "").trim();
 function widen(thumburl, px) { return thumburl ? thumburl.replace(/\/\d+px-/, `/${px}px-`) : thumburl; }
 
-async function searchCommons(recipe) {
+async function searchCommons(recipe, term) {
   const core = coreTitle(recipe.title);
-  const queries = [...new Set([core, core + " " + recipe.cuisine, recipe.title.replace(/[«»"]/g, "")])];
+  // term (англ./родное название блюда из terms.json) ищется в Commons НАМНОГО лучше русского title
+  const queries = term
+    ? [...new Set([term, term + " dish", term + " food", core])]
+    : [...new Set([core, core + " " + recipe.cuisine, recipe.title.replace(/[«»"]/g, "")])];
   const found = new Map(); // title -> {thumb480, full}
   for (const q of queries) {
     const url = "https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch="
@@ -160,6 +174,72 @@ im.save(dst,"WEBP",quality=82,method=6)`;
   if (ONLY) pool = pool.filter(r => ONLY.includes(r.cuisine));
   console.log(`Без фото: ${pool.length}${ONLY ? " (кухни: " + ONLY.join(", ") + ")" : ""}. Лимит за прогон: ${LIMIT === Infinity ? "—" : LIMIT}`);
   if (DRY) return;
+
+  // ── ЭТАП 1: --fetch — скачать кандидатов + manifest (без API; QA делает Claude Code на Max) ──
+  if (FETCH) {
+    const TERMS = fs.existsSync(path.join(TMP, "terms.json"))
+      ? JSON.parse(fs.readFileSync(path.join(TMP, "terms.json"), "utf8")) : {};
+    // если термины заданы — обрабатываем ТОЛЬКО рецепты из terms.json (точный контроль батча)
+    if (Object.keys(TERMS).length) pool = pool.filter(r => TERMS[r.id]);
+    console.log(`К обработке: ${pool.length}${Object.keys(TERMS).length ? " (по terms.json)" : ""}`);
+    const manifest = [];
+    let nF = 0, nE = 0, processed = 0;
+    for (const r of pool) {
+      if (processed >= LIMIT) break;
+      processed++;
+      let cands;
+      try { cands = await searchCommons(r, TERMS[r.id]); } catch { cands = []; }
+      if (!cands.length) { nE++; console.log(`  ∅ ${r.title} — нет кандидатов`); continue; }
+      const dir = path.join(TMP, r.id);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const candidates = [];
+      for (let i = 0; i < cands.length; i++) {
+        const file = path.join(dir, `c${i}.jpg`);
+        try { await download(cands[i].thumb, file); candidates.push({ i, file, thumb: cands[i].thumb, full: cands[i].full }); }
+        catch {}
+        await sleep(350);
+      }
+      if (!candidates.length) { nE++; console.log(`  ∅ ${r.title} — не скачалось`); continue; }
+      manifest.push({ id: r.id, title: r.title, cuisine: r.cuisine, category: r.category, candidates });
+      nF++; console.log(`  • ${r.title} — ${candidates.length} канд.`);
+    }
+    fs.writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2));
+    console.log(`\nFETCH готов. Рецептов с кандидатами: ${nF} | без: ${nE}`);
+    console.log(`Манифест: ${MANIFEST}`);
+    console.log(`Дальше: Claude Code читает кадры, пишет ${VERDICTS} ({"<id>": <индекс лучшего | -1>}), затем --apply.`);
+    return;
+  }
+
+  // ── ЭТАП 3: --apply — по verdicts.json вписать выбранные фото (без API) ──
+  if (APPLY) {
+    if (!fs.existsSync(MANIFEST) || !fs.existsSync(VERDICTS)) throw new Error("нет manifest.json/verdicts.json в .photo_tmp");
+    const manifest = JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
+    const verdicts = JSON.parse(fs.readFileSync(VERDICTS, "utf8"));
+    let ok = 0, skip = 0;
+    for (const m of manifest) {
+      const v = verdicts[m.id];
+      if (v == null || v < 0 || v >= m.candidates.length) { skip++; console.log(`  ✗ ${m.title} — пропуск (verdict=${v})`); continue; }
+      const chosen = m.candidates[v];
+      try {
+        const full = path.join(TMP, "full.jpg");
+        // 1100px-апскейл даёт 400, если оригинал уже — фолбэк на 800px и оригинал
+        const urls = [...new Set([widen(chosen.thumb, 1100), widen(chosen.thumb, 800), chosen.full].filter(Boolean))];
+        let src = null;
+        for (const u of urls) { try { await download(u, full); src = full; break; } catch {} }
+        // фолбэк: уже скачанное 480px-превью (для карточки ~440px достаточно)
+        if (!src && fs.existsSync(chosen.file)) { src = chosen.file; console.log(`    (HD недоступен — беру локальное превью)`); }
+        if (!src) throw new Error("все URL дали ошибку и нет локального превью");
+        const out = path.join(IMG_DIR, `${m.id}.webp`);
+        toWebp(src, out);
+        const kb = Math.round(fs.statSync(out).size / 1024);
+        if (setPhoto(m.id, `img/recipes/${m.id}.webp?v=1`)) { ok++; console.log(`  ✓ ${m.title} → ${m.id}.webp (${kb}KB)`); }
+        else console.log(`  ! ${m.title} — не удалось вписать photo`);
+      } catch (e) { console.log(`  ! ${m.title} — ${e.message}`); }
+    }
+    console.log(`\nAPPLY готов. Вписано: ${ok} | пропущено: ${skip}`);
+    console.log(`Осталось без фото: ${loadRecipes().filter(r => !r.photo).length}`);
+    return;
+  }
 
   let done = 0, ok = 0, noCand = 0, rejected = 0, processed = 0;
   for (const r of pool) {

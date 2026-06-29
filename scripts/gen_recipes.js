@@ -20,15 +20,21 @@ const args = Object.fromEntries(process.argv.slice(2).map(a => {
   const m = a.match(/^--([^=]+)(?:=(.*))?$/);
   return m ? [m[1], m[2] === undefined ? true : m[2]] : [a, true];
 }));
-const FLOOR = parseInt(args.floor || "20", 10);
+const FLOOR = parseInt(args.floor || "25", 10);
 const ONLY = args.only ? String(args.only).split(",").map(s => s.trim()).filter(Boolean) : null;
 const DRY = !!args.dry;
+const PLAN = !!args.plan;       // Max-режим, этап 1: выгрузить worklist (.gen_tmp/plan.json), без API
+const INGEST = !!args.ingest;   // Max-режим, этап 3: вписать рецепты из .gen_tmp/ingest.json, без API
 const PER_CALL = parseInt(args.batch || "6", 10);
 const MODEL = args.model || "claude-opus-4-8";
-const MAJOR_CAP = parseInt(args.majorcap || "80", 10); // потолок для крупных кухонь (страховка от «скрести по сусекам»)
-// Крупные мировые кухни с обширным репертуаром → генерим до естественного предела (пока модель даёт новое)
-const MAJORS = new Set(["Русская", "Итальянская", "Французская", "Китайская", "Японская", "Индийская", "Тайская", "Вьетнамская", "Мексиканская", "Американская", "Грузинская", "Ближневосточная", "Корейская", "Испанская", "Турецкая", "Греческая", "Узбекская", "Британская"]);
+const MAJOR_CAP = parseInt(args.majorcap || "200", 10); // потолок для знаменитых кухонь
+// Знаменитые мировые кухни с обширным репертуаром → генерим до потолка (или до естественного предела)
+const MAJORS = new Set(["Русская", "Украинская", "Итальянская", "Французская", "Испанская", "Греческая",
+  "Китайская", "Японская", "Корейская", "Тайская", "Вьетнамская", "Индийская",
+  "Мексиканская", "Латиноамериканская", "Американская", "Турецкая", "Грузинская",
+  "Ближневосточная", "Узбекская", "Британская", "Немецкая"]);
 const targetFor = c => MAJORS.has(c) ? MAJOR_CAP : FLOOR;
+const TMP = path.join(ROOT, ".gen_tmp");
 
 // ── API key ──
 function apiKey() {
@@ -37,7 +43,7 @@ function apiKey() {
   if (!m) throw new Error("ANTHROPIC_API_KEYS не найден в .env");
   return m[1].trim().replace(/^["']|["']$/g, "").split(",")[0].trim();
 }
-const KEY = DRY ? "" : apiKey();
+const KEY = (DRY || PLAN || INGEST) ? "" : apiKey();
 
 // ── recipes I/O ──
 function loadRecipes() {
@@ -184,7 +190,59 @@ function cleanTitle(t) {
   let totalNeed = 0;
   for (const c of targets) { const need = targetFor(c) - counts[c]; console.log(`  ${c}${MAJORS.has(c) ? " [крупная]" : ""}: ${counts[c]} → +${need}`); totalNeed += need; }
   console.log(`Итого новых (верхняя оценка): ~${totalNeed}`);
-  if (DRY || !targets.length) return;
+  if (DRY) return;
+
+  if (!fs.existsSync(TMP)) fs.mkdirSync(TMP, { recursive: true });
+
+  // ── Max-режим, этап 1: --plan — выгрузить worklist (без API) ──
+  if (PLAN) {
+    const plan = targets
+      .slice()
+      .sort((a, b) => a.localeCompare(b, "ru")) // по алфавиту
+      .map(c => ({
+        cuisine: c,
+        target: targetFor(c),
+        have: recipes.filter(r => r.cuisine === c).map(r => r.title),
+        need: targetFor(c) - counts[c],
+        major: MAJORS.has(c)
+      }));
+    fs.writeFileSync(path.join(TMP, "plan.json"), JSON.stringify(plan, null, 2));
+    console.log(`\nPLAN записан: ${path.join(TMP, "plan.json")} (${plan.length} кухонь, по алфавиту)`);
+    console.log(`Дальше: Claude Code пишет рецепты в ${path.join(TMP, "ingest.json")} (массив объектов с полем cuisine), затем --ingest.`);
+    return;
+  }
+
+  // ── Max-режим, этап 3: --ingest — вписать рецепты из ingest.json (без API) ──
+  if (INGEST) {
+    const file = path.join(TMP, "ingest.json");
+    if (!fs.existsSync(file)) throw new Error(`нет ${file}`);
+    const incoming = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!Array.isArray(incoming)) throw new Error("ingest.json должен быть массивом рецептов");
+    const usedIds = new Set(recipes.map(r => r.id));
+    const seenByCuisine = {};
+    for (const r of recipes) (seenByCuisine[r.cuisine] = seenByCuisine[r.cuisine] || new Set()).add(norm(r.title));
+    const fresh = [];
+    let skipDup = 0, skipBad = 0;
+    for (const g of incoming) {
+      if (!g || !g.title || !g.cuisine || !Array.isArray(g.ingredients) || g.ingredients.length < 2 || !Array.isArray(g.steps) || g.steps.length < 2) { skipBad++; continue; }
+      g.title = cleanTitle(g.title);
+      const sc = seenByCuisine[g.cuisine] = seenByCuisine[g.cuisine] || new Set();
+      if (!g.title || sc.has(norm(g.title))) { skipDup++; continue; }
+      sc.add(norm(g.title));
+      if (num(g.time) > 360) g.time = (num(g.prepTime) + num(g.cookTime)) || 60;
+      g.id = uniqueId(slug(g.title), usedIds);
+      fresh.push(g);
+    }
+    if (fresh.length) appendRecipes(fresh);
+    const after = loadRecipes();
+    const byC = {}; fresh.forEach(r => byC[r.cuisine] = (byC[r.cuisine] || 0) + 1);
+    console.log(`INGEST: вписано ${fresh.length} | дубликаты ${skipDup} | брак ${skipBad}`);
+    Object.entries(byC).forEach(([c, n]) => console.log(`  +${n} ${c}`));
+    console.log(`Рецептов в базе: ${after.length}`);
+    return;
+  }
+
+  if (!targets.length) return;
 
   const usedIds = new Set(recipes.map(r => r.id));
   let grandTotal = 0;
