@@ -30,7 +30,12 @@ const DRY = !!args.dry;
 const FETCH = !!args.fetch;   // этап 1: скачать кандидатов + manifest.json (без API)
 const APPLY = !!args.apply;   // этап 3: по verdicts.json вписать фото (без API)
 const QA_MODEL = args.model || "claude-sonnet-4-6";
-const N_CAND = args.cand ? parseInt(args.cand, 10) : 4;
+const N_CAND = args.cand ? parseInt(args.cand, 10) : 4;       // макс. кандидатов с ОДНОГО источника
+const ALL_SOURCES = ["commons", "openverse", "wikipedia", "mealdb"];
+// openverse за Cloudflare JS-челленджем (403) — без headless-браузера недоступен, вне дефолта
+const DEFAULT_SOURCES = ["wikipedia", "mealdb", "commons"];
+const ENABLED_SOURCES = args.sources ? String(args.sources).split(",").map(s => s.trim()).filter(s => ALL_SOURCES.includes(s)) : DEFAULT_SOURCES;
+const CAND_CAP = args.candcap ? parseInt(args.candcap, 10) : 8; // макс. кандидатов на рецепт после мержа всех источников
 const MANIFEST = path.join(TMP, "manifest.json");
 const VERDICTS = path.join(TMP, "verdicts.json");
 
@@ -107,12 +112,79 @@ async function searchCommons(recipe, term) {
       const ii = p.imageinfo && p.imageinfo[0];
       if (!ii || !/jpeg|jpg/.test(ii.mime || "")) continue;
       if (found.has(p.title)) continue;
-      found.set(p.title, { thumb: ii.thumburl || ii.url, full: ii.url });
+      found.set(p.title, { thumb: ii.thumburl || ii.url, full: ii.url, src: "commons" });
       if (found.size >= N_CAND) break;
     }
     if (found.size >= N_CAND) break;
   }
   return [...found.values()];
+}
+
+// ── Openverse: CC-агрегатор (Flickr, музеи). Без ключа (анонимный rate-limit). ──
+async function searchOpenverse(recipe, term) {
+  const q = term || coreTitle(recipe.title);
+  const url = "https://api.openverse.org/v1/images/?q=" + encodeURIComponent(q)
+    + "&license_type=all-cc&extension=jpg&mature=false&page_size=6";
+  const out = [];
+  try {
+    const data = await getJSON(url);
+    for (const im of (data.results || [])) {
+      const full = im.url, thumb = im.thumbnail || im.url;
+      if (!full) continue;
+      out.push({ thumb, full, src: "openverse" });
+      if (out.length >= N_CAND) break;
+    }
+  } catch {}
+  return out;
+}
+
+// ── Wikipedia lead image: курированное главное фото статьи блюда (REST, без ключа) ──
+async function searchWikipediaLead(recipe, term) {
+  const titles = [...new Set([term, coreTitle(recipe.title)].filter(Boolean))];
+  for (const t of titles) {
+    for (const lang of ["en", "ru"]) {
+      const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/` + encodeURIComponent(t.replace(/ /g, "_"));
+      try {
+        const data = await getJSON(url);
+        const full = data.originalimage && data.originalimage.source;
+        const thumb = (data.thumbnail && data.thumbnail.source) || full;
+        if (full && /\.(jpe?g|png)/i.test(full)) return [{ thumb, full, src: "wikipedia" }];
+      } catch {}
+    }
+  }
+  return [];
+}
+
+// ── TheMealDB: точное фото блюда, если оно есть в их базе (~300 блюд, без ключа) ──
+async function searchMealDB(recipe, term) {
+  const q = term || coreTitle(recipe.title);
+  const url = "https://www.themealdb.com/api/json/v1/1/search.php?s=" + encodeURIComponent(q);
+  const out = [];
+  try {
+    const data = await getJSON(url);
+    for (const meal of (data.meals || [])) {
+      if (meal.strMealThumb) out.push({ thumb: meal.strMealThumb + "/preview", full: meal.strMealThumb, src: "mealdb" });
+      if (out.length >= 2) break;
+    }
+  } catch {}
+  return out;
+}
+
+// ── собрать кандидатов из всех источников, дедуп по host+path ──
+const SOURCES = { commons: searchCommons, openverse: searchOpenverse, wikipedia: searchWikipediaLead, mealdb: searchMealDB };
+async function gatherCandidates(recipe, term, enabled) {
+  const merged = [];
+  const seen = new Set();
+  for (const name of enabled) {
+    let res = [];
+    try { res = await SOURCES[name](recipe, term); } catch {}
+    for (const c of res) {
+      let key; try { const u = new URL(c.full); key = u.host + u.pathname; } catch { key = c.full; }
+      if (seen.has(key)) continue;
+      seen.add(key); merged.push(c);
+    }
+  }
+  return merged;
 }
 
 // ── Sonnet-QA: выбрать лучшее, где блюдо — главный объект ──
@@ -182,26 +254,31 @@ im.save(dst,"WEBP",quality=82,method=6)`;
     // если термины заданы — обрабатываем ТОЛЬКО рецепты из terms.json (точный контроль батча)
     if (Object.keys(TERMS).length) pool = pool.filter(r => TERMS[r.id]);
     console.log(`К обработке: ${pool.length}${Object.keys(TERMS).length ? " (по terms.json)" : ""}`);
+    console.log(`Источники: ${ENABLED_SOURCES.join(", ")}`);
     const manifest = [];
     let nF = 0, nE = 0, processed = 0;
     for (const r of pool) {
       if (processed >= LIMIT) break;
       processed++;
       let cands;
-      try { cands = await searchCommons(r, TERMS[r.id]); } catch { cands = []; }
+      try { cands = await gatherCandidates(r, TERMS[r.id], ENABLED_SOURCES); } catch { cands = []; }
+      cands = cands.slice(0, CAND_CAP);
       if (!cands.length) { nE++; console.log(`  ∅ ${r.title} — нет кандидатов`); continue; }
       const dir = path.join(TMP, r.id);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       const candidates = [];
       for (let i = 0; i < cands.length; i++) {
         const file = path.join(dir, `c${i}.jpg`);
-        try { await download(cands[i].thumb, file); candidates.push({ i, file, thumb: cands[i].thumb, full: cands[i].full }); }
+        try { await download(cands[i].thumb, file); candidates.push({ i, file, thumb: cands[i].thumb, full: cands[i].full, src: cands[i].src }); }
         catch {}
-        await sleep(350);
+        await sleep(250);
       }
       if (!candidates.length) { nE++; console.log(`  ∅ ${r.title} — не скачалось`); continue; }
+      // переиндексируем (i = позиция в скачанном списке), чтобы verdicts совпадали с файлами cN.jpg
+      candidates.forEach((c, k) => c.i = k);
+      const bySrc = candidates.reduce((a, c) => { a[c.src] = (a[c.src] || 0) + 1; return a; }, {});
       manifest.push({ id: r.id, title: r.title, cuisine: r.cuisine, category: r.category, candidates });
-      nF++; console.log(`  • ${r.title} — ${candidates.length} канд.`);
+      nF++; console.log(`  • ${r.title} — ${candidates.length} канд. [${Object.entries(bySrc).map(([s, n]) => s + ":" + n).join(" ")}]`);
     }
     fs.writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2));
     console.log(`\nFETCH готов. Рецептов с кандидатами: ${nF} | без: ${nE}`);
@@ -222,8 +299,10 @@ im.save(dst,"WEBP",quality=82,method=6)`;
       const chosen = m.candidates[v];
       try {
         const full = path.join(TMP, "full.jpg");
-        // 1100px-апскейл даёт 400, если оригинал уже — фолбэк на 800px и оригинал
-        const urls = [...new Set([widen(chosen.thumb, 1100), widen(chosen.thumb, 800), chosen.full].filter(Boolean))];
+        // Commons: thumb можно расширить до 1100px через URL. Остальные источники — берём full напрямую.
+        const urls = chosen.src === "commons"
+          ? [...new Set([widen(chosen.thumb, 1100), widen(chosen.thumb, 800), chosen.full].filter(Boolean))]
+          : [...new Set([chosen.full, chosen.thumb].filter(Boolean))];
         let src = null;
         for (const u of urls) { try { await download(u, full); src = full; break; } catch {} }
         // фолбэк: уже скачанное 480px-превью (для карточки ~440px достаточно)
