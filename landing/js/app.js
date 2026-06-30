@@ -234,7 +234,9 @@
     });
     $("#openFilters").addEventListener("click", () => openFilterSheet(recipes, cuisines));
     view.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => {
-      listState.category = b.dataset.cat; renderList();
+      const c = b.dataset.cat;
+      listState.category = (c && listState.category === c) ? "" : c; // повторный тап по активной категории снимает фильтр
+      renderList();
     }));
     view.querySelectorAll("#activeFilters [data-clear]").forEach(b => b.addEventListener("click", () => {
       const k = b.dataset.clear; listState[k] = (k === "kidOnly") ? false : ""; renderList();
