@@ -211,15 +211,22 @@ async def _cf_run(model: str, payload: dict[str, Any]) -> dict[str, Any]:
     return data.get("result", {}) or {}
 
 
+def _as_text(v: Any) -> str:
+    # CF иногда возвращает response уже распарсенным объектом (когда модель выдала JSON)
+    if isinstance(v, (dict, list)):
+        return json.dumps(v, ensure_ascii=False)
+    return (v or "").strip() if isinstance(v, str) else ""
+
+
 async def _cf_chat(messages: list[dict[str, Any]], system: str, max_tokens: int = 700) -> str:
     msgs = ([{"role": "system", "content": system}] if system else []) + messages
     res = await _cf_run(CF_TEXT_MODEL, {"messages": msgs, "max_tokens": max_tokens})
-    return (res.get("response") or "").strip()
+    return _as_text(res.get("response"))
 
 
 async def _cf_vision(raw: bytes, prompt: str, max_tokens: int = 512) -> str:
     res = await _cf_run(CF_VISION_MODEL, {"image": list(raw), "prompt": prompt, "max_tokens": max_tokens})
-    return (res.get("description") or res.get("response") or "").strip()
+    return _as_text(res.get("description") or res.get("response"))
 
 
 # ---------------------------------------------------------------------------
