@@ -42,6 +42,7 @@
     memory:   LS.get("cb_memory", {}),
     userRecipes: LS.get("cb_user_recipes", []),
     plan:     LS.get("cb_plan", {}),
+    ingChecks: LS.get("cb_ingChecks", {}),
     save(key) { LS.set("cb_" + key, Store[key]); }
   };
 
@@ -405,12 +406,13 @@
       <button class="ing-ask" data-ask="${i}" title="Спросить ассистента">✦</button>
     </li>`;
   }
-  const ingChecks = {}; // `${id}:${i}` -> bool (сессия)
-  function ingChecked(id, i) { return !!ingChecks[id + ":" + i]; }
+  function ingChecked(id, i) { return !!Store.ingChecks[id + ":" + i]; }
   function bindIngredientRows(r) {
     $("#ings").querySelectorAll("[data-check]").forEach(b => b.onclick = () => {
-      const i = b.dataset.check; ingChecks[r.id + ":" + i] = !ingChecked(r.id, i);
-      b.closest("li").classList.toggle("checked"); b.textContent = ingChecked(r.id, i) ? "✓" : "";
+      const key = r.id + ":" + b.dataset.check;
+      if (Store.ingChecks[key]) delete Store.ingChecks[key]; else Store.ingChecks[key] = true;
+      Store.save("ingChecks");
+      b.closest("li").classList.toggle("checked"); b.textContent = Store.ingChecks[key] ? "✓" : "";
     });
     $("#ings").querySelectorAll("[data-ask]").forEach(b => b.onclick = () => {
       const ing = r.ingredients[b.dataset.ask];
@@ -587,6 +589,7 @@
      Кукинг-мод (#/cook/:id)
      ============================================================ */
   let cookState = null;
+  let _visBound = false;
   function fmtTimer(sec) { const m = Math.floor(sec / 60), s = sec % 60; return s ? `${m}:${String(s).padStart(2, "0")}` : `${m} мин`; }
 
   function renderCook(id) {
@@ -636,7 +639,7 @@
     const title = s.title ? `<div class="cook-step-title">${esc(s.title)}</div>` : "";
     const text = linkifyIngredients(s.text, r);
     const timers = parseTimers(s);
-    const timerBtns = (i === idx && timers.length) ? timers.map((t, ti) => `<button class="cook-timer" data-timer="${t.sec}" data-tid="${i}_${ti}">⏱ ${fmtTimer(t.sec)}${t.label ? " · " + esc(t.label) : ""}</button>`).join(" ") : "";
+    const timerBtns = (i === idx && timers.length) ? timers.map((t, ti) => `<button class="cook-timer" data-timer="${t.sec}" data-tid="${i}_${ti}" data-label="${esc(t.label || "")}">⏱ ${fmtTimer(t.sec)}${t.label ? " · " + esc(t.label) : ""}</button>`).join(" ") : "";
     return `<div class="cook-step ${cls}">${title}<div class="cook-step-text">${text}</div>${timerBtns ? "<div>" + timerBtns + "</div>" : ""}</div>`;
   }
   function cookServeHtml(serve, isCurrent) {
@@ -661,18 +664,21 @@
   }
   // Линкуем названия ингредиентов в тексте шага для тапа
   function linkifyIngredients(text, r) {
-    let out = esc(text);
-    const names = [...new Set(r.ingredients.map(i => i.name))].sort((a, b) => b.length - a.length);
-    for (const name of names) {
-      const safe = esc(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const re = new RegExp("(" + safe + ")", "i");
-      out = out.replace(re, `<span class="ing-tap" data-ing="${esc(name)}">$1</span>`);
-    }
-    return out;
+    const safe = esc(text);
+    const names = [...new Set((r.ingredients || []).map(i => i.name).filter(Boolean))].sort((a, b) => b.length - a.length);
+    if (!names.length) return safe;
+    const alt = names.map(n => esc(n).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+    // Единый проход с глобальной заменой: все вхождения, границы слова (Unicode),
+    // без перекрытия HTML (replace идёт по исходной строке, не входя в вставленные span).
+    let re;
+    try { re = new RegExp("(?<![\\p{L}\\p{N}])(" + alt + ")(?![\\p{L}\\p{N}])", "giu"); }
+    catch (e) { re = new RegExp("(" + alt + ")", "gi"); } // fallback: старые движки без lookbehind
+    return safe.replace(re, m => `<span class="ing-tap" data-ing="${m}">${m}</span>`);
   }
   function bindCookIngTaps(r, sv) {
     $("#cookBody").querySelectorAll(".ing-tap").forEach(el => el.onclick = () => {
-      const ing = r.ingredients.find(i => i.name === el.dataset.ing);
+      const tapped = (el.dataset.ing || "").toLowerCase();
+      const ing = r.ingredients.find(i => i.name.toLowerCase() === tapped);
       if (ing) toast(ing.name + ": " + fmtQtyUnit(ing.qty, ing.unit, sv, r.baseServings));
     });
   }
@@ -689,25 +695,65 @@
     }
     return res;
   }
+  // Таймеры на абсолютном времени (endAt), а не на счётчике: переживают сворачивание
+  // вкладки/блокировку экрана (setInterval в фоне тормозится — обратный отсчёт бы дрейфовал).
+  // Единый тикер (не привязан к кнопке) переживает навигацию по шагам и шлёт уведомление
+  // о финише, даже если открыт другой шаг.
+  function timerRemaining(t) { return Math.max(0, Math.round((t.endAt - Date.now()) / 1000)); }
+  function ensureNotifyPermission() {
+    try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch (e) {}
+  }
+  function notifyTimer(t) {
+    try { if ("Notification" in window && Notification.permission === "granted")
+      new Notification("Таймер готов", { body: fmtTimer(t.total) + (t.label ? " · " + t.label : ""), tag: "cook-timer" }); } catch (e) {}
+  }
+  function startTicker() {
+    if (!cookState || cookState.ticker) return;
+    if (!_visBound) { _visBound = true; document.addEventListener("visibilitychange", () => { if (!document.hidden) tickAllTimers(); }); }
+    cookState.ticker = setInterval(tickAllTimers, 500);
+  }
+  function tickAllTimers() {
+    if (!cookState) return;
+    let active = 0;
+    for (const tid of Object.keys(cookState.timers)) {
+      const t = cookState.timers[tid];
+      if (t.fired) continue;
+      const remaining = timerRemaining(t);
+      const btn = $('[data-tid="' + tid + '"]');
+      if (remaining <= 0) {
+        t.fired = true; delete cookState.timers[tid];
+        beep(); notifyTimer(t); toast("Таймер! " + fmtTimer(t.total));
+        if (btn) { btn.textContent = "✓ Готово"; btn.classList.remove("running"); }
+      } else {
+        active++;
+        if (btn) btn.textContent = "⏱ " + fmtTimer(remaining) + " · стоп";
+      }
+    }
+    if (!active && cookState.ticker) { clearInterval(cookState.ticker); cookState.ticker = null; }
+  }
   function bindCookTimers() {
     $("#cookBody").querySelectorAll("[data-timer]").forEach(btn => {
       const tid = btn.dataset.tid;
+      const total = parseInt(btn.dataset.timer, 10);
+      const running = cookState.timers[tid] && !cookState.timers[tid].fired;
+      if (running) { btn.classList.add("running"); btn.textContent = "⏱ " + fmtTimer(timerRemaining(cookState.timers[tid])) + " · стоп"; }
       btn.onclick = () => {
-        if (cookState.timers[tid]) { stopTimer(tid, btn); return; }
-        let remaining = parseInt(btn.dataset.timer, 10);
+        if (cookState.timers[tid] && !cookState.timers[tid].fired) { stopTimer(tid, btn); return; }
+        ensureNotifyPermission();
+        cookState.timers[tid] = { endAt: Date.now() + total * 1000, total, label: btn.dataset.label || "", fired: false };
         btn.classList.add("running");
-        const tick = () => {
-          remaining--;
-          if (remaining <= 0) { beep(); btn.textContent = "✓ Готово"; btn.classList.remove("running"); clearInterval(cookState.timers[tid]); delete cookState.timers[tid]; toast("Таймер! " + fmtTimer(parseInt(btn.dataset.timer, 10))); return; }
-          btn.textContent = "⏱ " + fmtTimer(remaining) + " · стоп";
-        };
-        btn.textContent = "⏱ " + fmtTimer(remaining) + " · стоп";
-        cookState.timers[tid] = setInterval(tick, 1000);
+        btn.textContent = "⏱ " + fmtTimer(total) + " · стоп";
+        startTicker();
       };
     });
   }
-  function stopTimer(tid, btn) { clearInterval(cookState.timers[tid]); delete cookState.timers[tid]; btn.classList.remove("running"); btn.textContent = "⏱ " + fmtTimer(parseInt(btn.dataset.timer, 10)); }
-  function clearCookTimers() { if (cookState) { Object.values(cookState.timers).forEach(clearInterval); cookState.timers = {}; } }
+  function stopTimer(tid, btn) {
+    delete cookState.timers[tid];
+    if (btn) { btn.classList.remove("running"); btn.textContent = "⏱ " + fmtTimer(parseInt(btn.dataset.timer, 10)); }
+  }
+  function clearCookTimers() {
+    if (cookState) { if (cookState.ticker) { clearInterval(cookState.ticker); cookState.ticker = null; } cookState.timers = {}; }
+  }
   function openIngredientsSheet(r, sv) {
     openSheet("Ингредиенты", `<ul class="ingredients">${r.ingredients.map(ing => `<li><span class="ing-name">${esc(ing.name)}</span><span class="ing-qty">${fmtQtyUnit(ing.qty, ing.unit, sv, r.baseServings)}</span></li>`).join("")}</ul>`);
   }
@@ -825,12 +871,13 @@
       </div>
       <div class="field"><label><input type="checkbox" id="f_kid" ${draft.forKid ? "checked" : ""}> Для дочки</label></div>
       <div class="field"><label>Ингредиенты (название · кол-во · ед · раздел)</label><div id="f_ings"></div><button class="btn sm" id="addIng">＋ ингредиент</button></div>
-      <div class="field"><label>Шаги</label><div id="f_steps"></div><button class="btn sm" id="addStep">＋ шаг</button></div>
+      <div class="field"><label>Шаги (заголовок · что делать · таймер)</label><div id="f_steps"></div><button class="btn sm" id="addStep">＋ шаг</button></div>
+      <div class="field"><label>С чем подавать</label><input id="f_serve" value="${esc(draft.serveWith || "")}"></div>
       <div class="btn-row"><button class="btn primary" id="saveRecipe">Сохранить</button><button class="btn" id="exportRecipe">Экспорт JSON</button></div>
     `;
     const ingsBox = $("#f_ings"), stepsBox = $("#f_steps");
     function ingRow(ing) { ing = ing || {}; const d = document.createElement("div"); d.className = "dyn-row"; d.innerHTML = `<input placeholder="название" class="i-name" value="${esc(ing.name || "")}"><input placeholder="кол-во" class="i-qty" style="max-width:70px" value="${ing.qty != null ? ing.qty : ""}"><input placeholder="ед" class="i-unit" style="max-width:60px" value="${esc(ing.unit || "")}"><input placeholder="раздел" class="i-group" style="max-width:90px" value="${esc(ing.group || "")}"><button class="del-x">✕</button>`; d.querySelector(".del-x").onclick = () => d.remove(); return d; }
-    function stepRow(s) { s = s || {}; const d = document.createElement("div"); d.className = "dyn-row"; d.innerHTML = `<textarea placeholder="что делать" class="s-text" style="flex:1">${esc(s.text || "")}</textarea><input placeholder="таймер сек" class="s-timer" style="max-width:80px" value="${s.timer || ""}"><button class="del-x">✕</button>`; d.querySelector(".del-x").onclick = () => d.remove(); return d; }
+    function stepRow(s) { s = s || {}; const d = document.createElement("div"); d.className = "dyn-row"; d.style.flexWrap = "wrap"; d.innerHTML = `<input placeholder="заголовок шага" class="s-title" style="flex:1 1 100%;margin-bottom:6px" value="${esc(s.title || "")}"><textarea placeholder="что делать" class="s-text" style="flex:1">${esc(s.text || "")}</textarea><input placeholder="таймер сек" class="s-timer" style="max-width:80px" value="${s.timer || ""}"><button class="del-x">✕</button>`; d.querySelector(".del-x").onclick = () => d.remove(); return d; }
     (draft.ingredients.length ? draft.ingredients : [{}]).forEach(i => ingsBox.appendChild(ingRow(i)));
     (draft.steps.length ? draft.steps : [{}]).forEach(s => stepsBox.appendChild(stepRow(s)));
     $("#addIng").onclick = () => ingsBox.appendChild(ingRow());
@@ -845,13 +892,17 @@
         group: d.querySelector(".i-group").value.trim() || "Прочее",
         staple: false
       })).filter(i => i.name);
-      const steps = [...stepsBox.querySelectorAll(".dyn-row")].map(d => { const o = { text: d.querySelector(".s-text").value.trim() }; const t = d.querySelector(".s-timer").value; if (t) o.timer = parseInt(t, 10); return o; }).filter(s => s.text);
-      return {
+      const steps = [...stepsBox.querySelectorAll(".dyn-row")].map(d => { const o = { text: d.querySelector(".s-text").value.trim() }; const ti = d.querySelector(".s-title").value.trim(); if (ti) o.title = ti; const t = d.querySelector(".s-timer").value; if (t) o.timer = parseInt(t, 10); return o; }).filter(s => s.text);
+      const r = {
         id: (title.toLowerCase().replace(/[^a-zа-я0-9]+/gi, "-").replace(/^-|-$/g, "") || "recipe") + "-" + Math.random().toString(36).slice(2, 6),
         title, forKid: $("#f_kid").checked, category: $("#f_category").value, cuisine: $("#f_cuisine").value.trim() || "Прочая",
         photo: "", time: parseInt($("#f_time").value, 10) || 0, difficulty: draft.difficulty || 1,
-        baseServings: parseInt($("#f_servings").value, 10) || 1, tags: draft.tags || [], ingredients, steps, notes: ""
+        baseServings: parseInt($("#f_servings").value, 10) || 1, tags: draft.tags || [], ingredients, steps,
+        serveWith: $("#f_serve").value.trim(), notes: draft.notes || ""
       };
+      // переносим доп. поля из черновика (ИИ/импорт), если есть
+      ["kcal", "prepTime", "cookTime", "equipment", "allergens", "kidNote"].forEach(k => { if (draft[k] != null && draft[k] !== "") r[k] = draft[k]; });
+      return r;
     }
     $("#saveRecipe").onclick = () => { const r = collect(); if (!r.title || !r.ingredients.length) { toast("Нужны название и ингредиенты"); return; } Store.userRecipes.push(r); Store.save("userRecipes"); toast("Рецепт сохранён"); location.hash = "#/recipe/" + r.id; };
     $("#exportRecipe").onclick = () => copyText(JSON.stringify(collect(), null, 2));
@@ -886,13 +937,15 @@
     }
   }
   function normalizeDraft(d) {
-    return {
+    const r = {
       title: d.title || "", cuisine: d.cuisine || "", category: d.category || "Основное",
       time: d.time || 30, difficulty: d.difficulty || 1, baseServings: d.baseServings || 2, forKid: !!d.forKid,
-      tags: d.tags || [],
+      tags: d.tags || [], serveWith: d.serveWith || "", notes: d.notes || "",
       ingredients: (d.ingredients || []).map(i => typeof i === "string" ? { name: i, group: "Прочее" } : i),
       steps: (d.steps || []).map(s => typeof s === "string" ? { text: s } : s)
     };
+    ["kcal", "prepTime", "cookTime", "equipment", "allergens", "kidNote"].forEach(k => { if (d[k] != null && d[k] !== "") r[k] = d[k]; });
+    return r;
   }
 
   function backupTab() {
