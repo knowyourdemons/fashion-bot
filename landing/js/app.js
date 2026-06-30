@@ -114,7 +114,6 @@
       : `<div class="cover" style="${coverStyle(r)}">
            <div class="c-cat">${esc(r.category)}</div>
            <div class="c-title">${esc(r.title)}</div>
-           <span class="c-icon">${CUISINE_ICON[r.cuisine] || "🍽"}</span>
          </div>`;
     return `<a class="card" href="#/recipe/${esc(r.id)}">
       ${cover}
