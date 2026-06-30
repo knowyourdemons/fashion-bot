@@ -177,6 +177,52 @@ def _resp_text(response: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Cloudflare Workers AI ($0 free tier): Llama 3.3 — текст, llava — vision
+# ---------------------------------------------------------------------------
+CF_TEXT_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+CF_VISION_MODEL = "@cf/llava-1.5-7b-hf"
+ASSISTANT_VISION_PROMPT = (
+    "Ты — кулинарный ассистент. По фото товара/блюда коротко на русском скажи, что это, "
+    "подходит ли к рецепту и чем заменить при необходимости."
+)
+
+
+async def _cf_run(model: str, payload: dict[str, Any]) -> dict[str, Any]:
+    acct = settings.cloudflare_account_id
+    token = settings.cloudflare_api_token
+    if not (acct and token):
+        raise HTTPException(status_code=503, detail="Ассистент не настроен (нет CF Workers AI)")
+    import httpx
+
+    url = f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/run/{model}"
+    try:
+        async with httpx.AsyncClient(timeout=45) as client:
+            r = await client.post(url, headers={"Authorization": f"Bearer {token}"}, json=payload)
+    except Exception as e:
+        logger.error("cookbook.cf.request_error", model=model, error=str(e))
+        raise HTTPException(status_code=502, detail="Ассистент временно недоступен")
+    if r.status_code != 200:
+        logger.error("cookbook.cf.http_error", model=model, status=r.status_code, body=r.text[:300])
+        raise HTTPException(status_code=502, detail="Ассистент временно недоступен")
+    data = r.json()
+    if not data.get("success", True):
+        logger.error("cookbook.cf.api_error", model=model, errors=str(data.get("errors"))[:300])
+        raise HTTPException(status_code=502, detail="Ассистент временно недоступен")
+    return data.get("result", {}) or {}
+
+
+async def _cf_chat(messages: list[dict[str, Any]], system: str, max_tokens: int = 700) -> str:
+    msgs = ([{"role": "system", "content": system}] if system else []) + messages
+    res = await _cf_run(CF_TEXT_MODEL, {"messages": msgs, "max_tokens": max_tokens})
+    return (res.get("response") or "").strip()
+
+
+async def _cf_vision(raw: bytes, prompt: str, max_tokens: int = 512) -> str:
+    res = await _cf_run(CF_VISION_MODEL, {"image": list(raw), "prompt": prompt, "max_tokens": max_tokens})
+    return (res.get("description") or res.get("response") or "").strip()
+
+
+# ---------------------------------------------------------------------------
 # GET /config — публичная конфигурация для фронта (виджет логина)
 # ---------------------------------------------------------------------------
 @router.get("/config")
@@ -253,37 +299,25 @@ async def assistant(
     if ingredient:
         ctx_lines.append(f"Вопрос про ингредиент: {ingredient.get('name', '')}.")
 
-    # Сборка messages: история (только текст) + текущее сообщение (+ фото)
+    ctx_prefix = ("\n".join(ctx_lines) + "\n\n") if ctx_lines else ""
+    user_text = message or "Что это? Подходит ли для рецепта?"
+
+    # Фото → vision (llava): простой ответ, без JSON-substitution
+    if photo_bytes:
+        prompt = (ASSISTANT_VISION_PROMPT + "\n" + ctx_prefix + user_text).strip()
+        reply = await _cf_vision(photo_bytes[0][0], prompt)
+        return {"reply": reply or "(пустой ответ)", "substitution": None}
+
+    # Текст → Llama 3.3 (история + контекст), JSON с возможной заменой
     messages: list[dict[str, Any]] = []
     for h in hist[-10:]:
         role = "assistant" if h.get("role") == "bot" else "user"
         txt = h.get("text") or ""
         if txt:
             messages.append({"role": role, "content": txt})
+    messages.append({"role": "user", "content": ctx_prefix + user_text})
 
-    content: list[dict[str, Any]] = []
-    for raw, mt in photo_bytes:
-        content.append(_image_block(raw, mt))
-    user_text = message or "Что это? Подходит ли для рецепта?"
-    if ctx_lines:
-        user_text = "\n".join(ctx_lines) + "\n\n" + user_text
-    content.append({"type": "text", "text": user_text})
-    messages.append({"role": "user", "content": content})
-
-    model = SONNET if photo_bytes else HAIKU
-    pool = get_anthropic_pool()
-    try:
-        response = await pool.create_message(
-            model=model,
-            max_tokens=700,
-            system=ASSISTANT_SYSTEM,
-            messages=messages,
-        )
-    except Exception as e:
-        logger.error("cookbook.assistant.error", error=str(e))
-        raise HTTPException(status_code=502, detail="Ассистент временно недоступен")
-
-    raw_text = _resp_text(response)
+    raw_text = await _cf_chat(messages, ASSISTANT_SYSTEM, max_tokens=700)
     parsed = _extract_json(raw_text)
     if parsed and isinstance(parsed, dict) and "reply" in parsed:
         sub = parsed.get("substitution")
