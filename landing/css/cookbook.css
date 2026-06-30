@@ -266,7 +266,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .vote { width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--line); background: var(--white-warm); font-size: 22px; }
 .vote.on.up { background: var(--sage); border-color: var(--sage); }
 .vote.on.down { background: var(--accent); border-color: var(--accent); }
-.stars { font-size: 26px; letter-spacing: 4px; color: var(--accent); cursor: pointer; }
+.stars { font-size: 26px; letter-spacing: 4px; color: var(--accent); }
+.stars .star { cursor: pointer; padding: 6px 2px; display: inline-block; }
 .memory textarea { width: 100%; min-height: 70px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--white-warm); resize: vertical; }
 .made-log { font-size: 14px; color: var(--ink-2); margin-top: 8px; }
 

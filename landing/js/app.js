@@ -463,7 +463,7 @@
       </div>
       <div class="made-log">${made.length ? `Готовил ${made.length} раз. Последний раз: ${lastMade}.` : "Ещё не отмечал, что готовил."}</div>
       <div style="margin-top:14px"><span class="label">Алисе зашло</span>
-        <div class="stars" id="kidStars">${[1, 2, 3, 4, 5].map(n => (n <= (mem.kidRating || 0) ? "★" : "☆")).join("")}</div>
+        <div class="stars" id="kidStars">${[1, 2, 3, 4, 5].map(n => `<span class="star" data-star="${n}">${n <= (mem.kidRating || 0) ? "★" : "☆"}</span>`).join("")}</div>
       </div>
       <div style="margin-top:14px"><span class="label">Заметки и правки</span>
         <textarea id="memNotes" placeholder="Личные правки, замены, что поменять…">${esc(mem.notes || "")}</textarea>
@@ -478,12 +478,11 @@
       mem.vote = mem.vote === v ? 0 : v; saveMem(); renderRecipe(r.id);
     });
     $("#madeBtn").onclick = () => { mem.madeLog = mem.madeLog || []; mem.madeLog.push(new Date().toISOString()); saveMem(); toast("Отмечено: готовил"); renderRecipe(r.id); };
-    $("#kidStars").onclick = (e) => {
-      const stars = [...$("#kidStars").childNodes];
-      const rect = $("#kidStars").getBoundingClientRect();
-      const rel = (e.clientX - rect.left) / rect.width;
-      mem.kidRating = Math.max(1, Math.min(5, Math.ceil(rel * 5))); saveMem(); renderRecipe(r.id);
-    };
+    $("#kidStars").querySelectorAll("[data-star]").forEach(s => s.onclick = () => {
+      const n = parseInt(s.dataset.star, 10);
+      mem.kidRating = (mem.kidRating === n) ? 0 : n; // повторный тап по той же звезде снимает оценку
+      saveMem(); renderRecipe(r.id);
+    });
     $("#memNotes").addEventListener("change", e => { mem.notes = e.target.value.slice(0, 2000); saveMem(); toast("Заметка сохранена"); });
   }
 
