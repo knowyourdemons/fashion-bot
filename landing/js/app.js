@@ -298,6 +298,9 @@
     updateCount();
   }
   // Перерисовываем ТОЛЬКО результаты — поле поиска и чипы не трогаем (фокус не теряется)
+  const LIST_PAGE = 48; // карточек за «страницу» бесконечного скролла
+  let listShown = LIST_PAGE;
+  let listObserver = null;
   function renderResults(recipes) {
     recipes = recipes || allRecipes();
     const el = $("#listResults");
@@ -306,14 +309,31 @@
     const anyFilter = listState.q || listState.cuisine || listState.category || listState.kidOnly || listState.time || listState.difficulty;
     const recs = anyFilter ? [] : recommend(6);
     const recsHead = hasTasteProfile() ? "Вам понравится" : "С чего начать";
+    listShown = LIST_PAGE; // сброс при каждой смене фильтров/поиска
     el.innerHTML = `
       ${recs.length ? `
         <div class="section-head"><h2>${recsHead}</h2></div>
         <div class="grid">${recs.map(cardHtml).join("")}</div>` : ""}
       <div class="section-head"><h2>Рецепты</h2><span class="muted">${filtered.length}</span></div>
-      ${filtered.length ? `<div class="grid">${filtered.map(cardHtml).join("")}</div>`
+      ${filtered.length ? `<div class="grid" id="listGrid">${filtered.slice(0, listShown).map(cardHtml).join("")}</div><div id="listSentinel" style="height:1px"></div>`
         : `<div class="empty">Ничего не найдено.<br>Сбросьте фильтры или <a href="#/add" style="color:var(--accent)">добавьте рецепт</a>.</div>`}
     `;
+    setupInfiniteScroll(filtered);
+  }
+  // Догружаем карточки порциями по мере прокрутки — иначе 4600 <img> рендерятся разом
+  function setupInfiniteScroll(filtered) {
+    if (listObserver) { listObserver.disconnect(); listObserver = null; }
+    const sentinel = document.getElementById("listSentinel");
+    const grid = document.getElementById("listGrid");
+    if (!sentinel || !grid || filtered.length <= listShown) return;
+    listObserver = new IntersectionObserver((entries) => {
+      if (!entries[0].isIntersecting) return;
+      const next = filtered.slice(listShown, listShown + LIST_PAGE);
+      grid.insertAdjacentHTML("beforeend", next.map(cardHtml).join(""));
+      listShown += next.length;
+      if (listShown >= filtered.length) { listObserver.disconnect(); listObserver = null; }
+    }, { rootMargin: "800px" });
+    listObserver.observe(sentinel);
   }
   let listDebTimer = null;
   function debouncedResults() { clearTimeout(listDebTimer); listDebTimer = setTimeout(() => renderResults(), 180); }
@@ -380,6 +400,7 @@
         <a class="btn primary" href="#/cook/${esc(r.id)}">🍳 Готовить</a>
         <button class="btn" id="toShop">🛒 В список покупок</button>
       </div>
+      <button class="btn" id="askAssistant" style="width:100%;margin:-6px 0 4px">✦ Спросить ассистента о рецепте</button>
 
       <div class="label" style="margin-top:8px">Метод</div>
       <ol class="steps">
@@ -392,6 +413,7 @@
     $("#svMinus").onclick = () => changeServings(id, -1);
     $("#svPlus").onclick = () => changeServings(id, +1);
     $("#toShop").onclick = () => { addRecipeToShopping(id, recipeServings[id]); toast("Добавлено в список"); updateBadge(); };
+    $("#askAssistant").onclick = () => { if (window.CookAssistant) window.CookAssistant.openOverlay({ recipe: r }); };
     bindIngredientRows(r);
     bindMemory(r);
   }

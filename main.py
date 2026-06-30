@@ -32,6 +32,22 @@ logger = structlog.get_logger()
 
 # FastAPI приложение
 app: FastAPI = create_app()
+
+# .webp не зарегистрирован в системном mimetypes → StaticFiles отдаёт text/plain.
+# Из-за этого Cloudflare не считает ресурс картинкой (нет image-оптимизации).
+import mimetypes
+mimetypes.add_type("image/webp", ".webp")
+
+
+@app.middleware("http")
+async def _static_image_cache(request, call_next):
+    """Длинный кэш для статичных фото рецептов (Cloudflare honors origin Cache-Control)."""
+    response = await call_next(request)
+    if request.url.path.startswith("/img/"):
+        response.headers["Cache-Control"] = "public, max-age=2592000"  # 30 дней
+    return response
+
+
 from fastapi.staticfiles import StaticFiles
 app.mount("/", StaticFiles(directory="landing", html=True), name="landing")
 
