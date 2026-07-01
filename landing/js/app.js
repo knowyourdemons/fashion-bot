@@ -40,7 +40,7 @@
     shopping: LS.get("cb_shopping", { recipes: {}, manual: [], checked: {} }),
     pantry:   LS.get("cb_pantry", { items: {} }),
     memory:   LS.get("cb_memory", {}),
-    userRecipes: LS.get("cb_user_recipes", []),
+    userRecipes: LS.get("cb_userRecipes", LS.get("cb_user_recipes", [])), // читаем правильный ключ; миграция со старого cb_user_recipes
     plan:     LS.get("cb_plan", {}),
     ingChecks: LS.get("cb_ingChecks", {}),
     profile:  LS.get("cb_profile", { excludeAllergens: [], diet: "" }),
@@ -56,6 +56,11 @@
 
   /* ---------- Доступ к данным ---------- */
   function allRecipes() { return (window.RECIPES || []).concat(Store.userRecipes || []); }
+  // Гейт логина перед AI-действиями вне экрана ассистента: вместо глухого тоста — окно входа + повтор действия
+  function guardAuth(action) {
+    if (window.CookAssistant && !window.CookAssistant.isAuthed()) { window.CookAssistant.promptLogin(() => action()); return; }
+    action();
+  }
   function getRecipe(id) { return allRecipes().find(r => r.id === id); }
 
   /* ---------- Утилиты ---------- */
@@ -150,7 +155,7 @@
   function serveWithSuggestions(r, limit) {
     limit = limit || 3;
     const wantCats = SERVE_PAIRS[r.category] || ["Напиток"];
-    const pool = allRecipes().filter(x => x.id !== r.id && wantCats.includes(x.category) && (x.difficulty || 1) <= 2);
+    const pool = allRecipes().filter(x => x.id !== r.id && wantCats.includes(x.category) && (x.difficulty || 1) <= 2 && profileAllows(x)); // гардрейл: не предлагать исключённое диетой/аллергенами
     const rank = (x) => {
       const mem = Store.memory[x.id] || {};
       let s = x.cuisine === r.cuisine ? 3 : 0;      // та же кухня — выше
@@ -260,6 +265,28 @@
   };
   function canonAllergen(a) { const n = normName(a); return ALLERGEN_CANON[n] || n; }
   function recipeAllergens(r) { return new Set((r.allergens || []).map(canonAllergen)); }
+  // Гардрейл: AI-вариант не должен вносить исключённый профилем аллерген. Проверяем и заявленные allergens, и названия ингредиентов
+  const ALLERGEN_INGR = {
+    "глютен": ["пшен", "мук", "хлеб", "макарон", "манк", "булгур", "сухар", "панир", "овсян", "ячмен", "рож", "отруб"],
+    "молоко": ["молок", "сливк", "сливочн", "сметан", "творог", "сыр", "йогурт", "кефир", "ряженк"],
+    "яйца": ["яйц", "яиц", "меланж"],
+    "орехи": ["орех", "миндал", "фундук", "кешью", "фисташк", "арахис", "пекан", "грецк", "макадам"],
+    "рыба": ["рыб", "лосос", "треск", "тунец", "форел", "сельд", "минтай", "икра"],
+    "соя": ["соя", "соев", "тофу", "эдамам", "мисо"],
+    "морепродукты": ["креветк", "краб", "кальмар", "мидии", "устриц", "морепрод", "гребешок"],
+  };
+  function draftAllergenConflict(draft) {
+    const excl = (Store.profile.excludeAllergens || []).map(canonAllergen);
+    if (!excl.length) return [];
+    const declared = new Set((draft.allergens || []).map(canonAllergen));
+    const names = (draft.ingredients || []).map(i => normName(typeof i === "string" ? i : (i.name || ""))).join(" | ");
+    const hit = new Set();
+    for (const a of excl) {
+      if (declared.has(a)) { hit.add(a); continue; }
+      if ((ALLERGEN_INGR[a] || []).some(k => names.includes(k))) hit.add(a);
+    }
+    return [...hit];
+  }
   function tagsHave(r, sub) { return (r.tags || []).some(t => normName(t).includes(sub)); }
   function recipeMatchesDiet(r, diet) {
     if (diet === "веганское") return tagsHave(r, "веган") || tagsHave(r, "постн");
@@ -356,7 +383,7 @@
     $("#todayShop").onclick = () => { addRecipeToShopping(r.id, sv); updateBadge(); toast("В списке покупок"); };
     $("#todayMore").onclick = () => renderToday();
     $("#todayLike").onclick = () => { const m = getMem(r.id); m.vote = 1; saveMem(); toast("Запомнил — буду предлагать похожее"); renderToday(); };
-    $("#todayNope").onclick = () => { const m = getMem(r.id); m.vote = -1; saveMem(); renderToday(); };
+    $("#todayNope").onclick = () => renderToday(); // «не сегодня» ≠ дизлайк: просто другой вариант (pickTonight исключит показанный). Явный минус — только 👎 в карточке рецепта
   }
 
   function renderList() {
@@ -857,7 +884,7 @@
 
     view.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { delete Store.shopping.recipes[b.dataset.rm]; Store.save("shopping"); updateBadge(); renderShopping(); });
     view.querySelectorAll("[data-toggle]").forEach(b => b.onclick = () => { const k = b.dataset.toggle; Store.shopping.checked[k] = !Store.shopping.checked[k]; Store.save("shopping"); b.closest(".shop-item").classList.toggle("done"); b.textContent = Store.shopping.checked[k] ? "✓" : ""; });
-    view.querySelectorAll("[data-pantry]").forEach(b => b.onclick = () => { Store.pantry.items[normName(b.dataset.pantry)] = true; Store.save("pantry"); toast("В кладовку: " + b.dataset.pantry); renderShopping(); });
+    view.querySelectorAll("[data-pantry]").forEach(b => b.onclick = () => { addToPantry(b.dataset.pantry); Store.save("pantry"); toast("В кладовку: " + b.dataset.pantry); renderShopping(); });
     view.querySelectorAll("[data-delman]").forEach(b => b.onclick = () => { Store.shopping.manual.splice(parseInt(b.dataset.delman, 10), 1); Store.save("shopping"); renderShopping(); });
     $("#addManual").onclick = addManualPrompt;
     $("#copyShop").onclick = copyShopping;
@@ -899,28 +926,28 @@
     $("#view").querySelectorAll("[data-unpantry]").forEach(b => b.onclick = (e) => { e.stopPropagation(); const n = b.dataset.unpantry; delete Store.pantry.items[n]; if (Store.pantry.expiry) delete Store.pantry.expiry[n]; Store.save("pantry"); renderShopping(); });
     $("#view").querySelectorAll("[data-exp]").forEach(b => b.onclick = () => setExpiry(b.dataset.exp));
     const useUp = $("#pantryUseUp");
-    if (useUp) useUp.onclick = async () => {
+    if (useUp) useUp.onclick = () => guardAuth(async () => {
       if (!window.CookAssistant) { toast("Ассистент недоступен"); return; }
       const items = Object.keys(Store.pantry.items || {}).filter(k => Store.pantry.items[k] && (() => { const dl = daysLeft((Store.pantry.expiry || {})[k]); return dl != null && dl <= 3; })());
       if (!items.length) return;
       toast("Придумываю из портящегося… (10–20 сек)");
       try { startDraft(await window.CookAssistant.generateRecipe({ ingredients: items, diet: Store.profile.diet || "", allergens: Store.profile.excludeAllergens || [] })); }
       catch (e) { toast(e.message || "Не получилось"); }
-    };
-    const add = () => { const v = $("#pantryAdd").value.trim(); if (v) { Store.pantry.items[normName(v)] = true; Store.save("pantry"); renderShopping(); } };
+    });
+    const add = () => { const v = $("#pantryAdd").value.trim(); if (v) { addToPantry(v); Store.save("pantry"); renderShopping(); } };
     $("#pantryAddBtn").onclick = add;
     $("#pantryAdd").addEventListener("keydown", e => { if (e.key === "Enter") add(); });
     const gen = $("#pantryGen");
-    if (gen) gen.onclick = async () => {
+    if (gen) gen.onclick = () => guardAuth(async () => {
       if (!window.CookAssistant) { toast("Ассистент недоступен"); return; }
       const ingredients = Object.keys(Store.pantry.items || {}).filter(k => Store.pantry.items[k]);
       if (!ingredients.length) return;
       toast("Придумываю рецепт… (10–20 сек)");
       try { startDraft(await window.CookAssistant.generateRecipe({ ingredients, diet: Store.profile.diet || "", allergens: Store.profile.excludeAllergens || [] })); }
       catch (e) { toast(e.message || "Не получилось"); }
-    };
+    });
     const scan = $("#pantryScan");
-    if (scan) scan.onchange = async () => {
+    if (scan) scan.onchange = () => guardAuth(async () => {
       let files = Array.from(scan.files || []); if (!files.length || !window.CookAssistant) return;
       const SCAN_MAX = 5;
       if (files.length > SCAN_MAX) { toast(`За раз обрабатываю ${SCAN_MAX} кадров`); files = files.slice(0, SCAN_MAX); }
@@ -934,28 +961,38 @@
       } catch (e) { toast(e.message || "Не получилось"); }
       scan.value = "";
       if (merged.length) openScanResultSheet(merged); else toast("Ничего не распознал — попробуйте ближе/светлее");
-    };
+    });
   }
   // Авто-срок годности по типу продукта (клиентский, $0)
   const SHELF_LIFE = { молочка: 4, мясо: 2, рыба: 2, овощи: 7, фрукты: 7, зелень: 4, хлеб: 3, яйца: 21, бакалея: 180, заморозка: 90, прочее: 7 };
+  // keyword'ы уже нормализованы (без ё) — classifyFood нормализует и имя (normName: ё→е, lower)
   const FOOD_KEYWORDS = [
-    ["молочка", ["молок", "кефир", "сметан", "творог", "сыр", "йогурт", "сливк", "ряженк", "масло сливоч"]],
+    ["молочка", ["молок", "кефир", "сметан", "творог", "сыр", "йогурт", "сливк", "сливочн", "ряженк", "масло сливоч"]],
     ["мясо", ["мясо", "курин", "куриц", "фарш", "говядин", "свинин", "индейк", "колбас", "сосиск", "бекон", "ветчин"]],
-    ["рыба", ["рыб", "лосос", "форел", "селёдк", "селедк", "креветк", "кальмар", "тунец", "икра", "морепрод"]],
-    ["зелень", ["укроп", "петрушк", "кинз", "базилик", "салат", "руккол", "шпинат", "зелен", "лук зелен"]],
+    ["рыба", ["рыб", "лосос", "форел", "селедк", "креветк", "кальмар", "тунец", "икра", "морепрод"]],
+    ["зелень", ["укроп", "петрушк", "кинз", "базилик", "руккол", "шпинат", "зелень", "лук зелен", "зелен лук"]],
     ["овощи", ["помидор", "огурец", "огурц", "перец", "капуст", "морков", "картоф", "картош", "кабач", "баклаж", "лук", "чеснок", "свекл", "тыкв", "грибы", "брокколи", "цветн"]],
     ["фрукты", ["яблок", "банан", "апельсин", "груш", "виноград", "ягод", "клубник", "малин", "лимон", "мандарин", "киви", "персик", "слив", "абрикос", "авокадо"]],
     ["хлеб", ["хлеб", "батон", "булк", "лаваш", "багет", "выпечк", "тортил"]],
     ["яйца", ["яйц", "яйк"]],
     ["заморозка", ["заморож", "мороженн", "пельмен", "вареник", "наггетс"]],
-    ["бакалея", ["крупа", "рис", "гречк", "макарон", "паста", "мук", "сахар", "соль", "консерв", "тушёнк", "тушенк", "фасол", "чечевиц", "горох", "масло растит", "уксус", "специ", "чай", "кофе", "мёд", "мед ", "орех", "сухофрукт"]],
+    ["бакалея", ["крупа", "рис", "гречк", "макарон", "паста", "мука", "сахар", "соль", "консерв", "тушенк", "фасол", "чечевиц", "горох", "масло растит", "уксус", "специ", "чай", "кофе", "мед", "орех", "сухофрукт"]],
   ];
   function classifyFood(name) {
     const n = normName(name);
+    // молотый/чёрный/душистый перец и т.п. — специя (бакалея), не свежий овощ
+    if (n.includes("перец") && /(черн|молот|горош|душист|паприк|чили|красн)/.test(n)) return "бакалея";
     for (const [cat, kws] of FOOD_KEYWORDS) { if (kws.some(k => n.includes(k))) return cat; }
     return "прочее";
   }
   function todayPlusDays(days) { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); }
+  // Единая точка добавления в кладовку: ставит дефолтный срок по категории, не перетирая ручной
+  function addToPantry(name) {
+    const n = normName(name);
+    Store.pantry.items[n] = true;
+    Store.pantry.expiry = Store.pantry.expiry || {};
+    if (Store.pantry.expiry[n] == null) Store.pantry.expiry[n] = todayPlusDays(SHELF_LIFE[classifyFood(name)] || 7);
+  }
   // Результат fridge-scan: чипы продуктов (toggle) → добавить выбранные в кладовку
   function openScanResultSheet(items) {
     const picked = new Set(items);
@@ -969,12 +1006,7 @@
       if (picked.has(n)) { picked.delete(n); b.classList.remove("active"); } else { picked.add(n); b.classList.add("active"); }
     });
     $("#scanAdd").onclick = () => {
-      Store.pantry.expiry = Store.pantry.expiry || {};
-      picked.forEach(name => {
-        const n = normName(name);
-        Store.pantry.items[n] = true;
-        if (Store.pantry.expiry[n] == null) Store.pantry.expiry[n] = todayPlusDays(SHELF_LIFE[classifyFood(name)] || 7); // не перетираем ручной срок
-      });
+      picked.forEach(addToPantry);
       Store.save("pantry"); closeSheet(); renderShopping(); toast("Добавлено в кладовку: " + picked.size);
     };
   }
@@ -1018,7 +1050,7 @@
         <button class="chip" data-pmode="scale">🔢 Другое число порций…</button>
       </div>
     `);
-    document.querySelectorAll("[data-pmode]").forEach(b => b.onclick = async () => {
+    document.querySelectorAll("[data-pmode]").forEach(b => b.onclick = () => guardAuth(async () => {
       const mode = b.dataset.pmode;
       let arg = "";
       if (mode === "no_allergen") { arg = (prompt("Какой аллерген убрать? (глютен / молоко / яйца / орехи / рыба / соя)") || "").trim(); if (!arg) return; }
@@ -1026,7 +1058,7 @@
       closeSheet(); toast("Готовлю вариант… (10–20 сек)");
       try { startDraft(await window.CookAssistant.personalizeRecipe(r, mode, arg)); }
       catch (e) { toast(e.message || "Не получилось"); }
-    });
+    }));
   }
   // Добавить рецепт в свои коллекции/папки (toggle) + создать новую
   function openCollectionSheet(id) {
@@ -1614,18 +1646,18 @@
       <p class="muted">Импорт обращается к бэкенду (требуется секрет и запущенный сервер). Результат — черновик, который можно поправить и сохранить.</p>
       <div id="impStatus"></div>
     `;
-    $("#impUrlBtn").onclick = async () => {
+    $("#impUrlBtn").onclick = () => guardAuth(async () => {
       const url = $("#impUrl").value.trim(); if (!url) return;
       $("#impStatus").textContent = "Импортирую…";
       try { const draft = await window.CookAssistant.importUrl(url); openDraft(draft); }
       catch (e) { $("#impStatus").textContent = "Ошибка импорта: " + e.message; }
-    };
-    $("#impPhotoBtn").onclick = async () => {
+    });
+    $("#impPhotoBtn").onclick = () => guardAuth(async () => {
       const f = $("#impPhoto").files[0]; if (!f) return;
       $("#impStatus").textContent = "Распознаю…";
       try { const draft = await window.CookAssistant.importPhoto(f); openDraft(draft); }
       catch (e) { $("#impStatus").textContent = "Ошибка распознавания: " + e.message; }
-    };
+    });
     function openDraft(draft) {
       document.querySelectorAll("[data-tab]").forEach(t => t.classList.toggle("active", t.dataset.tab === "manual"));
       manualForm(normalizeDraft(draft)); toast("Черновик готов — проверьте и сохраните");
@@ -1645,6 +1677,8 @@
   // Открыть AI/импорт-черновик в форме «Добавить» из любого экрана
   let pendingDraft = null;
   function startDraft(draft) {
+    const conflict = draftAllergenConflict(draft);
+    if (conflict.length) toast("⚠ Возможен исключённый аллерген: " + conflict.join(", ") + " — проверьте состав перед готовкой");
     pendingDraft = draft;
     if (location.hash === "#/add") renderAdd(); else location.hash = "#/add";
   }

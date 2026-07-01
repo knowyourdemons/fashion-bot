@@ -70,6 +70,17 @@
     if (holder) holder.appendChild(s);
   }
 
+  // Универсальный логин-гейт в шторке — вызывать перед AI-действиями вне экрана ассистента
+  function promptLogin(onDone) {
+    if (isAuthed()) { if (onDone) onDone(); return; }
+    const ov = document.createElement("div"); ov.className = "overlay"; ov.id = "loginOverlay";
+    ov.innerHTML = `<div class="sheet"><button class="btn ghost sm sheet-close" id="lClose">Закрыть</button><h3>Вход через Telegram</h3><div id="loginBox"></div></div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener("click", e => { if (e.target === ov) ov.remove(); });
+    ov.querySelector("#lClose").onclick = () => ov.remove();
+    renderLoginGate(ov.querySelector("#loginBox"), (name) => { ov.remove(); if (onDone) onDone(name); });
+  }
+
   function loadHistory() { try { return JSON.parse(localStorage.getItem("cb_assistant") || "[]"); } catch (e) { return []; } }
   function saveHistory(h) { try { localStorage.setItem("cb_assistant", JSON.stringify(h.slice(-40))); } catch (e) {} }
 
@@ -93,8 +104,10 @@
     return resp.json(); // { reply, substitution? }
   }
   async function importUrl(url) {
-    const resp = await fetch(API + "/import", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ url }) });
-    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const fd = new FormData(); fd.append("url", url); // multipart — эндпоинт читает url через Form(...)
+    const resp = await fetch(API + "/import", { method: "POST", headers: authHeaders(), body: fd });
+    if (resp.status === 401) { clearSession(); throw new Error("Войдите через Telegram"); }
+    if (!resp.ok) throw new Error("Не получилось (" + resp.status + ")");
     return (await resp.json()).recipe;
   }
   async function importPhoto(file) {
@@ -302,5 +315,5 @@
     else window.scrollTo(0, document.body.scrollHeight);
   }
 
-  window.CookAssistant = { renderView, openOverlay, importUrl, importPhoto, personalizeRecipe, generateRecipe, scanFridge };
+  window.CookAssistant = { renderView, openOverlay, importUrl, importPhoto, personalizeRecipe, generateRecipe, scanFridge, isAuthed, promptLogin };
 })();
