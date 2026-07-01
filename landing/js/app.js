@@ -509,6 +509,7 @@
         ${(r.prepTime != null && r.cookTime != null) ? `<span>🔪 ${r.prepTime} + 🍳 ${r.cookTime} мин</span>` : ""}
         <span>📊 сложность <b>${DIFF_LABEL[r.difficulty] || "просто"}</b></span>
         ${r.kcal ? `<span>🔥 <b>${r.kcal}</b> ккал</span>` : ""}
+        ${(r.protein != null && r.fat != null && r.carbs != null) ? `<span>Б <b>${r.protein}</b> · Ж <b>${r.fat}</b> · У <b>${r.carbs}</b> г</span>` : ""}
         ${r.forKid ? '<span class="kid" style="color:var(--accent);font-weight:700">★ для дочки</span>' : ""}
       </div>
       ${r.allergens && r.allergens.length ? `<div class="allergen-badges">${[...recipeAllergens(r)].map(a => `<span class="al-badge">${esc(a)}</span>`).join("")}</div>` : ""}
