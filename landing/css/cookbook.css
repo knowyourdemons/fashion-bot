@@ -201,9 +201,11 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 }
 .cover .c-icon { position: absolute; top: 10px; right: 12px; font-size: 22px; opacity: .5; }
 .card-meta {
-  padding: 9px 12px 11px; display: flex; gap: 10px; align-items: center;
+  padding: 9px 12px 11px; display: flex; gap: 6px 10px; align-items: center; flex-wrap: wrap;
   font-size: 13px; color: var(--ink-2); border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
 }
+.card-meta > span { white-space: nowrap; }
 .card-meta .kid { color: var(--accent); font-weight: 700; }
 
 .section-head { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 12px; }
@@ -221,7 +223,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .recipe-hero.photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .recipe-hero h1 { font-size: 32px; }
 .recipe-hero .r-cat { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; opacity: .75; font-family: var(--serif); font-weight: 600; margin-bottom: 6px; }
-.r-meta { display: flex; gap: 16px; flex-wrap: wrap; color: var(--ink-2); font-size: 15px; margin-bottom: 18px; }
+.r-meta { display: flex; gap: 8px 16px; flex-wrap: wrap; color: var(--ink-2); font-size: 15px; margin-bottom: 18px; font-variant-numeric: tabular-nums; }
+.r-meta > span { white-space: nowrap; }
 .r-meta b { color: var(--ink); font-weight: 600; }
 
 /* Оживление данных: аллергены, детская заметка, заголовки шагов, подача */

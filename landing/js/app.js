@@ -406,7 +406,7 @@
     const recsHead = hasTasteProfile() ? "Вам понравится" : "С чего начать";
     listShown = LIST_PAGE; // сброс при каждой смене фильтров/поиска
     // Режим «Из кладовки»: сортировка по нехватке + бейдж на карточке
-    let decorate = cardHtml;
+    let decorate = (r) => cardHtml(r);  // обёртка: .map передаёт индекс 2-м арг — не пускаем его в extra
     if (listState.pantryCook) {
       filtered.sort((a, b) => { const ma = pantryMatch(a), mb = pantryMatch(b); return ma.missing.length - mb.missing.length || mb.have - ma.have || a.time - b.time; });
       decorate = (r) => cardHtml(r, pantryBadge(pantryMatch(r)));
@@ -416,7 +416,7 @@
     el.innerHTML = `
       ${recs.length ? `
         <div class="section-head"><h2>${recsHead}</h2></div>
-        <div class="grid">${recs.map(cardHtml).join("")}</div>` : ""}
+        <div class="grid">${recs.map(r => cardHtml(r)).join("")}</div>` : ""}
       ${pantryEmptyHint}
       <div class="section-head"><h2>Рецепты</h2><span class="muted">${filtered.length}</span></div>
       ${filtered.length ? `<div class="grid" id="listGrid">${filtered.slice(0, listShown).map(decorate).join("")}</div><div id="listSentinel" style="height:1px"></div>`
@@ -481,7 +481,7 @@
     const section = (title, sub, list) => list.length
       ? `<div class="section-head"><h2>${title}</h2><span class="muted">${list.length}</span></div>
          ${sub ? `<div class="muted" style="margin:-6px 0 10px">${sub}</div>` : ""}
-         <div class="grid">${list.map(cardHtml).join("")}</div>`
+         <div class="grid">${list.map(r => cardHtml(r)).join("")}</div>`
       : "";
 
     const body = (cooked.length || liked.length || kid.length)
