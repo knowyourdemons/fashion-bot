@@ -240,8 +240,9 @@
   /* ============================================================
      ВЬЮХА: Список (#/)
      ============================================================ */
-  let listState = { q: "", cuisine: "", category: "", kidOnly: false, time: "", difficulty: "", simple: false, fewIngr: false, pantryCook: false };
+  let listState = { q: "", cuisine: "", category: "", kidOnly: false, time: "", difficulty: "", simple: false, fewIngr: false, pantryCook: false, noOven: false };
   function nonStapleCount(r) { return (r.ingredients || []).filter(i => !i.staple).length; }
+  function recipeNeedsOven(r) { return (r.equipment || []).some(e => normName(e).includes("духов")); }
   const DIFF_LABEL = ["", "просто", "средне", "сложно"];
 
   function renderList() {
@@ -287,12 +288,12 @@
       renderList();
     }));
     view.querySelectorAll("#activeFilters [data-clear]").forEach(b => b.addEventListener("click", () => {
-      const k = b.dataset.clear; listState[k] = (k === "kidOnly" || k === "fewIngr" || k === "simple") ? false : ""; renderList();
+      const k = b.dataset.clear; listState[k] = (k === "kidOnly" || k === "fewIngr" || k === "simple" || k === "noOven") ? false : ""; renderList();
     }));
   }
 
   function filterCount() {
-    return (listState.cuisine ? 1 : 0) + (listState.time ? 1 : 0) + (listState.difficulty ? 1 : 0) + (listState.fewIngr ? 1 : 0);
+    return (listState.cuisine ? 1 : 0) + (listState.time ? 1 : 0) + (listState.difficulty ? 1 : 0) + (listState.fewIngr ? 1 : 0) + (listState.noOven ? 1 : 0);
   }
   // Активные фильтры из листа «Фильтры» → съёмные чипы под поиском
   function activeFilterChips() {
@@ -301,6 +302,7 @@
     if (listState.time) chips.push(["time", "≤ " + listState.time + " мин"]);
     if (listState.difficulty) chips.push(["difficulty", DIFF_LABEL[listState.difficulty] || ""]);
     if (listState.fewIngr) chips.push(["fewIngr", "≤ 5 покупных"]);
+    if (listState.noOven) chips.push(["noOven", "без духовки"]);
     return chips.map(([k, label]) => `<button class="afilter" data-clear="${k}">${esc(label)} ✕</button>`).join("");
   }
 
@@ -338,6 +340,10 @@
         <div class="label">Ингредиенты</div>
         <div class="chips" id="ingrGrid"><button class="chip ${listState.fewIngr ? "active" : ""}" id="fewIngrChip">≤ 5 покупных</button></div>
       </div>
+      <div class="filter-group">
+        <div class="label">Оборудование</div>
+        <div class="chips" id="equipGrid"><button class="chip ${listState.noOven ? "active" : ""}" id="noOvenChip">🚫🔥 Без духовки</button></div>
+      </div>
       <div class="sheet-actions">
         <button class="btn ghost" id="fReset">Сбросить</button>
         <button class="btn primary" id="fApply"></button>
@@ -370,13 +376,18 @@
       e.target.classList.toggle("active", listState.fewIngr);
       updateCount();
     });
+    root.querySelector("#noOvenChip").addEventListener("click", (e) => {
+      listState.noOven = !listState.noOven;
+      e.target.classList.toggle("active", listState.noOven);
+      updateCount();
+    });
     $("#cuisineSearch").addEventListener("input", e => {
       const q = normName(e.target.value);
       root.querySelectorAll("#cuisineGrid [data-fc]").forEach(b => {
         b.style.display = (!q || normName(b.getAttribute("data-fc")).includes(q)) ? "" : "none";
       });
     });
-    $("#fReset").onclick = () => { listState.cuisine = ""; listState.time = ""; listState.difficulty = ""; listState.fewIngr = false; closeSheet(); renderList(); };
+    $("#fReset").onclick = () => { listState.cuisine = ""; listState.time = ""; listState.difficulty = ""; listState.fewIngr = false; listState.noOven = false; closeSheet(); renderList(); };
     $("#fApply").onclick = () => { closeSheet(); renderList(); };
     updateCount();
   }
@@ -389,7 +400,7 @@
     const el = $("#listResults");
     if (!el) return;
     const filtered = applyFilters(recipes);
-    const anyFilter = listState.q || listState.cuisine || listState.category || listState.kidOnly || listState.time || listState.difficulty || listState.simple || listState.fewIngr || listState.pantryCook;
+    const anyFilter = listState.q || listState.cuisine || listState.category || listState.kidOnly || listState.time || listState.difficulty || listState.simple || listState.fewIngr || listState.pantryCook || listState.noOven;
     const recs = anyFilter ? [] : recommend(6).filter(profileAllows);
     const recsHead = hasTasteProfile() ? "Вам понравится" : "С чего начать";
     listShown = LIST_PAGE; // сброс при каждой смене фильтров/поиска
@@ -442,6 +453,7 @@
       if (listState.difficulty && r.difficulty !== +listState.difficulty) return false;
       if (listState.simple && !(r.difficulty <= 1 && r.time <= 30)) return false;
       if (listState.fewIngr && nonStapleCount(r) > 5) return false;
+      if (listState.noOven && recipeNeedsOven(r)) return false;
       if (listState.pantryCook && pantryMatch(r).missing.length > 2) return false;
       if (q) {
         const hay = [r.title, ...(r.tags || []), ...(r.ingredients || []).map(i => i.name)].map(normName).join(" ");
