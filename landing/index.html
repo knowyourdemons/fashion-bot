@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/cookbook.css?v=20260701u">
+<link rel="stylesheet" href="css/cookbook.css?v=20260701v">
 </head>
 <body>
 <div class="app">
@@ -23,28 +23,30 @@
     <div class="topbar-inner">
       <a href="#/" class="brand">Кухня<small>&nbsp;&nbsp;книга рецептов</small></a>
       <a href="#/saved" class="iconbtn" title="Избранное и готовил">❤</a>
-      <a href="#/assistant" class="iconbtn" title="Ассистент">✦</a>
-      <a href="#/plan" class="iconbtn" title="План недели">▦</a>
-      <a href="#/shopping" class="iconbtn" title="Список покупок">
-        🛒<span class="badge hidden" id="shopBadge">0</span>
-      </a>
       <a href="#/add" class="iconbtn" title="Добавить рецепт">＋</a>
     </div>
   </header>
   <main class="view" id="view"><!-- сюда рендерится текущая вьюха --></main>
+  <nav class="tabbar" id="tabbar">
+    <a href="#/today" class="tab" data-tab="today"><span class="tab-ic">🍽</span><span class="tab-lb">Сегодня</span></a>
+    <a href="#/" class="tab" data-tab="catalog"><span class="tab-ic">📖</span><span class="tab-lb">Каталог</span></a>
+    <a href="#/shopping" class="tab" data-tab="shopping"><span class="tab-ic">🛒<span class="badge hidden" id="shopBadge">0</span></span><span class="tab-lb">Список</span></a>
+    <a href="#/plan" class="tab" data-tab="plan"><span class="tab-ic">📅</span><span class="tab-lb">План</span></a>
+    <a href="#/assistant" class="tab" data-tab="assistant"><span class="tab-ic">✦</span><span class="tab-lb">Ассистент</span></a>
+  </nav>
 </div>
 
 <!-- База рецептов (window.RECIPES). НЕ fetch — работает и под file:// --->
-<script src="data/recipes.js?v=20260701u"></script>
-<script src="js/assistant.js?v=20260701u"></script>
-<script src="js/sync.js?v=20260701u"></script>
-<script src="js/app.js?v=20260701u"></script>
+<script src="data/recipes.js?v=20260701v"></script>
+<script src="js/assistant.js?v=20260701v"></script>
+<script src="js/sync.js?v=20260701v"></script>
+<script src="js/app.js?v=20260701v"></script>
 <script>
   // Service worker: только по http(s), file:// не трогаем. Один reload при активации новой версии.
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     addEventListener('load', () => {
       // ?v= версионирует URL (CF кэширует .js 4ч → на релиз меняем query, чтобы SW обновился сразу)
-      navigator.serviceWorker.register('/sw.js?v=20260701u', { updateViaCache: 'none' }).catch(() => {});
+      navigator.serviceWorker.register('/sw.js?v=20260701v', { updateViaCache: 'none' }).catch(() => {});
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return; refreshing = true; location.reload();

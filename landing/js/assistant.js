@@ -220,8 +220,8 @@
     else if (ctx.ingredient) chips = ["Чем заменить?", "Сколько это в граммах?", "Обязательно ли?"];
     else if (ctx.recipe) chips = ["Чем заменить ингредиент?", "Как ускорить?"];
     if (!chips.length) return "";
-    return `<div class="quick-chips" style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 2px">`
-      + chips.map(c => `<button type="button" class="btn ghost sm" data-quickask="${esc(c)}">${esc(c)}</button>`).join("")
+    return `<div class="quick-chips">`
+      + chips.map(c => `<button type="button" class="chip accent" data-quickask="${esc(c)}">${esc(c)}</button>`).join("")
       + `</div>`;
   }
   function bindQuickChips(root) {

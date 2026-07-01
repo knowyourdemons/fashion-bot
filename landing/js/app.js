@@ -171,20 +171,18 @@
     return out;
   }
   function serveSuggestCardHtml(x) {
-    const bg = x.photo ? `background-image:url('${esc(x.photo)}');background-size:cover;background-position:center` : coverStyle(x);
-    return `<a class="serve-card" href="#/recipe/${esc(x.id)}" style="flex:0 0 132px;text-decoration:none;color:inherit">
-      <div style="height:82px;border-radius:12px;${bg}"></div>
-      <div style="font-size:11px;opacity:.6;margin-top:4px">${esc(x.category)} · ${x.time} мин</div>
-      <div style="font-size:13px;font-weight:600;line-height:1.2">${esc(x.title)}</div>
+    const bg = x.photo ? `background-image:url('${esc(x.photo)}')` : coverStyle(x);
+    return `<a class="serve-card" href="#/recipe/${esc(x.id)}">
+      <div class="sc-cover" style="${bg}"></div>
+      <div class="sc-cat">${esc(x.category)} · ${x.time} мин</div>
+      <div class="sc-title">${esc(x.title)}</div>
     </a>`;
   }
   function serveSuggestBlockHtml(r) {
     const sug = serveWithSuggestions(r);
     if (!sug.length) return "";
-    return `<div class="label" style="margin-top:14px">Подать с…</div>
-      <div class="serve-row" style="display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch">
-        ${sug.map(serveSuggestCardHtml).join("")}
-      </div>`;
+    return `<div class="label" style="margin-top:14px">Хорошо дополнит</div>
+      <div class="serve-row">${sug.map(serveSuggestCardHtml).join("")}</div>`;
   }
 
   /* ---------- Личная память ---------- */
@@ -337,25 +335,32 @@
      ВЬЮХА: Что сегодня? (#/today) — экран-решение «5pm»
      ============================================================ */
   let todayShown = new Set();
+  // Профиль ребёнка задан, если есть имя или списки не-любит/аллергий
+  function childProfileSet() { const c = Store.child || {}; return !!(c.name || (c.dislikes || []).length || (c.allergies || []).length); }
   function pickTonight() {
     let ranked = recommend(80).filter(r => profileAllows(r) && !todayShown.has(r.id));
     if (!ranked.length) { todayShown = new Set(); ranked = recommend(80).filter(profileAllows); }
     if (!ranked.length) return null;
     const dinner = MEAL_CATS["Ужин"];
+    const kidOn = childProfileSet();
     const scored = ranked.map(r => {
       const m = pantryMatch(r);
-      const s = (dinner.includes(r.category) ? 3 : 0) + Math.max(0, 4 - m.missing.length) + (r.time <= 40 ? 1 : 0);
-      return { r, m, s };
+      const kidOk = !kidOn || !childBlocks(r);
+      // «что поедят ВСЕ»: сильный приоритет ужинам, что подойдут и ребёнку
+      const s = (dinner.includes(r.category) ? 3 : 0) + Math.max(0, 4 - m.missing.length) + (r.time <= 40 ? 1 : 0) + (kidOn && kidOk ? 3 : 0);
+      return { r, m, s, kidOk };
     }).sort((a, b) => b.s - a.s);
     const pick = scored[0];
     if (pick) todayShown.add(pick.r.id);
     return pick;
   }
-  function todayWhy(m) {
-    if (!m.total) return "Просто и без лишних покупок";
-    if (!m.missing.length) return "🏠 Всё есть — готовь прямо сейчас";
-    if (m.missing.length <= 2) return "Почти всё есть, купить: " + m.missing.map(esc).join(", ");
-    return hasTasteProfile() ? "Под ваши вкусы" : "Хороший вариант на вечер";
+  function todayWhy(pick) {
+    const m = pick.m;
+    const kidLine = (childProfileSet() && pick.kidOk) ? ` · подойдёт и ${esc((Store.child && Store.child.name) || "ребёнку")}` : "";
+    if (!m.total) return "Просто и без лишних покупок" + kidLine;
+    if (!m.missing.length) return "🏠 Всё есть — готовь прямо сейчас" + kidLine;
+    if (m.missing.length <= 2) return "Почти всё есть, купить: " + m.missing.map(esc).join(", ") + kidLine;
+    return (hasTasteProfile() ? "Под ваши вкусы" : "Хороший вариант на вечер") + kidLine;
   }
   function renderToday() {
     const view = $("#view");
@@ -369,7 +374,7 @@
           : `<div class="cover" style="${coverStyle(r)}"><div class="c-cat">${esc(r.cuisine)} · ${esc(r.category)}</div><div class="c-title">${esc(r.title)}</div></div>`}
         <div class="card-meta"><span>⏱ ${r.time} мин</span>${r.kcal ? `<span>🔥 ${r.kcal}</span>` : ""}${r.forKid ? '<span class="kid">★ дочке</span>' : ""}</div>
       </a>
-      <div class="today-why">${todayWhy(pick.m)}</div>
+      <div class="today-why">${todayWhy(pick)}</div>
       <div class="btn-row" style="margin:14px 0">
         <a class="btn primary" href="#/cook/${esc(r.id)}">🍳 Готовить</a>
         <button class="btn" id="todayShop">🛒 В список</button>
@@ -406,9 +411,9 @@
       <div class="chips wrap">${catChips}</div>
       <div class="toolbar">
         <button class="btn ghost sm" id="openFilters">⚙ Фильтры${fcount ? ` · ${fcount}` : ""}</button>
-        <button class="btn ghost sm ${listState.kidOnly ? "on" : ""}" id="kidChip">★ Дочке</button>
-        <button class="btn ghost sm ${listState.simple ? "on" : ""}" id="simpleChip">⚡ Просто и быстро${listState.simple ? ` · ${currentMeal().toLowerCase()}` : ""}</button>
-        <button class="btn ghost sm ${listState.pantryCook ? "on" : ""}" id="pantryCookChip">🏠 Из кладовки</button>
+        <button class="chip accent ${listState.kidOnly ? "active" : ""}" id="kidChip">★ Дочке</button>
+        <button class="chip accent ${listState.simple ? "active" : ""}" id="simpleChip">⚡ Просто и быстро${listState.simple ? ` · ${currentMeal().toLowerCase()}` : ""}</button>
+        <button class="chip accent ${listState.pantryCook ? "active" : ""}" id="pantryCookChip">🏠 Из кладовки</button>
         <button class="btn ghost sm" id="surprise">🎲 Удиви меня</button>
       </div>
       <div id="listResults"></div>
@@ -1392,7 +1397,7 @@
   function goalSet() { const g = Store.goals || {}; return !!(g.kcal || g.protein || g.fat || g.carbs); }
   // Авто-план: заполнить пустые слоты по вкусам, с учётом профиля, категорийно, без повторов
   const MEAL_CATS = {
-    "Завтрак": ["Завтрак", "Выпечка", "Напиток"],
+    "Завтрак": ["Завтрак", "Выпечка"],
     "Обед": ["Суп", "Основное", "Салат"],
     "Ужин": ["Основное", "Гарнир", "Салат", "Суп"],
   };
@@ -1731,6 +1736,7 @@
     const arg = m && m[2] ? decodeURIComponent(m[2]) : "";
     window.scrollTo(0, 0);
     updateBadge();
+    updateTabbar(route);
     if (route === "recipe") return renderRecipe(arg);
     if (route === "cook") return renderCook(arg);
     if (route === "shopping") return renderShopping();
@@ -1759,6 +1765,12 @@
     toast("Замена применена: " + sub.replacement);
   }
 
+  // Подсветка активного таба нижнего навбара по текущему маршруту
+  function updateTabbar(route) {
+    const map = { "": "catalog", "recipe": "catalog", "today": "today", "shopping": "shopping", "plan": "plan", "assistant": "assistant" };
+    const active = map[route] || "";
+    document.querySelectorAll("#tabbar .tab").forEach(t => t.classList.toggle("active", t.dataset.tab === active));
+  }
   window.addEventListener("hashchange", router);
   function boot() { router(); maybeOnboard(); }
   document.addEventListener("DOMContentLoaded", boot);
