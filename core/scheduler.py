@@ -46,10 +46,11 @@ class Scheduler:
 
     def _setup_jobs(self) -> None:
         try:
-            from worker.tasks import morning_brief, gap_analysis
+            from worker.tasks import gap_analysis
             from worker.tasks import subscription_expiry, reminders, analytics_report
             from worker.tasks import evening_push, weekly_plan
             from worker.tasks import daily_reset, cleanup_r2
+            from worker.tasks import cookbook_push
         except Exception as e:
             logger.error("scheduler.core_imports_failed", error=str(e))
             return
@@ -57,12 +58,11 @@ class Scheduler:
         self._add_job_safe("daily_reset", daily_reset.reset_daily_limits,
             CronTrigger(hour="*", minute=0))
 
-        self._add_job_safe("morning_brief", morning_brief.schedule_all,
-            CronTrigger(hour="*", minute=0),
-            misfire_grace_time=300, max_instances=2)
-
-        self._add_job_safe("evening_brief", morning_brief.schedule_evening,
-            CronTrigger(hour="*", minute=30))
+        # Кукбук: ежедневный пуш «что на ужин» в 17:00 МСК (=14:00 UTC).
+        # Заменил фешн morning/evening brief (фешн-ботом не пользуемся).
+        self._add_job_safe("cookbook_dinner", cookbook_push.run,
+            CronTrigger(hour=14, minute=0),
+            misfire_grace_time=1800)
 
         self._add_job_safe("gap_analysis", gap_analysis.run,
             CronTrigger(day=1, hour=9, minute=0))
