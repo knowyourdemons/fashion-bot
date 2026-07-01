@@ -37,7 +37,7 @@ class TestSyncKeys:
         # Должны совпадать с ключами Store в landing/js/app.js (и SYNC_KEYS в sync.js)
         assert SYNC_KEYS == {
             "shopping", "pantry", "memory", "userRecipes", "plan", "ingChecks",
-            "profile", "planServings", "goals", "eaten", "collections",
+            "profile", "planServings", "goals", "eaten", "collections", "child",
         }
 
     def test_does_not_sync_auth_or_chat(self):
@@ -92,7 +92,7 @@ class TestAiRecipe:
         assert _valid_recipe(None) is False
 
     def test_personalize_modes_cover_expected(self):
-        assert set(PERSONALIZE_MODES) == {"kid", "vegan", "healthy", "no_allergen", "scale"}
+        assert set(PERSONALIZE_MODES) == {"kid", "vegan", "healthy", "no_allergen", "scale", "hide_veg"}
 
     def test_no_allergen_mode_formats_arg(self):
         assert "молоко" in PERSONALIZE_MODES["no_allergen"].format(arg="молоко")

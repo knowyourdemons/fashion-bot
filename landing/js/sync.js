@@ -8,7 +8,7 @@
 (function () {
   'use strict';
   const API = "/api/v1/cookbook";
-  const SYNC_KEYS = ["shopping", "pantry", "memory", "userRecipes", "plan", "ingChecks", "profile", "planServings", "goals", "eaten", "collections"];
+  const SYNC_KEYS = ["shopping", "pantry", "memory", "userRecipes", "plan", "ingChecks", "profile", "planServings", "goals", "eaten", "collections", "child"];
   const REV_KEY = "cb_rev";
 
   function session() { return localStorage.getItem("cb_session_token") || ""; }

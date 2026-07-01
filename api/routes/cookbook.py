@@ -79,6 +79,7 @@ PERSONALIZE_MODES = {
     "healthy": "Сделай полезнее: меньше жира/сахара/жарки, больше овощей и белка, но вкусно; пересчитай kcal и макросы.",
     "no_allergen": "Убери аллерген «{arg}» и все содержащие его ингредиенты, замени безопасными аналогами; обнови allergens.",
     "scale": "Пересчитай ВСЕ количества ингредиентов на {arg} порций, поставь baseServings={arg}; макросы на порцию не меняй.",
+    "hide_veg": "Адаптируй для ребёнка, который не любит овощи: измельчи и спрячь овощи в соус/пюре/начинку/котлету так, чтобы они были незаметны, но польза сохранилась; мягкий вкус; forKid=true, kidNote с подсказкой.",
 }
 
 
@@ -118,7 +119,7 @@ async def _authorize(session: str | None, secret: str | None) -> None:
 
 
 # Ключи личного состояния, которые синкаются между устройствами (совпадают с фронтовым Store).
-SYNC_KEYS = {"shopping", "pantry", "memory", "userRecipes", "plan", "ingChecks", "profile", "planServings", "goals", "eaten", "collections"}
+SYNC_KEYS = {"shopping", "pantry", "memory", "userRecipes", "plan", "ingChecks", "profile", "planServings", "goals", "eaten", "collections", "child"}
 
 
 def _lww_action(client_rev: int, server_rev: int | None) -> str:

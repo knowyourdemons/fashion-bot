@@ -48,6 +48,7 @@
     goals:    LS.get("cb_goals", { kcal: 0, protein: 0, fat: 0, carbs: 0 }),
     eaten:    LS.get("cb_eaten", {}),
     collections: LS.get("cb_collections", {}),
+    child:    LS.get("cb_child", { name: "", age: "", dislikes: [], allergies: [] }),
     save(key) { LS.set("cb_" + key, Store[key]); if (window.CookSync) window.CookSync.push(key); },
     // перезапись значения без побочек (для будущего синка: не триггерит push повторно)
     set(key, val) { Store[key] = val; LS.set("cb_" + key, val); }
@@ -229,6 +230,15 @@
     }
     return !p.diet || recipeMatchesDiet(r, p.diet);
   }
+  // Ребёнок не ест / аллергия — блокирует рецепт в детском фильтре
+  function childBlocks(r) {
+    const c = Store.child || {};
+    const ingNames = (r.ingredients || []).map(i => normName(i.name)).join(" ");
+    if ((c.dislikes || []).some(d => d && ingNames.includes(normName(d)))) return true;
+    const ra = recipeAllergens(r);
+    if ((c.allergies || []).some(a => ra.has(canonAllergen(a)) || ingNames.includes(normName(a)))) return true;
+    return false;
+  }
   // Совпадение с кладовкой по НЕ-staple ингредиентам (staple считаем «всегда есть»)
   function pantryMatch(r) {
     const key = (r.ingredients || []).filter(i => !i.staple);
@@ -378,6 +388,7 @@
           ${[["", "Любая"], ["вегетарианское", "Вегетар."], ["веганское", "Веган"], ["постное", "Постное"], ["безглютена", "Без глютена"]]
             .map(([v, l]) => `<button class="chip ${Store.profile.diet === v ? "active" : ""}" data-diet="${v}">${l}</button>`).join("")}
         </div>
+        <button class="btn ghost sm" id="childBtn" style="margin-top:10px">👶 Профиль ребёнка${Store.child && Store.child.name ? " · " + esc(Store.child.name) : ""}</button>
       </div>
       <div class="filter-group">
         <div class="label">Кухня</div>
@@ -429,6 +440,7 @@
       root.querySelectorAll("#dietGrid [data-diet]").forEach(x => x.classList.toggle("active", x.dataset.diet === Store.profile.diet));
       updateCount();
     });
+    root.querySelector("#childBtn").onclick = () => openChildSheet();
     root.querySelector("#fewIngrChip").addEventListener("click", (e) => {
       listState.fewIngr = !listState.fewIngr;
       e.target.classList.toggle("active", listState.fewIngr);
@@ -504,7 +516,7 @@
     const q = normName(listState.q);
     return recipes.filter(r => {
       if (!profileAllows(r)) return false;
-      if (listState.kidOnly && !r.forKid) return false;
+      if (listState.kidOnly && (!r.forKid || childBlocks(r))) return false;
       if (listState.cuisine && r.cuisine !== listState.cuisine) return false;
       if (listState.category && r.category !== listState.category) return false;
       if (listState.time && r.time > +listState.time) return false;
@@ -871,6 +883,7 @@
       <p class="muted" style="margin-bottom:12px">AI перепишет рецепт под запрос — откроется черновик для проверки и сохранения.</p>
       <div class="chips wrap">
         <button class="chip" data-pmode="kid">👶 Детская версия</button>
+        <button class="chip" data-pmode="hide_veg">🥕 Спрячь овощи</button>
         <button class="chip" data-pmode="vegan">🌱 Веган</button>
         <button class="chip" data-pmode="healthy">🥗 Полезнее</button>
         <button class="chip" data-pmode="no_allergen">🚫 Без аллергена…</button>
@@ -1239,6 +1252,27 @@
     Store.save("plan"); renderPlan();
     toast("План собран — жми ещё раз для другого варианта");
   }
+  function openChildSheet() {
+    const c = Store.child || {};
+    openSheet("👶 Профиль ребёнка", `
+      <div class="row2">
+        <div class="field"><label>Имя</label><input id="ch_name" value="${esc(c.name || "")}"></div>
+        <div class="field"><label>Возраст</label><input id="ch_age" type="number" inputmode="numeric" value="${esc(c.age || "")}"></div>
+      </div>
+      <div class="field"><label>Не ест (через запятую)</label><input id="ch_dislikes" value="${esc((c.dislikes || []).join(", "))}"></div>
+      <div class="field"><label>Аллергии (через запятую)</label><input id="ch_allergies" value="${esc((c.allergies || []).join(", "))}"></div>
+      <p class="muted">Фильтр «★ Дочке» спрячет блюда с этими продуктами. AI-режим «спрячь овощи» — на карточке рецепта.</p>
+      <button class="btn primary block" id="ch_save" style="margin-top:12px">Сохранить</button>
+    `);
+    $("#ch_save").onclick = () => {
+      Store.child = {
+        name: $("#ch_name").value.trim(), age: $("#ch_age").value.trim(),
+        dislikes: $("#ch_dislikes").value.split(",").map(s => s.trim()).filter(Boolean),
+        allergies: $("#ch_allergies").value.split(",").map(s => s.trim()).filter(Boolean),
+      };
+      Store.save("child"); closeSheet(); toast("Профиль ребёнка сохранён");
+    };
+  }
   function openGoalSheet() {
     const g = Store.goals || {};
     openSheet("🎯 Цель на день", `
@@ -1489,7 +1523,7 @@
       <div class="field"><label>Печать книги</label><button class="btn" id="printBook">🖨 Печать / PDF</button></div>
     `;
     $("#bkExport").onclick = () => {
-      const data = { v: 1, userRecipes: Store.userRecipes, shopping: Store.shopping, pantry: Store.pantry, memory: Store.memory, plan: Store.plan, profile: Store.profile, planServings: Store.planServings, goals: Store.goals, eaten: Store.eaten, collections: Store.collections };
+      const data = { v: 1, userRecipes: Store.userRecipes, shopping: Store.shopping, pantry: Store.pantry, memory: Store.memory, plan: Store.plan, profile: Store.profile, planServings: Store.planServings, goals: Store.goals, eaten: Store.eaten, collections: Store.collections, child: Store.child };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "cookbook-backup.json"; a.click();
     };
@@ -1500,7 +1534,7 @@
       reader.onload = () => {
         try {
           const d = JSON.parse(reader.result);
-          ["userRecipes", "shopping", "pantry", "memory", "plan", "profile", "planServings", "goals", "eaten", "collections"].forEach(k => { if (d[k]) { Store[k] = d[k]; Store.save(k); } });
+          ["userRecipes", "shopping", "pantry", "memory", "plan", "profile", "planServings", "goals", "eaten", "collections", "child"].forEach(k => { if (d[k]) { Store[k] = d[k]; Store.save(k); } });
           toast("Импортировано"); updateBadge();
         } catch (err) { toast("Битый файл"); }
       };
