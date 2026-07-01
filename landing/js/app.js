@@ -88,6 +88,60 @@
     return fmtNum(v) + (unit ? " " + unit : "");
   }
 
+  // RU-конвертер мер: граммы на 1 ст.л./ч.л./стакан по продукту (классическая таблица мер и весов,
+  // ложки «с горкой», стакан = 250 мл). Крупнейший RU-гэп — «сколько это в граммах».
+  const _MEAS_UNIT = { "ст.л.": "stl", "ст. л.": "stl", "ст.л": "stl", "ч.л.": "chl", "ч. л.": "chl", "ч.л": "chl", "стакан": "glass" };
+  // порядок = приоритет матча (специфичное раньше общего)
+  const PRODUCT_MEASURE = [
+    [["сахарн пудр", "пудра сахарн"], { stl: 25, chl: 10, glass: 180 }],
+    [["сахар"], { stl: 25, chl: 8, glass: 200 }],
+    [["мука"], { stl: 25, chl: 8, glass: 160 }],
+    [["соль"], { stl: 30, chl: 10, glass: 320 }],
+    [["сода"], { stl: 28, chl: 12 }],
+    [["разрыхлит", "пекарск порош"], { stl: 15, chl: 5 }],
+    [["крахмал"], { stl: 30, chl: 10, glass: 200 }],
+    [["какао"], { stl: 25, chl: 9, glass: 130 }],
+    [["манк"], { stl: 25, chl: 8, glass: 200 }],
+    [["рис"], { stl: 25, chl: 8, glass: 230 }],
+    [["греч"], { stl: 25, chl: 8, glass: 210 }],
+    [["пшено", "пшенка"], { stl: 25, chl: 8, glass: 220 }],
+    [["перлов"], { stl: 25, chl: 8, glass: 230 }],
+    [["овсян хлопь", "геркулес", "овсянка", "овсян"], { stl: 14, chl: 5, glass: 90 }],
+    [["панировоч", "сухар"], { stl: 15, chl: 5, glass: 130 }],
+    [["мак"], { stl: 15, chl: 5, glass: 155 }],
+    [["изюм"], { stl: 25, glass: 190 }],
+    [["орех", "миндал", "фундук"], { stl: 30, glass: 130 }],
+    [["мед", "мёд"], { stl: 30, chl: 12, glass: 350 }],
+    [["растительн", "подсолнечн", "оливков", "кунжутн", "масло растит", "масло олив"], { stl: 17, chl: 5, glass: 230 }],
+    [["сливочн", "масло сливоч"], { stl: 15, chl: 5, glass: 240 }],
+    [["сметан"], { stl: 25, chl: 10, glass: 250 }],
+    [["майонез"], { stl: 25, chl: 10, glass: 250 }],
+    [["томатн паст", "паста томатн"], { stl: 30, chl: 10 }],
+    [["творог"], { stl: 25, chl: 8, glass: 250 }],
+    [["дрожж"], { stl: 12, chl: 4 }],
+    [["молок", "вода", "бульон", "сок", "вино", "уксус", "сливк", "кефир", "сироп"], { stl: 15, chl: 5, glass: 250 }],
+  ];
+  function _productMeasure(name) {
+    const n = normName(name);
+    for (const [kws, tbl] of PRODUCT_MEASURE) { if (kws.some(k => n.includes(k))) return tbl; }
+    return null;
+  }
+  // Граммы для уже отмасштабированного qty в объёмной мере, либо null если не конвертируется
+  function gramsFor(name, scaledQty, unit) {
+    if (scaledQty == null) return null;
+    const key = _MEAS_UNIT[(unit || "").trim()];
+    if (!key) return null;
+    const tbl = _productMeasure(name);
+    if (!tbl || tbl[key] == null) return null;
+    return Math.round(scaledQty * tbl[key]);
+  }
+  // Кол-во + подсказка в граммах для объёмных мер: «2 ст.л. · ≈ 50 г»
+  function qtyDisplay(ing, servings, base) {
+    const main = fmtQtyUnit(ing.qty, ing.unit, servings, base);
+    const g = gramsFor(ing.name, scaleQty(ing.qty, servings, base), ing.unit);
+    return g ? `${main} <span class="q-g">≈ ${g} г</span>` : main;
+  }
+
   let toastTimer = null;
   function toast(msg) {
     let t = $("#toast"); if (t) t.remove();
@@ -752,7 +806,7 @@
     return `<li class="${checked ? "checked" : ""}" data-i="${i}">
       <button class="ing-check" data-check="${i}">${checked ? "✓" : ""}</button>
       <span class="ing-name">${esc(ing.name)}</span>
-      <span class="ing-qty">${fmtQtyUnit(ing.qty, ing.unit, sv, r.baseServings)}</span>
+      <span class="ing-qty">${qtyDisplay(ing, sv, r.baseServings)}</span>
       <button class="ing-ask" data-ask="${i}" title="Спросить ассистента">✦</button>
     </li>`;
   }
@@ -776,7 +830,7 @@
     const ul = $("#ings");
     r.ingredients.forEach((ing, i) => {
       const cell = ul.querySelector(`li[data-i="${i}"] .ing-qty`);
-      if (cell) cell.textContent = fmtQtyUnit(ing.qty, ing.unit, recipeServings[id], r.baseServings);
+      if (cell) cell.innerHTML = qtyDisplay(ing, recipeServings[id], r.baseServings);
     });
   }
 
