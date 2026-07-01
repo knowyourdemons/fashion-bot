@@ -46,9 +46,6 @@ class Scheduler:
 
     def _setup_jobs(self) -> None:
         try:
-            from worker.tasks import gap_analysis
-            from worker.tasks import subscription_expiry, reminders, analytics_report
-            from worker.tasks import evening_push, weekly_plan
             from worker.tasks import daily_reset, cleanup_r2
             from worker.tasks import cookbook_push
         except Exception as e:
@@ -64,81 +61,8 @@ class Scheduler:
             CronTrigger(hour=14, minute=0),
             misfire_grace_time=1800)
 
-        self._add_job_safe("gap_analysis", gap_analysis.run,
-            CronTrigger(day=1, hour=9, minute=0))
-
-        self._add_job_safe("subscription_expiry", subscription_expiry.run,
-            CronTrigger(hour=9, minute=0))
-
-        self._add_job_safe("evening_push", evening_push.run,
-            CronTrigger(hour="*", minute=45))
-
-        self._add_job_safe("weekly_plan", weekly_plan.schedule_weekly,
-            CronTrigger(hour="*", minute=15))
-
-        self._add_job_safe("reminders", reminders.run,
-            CronTrigger(hour=10, minute=0))
-
-        self._add_job_safe("analytics_report", analytics_report.run,
-            CronTrigger(hour=8, minute=0))
-
         self._add_job_safe("cleanup_r2", cleanup_r2.run,
             CronTrigger(hour=3, minute=0))
-
-        # Warm thumbnail cache — ensures collage rendering is fast
-        try:
-            from worker.tasks import thumb_cache
-            self._add_job_safe("warm_thumb_cache", thumb_cache.run,
-                CronTrigger(hour=4, minute=0))
-        except Exception as e:
-            logger.error("scheduler.import_failed", task="warm_thumb_cache", error=str(e))
-
-        # Optional tasks — each import wrapped individually
-        try:
-            from worker.tasks import growth_alert
-            self._add_job_safe("growth_alert", growth_alert.run,
-                CronTrigger(day=1, hour=8, minute=30))
-        except Exception as e:
-            logger.error("scheduler.import_failed", task="growth_alert", error=str(e))
-
-        try:
-            from worker.tasks import capsule_season
-            self._add_job_safe("capsule_season", capsule_season.run,
-                CronTrigger(day=1, hour=9, minute=30))
-        except Exception as e:
-            logger.error("scheduler.import_failed", task="capsule_season", error=str(e))
-
-        try:
-            from worker.tasks import wardrobe_analysis
-            self._add_job_safe("wardrobe_analysis", wardrobe_analysis.run,
-                CronTrigger(day_of_week="mon", hour=6, minute=0))
-        except Exception as e:
-            logger.error("scheduler.import_failed", task="wardrobe_analysis", error=str(e))
-
-        try:
-            from worker.tasks import declutter
-            self._add_job_safe("declutter", declutter.run,
-                CronTrigger(day=15, hour=10, minute=0))
-        except Exception as e:
-            logger.error("scheduler.import_failed", task="declutter", error=str(e))
-
-        try:
-            from worker.tasks import taxonomy_review
-            self._add_job_safe("taxonomy_review", taxonomy_review.run,
-                CronTrigger(hour=4, minute=0))
-        except Exception as e:
-            logger.error("scheduler.import_failed", task="taxonomy_review", error=str(e))
-
-        try:
-            from worker.tasks import unknown_items_report
-            self._add_job_safe("unknown_items_report", unknown_items_report.run,
-                CronTrigger(day=1, hour=7, minute=0))
-        except Exception as e:
-            logger.error("scheduler.import_failed", task="unknown_items_report", error=str(e))
-
-        try:
-            from worker.tasks import pre_generate_brief
-            self._add_job_safe("pre_generate_brief", pre_generate_brief.run,
-                CronTrigger(hour="*", minute=45))
-        except Exception as e:
-            logger.error("scheduler.import_failed", task="pre_generate_brief", error=str(e))
+        # Все фешн-cron-рассылки удалены (фешн-ботом не пользуемся). Код тасков остаётся
+        # в worker/tasks/ (используется тестами), просто не планируется. Оставлены только
+        # daily_reset + cleanup_r2 (инфра) + cookbook_dinner (кукбук).

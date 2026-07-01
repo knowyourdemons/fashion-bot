@@ -205,8 +205,7 @@ class TestEveningPush:
         assert "_TARGET_HOUR" in source
 
     def test_scheduler_hourly(self):
-        """Scheduler runs evening push every hour (not fixed 20:00 UTC)."""
+        """Scheduler wires the cookbook dinner push (fashion pushes removed)."""
         with open("core/scheduler.py") as f:
             source = f.read()
-        # Should have hour='*' for evening_push
-        assert "evening_push" in source
+        assert "cookbook_dinner" in source

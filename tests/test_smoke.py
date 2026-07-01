@@ -396,9 +396,9 @@ def test_evening_push_checks_brief_day_tomorrow():
     assert "is_brief_day_tomorrow" in src or "brief_day" in src.lower()
 
 
-def test_scheduler_has_evening_push():
-    """Планировщик регистрирует evening_push job."""
+def test_scheduler_has_cookbook_dinner():
+    """Планировщик регистрирует кукбук-пуш «что на ужин» (заменил фешн-рассылки)."""
     import inspect
     from core.scheduler import Scheduler
     src = inspect.getsource(Scheduler._setup_jobs)
-    assert "evening_push" in src
+    assert "cookbook_dinner" in src

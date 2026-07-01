@@ -139,14 +139,13 @@ class TestFitting:
 
 class TestScheduler:
 
-    def test_weekly_plan_in_scheduler(self):
+    def test_cookbook_dinner_in_scheduler(self):
+        # Фешн-рассылки (weekly_plan/evening_push и др.) удалены; остался кукбук-пуш.
         with open("core/scheduler.py") as f:
             source = f.read()
-        assert "weekly_plan" in source
-        assert "schedule_weekly" in source
+        assert "cookbook_dinner" in source
 
-    def test_evening_push_hourly(self):
-        with open("core/scheduler.py") as f:
-            source = f.read()
-        # Should run every hour for timezone awareness
-        assert "evening_push" in source
+    def test_weekly_plan_task_exists(self):
+        # Код таска остался (не планируется, но не удалён)
+        from worker.tasks import weekly_plan
+        assert hasattr(weekly_plan, "schedule_weekly")
