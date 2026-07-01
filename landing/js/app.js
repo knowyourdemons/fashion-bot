@@ -333,7 +333,7 @@
       <div class="toolbar">
         <button class="btn ghost sm" id="openFilters">⚙ Фильтры${fcount ? ` · ${fcount}` : ""}</button>
         <button class="btn ghost sm ${listState.kidOnly ? "on" : ""}" id="kidChip">★ Дочке</button>
-        <button class="btn ghost sm ${listState.simple ? "on" : ""}" id="simpleChip">⚡ Просто и быстро</button>
+        <button class="btn ghost sm ${listState.simple ? "on" : ""}" id="simpleChip">⚡ Просто и быстро${listState.simple ? ` · ${currentMeal().toLowerCase()}` : ""}</button>
         <button class="btn ghost sm ${listState.pantryCook ? "on" : ""}" id="pantryCookChip">🏠 Из кладовки</button>
         <button class="btn ghost sm" id="surprise">🎲 Удиви меня</button>
       </div>
@@ -479,6 +479,10 @@
     if (listState.pantryCook) {
       filtered.sort((a, b) => { const ma = pantryMatch(a), mb = pantryMatch(b); return ma.missing.length - mb.missing.length || mb.have - ma.have || a.time - b.time; });
       decorate = (r) => cardHtml(r, pantryBadge(pantryMatch(r)));
+    } else if (listState.simple) {
+      // Мягкая привязка ко времени суток: горячее блюдо под трапезу вверх, салаты ниже
+      const pref = MEAL_PREF[currentMeal()];
+      filtered.sort((a, b) => simpleRank(a, pref) - simpleRank(b, pref) || a.time - b.time);
     }
     const pantryEmptyHint = (listState.pantryCook && !Object.keys(Store.pantry.items || {}).length)
       ? `<div class="empty" style="margin-bottom:12px">Кладовка пуста — отмечайте 🏠 на позициях в списке покупок.</div>` : "";
@@ -512,6 +516,17 @@
   let listDebTimer = null;
   function debouncedResults() { clearTimeout(listDebTimer); listDebTimer = setTimeout(() => renderResults(), 180); }
 
+  // «⚡ Просто и быстро» — это «дай приготовлю что-то поесть», а не напиток/десерт/нарезку
+  const SIMPLE_EXCLUDE = new Set(["Напиток", "Десерт", "Закуска"]);
+  // Приоритет категорий по времени суток (мягкая сортировка — горячее выше салатов в обед/ужин)
+  const MEAL_PREF = {
+    "Завтрак": ["Завтрак", "Выпечка", "Основное", "Гарнир", "Суп", "Салат"],
+    "Обед":    ["Суп", "Основное", "Гарнир", "Салат", "Завтрак", "Выпечка"],
+    "Ужин":    ["Основное", "Гарнир", "Суп", "Салат", "Завтрак", "Выпечка"],
+  };
+  function currentMeal() { const h = new Date().getHours(); return h < 11 ? "Завтрак" : h < 16 ? "Обед" : "Ужин"; }
+  function simpleRank(r, pref) { const i = pref.indexOf(r.category); return i < 0 ? pref.length : i; }
+
   function applyFilters(recipes) {
     const q = normName(listState.q);
     return recipes.filter(r => {
@@ -522,6 +537,7 @@
       if (listState.time && r.time > +listState.time) return false;
       if (listState.difficulty && r.difficulty !== +listState.difficulty) return false;
       if (listState.simple && !(r.difficulty <= 1 && r.time <= 30)) return false;
+      if (listState.simple && SIMPLE_EXCLUDE.has(r.category)) return false;
       if (listState.fewIngr && nonStapleCount(r) > 5) return false;
       if (listState.noOven && recipeNeedsOven(r)) return false;
       if (listState.pantryCook && pantryMatch(r).missing.length > 2) return false;
