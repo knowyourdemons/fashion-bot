@@ -801,18 +801,48 @@
     bindPantry();
   }
 
+  function daysLeft(dateStr) { if (!dateStr) return null; const d = new Date(dateStr + "T00:00:00"); const t = new Date(); t.setHours(0, 0, 0, 0); return Math.round((d - t) / 86400000); }
+  function expiryBadge(name) {
+    const dl = daysLeft((Store.pantry.expiry || {})[name]);
+    if (dl == null) return "";
+    if (dl < 0) return ` <span class="exp-badge exp-bad">просроч.</span>`;
+    if (dl === 0) return ` <span class="exp-badge exp-soon">сегодня</span>`;
+    if (dl <= 3) return ` <span class="exp-badge exp-soon">${dl}д</span>`;
+    return ` <span class="exp-badge">${dl}д</span>`;
+  }
   function pantryBlock() {
     const items = Object.keys(Store.pantry.items || {}).filter(k => Store.pantry.items[k]);
+    const expiring = items.filter(n => { const dl = daysLeft((Store.pantry.expiry || {})[n]); return dl != null && dl <= 3; });
     return `<div class="memory" style="margin-top:22px">
       <div class="label">🏠 Кладовка (есть дома — не попадает в список)</div>
-      ${items.length ? `<div class="chips" style="flex-wrap:wrap;padding-top:10px">${items.map(n => `<button class="chip active" data-unpantry="${esc(n)}">${esc(n)} ✕</button>`).join("")}</div>` : `<div class="made-log">Пусто. Отмечайте 🏠 на позициях, что уже есть дома.</div>`}
+      ${expiring.length ? `<div class="expire-soon">⏳ <b>Успей съесть:</b> ${expiring.map(esc).join(", ")}<button class="btn sm" id="pantryUseUp" style="margin-top:8px">✨ Придумай из них</button></div>` : ""}
+      ${items.length ? `<div class="chips" style="flex-wrap:wrap;padding-top:10px">${items.map(n => `<span class="chip active pantry-chip" data-exp="${esc(n)}">${esc(n)}${expiryBadge(n)}<b class="p-x" data-unpantry="${esc(n)}">✕</b></span>`).join("")}</div><div class="muted" style="font-size:12px;margin-top:6px">Тап по продукту — поставить срок годности.</div>` : `<div class="made-log">Пусто. Отмечайте 🏠 на позициях, что уже есть дома.</div>`}
       <div class="dyn-row" style="margin-top:10px"><input id="pantryAdd" placeholder="Добавить в кладовку (соль, масло…)"><button class="btn sm" id="pantryAddBtn">＋</button></div>
       <label class="btn block" style="margin-top:8px">📷 Сфоткать продукты (AI распознает)<input id="pantryScan" type="file" accept="image/*" capture="environment" class="hidden"></label>
       ${items.length ? `<button class="btn block" id="pantryGen" style="margin-top:8px">✨ Придумай блюдо из кладовки</button>` : ""}
     </div>`;
   }
+  function setExpiry(name) {
+    const cur = (Store.pantry.expiry || {})[name];
+    const v = prompt("Через сколько дней истекает срок «" + name + "»? (0 — сегодня, пусто — убрать)", cur != null ? String(daysLeft(cur)) : "");
+    if (v === null) return;
+    Store.pantry.expiry = Store.pantry.expiry || {};
+    if (v.trim() === "") { delete Store.pantry.expiry[name]; }
+    else { const days = parseInt(v, 10) || 0; const d = new Date(); d.setDate(d.getDate() + days); Store.pantry.expiry[name] = d.toISOString().slice(0, 10); }
+    Store.save("pantry"); renderShopping();
+  }
   function bindPantry() {
-    $("#view").querySelectorAll("[data-unpantry]").forEach(b => b.onclick = () => { delete Store.pantry.items[b.dataset.unpantry]; Store.save("pantry"); renderShopping(); });
+    $("#view").querySelectorAll("[data-unpantry]").forEach(b => b.onclick = (e) => { e.stopPropagation(); const n = b.dataset.unpantry; delete Store.pantry.items[n]; if (Store.pantry.expiry) delete Store.pantry.expiry[n]; Store.save("pantry"); renderShopping(); });
+    $("#view").querySelectorAll("[data-exp]").forEach(b => b.onclick = () => setExpiry(b.dataset.exp));
+    const useUp = $("#pantryUseUp");
+    if (useUp) useUp.onclick = async () => {
+      if (!window.CookAssistant) { toast("Ассистент недоступен"); return; }
+      const items = Object.keys(Store.pantry.items || {}).filter(k => Store.pantry.items[k] && (() => { const dl = daysLeft((Store.pantry.expiry || {})[k]); return dl != null && dl <= 3; })());
+      if (!items.length) return;
+      toast("Придумываю из портящегося… (10–20 сек)");
+      try { startDraft(await window.CookAssistant.generateRecipe({ ingredients: items, diet: Store.profile.diet || "", allergens: Store.profile.excludeAllergens || [] })); }
+      catch (e) { toast(e.message || "Не получилось"); }
+    };
     const add = () => { const v = $("#pantryAdd").value.trim(); if (v) { Store.pantry.items[normName(v)] = true; Store.save("pantry"); renderShopping(); } };
     $("#pantryAddBtn").onclick = add;
     $("#pantryAdd").addEventListener("keydown", e => { if (e.key === "Enter") add(); });

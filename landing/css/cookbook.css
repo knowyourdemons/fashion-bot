@@ -362,6 +362,11 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .today-card-big { display: block; max-width: 100%; margin-bottom: 6px; }
 .today-card-big .cover { height: 240px; }
 .today-why { color: var(--ink-2); font-size: 15px; margin: 2px 2px 0; }
+.exp-badge { font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--paper-2); color: var(--ink-2); margin-left: 2px; }
+.exp-badge.exp-soon { background: #F0C24B; color: #5a4a10; }
+.exp-badge.exp-bad { background: var(--accent); color: #fff; }
+.pantry-chip .p-x { margin-left: 6px; opacity: .6; font-weight: 400; }
+.expire-soon { background: #FBF0D5; border: 1px solid #F0C24B; border-radius: 12px; padding: 10px 12px; margin-top: 10px; font-size: 14px; }
 .today-card { border: 2px solid var(--accent); }
 .today-card h4 { color: var(--accent); }
 .plan-nutri.over-goal { color: var(--accent); font-weight: 600; }
