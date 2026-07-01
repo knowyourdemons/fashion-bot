@@ -529,6 +529,7 @@
       <div class="btn-row" style="margin:18px 0">
         <a class="btn primary" href="#/cook/${esc(r.id)}">🍳 Готовить</a>
         <button class="btn" id="toShop">🛒 В список покупок</button>
+        <button class="btn" id="shareBtn">📤 Поделиться</button>
       </div>
       <button class="btn" id="askAssistant" style="width:100%;margin:-6px 0 4px">✦ Спросить ассистента о рецепте</button>
 
@@ -547,6 +548,7 @@
     $("#svPlus").onclick = () => changeServings(id, +1);
     $("#toShop").onclick = () => { addRecipeToShopping(id, recipeServings[id]); toast("Добавлено в список"); updateBadge(); };
     $("#askAssistant").onclick = () => { if (window.CookAssistant) window.CookAssistant.openOverlay({ recipe: r }); };
+    $("#shareBtn").onclick = () => shareRecipe(r);
     bindIngredientRows(r);
     bindMemory(r);
   }
@@ -727,6 +729,17 @@
       items.forEach(it => { if (!Store.shopping.checked[it.key]) text += "— " + it.name + (it.qty != null ? " " + fmtNum(it.qty) + (it.unit ? " " + it.unit : "") : "") + "\n"; });
     });
     copyText(text.trim());
+  }
+  // Рецепт → текст для шаринга/копирования
+  function recipeToText(r) {
+    const ings = r.ingredients.map(i => "— " + i.name + (i.qty != null ? " " + fmtNum(i.qty) + (i.unit ? " " + i.unit : "") : "")).join("\n");
+    const steps = r.steps.map((s, i) => (i + 1) + ". " + (s.title ? s.title + ": " : "") + s.text).join("\n");
+    return `${r.title} (${r.cuisine} · ${r.category})\n\nИнгредиенты:\n${ings}\n\nМетод:\n${steps}` + (r.serveWith ? `\n\nС чем подавать: ${r.serveWith}` : "");
+  }
+  function shareRecipe(r) {
+    const text = recipeToText(r);
+    if (navigator.share) navigator.share({ title: r.title, text }).catch(() => {});
+    else copyText(text);
   }
   function copyText(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast("Скопировано"), () => fallbackCopy(text));

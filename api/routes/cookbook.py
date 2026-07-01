@@ -306,7 +306,8 @@ async def assistant(
         data = await up.read()
         if data:
             photo_bytes.append((data, up.content_type or "image/jpeg"))
-    await _vision_guard(len(photo_bytes))
+    # llava анализирует только первое фото → и списываем из лимита ровно за него
+    await _vision_guard(1 if photo_bytes else 0)
 
     try:
         ctx = json.loads(context) if context else {}
@@ -428,6 +429,40 @@ def _iter_jsonld_nodes(data: Any):
         yield data
 
 
+_ING_FRAC = {"½": 0.5, "⅓": 0.333, "¼": 0.25, "¾": 0.75, "⅔": 0.667, "⅛": 0.125}
+_ING_UNITS = {
+    "г", "гр", "кг", "мл", "л", "ст.л.", "ст.л", "ч.л.", "ч.л", "шт", "штук", "штуки",
+    "стакан", "стакана", "стаканов", "зубчик", "зубчика", "зубчиков", "щепотка", "щепотки",
+    "пучок", "пучка", "банка", "банки", "уп", "упаковка",
+    "g", "kg", "ml", "l", "cup", "cups", "tbsp", "tsp", "oz", "lb",
+}
+
+
+def _parse_ingredient_line(s: str) -> tuple[float | int | None, str, str]:
+    """Из строки ('200 г муки') достаёт (qty, unit, name). Без числа — (None, '', s)."""
+    s = s.strip()
+    m = re.match(r"^(\d+/\d+|\d+[.,]?\d*|[½⅓¼¾⅔⅛])\s*(.*)$", s)
+    if not m:
+        return None, "", s
+    qraw, rest = m.group(1), m.group(2).strip()
+    if qraw in _ING_FRAC:
+        qty: float | int | None = _ING_FRAC[qraw]
+    elif "/" in qraw:
+        a, b = qraw.split("/")
+        qty = round(int(a) / int(b), 3) if b.isdigit() and int(b) else None
+    else:
+        qty = float(qraw.replace(",", "."))
+        if qty == int(qty):
+            qty = int(qty)
+    unit = ""
+    parts = rest.split(None, 1)
+    if parts and parts[0].lower() in _ING_UNITS:
+        unit = parts[0]
+        rest = parts[1] if len(parts) > 1 else ""
+    name = rest.strip() or s
+    return qty, unit, name
+
+
 def _schema_to_recipe(node: dict[str, Any]) -> dict[str, Any]:
     def _first(v):
         return v[0] if isinstance(v, list) and v else v
@@ -436,9 +471,10 @@ def _schema_to_recipe(node: dict[str, Any]) -> dict[str, Any]:
 
     ingredients = []
     for raw in node.get("recipeIngredient") or node.get("ingredients") or []:
-        name = str(raw).strip()
-        if name:
-            ingredients.append({"name": name, "qty": None, "unit": "", "group": "Прочее", "staple": False})
+        line = str(raw).strip()
+        if line:
+            qty, unit, name = _parse_ingredient_line(line)
+            ingredients.append({"name": name, "qty": qty, "unit": unit, "group": "Прочее", "staple": False})
 
     steps = []
     instr = node.get("recipeInstructions")

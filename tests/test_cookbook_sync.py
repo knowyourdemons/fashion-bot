@@ -1,7 +1,12 @@
 """Юнит-тесты синка кукбука: last-write-wins и набор синкаемых ключей."""
 import pytest
 
-from api.routes.cookbook import SYNC_KEYS, _lww_action, _require_tg_id
+from api.routes.cookbook import (
+    SYNC_KEYS,
+    _lww_action,
+    _parse_ingredient_line,
+    _require_tg_id,
+)
 from fastapi import HTTPException
 
 
@@ -39,3 +44,33 @@ class TestRequireTgId:
         with pytest.raises(HTTPException) as exc:
             await _require_tg_id(None)
         assert exc.value.status_code == 401
+
+
+class TestIngredientParser:
+    def test_metric_qty_unit(self):
+        assert _parse_ingredient_line("200 г муки") == (200, "г", "муки")
+
+    def test_spoon_unit(self):
+        assert _parse_ingredient_line("2 ст.л. сахара") == (2, "ст.л.", "сахара")
+
+    def test_fraction_slash(self):
+        qty, unit, name = _parse_ingredient_line("1/2 стакана молока")
+        assert qty == 0.5 and unit == "стакана" and name == "молока"
+
+    def test_unicode_fraction(self):
+        qty, unit, name = _parse_ingredient_line("½ лимона")
+        assert qty == 0.5 and name == "лимона"
+
+    def test_decimal_comma(self):
+        assert _parse_ingredient_line("1,5 кг картофеля") == (1.5, "кг", "картофеля")
+
+    def test_no_quantity(self):
+        assert _parse_ingredient_line("соль по вкусу") == (None, "", "соль по вкусу")
+
+    def test_english_unit(self):
+        assert _parse_ingredient_line("500 g flour") == (500, "g", "flour")
+
+    def test_number_without_known_unit(self):
+        # число есть, но следующее слово — не единица → оно часть названия
+        qty, unit, name = _parse_ingredient_line("3 яйца")
+        assert qty == 3 and unit == "" and name == "яйца"
