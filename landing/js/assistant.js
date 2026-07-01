@@ -117,7 +117,8 @@
     return (await resp.json()).recipe;
   }
   async function personalizeRecipe(recipe, mode, arg) {
-    const resp = await fetch(API + "/personalize", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ recipe, mode, arg: arg || "" }) });
+    const allergens = (window.Cookbook && window.Cookbook.Store.profile.excludeAllergens) || []; // гардрейл: бэкенд не должен вернуть исключённый аллерген
+    const resp = await fetch(API + "/personalize", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ recipe, mode, arg: arg || "", allergens }) });
     if (resp.status === 401) { clearSession(); throw new Error("Войдите через Telegram"); }
     if (!resp.ok) throw new Error("Не получилось (" + resp.status + ")");
     return (await resp.json()).recipe;

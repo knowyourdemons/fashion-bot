@@ -1463,10 +1463,17 @@
       Store.save("goals"); closeSheet(); renderPlan(); toast("Цель сохранена");
     };
   }
+  // Дневник съеденного растёт по дню — держим только последние 30 дней (иначе синк-блоб пухнет)
+  function pruneEaten() {
+    const keys = Object.keys(Store.eaten || {});
+    if (keys.length <= 30) return;
+    keys.sort(); // YYYY-MM-DD лексикографически = хронологически
+    keys.slice(0, keys.length - 30).forEach(k => delete Store.eaten[k]);
+  }
   function eatToday(id) {
     const k = todayKey();
     Store.eaten[k] = Store.eaten[k] || [];
-    Store.eaten[k].push(id); Store.save("eaten");
+    Store.eaten[k].push(id); pruneEaten(); Store.save("eaten");
     toast("Отмечено: съедено сегодня");
   }
   function renderPlan() {
@@ -1696,7 +1703,7 @@
       <div class="field"><label>Печать книги</label><button class="btn" id="printBook">🖨 Печать / PDF</button></div>
     `;
     $("#bkExport").onclick = () => {
-      const data = { v: 1, userRecipes: Store.userRecipes, shopping: Store.shopping, pantry: Store.pantry, memory: Store.memory, plan: Store.plan, profile: Store.profile, planServings: Store.planServings, goals: Store.goals, eaten: Store.eaten, collections: Store.collections, child: Store.child };
+      const data = { v: 1, userRecipes: Store.userRecipes, shopping: Store.shopping, pantry: Store.pantry, memory: Store.memory, plan: Store.plan, ingChecks: Store.ingChecks, profile: Store.profile, planServings: Store.planServings, goals: Store.goals, eaten: Store.eaten, collections: Store.collections, child: Store.child };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "cookbook-backup.json"; a.click();
     };
@@ -1707,7 +1714,7 @@
       reader.onload = () => {
         try {
           const d = JSON.parse(reader.result);
-          ["userRecipes", "shopping", "pantry", "memory", "plan", "profile", "planServings", "goals", "eaten", "collections", "child"].forEach(k => { if (d[k]) { Store[k] = d[k]; Store.save(k); } });
+          ["userRecipes", "shopping", "pantry", "memory", "plan", "ingChecks", "profile", "planServings", "goals", "eaten", "collections", "child"].forEach(k => { if (d[k]) { Store[k] = d[k]; Store.save(k); } });
           toast("Импортировано"); updateBadge();
         } catch (err) { toast("Битый файл"); }
       };

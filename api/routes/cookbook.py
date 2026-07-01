@@ -1,9 +1,11 @@
 """
 Поваренная книга — тонкий бэкенд для AI-ассистента и импорта рецептов.
 
-Переиспользует инфраструктуру фешн-бота:
-- AnthropicPool (core/anthropic_client) — Vision (sonnet) + чат (haiku)
-- Redis (core/redis) — дневной cost guard на Vision-вызовы
+Модели:
+- CF Workers AI (бесплатно): Llama 3.3 — чат/персонализация/генерация; llava — vision-ассистент и fridge-scan.
+- Anthropic Sonnet (ПЛАТНО, ~$0.03/фото): ТОЛЬКО OCR рецепта из фото в /import (llava-1.5-7b плохо
+  распознаёт длинный рукописный/печатный рецепт — сознательный компромисс, единственная платная точка).
+- Redis (core/redis) — дневной cost guard на Vision-вызовы.
 
 Авторизация: общий секрет (settings.cookbook_secret) в заголовке X-Cookbook-Secret.
 Сайт личный, пользовательских аккаунтов нет — секрет защищает от утечки API-ключа.
@@ -32,8 +34,7 @@ TELEGRAM_AUTH_MAX_AGE = 86400  # подпись виджета не старше
 logger = structlog.get_logger()
 router = APIRouter()
 
-SONNET = "claude-sonnet-4-6"
-HAIKU = "claude-haiku-4-5-20251001"
+SONNET = "claude-sonnet-4-6"  # ПЛАТНО: только OCR рецепта из фото в /import
 
 ASSISTANT_SYSTEM = (
     "Ты — кулинарный ассистент в личной поваренной книге. Помогаешь в магазине и у плиты: "
@@ -691,16 +692,52 @@ def _valid_recipe(p: Any) -> bool:
     return isinstance(p, dict) and bool(p.get("title")) and bool(p.get("ingredients"))
 
 
-async def _cf_recipe(system: str, user_msg: str) -> dict[str, Any]:
-    """Прогоняет CF Llama и валидирует, что вернулся рецепт-объект. Один ретрай (модель недетерминирована)."""
+# Гардрейл аллергенов: AI-вариант НИКОГДА не должен содержать исключённый профилем аллерген.
+_ALLERGEN_INGR = {
+    "глютен": ["пшен", "мук", "хлеб", "макарон", "манк", "булгур", "сухар", "панир", "овсян", "ячмен", "рож", "отруб"],
+    "молоко": ["молок", "сливк", "сливочн", "сметан", "творог", "сыр", "йогурт", "кефир", "ряженк"],
+    "яйца": ["яйц", "яиц", "меланж"],
+    "орехи": ["орех", "миндал", "фундук", "кешью", "фисташк", "арахис", "пекан", "грецк", "макадам"],
+    "рыба": ["рыб", "лосос", "треск", "тунец", "форел", "сельд", "минтай", "икра"],
+    "соя": ["соя", "соев", "тофу", "эдамам", "мисо"],
+    "морепродукты": ["креветк", "краб", "кальмар", "мидии", "устриц", "морепрод", "гребешок"],
+}
+_ALLERGEN_ALIAS = {"молочное": "молоко", "лактоза": "молоко", "яйцо": "яйца", "арахис": "орехи", "ракообразные": "морепродукты", "моллюски": "морепродукты"}
+
+
+def _canon_allergen(a: str) -> str:
+    n = (a or "").strip().lower().replace("ё", "е")
+    return _ALLERGEN_ALIAS.get(n, n)
+
+
+def _recipe_allergen_hits(recipe: dict[str, Any], forbidden: set[str]) -> set[str]:
+    if not forbidden:
+        return set()
+    declared = {_canon_allergen(a) for a in (recipe.get("allergens") or [])}
+    names = " | ".join(
+        ((i.get("name") if isinstance(i, dict) else str(i)) or "") for i in (recipe.get("ingredients") or [])
+    ).lower().replace("ё", "е")
+    hits = set()
+    for a in forbidden:
+        if a in declared or any(k in names for k in _ALLERGEN_INGR.get(a, [])):
+            hits.add(a)
+    return hits
+
+
+async def _cf_recipe(system: str, user_msg: str, forbidden: list[str] | None = None) -> dict[str, Any]:
+    """Прогоняет CF Llama и валидирует рецепт-объект + отсутствие запрещённых аллергенов. Ретрай (модель недетерминирована)."""
+    forb = {_canon_allergen(a) for a in (forbidden or []) if a}
     parsed = None
     for _ in range(2):
         text = await _cf_chat([{"role": "user", "content": user_msg}], system, max_tokens=1600)
         parsed = _extract_json(text)
-        if _valid_recipe(parsed):
+        if _valid_recipe(parsed) and not _recipe_allergen_hits(parsed, forb):
             break
     if not _valid_recipe(parsed):
         raise HTTPException(status_code=422, detail="Не удалось сгенерировать рецепт, попробуйте ещё раз")
+    hits = _recipe_allergen_hits(parsed, forb)
+    if hits:  # жёсткий гардрейл: не отдаём вариант с исключённым аллергеном
+        raise HTTPException(status_code=422, detail="Не удалось убрать аллерген(ы): " + ", ".join(sorted(hits)) + ". Проверьте состав вручную.")
     parsed.setdefault("steps", [])
     parsed.setdefault("category", "Основное")
     parsed.setdefault("baseServings", 2)
@@ -723,9 +760,13 @@ async def personalize(
     arg = str(body.get("arg") or "").strip() if isinstance(body, dict) else ""
     if not isinstance(recipe, dict) or mode not in PERSONALIZE_MODES:
         raise HTTPException(status_code=400, detail="Нужны recipe и корректный mode")
+    forbidden = [str(a) for a in (body.get("allergens") or []) if str(a).strip()]
+    if mode == "no_allergen" and arg:
+        forbidden.append(arg)
     instruction = PERSONALIZE_MODES[mode].format(arg=arg or "")
-    user_msg = f"Исходный рецепт:\n{_recipe_brief(recipe)}\n\nЗадача: {instruction}"
-    return {"recipe": await _cf_recipe(PERSONALIZE_SYSTEM, user_msg)}
+    guard = ("\n\nСТРОГО НЕ используй ингредиенты с аллергенами: " + ", ".join(forbidden) + ".") if forbidden else ""
+    user_msg = f"Исходный рецепт:\n{_recipe_brief(recipe)}\n\nЗадача: {instruction}{guard}"
+    return {"recipe": await _cf_recipe(PERSONALIZE_SYSTEM, user_msg, forbidden=forbidden)}
 
 
 @router.post("/generate")
@@ -753,8 +794,10 @@ async def generate(
     if body.get("category"):
         constraints.append(f"категория: {body['category']}")
     tail = (" Ограничения: " + "; ".join(constraints) + ".") if constraints else ""
-    user_msg = f"Продукты в наличии: {ings}.{tail} Придумай одно блюдо, которое можно приготовить преимущественно из них."
-    return {"recipe": await _cf_recipe(GENERATE_SYSTEM, user_msg)}
+    forbidden = [str(a) for a in (body.get("allergens") or []) if str(a).strip()]
+    guard = (" СТРОГО НЕ используй ингредиенты с аллергенами: " + ", ".join(forbidden) + ".") if forbidden else ""
+    user_msg = f"Продукты в наличии: {ings}.{tail}{guard} Придумай одно блюдо, которое можно приготовить преимущественно из них."
+    return {"recipe": await _cf_recipe(GENERATE_SYSTEM, user_msg, forbidden=forbidden)}
 
 
 # ---------------------------------------------------------------------------
@@ -767,11 +810,16 @@ SCAN_PROMPT = (
 
 
 def _parse_food_list(text: str) -> list[str]:
-    """Из ответа llava достаёт чистый список продуктов (RU/EN), дедуп, лимит."""
-    raw = re.split(r"[,\n;•\-\d.]+", text or "")
+    """Из ответа llava достаёт чистый список продуктов (RU/EN), дедуп, лимит.
+
+    Делим по запятой/переносу/точке-с-запятой/маркеру и по маркерам нумерованного
+    списка (« 1. », «2)»), но НЕ по дефису/одиночным цифрам — иначе «лук-порей»→«лук»,«порей»
+    и «5% молоко»→«% молоко». Ведущие цифры/проценты/маркеры чистим уже внутри токена.
+    """
+    raw = re.split(r"[,\n;•]+|\s\d+[.)]\s+", text or "")
     out, seen = [], set()
     for x in raw:
-        w = x.strip().strip(".:").lower()
+        w = re.sub(r"^[\s\d.%*)\-–—]+", "", x.strip()).strip(".:").lower()  # срезаем ведущие цифры/%/маркеры
         if 2 <= len(w) <= 40 and not w.startswith(("the ", "a ", "this ", "image", "photo", "фото", "изображени")):
             if w not in seen:
                 seen.add(w)
