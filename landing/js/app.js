@@ -44,6 +44,7 @@
     plan:     LS.get("cb_plan", {}),
     ingChecks: LS.get("cb_ingChecks", {}),
     profile:  LS.get("cb_profile", { excludeAllergens: [], diet: "" }),
+    planServings: LS.get("cb_planServings", {}),
     save(key) { LS.set("cb_" + key, Store[key]); if (window.CookSync) window.CookSync.push(key); },
     // перезапись значения без побочек (для будущего синка: не триггерит push повторно)
     set(key, val) { Store[key] = val; LS.set("cb_" + key, val); }
@@ -789,6 +790,7 @@
     view.innerHTML = `<div class="cook" id="cookRoot">
       <div class="cook-top">
         <span class="cook-progress">${onServe ? "Подача" : `Шаг ${idx + 1} из ${total}`}</span>
+        <span class="cook-serv"><button id="cookSvMinus">−</button>${sv} порц<button id="cookSvPlus">+</button></span>
         <button class="iconbtn" id="cookIngs" title="Ингредиенты">📋</button>
         <button class="iconbtn" id="cookExit" title="Выйти">✕</button>
       </div>
@@ -804,6 +806,8 @@
     </div>`;
 
     $("#cookExit").onclick = () => { releaseWakeLock(); clearCookTimers(); location.hash = "#/recipe/" + r.id; };
+    $("#cookSvMinus").onclick = () => cookServings(-1);
+    $("#cookSvPlus").onclick = () => cookServings(+1);
     $("#cookIngs").onclick = () => openIngredientsSheet(r, sv);
     const prev = $("#cookPrev"); if (prev) prev.onclick = () => { if (cookState.idx > 0) { cookState.idx--; drawCook(); } };
     const next = $("#cookNext"); if (next) next.onclick = () => { if (cookState.idx < total - 1) { cookState.idx++; drawCook(); } };
@@ -812,6 +816,12 @@
       releaseWakeLock(); clearCookTimers(); toast("Готово! Отмечено, что готовил."); location.hash = "#/recipe/" + r.id;
     };
     bindCookTimers(); bindCookIngTaps(r, sv); bindCookSwipe(total);
+  }
+  // Смена порций прямо в кукинг-моде (общая session-карта с деталью/покупками)
+  function cookServings(d) {
+    const r = cookState.r;
+    recipeServings[r.id] = Math.max(1, Math.min(20, (recipeServings[r.id] || r.baseServings) + d));
+    drawCook();
   }
   function cookStepHtml(s, i, idx, r, sv) {
     const cls = i === idx ? "current" : "dim";
@@ -934,7 +944,9 @@
     if (cookState) { if (cookState.ticker) { clearInterval(cookState.ticker); cookState.ticker = null; } cookState.timers = {}; }
   }
   function openIngredientsSheet(r, sv) {
-    openSheet("Ингредиенты", `<ul class="ingredients">${r.ingredients.map(ing => `<li><span class="ing-name">${esc(ing.name)}</span><span class="ing-qty">${fmtQtyUnit(ing.qty, ing.unit, sv, r.baseServings)}</span></li>`).join("")}</ul>`);
+    // Чекбоксы общие с деталью (cb_ingChecks) — прогресс сохраняется и синкается
+    openSheet("Ингредиенты", `<ul class="ingredients" id="ings">${r.ingredients.map((ing, i) => ingredientRow(r, ing, i, sv)).join("")}</ul>`);
+    bindIngredientRows(r);
   }
 
   /* Wake Lock */
@@ -968,17 +980,86 @@
   }
   function closeSheet() { const s = $("#sheet"); if (s) s.remove(); }
 
+  // Первый запуск: разовое приветствие с обзором возможностей
+  function maybeOnboard() {
+    if (LS.get("cb_seen")) return;
+    openSheet("Добро пожаловать 👋", `
+      <p class="muted" style="margin-bottom:12px">Ваша личная поваренная книга. Коротко о главном:</p>
+      <ul class="onboard-list">
+        <li>🔎 <b>Каталог и фильтры</b> — поиск по кухне, времени, сложности, кладовке</li>
+        <li>🍳 <b>Режим готовки</b> — пошагово, таймеры, экран не гаснет</li>
+        <li>🛒 <b>Список покупок</b> — собирается из рецептов, вычитает кладовку</li>
+        <li>🗓 <b>План на неделю</b> — авто-план по вкусам + КБЖУ</li>
+        <li>🏠 <b>Готовлю из того, что есть</b> — подбор по кладовке</li>
+        <li>✦ <b>Ассистент</b> — вопросы по рецептам и заменам</li>
+        <li>☁️ <b>Синхронизация</b> между устройствами</li>
+      </ul>
+      <button class="btn primary block" id="onboardOk" style="margin-top:14px">Понятно, начать</button>
+    `);
+    $("#onboardOk").onclick = () => { LS.set("cb_seen", true); closeSheet(); };
+  }
+
   /* ============================================================
      План на неделю (#/plan)
      ============================================================ */
   const DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
   const MEALS = ["Завтрак", "Обед", "Ужин"];
+  // Суммы КБЖУ по набору рецептов (одна порция на заполненный слот)
+  function slotNutrition(ids) {
+    const t = { kcal: 0, protein: 0, fat: 0, carbs: 0, n: 0 };
+    ids.forEach(rid => {
+      const r = getRecipe(rid); if (!r) return;
+      t.n++;
+      if (r.kcal != null) t.kcal += r.kcal;
+      if (r.protein != null) t.protein += r.protein;
+      if (r.fat != null) t.fat += r.fat;
+      if (r.carbs != null) t.carbs += r.carbs;
+    });
+    return t;
+  }
+  function nutriLine(t) {
+    if (!t.n) return "";
+    return `<div class="plan-nutri muted">🔥 ${fmtNum(t.kcal)} ккал · Б ${fmtNum(t.protein)} · Ж ${fmtNum(t.fat)} · У ${fmtNum(t.carbs)} г</div>`;
+  }
+  // Авто-план: заполнить пустые слоты по вкусам, с учётом профиля, категорийно, без повторов
+  const MEAL_CATS = {
+    "Завтрак": ["Завтрак", "Выпечка", "Напиток"],
+    "Обед": ["Суп", "Основное", "Салат"],
+    "Ужин": ["Основное", "Гарнир", "Салат", "Суп"],
+  };
+  let autoRollSeed = 0;
+  function pickFrom(pool, used, cats, di, meal) {
+    const cand = pool.filter(r => !used.has(r.id) && (!cats.length || cats.includes(r.category)));
+    const list = cand.length ? cand : pool.filter(r => !used.has(r.id));
+    if (!list.length) return null;
+    const off = (autoRollSeed + di * 3 + MEALS.indexOf(meal)) % list.length;
+    return list[off];
+  }
+  function autoFillPlan() {
+    autoRollSeed++;
+    const ranked = recommend(100).filter(profileAllows);
+    const pool = ranked.concat(allRecipes().filter(r => profileAllows(r) && !ranked.includes(r)));
+    const used = new Set(Object.values(Store.plan));
+    DAYS.forEach((d, di) => MEALS.forEach(meal => {
+      const key = d + "|" + meal;
+      if (Store.plan[key]) return; // ручные не трогаем
+      const m = pickFrom(pool, used, MEAL_CATS[meal] || [], di, meal);
+      if (m) { Store.plan[key] = m.id; used.add(m.id); }
+    }));
+    Store.save("plan"); renderPlan();
+    toast("План собран — жми ещё раз для другого варианта");
+  }
   function renderPlan() {
     const view = $("#view");
+    const empty = !Object.keys(Store.plan).length;
+    const weekIds = Object.entries(Store.plan).filter(([k]) => DAYS.includes(k.split("|")[0])).map(([, rid]) => rid);
     view.innerHTML = `
       <div class="section-head"><h2>План на неделю</h2></div>
       <p class="muted" style="margin-bottom:12px">Назначайте блюда на дни, затем соберите список покупок на всю неделю.</p>
-      ${DAYS.map(d => `
+      ${empty ? `<div class="plan-empty muted">Пока пусто — 21 слот на неделю. Нажмите «✨ Авто-план недели», чтобы заполнить по вашим вкусам, или добавляйте блюда вручную.</div>` : ""}
+      ${DAYS.map(d => {
+        const dayIds = MEALS.map(meal => Store.plan[d + "|" + meal]).filter(Boolean);
+        return `
         <div class="plan-day">
           <h4>${d}</h4>
           ${MEALS.map(meal => {
@@ -989,14 +1070,19 @@
                   : `<button class="btn sm ghost" data-pick="${esc(key)}" style="flex:1">＋ выбрать</button>`}
             </div>`;
           }).join("")}
-        </div>`).join("")}
+          ${nutriLine(slotNutrition(dayIds))}
+        </div>`;
+      }).join("")}
+      ${weekIds.length ? `<div class="plan-week-total"><b>Итого за неделю</b>${nutriLine(slotNutrition(weekIds))}</div>` : ""}
+      <button class="btn block" id="planAuto" style="margin-top:10px">✨ Авто-план недели</button>
       <button class="btn primary block" id="planToShop" style="margin-top:8px">🛒 Собрать список покупок на неделю</button>
     `;
     view.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => pickRecipeForPlan(b.dataset.pick));
     view.querySelectorAll("[data-clear]").forEach(b => b.onclick = () => { delete Store.plan[b.dataset.clear]; Store.save("plan"); renderPlan(); });
+    $("#planAuto").onclick = () => autoFillPlan();
     $("#planToShop").onclick = () => {
       let n = 0;
-      Object.values(Store.plan).forEach(rid => { if (getRecipe(rid)) { addRecipeToShopping(rid, getRecipe(rid).baseServings); n++; } });
+      Object.entries(Store.plan).forEach(([key, rid]) => { const r = getRecipe(rid); if (r) { addRecipeToShopping(rid, Store.planServings[key] || r.baseServings); n++; } });
       updateBadge(); toast(n ? "Добавлено блюд: " + n : "План пуст"); if (n) location.hash = "#/shopping";
     };
   }
@@ -1202,8 +1288,9 @@
   }
 
   window.addEventListener("hashchange", router);
-  document.addEventListener("DOMContentLoaded", router);
-  if (document.readyState !== "loading") router();
+  function boot() { router(); maybeOnboard(); }
+  document.addEventListener("DOMContentLoaded", boot);
+  if (document.readyState !== "loading") boot();
 
   // Синк: перерисовать при подтягивании серверных данных + первичный merge
   window.addEventListener("cb-synced", router);

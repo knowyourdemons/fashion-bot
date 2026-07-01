@@ -350,6 +350,14 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .plan-day { border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 12px; padding: 14px; background: var(--white-warm); }
 .plan-day h4 { margin-bottom: 8px; }
 .plan-slot { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.plan-nutri { margin-top: 8px; font-size: 13px; }
+.plan-empty { border: 1px dashed var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+.plan-week-total { border-top: 2px solid var(--line); margin-top: 8px; padding-top: 10px; font-size: 15px; }
+.plan-week-total .plan-nutri { margin-top: 4px; }
+.cook-serv { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ink-2); }
+.cook-serv button { width: 28px; height: 28px; border: 1px solid var(--line); background: var(--white-warm); border-radius: 999px; font-size: 16px; color: var(--ink); }
+.onboard-list { list-style: none; padding: 0; margin: 0; }
+.onboard-list li { margin: 9px 0; line-height: 1.4; }
 
 .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); z-index: 300; background: var(--ink); color: var(--paper); padding: 12px 18px; border-radius: 999px; font-size: 14px; box-shadow: var(--shadow); animation: fade .2s var(--ease); }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
