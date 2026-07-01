@@ -1,7 +1,7 @@
 /* Service Worker кукбука — офлайн + установка на телефон.
    VERSION синхронен с ?v= в index.html (менять вместе на каждый релиз).
    Кэши: shell (оболочка) + data (recipes.js) версионированные; photos — нет (id-неизменны). */
-const VERSION = '20260701o';
+const VERSION = '20260701p';
 const SHELL = `shell-${VERSION}`;
 const DATA = `data-${VERSION}`;
 const PHOTOS = 'photos-v1';

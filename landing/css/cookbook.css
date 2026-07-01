@@ -357,6 +357,11 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .plan-empty { border: 1px dashed var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
 .plan-week-total { border-top: 2px solid var(--line); margin-top: 8px; padding-top: 10px; font-size: 15px; }
 .plan-week-total .plan-nutri { margin-top: 4px; }
+.today-hero { display: flex; flex-direction: column; gap: 2px; background: var(--accent); color: #fff; border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px; font-weight: 700; font-size: 18px; font-family: var(--serif); }
+.today-hero span { font-family: var(--sans); font-weight: 500; font-size: 13px; opacity: .85; }
+.today-card-big { display: block; max-width: 100%; margin-bottom: 6px; }
+.today-card-big .cover { height: 240px; }
+.today-why { color: var(--ink-2); font-size: 15px; margin: 2px 2px 0; }
 .today-card { border: 2px solid var(--accent); }
 .today-card h4 { color: var(--accent); }
 .plan-nutri.over-goal { color: var(--accent); font-weight: 600; }

@@ -249,6 +249,59 @@
   function recipeNeedsOven(r) { return (r.equipment || []).some(e => normName(e).includes("духов")); }
   const DIFF_LABEL = ["", "просто", "средне", "сложно"];
 
+  /* ============================================================
+     ВЬЮХА: Что сегодня? (#/today) — экран-решение «5pm»
+     ============================================================ */
+  let todayShown = new Set();
+  function pickTonight() {
+    let ranked = recommend(80).filter(r => profileAllows(r) && !todayShown.has(r.id));
+    if (!ranked.length) { todayShown = new Set(); ranked = recommend(80).filter(profileAllows); }
+    if (!ranked.length) return null;
+    const dinner = MEAL_CATS["Ужин"];
+    const scored = ranked.map(r => {
+      const m = pantryMatch(r);
+      const s = (dinner.includes(r.category) ? 3 : 0) + Math.max(0, 4 - m.missing.length) + (r.time <= 40 ? 1 : 0);
+      return { r, m, s };
+    }).sort((a, b) => b.s - a.s);
+    const pick = scored[0];
+    if (pick) todayShown.add(pick.r.id);
+    return pick;
+  }
+  function todayWhy(m) {
+    if (!m.total) return "Просто и без лишних покупок";
+    if (!m.missing.length) return "🏠 Всё есть — готовь прямо сейчас";
+    if (m.missing.length <= 2) return "Почти всё есть, купить: " + m.missing.map(esc).join(", ");
+    return hasTasteProfile() ? "Под ваши вкусы" : "Хороший вариант на вечер";
+  }
+  function renderToday() {
+    const view = $("#view");
+    const pick = pickTonight();
+    if (!pick) { view.innerHTML = `<div class="empty">Пока нечего предложить.<br><a href="#/" style="color:var(--accent)">К каталогу</a></div>`; return; }
+    const r = pick.r, sv = r.baseServings;
+    view.innerHTML = `
+      <div class="section-head" style="margin-top:4px"><h1>🍽 Сегодня</h1></div>
+      <a class="card today-card-big" href="#/recipe/${esc(r.id)}">
+        ${r.photo ? `<div class="cover photo"><img src="${esc(r.photo)}" alt="" loading="lazy"><div class="cover-cap"><div class="c-cat">${esc(r.cuisine)} · ${esc(r.category)}</div><div class="c-title">${esc(r.title)}</div></div></div>`
+          : `<div class="cover" style="${coverStyle(r)}"><div class="c-cat">${esc(r.cuisine)} · ${esc(r.category)}</div><div class="c-title">${esc(r.title)}</div></div>`}
+        <div class="card-meta"><span>⏱ ${r.time} мин</span>${r.kcal ? `<span>🔥 ${r.kcal}</span>` : ""}${r.forKid ? '<span class="kid">★ дочке</span>' : ""}</div>
+      </a>
+      <div class="today-why">${todayWhy(pick.m)}</div>
+      <div class="btn-row" style="margin:14px 0">
+        <a class="btn primary" href="#/cook/${esc(r.id)}">🍳 Готовить</a>
+        <button class="btn" id="todayShop">🛒 В список</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn ghost" id="todayLike">👍 Нравится</button>
+        <button class="btn ghost" id="todayNope">👎 Другое</button>
+        <button class="btn" id="todayMore">🔄 Ещё вариант</button>
+      </div>
+    `;
+    $("#todayShop").onclick = () => { addRecipeToShopping(r.id, sv); updateBadge(); toast("В списке покупок"); };
+    $("#todayMore").onclick = () => renderToday();
+    $("#todayLike").onclick = () => { const m = getMem(r.id); m.vote = 1; saveMem(); toast("Запомнил — буду предлагать похожее"); renderToday(); };
+    $("#todayNope").onclick = () => { const m = getMem(r.id); m.vote = -1; saveMem(); renderToday(); };
+  }
+
   function renderList() {
     const recipes = allRecipes();
     const cuisines = [...new Set(recipes.map(r => r.cuisine))].sort();
@@ -260,6 +313,7 @@
 
     const view = $("#view");
     view.innerHTML = `
+      <a class="today-hero" href="#/today">🍽 Что приготовить сегодня?<span>один тап — готовый ответ</span></a>
       <div class="search">
         <span>🔎</span>
         <input id="q" type="text" placeholder="Поиск: название, тег, ингредиент…" value="${esc(listState.q)}">
@@ -1478,6 +1532,7 @@
     if (route === "recipe") return renderRecipe(arg);
     if (route === "cook") return renderCook(arg);
     if (route === "shopping") return renderShopping();
+    if (route === "today") return renderToday();
     if (route === "saved") return renderSaved();
     if (route === "assistant") return window.CookAssistant ? window.CookAssistant.renderView($("#view")) : null;
     if (route === "plan") return renderPlan();
