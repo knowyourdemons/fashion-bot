@@ -63,6 +63,22 @@ def create_application() -> Application:
         await _send_style_passport(update.message, user, get_user_lang(user))
     app.add_handler(CommandHandler("style_passport", _style_passport_cmd))
 
+    # Кукбук-захват: /recipe + пересланное фото/ссылка → рецепт в личную книгу.
+    # Регистрируем ДО фешн-фото-хендлеров, но ловим ТОЛЬКО forwarded от cookbook-юзеров,
+    # поэтому обычные (не пересланные) фото гардероба не затрагиваются.
+    from bot.handlers import cookbook_capture
+    app.add_handler(CommandHandler("recipe", cookbook_capture.handle_recipe_command))
+    _cb_ids = [int(x) for x in cookbook_capture.cookbook_user_ids() if x.isdigit()]
+    if _cb_ids:
+        from telegram import MessageEntity
+        _cb_users = filters.User(user_id=_cb_ids)
+        app.add_handler(MessageHandler(
+            _cb_users & filters.FORWARDED & (
+                filters.PHOTO | filters.Document.IMAGE | (filters.TEXT & filters.Entity(MessageEntity.URL))
+            ),
+            cookbook_capture.handle_forwarded_capture,
+        ))
+
     # Photo handlers (сжатое фото и документ-изображение оригинального качества)
     app.add_handler(MessageHandler(filters.PHOTO, wardrobe.handle_photo))
     app.add_handler(MessageHandler(filters.Document.IMAGE, wardrobe.handle_photo))

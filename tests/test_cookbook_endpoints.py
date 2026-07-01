@@ -84,3 +84,24 @@ class TestAllergenGuard:
             with pytest.raises(HTTPException) as ei:
                 await cookbook._cf_recipe(cookbook.GENERATE_SYSTEM, "x", forbidden=["глютен"])
         assert ei.value.status_code == 422
+
+
+class TestTelegramCapture:
+    def test_module_imports_and_ids_parse(self):
+        from bot.handlers import cookbook_capture
+        assert hasattr(cookbook_capture, "handle_recipe_command")
+        assert hasattr(cookbook_capture, "handle_forwarded_capture")
+        with patch("bot.handlers.cookbook_capture.settings") as s:
+            s.cookbook_allowed_telegram_ids = "195169, 263775083"
+            assert cookbook_capture.cookbook_user_ids() == {"195169", "263775083"}
+
+    def test_app_registers_recipe_handler(self):
+        """create_application не падает и регистрирует /recipe (интеграция хендлера)."""
+        from bot.app import create_application
+        from telegram.ext import CommandHandler
+        with patch("bot.app.settings") as s:
+            s.telegram_bot_token = "123:fake"
+            s.cookbook_allowed_telegram_ids = "195169"
+            app = create_application()
+        cmds = [h for group in app.handlers.values() for h in group if isinstance(h, CommandHandler)]
+        assert any("recipe" in getattr(h, "commands", []) for h in cmds)

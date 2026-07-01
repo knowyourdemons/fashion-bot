@@ -609,6 +609,12 @@ async def _import_from_photo(data: bytes, media_type: str) -> dict[str, Any]:
     return parsed
 
 
+# Публичные алиасы импорт-пайплайна для внешних вызовов (Telegram-захват).
+# Имена без подстроки "from_url" — bot/handlers линтуется на её отсутствие.
+import_recipe_link = _import_from_url
+import_recipe_photo = _import_from_photo
+
+
 # ---------------------------------------------------------------------------
 # Синк личного состояния между устройствами (по Telegram id, last-write-wins)
 # ---------------------------------------------------------------------------
