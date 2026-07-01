@@ -11,6 +11,7 @@ from db.models.scoring_matrix import ScoringMatrix
 from db.models.taxonomy import ItemCategory, TaxonomyVersion, UnknownItem
 from db.models.referrals import Referral
 from db.models.admin_actions import AdminAction
+from db.models.cookbook_state import CookbookState
 
 __all__ = [
     "User",
@@ -25,4 +26,5 @@ __all__ = [
     "UnknownItem",
     "Referral",
     "AdminAction",
+    "CookbookState",
 ]

@@ -44,7 +44,7 @@
     plan:     LS.get("cb_plan", {}),
     ingChecks: LS.get("cb_ingChecks", {}),
     profile:  LS.get("cb_profile", { excludeAllergens: [], diet: "" }),
-    save(key) { LS.set("cb_" + key, Store[key]); },
+    save(key) { LS.set("cb_" + key, Store[key]); if (window.CookSync) window.CookSync.push(key); },
     // перезапись значения без побочек (для будущего синка: не триггерит push повторно)
     set(key, val) { Store[key] = val; LS.set("cb_" + key, val); }
   };
@@ -1178,4 +1178,8 @@
   window.addEventListener("hashchange", router);
   document.addEventListener("DOMContentLoaded", router);
   if (document.readyState !== "loading") router();
+
+  // Синк: перерисовать при подтягивании серверных данных + первичный merge
+  window.addEventListener("cb-synced", router);
+  if (window.CookSync) window.CookSync.boot();
 })();

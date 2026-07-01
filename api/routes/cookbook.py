@@ -91,6 +91,27 @@ async def _authorize(session: str | None, secret: str | None) -> None:
     raise HTTPException(status_code=401, detail="Нужна авторизация (войдите через Telegram)")
 
 
+# Ключи личного состояния, которые синкаются между устройствами (совпадают с фронтовым Store).
+SYNC_KEYS = {"shopping", "pantry", "memory", "userRecipes", "plan", "ingChecks", "profile"}
+
+
+def _lww_action(client_rev: int, server_rev: int | None) -> str:
+    """Решение last-write-wins: write (принять клиента) | newer (сервер свежее) | noop."""
+    if server_rev is None or client_rev > server_rev:
+        return "write"
+    if client_rev < server_rev:
+        return "newer"
+    return "noop"
+
+
+async def _require_tg_id(session: str | None) -> str:
+    """Синк привязан к личности → нужен именно Telegram-логин (общий секрет анонимен)."""
+    tg_id = await _session_tg_id(session)
+    if not tg_id:
+        raise HTTPException(status_code=401, detail="Синхронизация требует входа через Telegram")
+    return tg_id
+
+
 def _verify_telegram(data: dict[str, Any]) -> str | None:
     """Проверяет подпись Telegram Login Widget. Возвращает telegram_id (str) или None."""
     recv_hash = data.get("hash")
@@ -513,3 +534,65 @@ async def _import_from_photo(data: bytes, media_type: str) -> dict[str, Any]:
     parsed.setdefault("steps", [])
     parsed.setdefault("category", "Основное")
     return parsed
+
+
+# ---------------------------------------------------------------------------
+# Синк личного состояния между устройствами (по Telegram id, last-write-wins)
+# ---------------------------------------------------------------------------
+@router.get("/state")
+async def get_state(x_cookbook_session: str | None = Header(default=None)) -> dict[str, Any]:
+    """Возвращает всё синкаемое состояние пользователя: {states: {key: {v, rev}}}."""
+    tg_id = await _require_tg_id(x_cookbook_session)
+    from sqlalchemy import select
+    from db.base import AsyncReadSession
+    from db.models.cookbook_state import CookbookState
+
+    out: dict[str, Any] = {}
+    async with AsyncReadSession() as s:
+        rows = (await s.execute(select(CookbookState).where(CookbookState.tg_id == tg_id))).scalars().all()
+        for r in rows:
+            if r.key in SYNC_KEYS:
+                out[r.key] = {"v": r.value, "rev": r.rev}
+    return {"states": out}
+
+
+@router.put("/state")
+async def put_state(request: Request, x_cookbook_session: str | None = Header(default=None)) -> dict[str, Any]:
+    """Пер-ключ LWW: пишем только если rev новее; если серверная копия новее — вернём её в newer."""
+    tg_id = await _require_tg_id(x_cookbook_session)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Ожидается JSON")
+    states = body.get("states") if isinstance(body, dict) else None
+    if not isinstance(states, dict):
+        raise HTTPException(status_code=400, detail="states должен быть объектом")
+
+    from sqlalchemy import select
+    from db.base import AsyncWriteSession
+    from db.models.cookbook_state import CookbookState
+
+    newer: dict[str, Any] = {}
+    async with AsyncWriteSession() as s:
+        for key, item in states.items():
+            if key not in SYNC_KEYS or not isinstance(item, dict):
+                continue
+            rev = item.get("rev")
+            if not isinstance(rev, int) or isinstance(rev, bool):
+                continue
+            val = item.get("v")
+            row = (await s.execute(
+                select(CookbookState).where(CookbookState.tg_id == tg_id, CookbookState.key == key)
+            )).scalar_one_or_none()
+            action = _lww_action(rev, row.rev if row else None)
+            if action == "write":
+                if row is None:
+                    s.add(CookbookState(tg_id=tg_id, key=key, value=val, rev=rev))
+                else:
+                    row.value = val
+                    row.rev = rev
+            elif action == "newer":
+                newer[key] = {"v": row.value, "rev": row.rev}
+            # noop → rev == row.rev
+        await s.commit()
+    return {"newer": newer}
