@@ -39,6 +39,10 @@ ASSISTANT_SYSTEM = (
     "Ты — кулинарный ассистент в личной поваренной книге. Помогаешь в магазине и у плиты: "
     "по фото товара говоришь, тот ли это ингредиент, и чем его заменить; отвечаешь на вопросы "
     "по рецепту и готовке коротко и по делу, на русском.\n"
+    "Когда спрашивают «готово ли / так ли / достаточно ли» на текущем шаге — отвечай "
+    "НАБЛЮДАЕМЫМИ ПРИЗНАКАМИ, которые видно/слышно/пахнет прямо сейчас (цвет, текстура, "
+    "запах, звук, поведение: «лук золотистый и мягкий, пахнет сладко, не горчит»), а НЕ "
+    "временем по часам и не расплывчатым «выглядит отлично». Дай 1–2 конкретных признака готовности.\n"
     "Если предлагаешь замену ингредиента — заполни поле substitution.\n"
     'Отвечай ТОЛЬКО валидным JSON без markdown: '
     '{"reply": "<текст ответа>", "substitution": null | '
@@ -354,6 +358,11 @@ async def assistant(
     ingredient = ctx.get("ingredient") if isinstance(ctx, dict) else None
     if ingredient:
         ctx_lines.append(f"Вопрос про ингредиент: {ingredient.get('name', '')}.")
+    step = ctx.get("step") if isinstance(ctx, dict) else None
+    if isinstance(step, dict) and (step.get("text") or step.get("title")):
+        step_title = (step.get("title") or "").strip()
+        step_text = (step.get("text") or "").strip()
+        ctx_lines.append(f"Юзер сейчас на этом шаге готовки: {step_title} {step_text}".strip())
 
     ctx_prefix = ("\n".join(ctx_lines) + "\n\n") if ctx_lines else ""
     user_text = message or "Что это? Подходит ли для рецепта?"

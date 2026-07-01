@@ -135,6 +135,53 @@
     </a>`;
   }
 
+  // «Подать с…» — дополняющие блюда из нашей базы (клиентский подбор, $0, офлайн)
+  const SERVE_PAIRS = {
+    "Основное": ["Гарнир", "Салат", "Суп"],
+    "Гарнир": ["Основное", "Салат"],
+    "Суп": ["Выпечка", "Салат"],
+    "Салат": ["Основное", "Суп"],
+    "Закуска": ["Основное", "Суп"],
+    "Выпечка": ["Напиток"],
+    "Десерт": ["Напиток"],
+    "Напиток": ["Выпечка", "Десерт"],
+    "Завтрак": ["Напиток", "Выпечка"],
+  };
+  function serveWithSuggestions(r, limit) {
+    limit = limit || 3;
+    const wantCats = SERVE_PAIRS[r.category] || ["Напиток"];
+    const pool = allRecipes().filter(x => x.id !== r.id && wantCats.includes(x.category) && (x.difficulty || 1) <= 2);
+    const rank = (x) => {
+      const mem = Store.memory[x.id] || {};
+      let s = x.cuisine === r.cuisine ? 3 : 0;      // та же кухня — выше
+      if (mem.vote === 1) s += 2;
+      if (mem.madeLog && mem.madeLog.length) s += 1;
+      s += Math.max(0, 2 - ((x.difficulty || 1) - 1)); // проще — выше
+      return s;
+    };
+    const sorted = pool.slice().sort((a, b) => rank(b) - rank(a) || a.time - b.time);
+    const out = [], usedCat = new Set();
+    for (const x of sorted) { if (out.length >= limit) break; if (usedCat.has(x.category)) continue; usedCat.add(x.category); out.push(x); }
+    for (const x of sorted) { if (out.length >= limit) break; if (!out.includes(x)) out.push(x); }
+    return out;
+  }
+  function serveSuggestCardHtml(x) {
+    const bg = x.photo ? `background-image:url('${esc(x.photo)}');background-size:cover;background-position:center` : coverStyle(x);
+    return `<a class="serve-card" href="#/recipe/${esc(x.id)}" style="flex:0 0 132px;text-decoration:none;color:inherit">
+      <div style="height:82px;border-radius:12px;${bg}"></div>
+      <div style="font-size:11px;opacity:.6;margin-top:4px">${esc(x.category)} · ${x.time} мин</div>
+      <div style="font-size:13px;font-weight:600;line-height:1.2">${esc(x.title)}</div>
+    </a>`;
+  }
+  function serveSuggestBlockHtml(r) {
+    const sug = serveWithSuggestions(r);
+    if (!sug.length) return "";
+    return `<div class="label" style="margin-top:14px">Подать с…</div>
+      <div class="serve-row" style="display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch">
+        ${sug.map(serveSuggestCardHtml).join("")}
+      </div>`;
+  }
+
   /* ---------- Личная память ---------- */
   function getMem(id) {
     return Store.memory[id] || (Store.memory[id] = { vote: 0, madeLog: [], notes: "", kidRating: 0, substitutions: [] });
@@ -651,6 +698,7 @@
       </ol>
 
       ${r.serveWith ? `<div class="label" style="margin-top:14px">С чем подавать</div><p class="serve-note">${esc(r.serveWith)}</p>` : ""}
+      ${serveSuggestBlockHtml(r)}
       ${r.notes ? `<div class="label" style="margin-top:14px">Совет</div><p class="serve-note">${esc(r.notes)}</p>` : ""}
 
       ${memoryBlock(r, mem)}
@@ -834,7 +882,7 @@
       ${expiring.length ? `<div class="expire-soon">⏳ <b>Успей съесть:</b> ${expiring.map(esc).join(", ")}<button class="btn sm" id="pantryUseUp" style="margin-top:8px">✨ Придумай из них</button></div>` : ""}
       ${items.length ? `<div class="chips" style="flex-wrap:wrap;padding-top:10px">${items.map(n => `<span class="chip active pantry-chip" data-exp="${esc(n)}">${esc(n)}${expiryBadge(n)}<b class="p-x" data-unpantry="${esc(n)}">✕</b></span>`).join("")}</div><div class="muted" style="font-size:12px;margin-top:6px">Тап по продукту — поставить срок годности.</div>` : `<div class="made-log">Пусто. Отмечайте 🏠 на позициях, что уже есть дома.</div>`}
       <div class="dyn-row" style="margin-top:10px"><input id="pantryAdd" placeholder="Добавить в кладовку (соль, масло…)"><button class="btn sm" id="pantryAddBtn">＋</button></div>
-      <label class="btn block" style="margin-top:8px">📷 Сфоткать продукты (AI распознает)<input id="pantryScan" type="file" accept="image/*" capture="environment" class="hidden"></label>
+      <label class="btn block" style="margin-top:8px">📷 Сфоткать продукты (можно несколько кадров)<input id="pantryScan" type="file" accept="image/*" capture="environment" multiple class="hidden"></label>
       ${items.length ? `<button class="btn block" id="pantryGen" style="margin-top:8px">✨ Придумай блюдо из кладовки</button>` : ""}
     </div>`;
   }
@@ -873,12 +921,41 @@
     };
     const scan = $("#pantryScan");
     if (scan) scan.onchange = async () => {
-      const f = scan.files[0]; if (!f || !window.CookAssistant) return;
-      toast("Распознаю продукты… (5–15 сек)");
-      try { openScanResultSheet(await window.CookAssistant.scanFridge(f)); }
-      catch (e) { toast(e.message || "Не получилось"); }
+      let files = Array.from(scan.files || []); if (!files.length || !window.CookAssistant) return;
+      const SCAN_MAX = 5;
+      if (files.length > SCAN_MAX) { toast(`За раз обрабатываю ${SCAN_MAX} кадров`); files = files.slice(0, SCAN_MAX); }
+      const seen = new Set(), merged = [];
+      try {
+        for (let i = 0; i < files.length; i++) {
+          toast(files.length > 1 ? `Распознаю фото ${i + 1} из ${files.length}…` : "Распознаю продукты… (5–15 сек)");
+          const names = await window.CookAssistant.scanFridge(files[i]);
+          for (const n of (names || [])) { const k = normName(n); if (!seen.has(k)) { seen.add(k); merged.push(n); } }
+        }
+      } catch (e) { toast(e.message || "Не получилось"); }
+      scan.value = "";
+      if (merged.length) openScanResultSheet(merged); else toast("Ничего не распознал — попробуйте ближе/светлее");
     };
   }
+  // Авто-срок годности по типу продукта (клиентский, $0)
+  const SHELF_LIFE = { молочка: 4, мясо: 2, рыба: 2, овощи: 7, фрукты: 7, зелень: 4, хлеб: 3, яйца: 21, бакалея: 180, заморозка: 90, прочее: 7 };
+  const FOOD_KEYWORDS = [
+    ["молочка", ["молок", "кефир", "сметан", "творог", "сыр", "йогурт", "сливк", "ряженк", "масло сливоч"]],
+    ["мясо", ["мясо", "курин", "куриц", "фарш", "говядин", "свинин", "индейк", "колбас", "сосиск", "бекон", "ветчин"]],
+    ["рыба", ["рыб", "лосос", "форел", "селёдк", "селедк", "креветк", "кальмар", "тунец", "икра", "морепрод"]],
+    ["зелень", ["укроп", "петрушк", "кинз", "базилик", "салат", "руккол", "шпинат", "зелен", "лук зелен"]],
+    ["овощи", ["помидор", "огурец", "огурц", "перец", "капуст", "морков", "картоф", "картош", "кабач", "баклаж", "лук", "чеснок", "свекл", "тыкв", "грибы", "брокколи", "цветн"]],
+    ["фрукты", ["яблок", "банан", "апельсин", "груш", "виноград", "ягод", "клубник", "малин", "лимон", "мандарин", "киви", "персик", "слив", "абрикос", "авокадо"]],
+    ["хлеб", ["хлеб", "батон", "булк", "лаваш", "багет", "выпечк", "тортил"]],
+    ["яйца", ["яйц", "яйк"]],
+    ["заморозка", ["заморож", "мороженн", "пельмен", "вареник", "наггетс"]],
+    ["бакалея", ["крупа", "рис", "гречк", "макарон", "паста", "мук", "сахар", "соль", "консерв", "тушёнк", "тушенк", "фасол", "чечевиц", "горох", "масло растит", "уксус", "специ", "чай", "кофе", "мёд", "мед ", "орех", "сухофрукт"]],
+  ];
+  function classifyFood(name) {
+    const n = normName(name);
+    for (const [cat, kws] of FOOD_KEYWORDS) { if (kws.some(k => n.includes(k))) return cat; }
+    return "прочее";
+  }
+  function todayPlusDays(days) { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); }
   // Результат fridge-scan: чипы продуктов (toggle) → добавить выбранные в кладовку
   function openScanResultSheet(items) {
     const picked = new Set(items);
@@ -892,7 +969,12 @@
       if (picked.has(n)) { picked.delete(n); b.classList.remove("active"); } else { picked.add(n); b.classList.add("active"); }
     });
     $("#scanAdd").onclick = () => {
-      picked.forEach(n => { Store.pantry.items[normName(n)] = true; });
+      Store.pantry.expiry = Store.pantry.expiry || {};
+      picked.forEach(name => {
+        const n = normName(name);
+        Store.pantry.items[n] = true;
+        if (Store.pantry.expiry[n] == null) Store.pantry.expiry[n] = todayPlusDays(SHELF_LIFE[classifyFood(name)] || 7); // не перетираем ручной срок
+      });
       Store.save("pantry"); closeSheet(); renderShopping(); toast("Добавлено в кладовку: " + picked.size);
     };
   }
@@ -1008,6 +1090,7 @@
         <span class="cook-progress">${onServe ? "Подача" : `Шаг ${idx + 1} из ${total}`}</span>
         <span class="cook-serv"><button id="cookSvMinus">−</button>${sv} порц<button id="cookSvPlus">+</button></span>
         ${voiceSupported() ? `<button class="iconbtn ${voiceOn ? "on" : ""}" id="cookMic" title="Голосовое управление">🎤</button>` : ""}
+        <button class="iconbtn" id="cookAsk" title="Спросить ассистента">✦</button>
         <button class="iconbtn" id="cookIngs" title="Ингредиенты">📋</button>
         <button class="iconbtn" id="cookExit" title="Выйти">✕</button>
       </div>
@@ -1024,6 +1107,11 @@
 
     $("#cookExit").onclick = () => { releaseWakeLock(); clearCookTimers(); location.hash = "#/recipe/" + r.id; };
     const mic = $("#cookMic"); if (mic) mic.onclick = () => { if (voiceOn) stopVoice(); else startVoice(); drawCook(); };
+    $("#cookAsk").onclick = () => {
+      if (!window.CookAssistant) return;
+      const step = onServe ? null : { idx, title: r.steps[idx].title || "", text: r.steps[idx].text || "" };
+      window.CookAssistant.openOverlay({ recipe: r, step });
+    };
     $("#cookSvMinus").onclick = () => cookServings(-1);
     $("#cookSvPlus").onclick = () => cookServings(+1);
     $("#cookIngs").onclick = () => openIngredientsSheet(r, sv);

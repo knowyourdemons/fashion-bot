@@ -171,7 +171,7 @@
     const ov = document.createElement("div"); ov.className = "overlay"; ov.id = "assistOverlay";
     ov.innerHTML = `<div class="sheet" style="max-height:90vh;display:flex;flex-direction:column">
       <button class="btn ghost sm sheet-close" id="aClose">Закрыть</button>
-      <h3>Спросить про: ${esc(ctx.ingredient ? ctx.ingredient.name : (ctx.recipe ? ctx.recipe.title : ""))}</h3>
+      <h3>Спросить про: ${esc(ctx.step ? "Шаг " + ((ctx.step.idx || 0) + 1) : (ctx.ingredient ? ctx.ingredient.name : (ctx.recipe ? ctx.recipe.title : "")))}</h3>
       <div class="chat" id="chat" style="flex:1;overflow-y:auto;padding-bottom:10px"></div>
       <form id="chatForm" style="display:flex;gap:10px;align-items:center;border-top:1px solid var(--line);padding-top:10px">
         <label class="iconbtn" title="Фото">📷<input id="chatPhoto" type="file" accept="image/*" capture="environment" multiple class="hidden"></label>
@@ -191,9 +191,33 @@
     startOverlayChat();
 
     function startOverlayChat() {
-      chat.innerHTML = msgHtml({ role: "bot", text: ctx.ingredient ? `Спросите про «${ctx.ingredient.name}» — пришлите фото товара с полки, подскажу то это или нет и чем заменить.` : "Чем помочь по рецепту?" });
+      const greet = ctx.step
+        ? `Шаг ${(ctx.step.idx || 0) + 1}: ${ctx.step.text || ctx.step.title || ""}\n\nСпросите, как понять что готово — подскажу по виду, запаху и текстуре.`
+        : (ctx.ingredient ? `Спросите про «${ctx.ingredient.name}» — пришлите фото товара с полки, подскажу то это или нет и чем заменить.` : "Чем помочь по рецепту?");
+      chat.innerHTML = msgHtml({ role: "bot", text: greet }) + quickChipsHtml(ctx);
       wireChat(ov, ctx, true);
+      bindQuickChips(ov);
     }
+  }
+
+  // Быстрые подсказки без набора текста — тап шлёт готовый вопрос
+  function quickChipsHtml(ctx) {
+    let chips = [];
+    if (ctx.step) chips = ["Готово? Как понять?", "Что дальше?"];
+    else if (ctx.ingredient) chips = ["Чем заменить?", "Сколько это в граммах?", "Обязательно ли?"];
+    else if (ctx.recipe) chips = ["Чем заменить ингредиент?", "Как ускорить?"];
+    if (!chips.length) return "";
+    return `<div class="quick-chips" style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 2px">`
+      + chips.map(c => `<button type="button" class="btn ghost sm" data-quickask="${esc(c)}">${esc(c)}</button>`).join("")
+      + `</div>`;
+  }
+  function bindQuickChips(root) {
+    const text = root.querySelector("#chatText");
+    const form = root.querySelector("#chatForm");
+    root.querySelectorAll("[data-quickask]").forEach(b => b.onclick = () => {
+      text.value = b.dataset.quickask;
+      if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event("submit", { cancelable: true }));
+    });
   }
 
   /* ---------- Общая логика чата ---------- */
@@ -230,7 +254,8 @@
       try {
         const ctxPayload = {
           recipe: ctx.recipe ? { id: ctx.recipe.id, title: ctx.recipe.title, ingredients: ctx.recipe.ingredients } : null,
-          ingredient: ctx.ingredient || null
+          ingredient: ctx.ingredient || null,
+          step: ctx.step ? { idx: ctx.step.idx, title: ctx.step.title || "", text: ctx.step.text || "" } : null
         };
         const res = await callAssistant({ message, files: sending, context: ctxPayload, history: (isOverlay ? [] : history.slice(-10)) });
         typing.remove();
