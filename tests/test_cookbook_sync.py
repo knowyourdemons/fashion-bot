@@ -36,7 +36,7 @@ class TestSyncKeys:
         # Должны совпадать с ключами Store в landing/js/app.js (и SYNC_KEYS в sync.js)
         assert SYNC_KEYS == {
             "shopping", "pantry", "memory", "userRecipes", "plan", "ingChecks",
-            "profile", "planServings", "goals", "eaten",
+            "profile", "planServings", "goals", "eaten", "collections",
         }
 
     def test_does_not_sync_auth_or_chat(self):

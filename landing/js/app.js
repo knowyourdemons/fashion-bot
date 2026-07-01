@@ -47,6 +47,7 @@
     planServings: LS.get("cb_planServings", {}),
     goals:    LS.get("cb_goals", { kcal: 0, protein: 0, fat: 0, carbs: 0 }),
     eaten:    LS.get("cb_eaten", {}),
+    collections: LS.get("cb_collections", {}),
     save(key) { LS.set("cb_" + key, Store[key]); if (window.CookSync) window.CookSync.push(key); },
     // перезапись значения без побочек (для будущего синка: не триггерит push повторно)
     set(key, val) { Store[key] = val; LS.set("cb_" + key, val); }
@@ -486,13 +487,24 @@
          <div class="grid">${list.map(r => cardHtml(r)).join("")}</div>`
       : "";
 
-    const body = (cooked.length || liked.length || kid.length)
-      ? section("Готовил", "Отмеченное «✓ Готовил» — от свежего к старому", cooked)
-        + section("Понравилось", "Отмеченное 👍", liked)
-        + section("Алисе зашло", "По звёздам, от высоких к низким", kid)
-      : `<div class="empty">Пока пусто.<br>Открой рецепт и отметь «✓ Готовил», поставь 👍 или звёзды «Алисе зашло» — всё соберётся здесь.</div>`;
+    // Свои коллекции — сверху
+    const cols = Object.entries(Store.collections || {}).filter(([, ids]) => (ids || []).length);
+    const colSections = cols.map(([n, ids]) => {
+      const list = ids.map(getRecipe).filter(Boolean);
+      return `<div class="section-head"><h2>📁 ${esc(n)}</h2><span class="muted">${list.length}</span><button class="btn ghost sm" data-delcol="${esc(n)}" style="margin-left:auto">Удалить</button></div>
+        <div class="grid">${list.map(r => cardHtml(r)).join("")}</div>`;
+    }).join("");
+
+    const favBody = section("Готовил", "Отмеченное «✓ Готовил» — от свежего к старому", cooked)
+      + section("Понравилось", "Отмеченное 👍", liked)
+      + section("Алисе зашло", "По звёздам, от высоких к низким", kid);
+    const body = (colSections || favBody) ? (colSections + favBody)
+      : `<div class="empty">Пока пусто.<br>Открой рецепт: отметь «✓ Готовил», 👍, звёзды «Алисе зашло» или собери свою коллекцию (📁).</div>`;
 
     $("#view").innerHTML = `<div class="section-head" style="margin-top:4px"><h1>Избранное</h1></div>${body}`;
+    $("#view").querySelectorAll("[data-delcol]").forEach(b => b.onclick = () => {
+      if (confirm("Удалить коллекцию «" + b.dataset.delcol + "»? Рецепты останутся в базе.")) { delete Store.collections[b.dataset.delcol]; Store.save("collections"); renderSaved(); }
+    });
   }
 
   /* ============================================================
@@ -549,6 +561,7 @@
       </div>
       <button class="btn" id="askAssistant" style="width:100%;margin:-6px 0 4px">✦ Спросить ассистента о рецепте</button>
       <button class="btn" id="personalizeBtn" style="width:100%;margin:4px 0">✨ Персонализировать (детская / веган / полезнее…)</button>
+      <button class="btn" id="collectBtn" style="width:100%;margin:0 0 4px">📁 В коллекцию</button>
 
       <div class="label" style="margin-top:8px">Метод</div>
       <ol class="steps">
@@ -567,6 +580,7 @@
     $("#askAssistant").onclick = () => { if (window.CookAssistant) window.CookAssistant.openOverlay({ recipe: r }); };
     $("#shareBtn").onclick = () => shareRecipe(r);
     $("#personalizeBtn").onclick = () => openPersonalizeSheet(r);
+    $("#collectBtn").onclick = () => openCollectionSheet(r.id);
     bindIngredientRows(r);
     bindMemory(r);
   }
@@ -794,6 +808,31 @@
       catch (e) { toast(e.message || "Не получилось"); }
     });
   }
+  // Добавить рецепт в свои коллекции/папки (toggle) + создать новую
+  function openCollectionSheet(id) {
+    const names = Object.keys(Store.collections);
+    const chips = names.map(n => {
+      const inCol = (Store.collections[n] || []).includes(id);
+      return `<button class="chip ${inCol ? "active" : ""}" data-col="${esc(n)}">${esc(n)}${inCol ? " ✓" : ""}</button>`;
+    }).join("");
+    openSheet("📁 В коллекцию", `
+      <p class="muted" style="margin-bottom:10px">Добавьте рецепт в свои подборки — они появятся в «Избранном».</p>
+      <div class="chips wrap" id="colChips">${chips || '<span class="muted">Пока нет коллекций.</span>'}</div>
+      <div class="dyn-row" style="margin-top:12px"><input id="colNew" placeholder="Новая коллекция (напр. Праздник)"><button class="btn sm" id="colAdd">＋</button></div>
+    `);
+    document.querySelectorAll("#colChips [data-col]").forEach(b => b.onclick = () => {
+      const n = b.dataset.col, arr = Store.collections[n] || (Store.collections[n] = []);
+      const i = arr.indexOf(id);
+      if (i >= 0) arr.splice(i, 1); else arr.push(id);
+      Store.save("collections"); toast(i >= 0 ? "Убрано" : "Добавлено"); openCollectionSheet(id);
+    });
+    $("#colAdd").onclick = () => {
+      const n = ($("#colNew").value || "").trim(); if (!n) return;
+      if (!Store.collections[n]) Store.collections[n] = [];
+      if (!Store.collections[n].includes(id)) Store.collections[n].push(id);
+      Store.save("collections"); toast("Добавлено в «" + n + "»"); openCollectionSheet(id);
+    };
+  }
   function copyText(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast("Скопировано"), () => fallbackCopy(text));
     else fallbackCopy(text);
@@ -830,6 +869,7 @@
       <div class="cook-top">
         <span class="cook-progress">${onServe ? "Подача" : `Шаг ${idx + 1} из ${total}`}</span>
         <span class="cook-serv"><button id="cookSvMinus">−</button>${sv} порц<button id="cookSvPlus">+</button></span>
+        ${voiceSupported() ? `<button class="iconbtn ${voiceOn ? "on" : ""}" id="cookMic" title="Голосовое управление">🎤</button>` : ""}
         <button class="iconbtn" id="cookIngs" title="Ингредиенты">📋</button>
         <button class="iconbtn" id="cookExit" title="Выйти">✕</button>
       </div>
@@ -845,6 +885,7 @@
     </div>`;
 
     $("#cookExit").onclick = () => { releaseWakeLock(); clearCookTimers(); location.hash = "#/recipe/" + r.id; };
+    const mic = $("#cookMic"); if (mic) mic.onclick = () => { if (voiceOn) stopVoice(); else startVoice(); drawCook(); };
     $("#cookSvMinus").onclick = () => cookServings(-1);
     $("#cookSvPlus").onclick = () => cookServings(+1);
     $("#cookIngs").onclick = () => openIngredientsSheet(r, sv);
@@ -862,6 +903,32 @@
     recipeServings[r.id] = Math.max(1, Math.min(20, (recipeServings[r.id] || r.baseServings) + d));
     drawCook();
   }
+  // --- Голосовое управление кукинг-модом (Web Speech API, $0) ---
+  let cookRecog = null, voiceOn = false;
+  function voiceSupported() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+  function cookTotal() { const r = cookState.r; return r.steps.length + ((r.serveWith || r.notes) ? 1 : 0); }
+  function cookNextStep() { if (cookState && cookState.idx < cookTotal() - 1) { cookState.idx++; drawCook(); } }
+  function cookPrevStep() { if (cookState && cookState.idx > 0) { cookState.idx--; drawCook(); } }
+  function handleVoice(t) {
+    if (/дальше|следующ|вперёд|вперед|next/.test(t)) cookNextStep();
+    else if (/назад|предыдущ|обратно|back/.test(t)) cookPrevStep();
+    else if (/таймер|время|засеки/.test(t)) { const b = document.querySelector(".cook-timer"); if (b) b.click(); }
+    else if (/ингредиент|состав|продукт/.test(t)) openIngredientsSheet(cookState.r, recipeServings[cookState.r.id] || cookState.r.baseServings);
+    else if (/стоп|выход|закрой|хватит|заверши/.test(t)) { stopVoice(); location.hash = "#/recipe/" + cookState.r.id; }
+  }
+  function startVoice() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { toast("Голос не поддерживается браузером"); return; }
+    stopVoice();
+    cookRecog = new SR();
+    cookRecog.lang = "ru-RU"; cookRecog.continuous = true; cookRecog.interimResults = false;
+    cookRecog.onresult = (e) => handleVoice((e.results[e.results.length - 1][0].transcript || "").toLowerCase());
+    cookRecog.onerror = () => {};
+    cookRecog.onend = () => { if (voiceOn && cookRecog) { try { cookRecog.start(); } catch (e) {} } };
+    voiceOn = true;
+    try { cookRecog.start(); toast("🎤 Голос: «дальше», «назад», «таймер», «ингредиенты», «стоп»"); } catch (e) {}
+  }
+  function stopVoice() { voiceOn = false; if (cookRecog) { try { cookRecog.onend = null; cookRecog.stop(); } catch (e) {} cookRecog = null; } }
   function cookStepHtml(s, i, idx, r, sv) {
     const cls = i === idx ? "current" : "dim";
     const title = s.title ? `<div class="cook-step-title">${esc(s.title)}</div>` : "";
@@ -1310,7 +1377,7 @@
       <div class="field"><label>Печать книги</label><button class="btn" id="printBook">🖨 Печать / PDF</button></div>
     `;
     $("#bkExport").onclick = () => {
-      const data = { v: 1, userRecipes: Store.userRecipes, shopping: Store.shopping, pantry: Store.pantry, memory: Store.memory, plan: Store.plan, profile: Store.profile, planServings: Store.planServings, goals: Store.goals, eaten: Store.eaten };
+      const data = { v: 1, userRecipes: Store.userRecipes, shopping: Store.shopping, pantry: Store.pantry, memory: Store.memory, plan: Store.plan, profile: Store.profile, planServings: Store.planServings, goals: Store.goals, eaten: Store.eaten, collections: Store.collections };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "cookbook-backup.json"; a.click();
     };
@@ -1321,7 +1388,7 @@
       reader.onload = () => {
         try {
           const d = JSON.parse(reader.result);
-          ["userRecipes", "shopping", "pantry", "memory", "plan", "profile", "planServings", "goals", "eaten"].forEach(k => { if (d[k]) { Store[k] = d[k]; Store.save(k); } });
+          ["userRecipes", "shopping", "pantry", "memory", "plan", "profile", "planServings", "goals", "eaten", "collections"].forEach(k => { if (d[k]) { Store[k] = d[k]; Store.save(k); } });
           toast("Импортировано"); updateBadge();
         } catch (err) { toast("Битый файл"); }
       };
@@ -1343,6 +1410,7 @@
      ============================================================ */
   function router() {
     closeSheet();
+    stopVoice(); // уходим с кукинг-мода → выключаем микрофон
     const hash = location.hash || "#/";
     const m = hash.match(/^#\/(\w+)?\/?(.*)$/);
     const route = m && m[1] ? m[1] : "";
