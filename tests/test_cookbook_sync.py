@@ -33,8 +33,11 @@ class TestLwwAction:
 
 class TestSyncKeys:
     def test_covers_frontend_store_keys(self):
-        # Должны совпадать с ключами Store в landing/js/app.js
-        assert SYNC_KEYS == {"shopping", "pantry", "memory", "userRecipes", "plan", "ingChecks", "profile"}
+        # Должны совпадать с ключами Store в landing/js/app.js (и SYNC_KEYS в sync.js)
+        assert SYNC_KEYS == {
+            "shopping", "pantry", "memory", "userRecipes", "plan", "ingChecks",
+            "profile", "planServings", "goals", "eaten",
+        }
 
     def test_does_not_sync_auth_or_chat(self):
         for k in ("session_token", "secret", "assistant", "rev"):

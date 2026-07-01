@@ -118,7 +118,7 @@ async def _authorize(session: str | None, secret: str | None) -> None:
 
 
 # Ключи личного состояния, которые синкаются между устройствами (совпадают с фронтовым Store).
-SYNC_KEYS = {"shopping", "pantry", "memory", "userRecipes", "plan", "ingChecks", "profile"}
+SYNC_KEYS = {"shopping", "pantry", "memory", "userRecipes", "plan", "ingChecks", "profile", "planServings", "goals", "eaten"}
 
 
 def _lww_action(client_rev: int, server_rev: int | None) -> str:

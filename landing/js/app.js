@@ -45,6 +45,8 @@
     ingChecks: LS.get("cb_ingChecks", {}),
     profile:  LS.get("cb_profile", { excludeAllergens: [], diet: "" }),
     planServings: LS.get("cb_planServings", {}),
+    goals:    LS.get("cb_goals", { kcal: 0, protein: 0, fat: 0, carbs: 0 }),
+    eaten:    LS.get("cb_eaten", {}),
     save(key) { LS.set("cb_" + key, Store[key]); if (window.CookSync) window.CookSync.push(key); },
     // перезапись значения без побочек (для будущего синка: не триггерит push повторно)
     set(key, val) { Store[key] = val; LS.set("cb_" + key, val); }
@@ -613,6 +615,7 @@
         <button class="btn sm" id="madeBtn" style="margin-left:auto">✓ Готовил сегодня</button>
       </div>
       <div class="made-log">${made.length ? `Готовил ${made.length} раз. Последний раз: ${lastMade}.` : "Ещё не отмечал, что готовил."}</div>
+      <button class="btn sm ghost" id="eatBtn" style="margin-top:8px">🍽 Съел сегодня (в дневник)</button>
       <div style="margin-top:14px"><span class="label">Алисе зашло</span>
         <div class="stars" id="kidStars">${[1, 2, 3, 4, 5].map(n => `<span class="star" data-star="${n}">${n <= (mem.kidRating || 0) ? "★" : "☆"}</span>`).join("")}</div>
       </div>
@@ -629,6 +632,7 @@
       mem.vote = mem.vote === v ? 0 : v; saveMem(); renderRecipe(r.id);
     });
     $("#madeBtn").onclick = () => { mem.madeLog = mem.madeLog || []; mem.madeLog.push(new Date().toISOString()); saveMem(); toast("Отмечено: готовил"); renderRecipe(r.id); };
+    $("#eatBtn").onclick = () => eatToday(r.id);
     $("#kidStars").querySelectorAll("[data-star]").forEach(s => s.onclick = () => {
       const n = parseInt(s.dataset.star, 10);
       mem.kidRating = (mem.kidRating === n) ? 0 : n; // повторный тап по той же звезде снимает оценку
@@ -1052,10 +1056,15 @@
     });
     return t;
   }
-  function nutriLine(t) {
-    if (!t.n) return "";
-    return `<div class="plan-nutri muted">🔥 ${fmtNum(t.kcal)} ккал · Б ${fmtNum(t.protein)} · Ж ${fmtNum(t.fat)} · У ${fmtNum(t.carbs)} г</div>`;
+  // goal — опц. {kcal,protein,fat,carbs}: показываем «X/цель» и подсветку перебора
+  function nutriLine(t, goal) {
+    if (!t.n && !goal) return "";
+    const seg = (val, tgt) => tgt ? `${fmtNum(val)}/${tgt}` : `${fmtNum(val)}`;
+    const over = goal && goal.kcal && t.kcal > goal.kcal * 1.05;
+    return `<div class="plan-nutri muted${over ? " over-goal" : ""}">🔥 ${seg(t.kcal, goal && goal.kcal)} ккал · Б ${seg(t.protein, goal && goal.protein)} · Ж ${seg(t.fat, goal && goal.fat)} · У ${seg(t.carbs, goal && goal.carbs)} г</div>`;
   }
+  function todayKey() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  function goalSet() { const g = Store.goals || {}; return !!(g.kcal || g.protein || g.fat || g.carbs); }
   // Авто-план: заполнить пустые слоты по вкусам, с учётом профиля, категорийно, без повторов
   const MEAL_CATS = {
     "Завтрак": ["Завтрак", "Выпечка", "Напиток"],
@@ -1084,13 +1093,49 @@
     Store.save("plan"); renderPlan();
     toast("План собран — жми ещё раз для другого варианта");
   }
+  function openGoalSheet() {
+    const g = Store.goals || {};
+    openSheet("🎯 Цель на день", `
+      <p class="muted" style="margin-bottom:10px">Дневная норма — планер и «Сегодня» покажут попадание. 0 = не учитывать.</p>
+      <div class="row2">
+        <div class="field"><label>Калории</label><input id="g_kcal" type="number" inputmode="numeric" value="${g.kcal || ""}"></div>
+        <div class="field"><label>Белки, г</label><input id="g_protein" type="number" inputmode="numeric" value="${g.protein || ""}"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Жиры, г</label><input id="g_fat" type="number" inputmode="numeric" value="${g.fat || ""}"></div>
+        <div class="field"><label>Углеводы, г</label><input id="g_carbs" type="number" inputmode="numeric" value="${g.carbs || ""}"></div>
+      </div>
+      <button class="btn primary block" id="g_save" style="margin-top:12px">Сохранить</button>
+    `);
+    $("#g_save").onclick = () => {
+      Store.goals = { kcal: +$("#g_kcal").value || 0, protein: +$("#g_protein").value || 0, fat: +$("#g_fat").value || 0, carbs: +$("#g_carbs").value || 0 };
+      Store.save("goals"); closeSheet(); renderPlan(); toast("Цель сохранена");
+    };
+  }
+  function eatToday(id) {
+    const k = todayKey();
+    Store.eaten[k] = Store.eaten[k] || [];
+    Store.eaten[k].push(id); Store.save("eaten");
+    toast("Отмечено: съедено сегодня");
+  }
   function renderPlan() {
     const view = $("#view");
     const empty = !Object.keys(Store.plan).length;
     const weekIds = Object.entries(Store.plan).filter(([k]) => DAYS.includes(k.split("|")[0])).map(([, rid]) => rid);
+    const g = goalSet() ? Store.goals : null;
+    const weekGoal = g ? { kcal: g.kcal * 7, protein: g.protein * 7, fat: g.fat * 7, carbs: g.carbs * 7 } : null;
+    const eatenIds = Store.eaten[todayKey()] || [];
     view.innerHTML = `
       <div class="section-head"><h2>План на неделю</h2></div>
-      <p class="muted" style="margin-bottom:12px">Назначайте блюда на дни, затем соберите список покупок на всю неделю.</p>
+      <div class="btn-row" style="margin-bottom:12px">
+        <button class="btn ghost sm" id="planGoal">🎯 Цель на день${g && g.kcal ? ` · ${g.kcal} ккал` : ""}</button>
+      </div>
+      <div class="plan-day today-card">
+        <h4>🍽 Сегодня съедено</h4>
+        ${eatenIds.length ? `<div class="chips wrap">${eatenIds.map((rid, i) => { const r = getRecipe(rid); return r ? `<button class="chip active" data-uneat="${i}">${esc(r.title)} ✕</button>` : ""; }).join("")}</div>` : `<div class="muted">Пока ничего. Открой рецепт → «🍽 Съел сегодня».</div>`}
+        ${nutriLine(slotNutrition(eatenIds), g)}
+      </div>
+      <div class="section-head" style="margin-top:18px"><h2 style="font-size:20px">Меню недели</h2></div>
       ${empty ? `<div class="plan-empty muted">Пока пусто — 21 слот на неделю. Нажмите «✨ Авто-план недели», чтобы заполнить по вашим вкусам, или добавляйте блюда вручную.</div>` : ""}
       ${DAYS.map(d => {
         const dayIds = MEALS.map(meal => Store.plan[d + "|" + meal]).filter(Boolean);
@@ -1105,15 +1150,17 @@
                   : `<button class="btn sm ghost" data-pick="${esc(key)}" style="flex:1">＋ выбрать</button>`}
             </div>`;
           }).join("")}
-          ${nutriLine(slotNutrition(dayIds))}
+          ${nutriLine(slotNutrition(dayIds), g)}
         </div>`;
       }).join("")}
-      ${weekIds.length ? `<div class="plan-week-total"><b>Итого за неделю</b>${nutriLine(slotNutrition(weekIds))}</div>` : ""}
+      ${weekIds.length ? `<div class="plan-week-total"><b>Итого за неделю</b>${nutriLine(slotNutrition(weekIds), weekGoal)}</div>` : ""}
       <button class="btn block" id="planAuto" style="margin-top:10px">✨ Авто-план недели</button>
       <button class="btn primary block" id="planToShop" style="margin-top:8px">🛒 Собрать список покупок на неделю</button>
     `;
     view.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => pickRecipeForPlan(b.dataset.pick));
     view.querySelectorAll("[data-clear]").forEach(b => b.onclick = () => { delete Store.plan[b.dataset.clear]; Store.save("plan"); renderPlan(); });
+    view.querySelectorAll("[data-uneat]").forEach(b => b.onclick = () => { const arr = Store.eaten[todayKey()] || []; arr.splice(+b.dataset.uneat, 1); Store.eaten[todayKey()] = arr; Store.save("eaten"); renderPlan(); });
+    $("#planGoal").onclick = () => openGoalSheet();
     $("#planAuto").onclick = () => autoFillPlan();
     $("#planToShop").onclick = () => {
       let n = 0;
@@ -1263,7 +1310,7 @@
       <div class="field"><label>Печать книги</label><button class="btn" id="printBook">🖨 Печать / PDF</button></div>
     `;
     $("#bkExport").onclick = () => {
-      const data = { v: 1, userRecipes: Store.userRecipes, shopping: Store.shopping, pantry: Store.pantry, memory: Store.memory, plan: Store.plan, profile: Store.profile };
+      const data = { v: 1, userRecipes: Store.userRecipes, shopping: Store.shopping, pantry: Store.pantry, memory: Store.memory, plan: Store.plan, profile: Store.profile, planServings: Store.planServings, goals: Store.goals, eaten: Store.eaten };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "cookbook-backup.json"; a.click();
     };
@@ -1274,7 +1321,7 @@
       reader.onload = () => {
         try {
           const d = JSON.parse(reader.result);
-          ["userRecipes", "shopping", "pantry", "memory", "plan", "profile"].forEach(k => { if (d[k]) { Store[k] = d[k]; Store.save(k); } });
+          ["userRecipes", "shopping", "pantry", "memory", "plan", "profile", "planServings", "goals", "eaten"].forEach(k => { if (d[k]) { Store[k] = d[k]; Store.save(k); } });
           toast("Импортировано"); updateBadge();
         } catch (err) { toast("Битый файл"); }
       };
