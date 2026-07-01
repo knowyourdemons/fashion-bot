@@ -41,13 +41,16 @@
       }
       const data = await r.json();
       localStorage.setItem(SESSION_KEY, data.token);
-      if (window._cbOnLogin) window._cbOnLogin(data.name);
+      // Оповещаем ВСЕ открытые экраны логина (полный вид + оверлей): каждый
+      // перерисовывает свой контекст. Единый window._cbOnLogin ломался, когда
+      // второй гейт перезаписывал колбэк первого и видимая кнопка не пропадала.
+      window.dispatchEvent(new CustomEvent("cb-auth", { detail: { name: data.name } }));
     } catch (e) { alert("Ошибка входа: " + e.message); }
   };
 
   async function renderLoginGate(chatEl, onDone) {
     const cfg = await getConfig();
-    window._cbOnLogin = (name) => { onDone(); };
+    window.addEventListener("cb-auth", (e) => onDone(e.detail && e.detail.name), { once: true });
     if (!cfg.ssoEnabled || !cfg.botUsername) {
       chatEl.innerHTML = `<div class="msg bot">Вход недоступен: SSO не настроен на сервере. Можно задать код доступа вручную (localStorage <b>cb_secret</b>).</div>`;
       return;

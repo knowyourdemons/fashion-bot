@@ -222,3 +222,4 @@ renderer/test*.mjs
 # Recipe photo pipeline scratch
 .photo_tmp/
 .gen_tmp/
+.enrich-wip/

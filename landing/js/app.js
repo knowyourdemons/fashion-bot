@@ -197,7 +197,8 @@
   /* ============================================================
      ВЬЮХА: Список (#/)
      ============================================================ */
-  let listState = { q: "", cuisine: "", category: "", kidOnly: false, time: "", difficulty: "" };
+  let listState = { q: "", cuisine: "", category: "", kidOnly: false, time: "", difficulty: "", simple: false, fewIngr: false };
+  function nonStapleCount(r) { return (r.ingredients || []).filter(i => !i.staple).length; }
   const DIFF_LABEL = ["", "просто", "средне", "сложно"];
 
   function renderList() {
@@ -220,6 +221,7 @@
       <div class="toolbar">
         <button class="btn ghost sm" id="openFilters">⚙ Фильтры${fcount ? ` · ${fcount}` : ""}</button>
         <button class="btn ghost sm ${listState.kidOnly ? "on" : ""}" id="kidChip">★ Дочке</button>
+        <button class="btn ghost sm ${listState.simple ? "on" : ""}" id="simpleChip">⚡ Просто и быстро</button>
         <button class="btn ghost sm" id="surprise">🎲 Удиви меня</button>
       </div>
       <div id="listResults"></div>
@@ -228,6 +230,7 @@
 
     $("#q").addEventListener("input", e => { listState.q = e.target.value; debouncedResults(); });
     $("#kidChip").addEventListener("click", () => { listState.kidOnly = !listState.kidOnly; renderList(); });
+    $("#simpleChip").addEventListener("click", () => { listState.simple = !listState.simple; renderList(); });
     $("#surprise").addEventListener("click", () => {
       const pool = applyFilters(recipes); if (!pool.length) return;
       location.hash = "#/recipe/" + pool[Math.floor(Math.random() * pool.length)].id;
@@ -239,12 +242,12 @@
       renderList();
     }));
     view.querySelectorAll("#activeFilters [data-clear]").forEach(b => b.addEventListener("click", () => {
-      const k = b.dataset.clear; listState[k] = (k === "kidOnly") ? false : ""; renderList();
+      const k = b.dataset.clear; listState[k] = (k === "kidOnly" || k === "fewIngr" || k === "simple") ? false : ""; renderList();
     }));
   }
 
   function filterCount() {
-    return (listState.cuisine ? 1 : 0) + (listState.time ? 1 : 0) + (listState.difficulty ? 1 : 0);
+    return (listState.cuisine ? 1 : 0) + (listState.time ? 1 : 0) + (listState.difficulty ? 1 : 0) + (listState.fewIngr ? 1 : 0);
   }
   // Активные фильтры из листа «Фильтры» → съёмные чипы под поиском
   function activeFilterChips() {
@@ -252,6 +255,7 @@
     if (listState.cuisine) chips.push(["cuisine", listState.cuisine]);
     if (listState.time) chips.push(["time", "≤ " + listState.time + " мин"]);
     if (listState.difficulty) chips.push(["difficulty", DIFF_LABEL[listState.difficulty] || ""]);
+    if (listState.fewIngr) chips.push(["fewIngr", "≤ 5 покупных"]);
     return chips.map(([k, label]) => `<button class="afilter" data-clear="${k}">${esc(label)} ✕</button>`).join("");
   }
 
@@ -273,6 +277,10 @@
         <div class="label">Сложность</div>
         <div class="chips" id="diffGrid">${[1, 2, 3].map(d => `<button class="chip ${listState.difficulty == d ? "active" : ""}" data-fd="${d}">${DIFF_LABEL[d]}</button>`).join("")}</div>
       </div>
+      <div class="filter-group">
+        <div class="label">Ингредиенты</div>
+        <div class="chips" id="ingrGrid"><button class="chip ${listState.fewIngr ? "active" : ""}" id="fewIngrChip">≤ 5 покупных</button></div>
+      </div>
       <div class="sheet-actions">
         <button class="btn ghost" id="fReset">Сбросить</button>
         <button class="btn primary" id="fApply"></button>
@@ -289,13 +297,18 @@
     single(root.querySelector("#cuisineGrid"), "data-fc", "cuisine");
     single(root.querySelector("#timeGrid"), "data-ft", "time");
     single(root.querySelector("#diffGrid"), "data-fd", "difficulty");
+    root.querySelector("#fewIngrChip").addEventListener("click", (e) => {
+      listState.fewIngr = !listState.fewIngr;
+      e.target.classList.toggle("active", listState.fewIngr);
+      updateCount();
+    });
     $("#cuisineSearch").addEventListener("input", e => {
       const q = normName(e.target.value);
       root.querySelectorAll("#cuisineGrid [data-fc]").forEach(b => {
         b.style.display = (!q || normName(b.getAttribute("data-fc")).includes(q)) ? "" : "none";
       });
     });
-    $("#fReset").onclick = () => { listState.cuisine = ""; listState.time = ""; listState.difficulty = ""; closeSheet(); renderList(); };
+    $("#fReset").onclick = () => { listState.cuisine = ""; listState.time = ""; listState.difficulty = ""; listState.fewIngr = false; closeSheet(); renderList(); };
     $("#fApply").onclick = () => { closeSheet(); renderList(); };
     updateCount();
   }
@@ -308,7 +321,7 @@
     const el = $("#listResults");
     if (!el) return;
     const filtered = applyFilters(recipes);
-    const anyFilter = listState.q || listState.cuisine || listState.category || listState.kidOnly || listState.time || listState.difficulty;
+    const anyFilter = listState.q || listState.cuisine || listState.category || listState.kidOnly || listState.time || listState.difficulty || listState.simple || listState.fewIngr;
     const recs = anyFilter ? [] : recommend(6);
     const recsHead = hasTasteProfile() ? "Вам понравится" : "С чего начать";
     listShown = LIST_PAGE; // сброс при каждой смене фильтров/поиска
@@ -348,12 +361,43 @@
       if (listState.category && r.category !== listState.category) return false;
       if (listState.time && r.time > +listState.time) return false;
       if (listState.difficulty && r.difficulty !== +listState.difficulty) return false;
+      if (listState.simple && !(r.difficulty <= 1 && r.time <= 30)) return false;
+      if (listState.fewIngr && nonStapleCount(r) > 5) return false;
       if (q) {
         const hay = [r.title, ...(r.tags || []), ...(r.ingredients || []).map(i => i.name)].map(normName).join(" ");
         if (!hay.includes(q)) return false;
       }
       return true;
     });
+  }
+
+  /* ============================================================
+     ВЬЮХА: Избранное / Готовил (#/saved)
+     ============================================================ */
+  function renderSaved() {
+    const all = allRecipes();
+    const withMem = all.filter(r => Store.memory[r.id]);
+    const cooked = withMem
+      .filter(r => (Store.memory[r.id].madeLog || []).length)
+      .sort((a, b) => new Date(Store.memory[b.id].madeLog.at(-1)) - new Date(Store.memory[a.id].madeLog.at(-1)));
+    const liked = withMem.filter(r => Store.memory[r.id].vote === 1);
+    const kid = withMem
+      .filter(r => (Store.memory[r.id].kidRating || 0) > 0)
+      .sort((a, b) => (Store.memory[b.id].kidRating || 0) - (Store.memory[a.id].kidRating || 0));
+
+    const section = (title, sub, list) => list.length
+      ? `<div class="section-head"><h2>${title}</h2><span class="muted">${list.length}</span></div>
+         ${sub ? `<div class="muted" style="margin:-6px 0 10px">${sub}</div>` : ""}
+         <div class="grid">${list.map(cardHtml).join("")}</div>`
+      : "";
+
+    const body = (cooked.length || liked.length || kid.length)
+      ? section("Готовил", "Отмеченное «✓ Готовил» — от свежего к старому", cooked)
+        + section("Понравилось", "Отмеченное 👍", liked)
+        + section("Алисе зашло", "По звёздам, от высоких к низким", kid)
+      : `<div class="empty">Пока пусто.<br>Открой рецепт и отметь «✓ Готовил», поставь 👍 или звёзды «Алисе зашло» — всё соберётся здесь.</div>`;
+
+    $("#view").innerHTML = `<div class="section-head" style="margin-top:4px"><h1>Избранное</h1></div>${body}`;
   }
 
   /* ============================================================
@@ -1020,6 +1064,7 @@
     if (route === "recipe") return renderRecipe(arg);
     if (route === "cook") return renderCook(arg);
     if (route === "shopping") return renderShopping();
+    if (route === "saved") return renderSaved();
     if (route === "assistant") return window.CookAssistant ? window.CookAssistant.renderView($("#view")) : null;
     if (route === "plan") return renderPlan();
     if (route === "add") return renderAdd();
