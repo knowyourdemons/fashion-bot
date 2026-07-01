@@ -317,7 +317,7 @@
             `<button class="chip ${Store.profile.excludeAllergens.includes(a) ? "active" : ""}" data-al="${a}">${a}</button>`).join("")}
         </div>
         <div class="label" style="margin-top:10px">Диета</div>
-        <div class="chips" id="dietGrid">
+        <div class="chips wrap" id="dietGrid">
           ${[["", "Любая"], ["вегетарианское", "Вегетар."], ["веганское", "Веган"], ["постное", "Постное"], ["безглютена", "Без глютена"]]
             .map(([v, l]) => `<button class="chip ${Store.profile.diet === v ? "active" : ""}" data-diet="${v}">${l}</button>`).join("")}
         </div>
