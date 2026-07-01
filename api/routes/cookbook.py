@@ -55,6 +55,32 @@ IMPORT_SYSTEM = (
     "Количества разнеси в qty/unit где возможно. Текст на языке оригинала рецепта."
 )
 
+# Богатая схема рецепта для AI-генерации/персонализации (совместима с draft-формой фронта).
+RECIPE_JSON_SPEC = (
+    'Верни ТОЛЬКО валидный JSON без markdown вида: '
+    '{"title":"","cuisine":"","category":"Основное","time":<мин int>,"prepTime":<мин int>,'
+    '"cookTime":<мин int>,"baseServings":<int>,"difficulty":<1|2|3>,"forKid":<bool>,"kidNote":"",'
+    '"kcal":<int на порцию>,"protein":<int>,"fat":<int>,"carbs":<int>,"allergens":[],"tags":[],'
+    '"ingredients":[{"name":"","qty":<число|null>,"unit":"","group":"Прочее","staple":<bool>}],'
+    '"steps":[{"title":"","text":"","timer":<сек int|null>}],"serveWith":"","notes":""}. '
+    "category — одно из: Завтрак|Суп|Основное|Гарнир|Салат|Десерт|Выпечка|Закуска|Напиток. "
+    "group ингредиента — секция магазина (Овощи|Мясо|Молочное|Бакалея|Специи|Заморозка|Рыба|Зелень|Гарнир|Соус|Прочее). "
+    "staple=true для соли/масла/воды/специй (что всегда есть дома). Макросы согласуй с kcal (4Б+9Ж+4У≈kcal). "
+    "allergens — ТОЛЬКО настоящие аллергены из списка (глютен, молоко, яйца, орехи, рыба, морепродукты, соя), НЕ обычные ингредиенты. "
+    "unit — короткие формы (г, кг, мл, шт, ст.л., ч.л.). Всё по-русски, тёплым языком, шаги подробные и самодостаточные."
+)
+
+PERSONALIZE_SYSTEM = "Ты — шеф-редактор кулинарной книги. Перепиши присланный рецепт под запрос, сохранив суть блюда. " + RECIPE_JSON_SPEC
+GENERATE_SYSTEM = "Ты — шеф-повар. Придумай реалистичный рецепт из указанных продуктов (можно добавить базовые: соль/масло/специи/вода). " + RECIPE_JSON_SPEC
+
+PERSONALIZE_MODES = {
+    "kid": "Адаптируй блюдо для ребёнка 4 лет: убери острое/жгучее, алкоголь, сырое мясо/рыбу; смягчи вкус; безопасная подача; forKid=true и заполни kidNote советом.",
+    "vegan": "Сделай рецепт веганским: замени все продукты животного происхождения растительными аналогами, сохрани текстуру и вкус; обнови allergens и макросы.",
+    "healthy": "Сделай полезнее: меньше жира/сахара/жарки, больше овощей и белка, но вкусно; пересчитай kcal и макросы.",
+    "no_allergen": "Убери аллерген «{arg}» и все содержащие его ингредиенты, замени безопасными аналогами; обнови allergens.",
+    "scale": "Пересчитай ВСЕ количества ингредиентов на {arg} порций, поставь baseServings={arg}; макросы на порцию не меняй.",
+}
+
 
 # ---------------------------------------------------------------------------
 # Хелперы
@@ -632,3 +658,90 @@ async def put_state(request: Request, x_cookbook_session: str | None = Header(de
             # noop → rev == row.rev
         await s.commit()
     return {"newer": newer}
+
+
+# ---------------------------------------------------------------------------
+# AI: персонализация рецепта + генерация из ингредиентов (CF Workers AI, $0)
+# ---------------------------------------------------------------------------
+def _recipe_brief(r: dict[str, Any]) -> str:
+    """Компактное представление рецепта для промпта (без лишних полей)."""
+    ings = "; ".join(
+        f"{i.get('name', '')} {i.get('qty', '') or ''} {i.get('unit', '') or ''}".strip()
+        for i in (r.get("ingredients") or [])
+    )
+    steps = " ".join(s.get("text", "") for s in (r.get("steps") or []))
+    return (
+        f"Название: {r.get('title', '')}\nКухня: {r.get('cuisine', '')}\n"
+        f"Категория: {r.get('category', '')}\nПорций: {r.get('baseServings', '')}\n"
+        f"Ингредиенты: {ings}\nШаги: {steps[:2000]}"
+    )
+
+
+def _valid_recipe(p: Any) -> bool:
+    return isinstance(p, dict) and bool(p.get("title")) and bool(p.get("ingredients"))
+
+
+async def _cf_recipe(system: str, user_msg: str) -> dict[str, Any]:
+    """Прогоняет CF Llama и валидирует, что вернулся рецепт-объект. Один ретрай (модель недетерминирована)."""
+    parsed = None
+    for _ in range(2):
+        text = await _cf_chat([{"role": "user", "content": user_msg}], system, max_tokens=1600)
+        parsed = _extract_json(text)
+        if _valid_recipe(parsed):
+            break
+    if not _valid_recipe(parsed):
+        raise HTTPException(status_code=422, detail="Не удалось сгенерировать рецепт, попробуйте ещё раз")
+    parsed.setdefault("steps", [])
+    parsed.setdefault("category", "Основное")
+    parsed.setdefault("baseServings", 2)
+    return parsed
+
+
+@router.post("/personalize")
+async def personalize(
+    request: Request,
+    x_cookbook_secret: str | None = Header(default=None),
+    x_cookbook_session: str | None = Header(default=None),
+) -> dict[str, Any]:
+    await _authorize(x_cookbook_session, x_cookbook_secret)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Ожидается JSON")
+    recipe = body.get("recipe") if isinstance(body, dict) else None
+    mode = (body.get("mode") or "").strip() if isinstance(body, dict) else ""
+    arg = str(body.get("arg") or "").strip() if isinstance(body, dict) else ""
+    if not isinstance(recipe, dict) or mode not in PERSONALIZE_MODES:
+        raise HTTPException(status_code=400, detail="Нужны recipe и корректный mode")
+    instruction = PERSONALIZE_MODES[mode].format(arg=arg or "")
+    user_msg = f"Исходный рецепт:\n{_recipe_brief(recipe)}\n\nЗадача: {instruction}"
+    return {"recipe": await _cf_recipe(PERSONALIZE_SYSTEM, user_msg)}
+
+
+@router.post("/generate")
+async def generate(
+    request: Request,
+    x_cookbook_secret: str | None = Header(default=None),
+    x_cookbook_session: str | None = Header(default=None),
+) -> dict[str, Any]:
+    await _authorize(x_cookbook_session, x_cookbook_secret)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Ожидается JSON")
+    ingredients = body.get("ingredients") if isinstance(body, dict) else None
+    if not isinstance(ingredients, list) or not ingredients:
+        raise HTTPException(status_code=400, detail="Нужен непустой список ingredients")
+    ings = ", ".join(str(x) for x in ingredients if str(x).strip())[:1000]
+    constraints = []
+    if body.get("diet"):
+        constraints.append(f"диета: {body['diet']}")
+    if body.get("allergens"):
+        constraints.append("без аллергенов: " + ", ".join(str(a) for a in body["allergens"]))
+    if body.get("forKid"):
+        constraints.append("подходит ребёнку 4 лет (не острое, без алкоголя)")
+    if body.get("category"):
+        constraints.append(f"категория: {body['category']}")
+    tail = (" Ограничения: " + "; ".join(constraints) + ".") if constraints else ""
+    user_msg = f"Продукты в наличии: {ings}.{tail} Придумай одно блюдо, которое можно приготовить преимущественно из них."
+    return {"recipe": await _cf_recipe(GENERATE_SYSTEM, user_msg)}

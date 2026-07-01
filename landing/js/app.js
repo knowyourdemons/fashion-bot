@@ -546,6 +546,7 @@
         <button class="btn" id="shareBtn">📤 Поделиться</button>
       </div>
       <button class="btn" id="askAssistant" style="width:100%;margin:-6px 0 4px">✦ Спросить ассистента о рецепте</button>
+      <button class="btn" id="personalizeBtn" style="width:100%;margin:4px 0">✨ Персонализировать (детская / веган / полезнее…)</button>
 
       <div class="label" style="margin-top:8px">Метод</div>
       <ol class="steps">
@@ -563,6 +564,7 @@
     $("#toShop").onclick = () => { addRecipeToShopping(id, recipeServings[id]); toast("Добавлено в список"); updateBadge(); };
     $("#askAssistant").onclick = () => { if (window.CookAssistant) window.CookAssistant.openOverlay({ recipe: r }); };
     $("#shareBtn").onclick = () => shareRecipe(r);
+    $("#personalizeBtn").onclick = () => openPersonalizeSheet(r);
     bindIngredientRows(r);
     bindMemory(r);
   }
@@ -721,6 +723,7 @@
       <div class="label">🏠 Кладовка (есть дома — не попадает в список)</div>
       ${items.length ? `<div class="chips" style="flex-wrap:wrap;padding-top:10px">${items.map(n => `<button class="chip active" data-unpantry="${esc(n)}">${esc(n)} ✕</button>`).join("")}</div>` : `<div class="made-log">Пусто. Отмечайте 🏠 на позициях, что уже есть дома.</div>`}
       <div class="dyn-row" style="margin-top:10px"><input id="pantryAdd" placeholder="Добавить в кладовку (соль, масло…)"><button class="btn sm" id="pantryAddBtn">＋</button></div>
+      ${items.length ? `<button class="btn block" id="pantryGen" style="margin-top:10px">✨ Придумай блюдо из кладовки</button>` : ""}
     </div>`;
   }
   function bindPantry() {
@@ -728,6 +731,15 @@
     const add = () => { const v = $("#pantryAdd").value.trim(); if (v) { Store.pantry.items[normName(v)] = true; Store.save("pantry"); renderShopping(); } };
     $("#pantryAddBtn").onclick = add;
     $("#pantryAdd").addEventListener("keydown", e => { if (e.key === "Enter") add(); });
+    const gen = $("#pantryGen");
+    if (gen) gen.onclick = async () => {
+      if (!window.CookAssistant) { toast("Ассистент недоступен"); return; }
+      const ingredients = Object.keys(Store.pantry.items || {}).filter(k => Store.pantry.items[k]);
+      if (!ingredients.length) return;
+      toast("Придумываю рецепт… (10–20 сек)");
+      try { startDraft(await window.CookAssistant.generateRecipe({ ingredients, diet: Store.profile.diet || "", allergens: Store.profile.excludeAllergens || [] })); }
+      catch (e) { toast(e.message || "Не получилось"); }
+    };
   }
   function addManualPrompt() {
     const name = prompt("Что добавить?"); if (!name) return;
@@ -754,6 +766,29 @@
     const text = recipeToText(r);
     if (navigator.share) navigator.share({ title: r.title, text }).catch(() => {});
     else copyText(text);
+  }
+  // AI-персонализация рецепта: выбор режима → эндпоинт → editable draft
+  function openPersonalizeSheet(r) {
+    if (!window.CookAssistant) { toast("Ассистент недоступен"); return; }
+    openSheet("✨ Персонализировать", `
+      <p class="muted" style="margin-bottom:12px">AI перепишет рецепт под запрос — откроется черновик для проверки и сохранения.</p>
+      <div class="chips wrap">
+        <button class="chip" data-pmode="kid">👶 Детская версия</button>
+        <button class="chip" data-pmode="vegan">🌱 Веган</button>
+        <button class="chip" data-pmode="healthy">🥗 Полезнее</button>
+        <button class="chip" data-pmode="no_allergen">🚫 Без аллергена…</button>
+        <button class="chip" data-pmode="scale">🔢 Другое число порций…</button>
+      </div>
+    `);
+    document.querySelectorAll("[data-pmode]").forEach(b => b.onclick = async () => {
+      const mode = b.dataset.pmode;
+      let arg = "";
+      if (mode === "no_allergen") { arg = (prompt("Какой аллерген убрать? (глютен / молоко / яйца / орехи / рыба / соя)") || "").trim(); if (!arg) return; }
+      if (mode === "scale") { arg = (prompt("На сколько порций пересчитать?", String(r.baseServings || 2)) || "").trim(); if (!arg) return; }
+      closeSheet(); toast("Готовлю вариант… (10–20 сек)");
+      try { startDraft(await window.CookAssistant.personalizeRecipe(r, mode, arg)); }
+      catch (e) { toast(e.message || "Не получилось"); }
+    });
   }
   function copyText(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast("Скопировано"), () => fallbackCopy(text));
@@ -1114,7 +1149,8 @@
     `;
     const tabs = view.querySelectorAll("[data-tab]");
     tabs.forEach(t => t.onclick = () => { tabs.forEach(x => x.classList.remove("active")); t.classList.add("active"); addTab(t.dataset.tab); });
-    addTab("manual");
+    if (pendingDraft) { manualForm(normalizeDraft(pendingDraft)); pendingDraft = null; toast("Черновик готов — проверьте и сохраните"); }
+    else addTab("manual");
   }
   function addTab(tab) {
     if (tab === "manual") return manualForm();
@@ -1209,8 +1245,14 @@
       ingredients: (d.ingredients || []).map(i => typeof i === "string" ? { name: i, group: "Прочее" } : i),
       steps: (d.steps || []).map(s => typeof s === "string" ? { text: s } : s)
     };
-    ["kcal", "prepTime", "cookTime", "equipment", "allergens", "kidNote"].forEach(k => { if (d[k] != null && d[k] !== "") r[k] = d[k]; });
+    ["kcal", "protein", "fat", "carbs", "prepTime", "cookTime", "equipment", "allergens", "kidNote"].forEach(k => { if (d[k] != null && d[k] !== "") r[k] = d[k]; });
     return r;
+  }
+  // Открыть AI/импорт-черновик в форме «Добавить» из любого экрана
+  let pendingDraft = null;
+  function startDraft(draft) {
+    pendingDraft = draft;
+    if (location.hash === "#/add") renderAdd(); else location.hash = "#/add";
   }
 
   function backupTab() {

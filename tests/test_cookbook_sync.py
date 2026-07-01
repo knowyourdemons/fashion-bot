@@ -2,10 +2,13 @@
 import pytest
 
 from api.routes.cookbook import (
+    PERSONALIZE_MODES,
     SYNC_KEYS,
     _lww_action,
     _parse_ingredient_line,
+    _recipe_brief,
     _require_tg_id,
+    _valid_recipe,
 )
 from fastapi import HTTPException
 
@@ -74,3 +77,25 @@ class TestIngredientParser:
         # число есть, но следующее слово — не единица → оно часть названия
         qty, unit, name = _parse_ingredient_line("3 яйца")
         assert qty == 3 and unit == "" and name == "яйца"
+
+
+class TestAiRecipe:
+    def test_valid_recipe_requires_title_and_ingredients(self):
+        assert _valid_recipe({"title": "Суп", "ingredients": [{"name": "вода"}]}) is True
+        assert _valid_recipe({"title": "Суп"}) is False
+        assert _valid_recipe({"ingredients": [{"name": "x"}]}) is False
+        assert _valid_recipe("not a dict") is False
+        assert _valid_recipe(None) is False
+
+    def test_personalize_modes_cover_expected(self):
+        assert set(PERSONALIZE_MODES) == {"kid", "vegan", "healthy", "no_allergen", "scale"}
+
+    def test_no_allergen_mode_formats_arg(self):
+        assert "молоко" in PERSONALIZE_MODES["no_allergen"].format(arg="молоко")
+
+    def test_scale_mode_formats_arg(self):
+        assert "6" in PERSONALIZE_MODES["scale"].format(arg="6")
+
+    def test_recipe_brief_includes_title_and_ingredients(self):
+        brief = _recipe_brief({"title": "Борщ", "ingredients": [{"name": "Свёкла", "qty": 2, "unit": "шт"}], "steps": [{"text": "варить"}]})
+        assert "Борщ" in brief and "Свёкла" in brief and "варить" in brief

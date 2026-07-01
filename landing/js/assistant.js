@@ -103,6 +103,18 @@
     if (!resp.ok) throw new Error("HTTP " + resp.status);
     return (await resp.json()).recipe;
   }
+  async function personalizeRecipe(recipe, mode, arg) {
+    const resp = await fetch(API + "/personalize", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ recipe, mode, arg: arg || "" }) });
+    if (resp.status === 401) { clearSession(); throw new Error("Войдите через Telegram"); }
+    if (!resp.ok) throw new Error("Не получилось (" + resp.status + ")");
+    return (await resp.json()).recipe;
+  }
+  async function generateRecipe(payload) {
+    const resp = await fetch(API + "/generate", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify(payload) });
+    if (resp.status === 401) { clearSession(); throw new Error("Войдите через Telegram"); }
+    if (!resp.ok) throw new Error("Не получилось (" + resp.status + ")");
+    return (await resp.json()).recipe;
+  }
 
   /* ---------- Рендер сообщений ---------- */
   function msgHtml(m) {
@@ -258,5 +270,5 @@
     else window.scrollTo(0, document.body.scrollHeight);
   }
 
-  window.CookAssistant = { renderView, openOverlay, importUrl, importPhoto };
+  window.CookAssistant = { renderView, openOverlay, importUrl, importPhoto, personalizeRecipe, generateRecipe };
 })();
