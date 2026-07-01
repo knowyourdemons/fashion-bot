@@ -115,6 +115,13 @@
     if (!resp.ok) throw new Error("Не получилось (" + resp.status + ")");
     return (await resp.json()).recipe;
   }
+  async function scanFridge(file) {
+    const fd = new FormData(); fd.append("photo", file, file.name || "fridge.jpg");
+    const resp = await fetch(API + "/scan", { method: "POST", headers: authHeaders(), body: fd });
+    if (resp.status === 401) { clearSession(); throw new Error("Войдите через Telegram"); }
+    if (!resp.ok) throw new Error("Не получилось (" + resp.status + ")");
+    return (await resp.json()).ingredients || [];
+  }
 
   /* ---------- Рендер сообщений ---------- */
   function msgHtml(m) {
@@ -270,5 +277,5 @@
     else window.scrollTo(0, document.body.scrollHeight);
   }
 
-  window.CookAssistant = { renderView, openOverlay, importUrl, importPhoto, personalizeRecipe, generateRecipe };
+  window.CookAssistant = { renderView, openOverlay, importUrl, importPhoto, personalizeRecipe, generateRecipe, scanFridge };
 })();

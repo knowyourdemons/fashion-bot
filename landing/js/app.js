@@ -741,7 +741,8 @@
       <div class="label">🏠 Кладовка (есть дома — не попадает в список)</div>
       ${items.length ? `<div class="chips" style="flex-wrap:wrap;padding-top:10px">${items.map(n => `<button class="chip active" data-unpantry="${esc(n)}">${esc(n)} ✕</button>`).join("")}</div>` : `<div class="made-log">Пусто. Отмечайте 🏠 на позициях, что уже есть дома.</div>`}
       <div class="dyn-row" style="margin-top:10px"><input id="pantryAdd" placeholder="Добавить в кладовку (соль, масло…)"><button class="btn sm" id="pantryAddBtn">＋</button></div>
-      ${items.length ? `<button class="btn block" id="pantryGen" style="margin-top:10px">✨ Придумай блюдо из кладовки</button>` : ""}
+      <label class="btn block" style="margin-top:8px">📷 Сфоткать продукты (AI распознает)<input id="pantryScan" type="file" accept="image/*" capture="environment" class="hidden"></label>
+      ${items.length ? `<button class="btn block" id="pantryGen" style="margin-top:8px">✨ Придумай блюдо из кладовки</button>` : ""}
     </div>`;
   }
   function bindPantry() {
@@ -757,6 +758,30 @@
       toast("Придумываю рецепт… (10–20 сек)");
       try { startDraft(await window.CookAssistant.generateRecipe({ ingredients, diet: Store.profile.diet || "", allergens: Store.profile.excludeAllergens || [] })); }
       catch (e) { toast(e.message || "Не получилось"); }
+    };
+    const scan = $("#pantryScan");
+    if (scan) scan.onchange = async () => {
+      const f = scan.files[0]; if (!f || !window.CookAssistant) return;
+      toast("Распознаю продукты… (5–15 сек)");
+      try { openScanResultSheet(await window.CookAssistant.scanFridge(f)); }
+      catch (e) { toast(e.message || "Не получилось"); }
+    };
+  }
+  // Результат fridge-scan: чипы продуктов (toggle) → добавить выбранные в кладовку
+  function openScanResultSheet(items) {
+    const picked = new Set(items);
+    openSheet("📷 Распознано", `
+      <p class="muted" style="margin-bottom:10px">Отметьте, что добавить в кладовку.</p>
+      <div class="chips wrap" id="scanChips">${items.map(n => `<button class="chip active" data-scan="${esc(n)}">${esc(n)}</button>`).join("")}</div>
+      <button class="btn primary block" id="scanAdd" style="margin-top:14px">Добавить в кладовку</button>
+    `);
+    document.querySelectorAll("#scanChips [data-scan]").forEach(b => b.onclick = () => {
+      const n = b.dataset.scan;
+      if (picked.has(n)) { picked.delete(n); b.classList.remove("active"); } else { picked.add(n); b.classList.add("active"); }
+    });
+    $("#scanAdd").onclick = () => {
+      picked.forEach(n => { Store.pantry.items[normName(n)] = true; });
+      Store.save("pantry"); closeSheet(); renderShopping(); toast("Добавлено в кладовку: " + picked.size);
     };
   }
   function addManualPrompt() {
@@ -1285,6 +1310,16 @@
         <div class="field"><label>Порций</label><input id="f_servings" type="number" value="${draft.baseServings}"></div>
       </div>
       <div class="field"><label><input type="checkbox" id="f_kid" ${draft.forKid ? "checked" : ""}> Для дочки</label></div>
+      <div class="row2">
+        <div class="field"><label>Калории (порция)</label><input id="f_kcal" type="number" value="${draft.kcal || ""}"></div>
+        <div class="field"><label>Белки, г</label><input id="f_protein" type="number" value="${draft.protein || ""}"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Жиры, г</label><input id="f_fat" type="number" value="${draft.fat || ""}"></div>
+        <div class="field"><label>Углеводы, г</label><input id="f_carbs" type="number" value="${draft.carbs || ""}"></div>
+      </div>
+      <div class="field"><label>Аллергены (через запятую)</label><input id="f_allergens" value="${esc((draft.allergens || []).join(", "))}"></div>
+      <div class="field"><label>Фото блюда</label><input id="f_photo" type="file" accept="image/*"><div id="f_photoPrev">${draft.photo ? `<img src="${esc(draft.photo)}" style="max-width:120px;border-radius:8px;margin-top:8px">` : ""}</div></div>
       <div class="field"><label>Ингредиенты (название · кол-во · ед · раздел)</label><div id="f_ings"></div><button class="btn sm" id="addIng">＋ ингредиент</button></div>
       <div class="field"><label>Шаги (заголовок · что делать · таймер)</label><div id="f_steps"></div><button class="btn sm" id="addStep">＋ шаг</button></div>
       <div class="field"><label>С чем подавать</label><input id="f_serve" value="${esc(draft.serveWith || "")}"></div>
@@ -1298,6 +1333,25 @@
     $("#addIng").onclick = () => ingsBox.appendChild(ingRow());
     $("#addStep").onclick = () => stepsBox.appendChild(stepRow());
 
+    // Фото блюда → resized JPEG dataURL (хранится в самом рецепте)
+    let photoData = draft.photo || "";
+    $("#f_photo").onchange = () => {
+      const f = $("#f_photo").files[0]; if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const max = 600, sc = Math.min(1, max / Math.max(img.width, img.height));
+          const c = document.createElement("canvas"); c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+          photoData = c.toDataURL("image/jpeg", 0.82);
+          $("#f_photoPrev").innerHTML = `<img src="${photoData}" style="max-width:120px;border-radius:8px;margin-top:8px">`;
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(f);
+    };
+
     function collect() {
       const title = $("#f_title").value.trim();
       const ingredients = [...ingsBox.querySelectorAll(".dyn-row")].map(d => ({
@@ -1308,15 +1362,19 @@
         staple: false
       })).filter(i => i.name);
       const steps = [...stepsBox.querySelectorAll(".dyn-row")].map(d => { const o = { text: d.querySelector(".s-text").value.trim() }; const ti = d.querySelector(".s-title").value.trim(); if (ti) o.title = ti; const t = d.querySelector(".s-timer").value; if (t) o.timer = parseInt(t, 10); return o; }).filter(s => s.text);
+      const numOr = (sel, d) => { const v = parseInt($(sel).value, 10); return Number.isFinite(v) ? v : d; };
+      const allergens = $("#f_allergens").value.split(",").map(s => s.trim()).filter(Boolean);
       const r = {
         id: (title.toLowerCase().replace(/[^a-zа-я0-9]+/gi, "-").replace(/^-|-$/g, "") || "recipe") + "-" + Math.random().toString(36).slice(2, 6),
         title, forKid: $("#f_kid").checked, category: $("#f_category").value, cuisine: $("#f_cuisine").value.trim() || "Прочая",
-        photo: "", time: parseInt($("#f_time").value, 10) || 0, difficulty: draft.difficulty || 1,
+        photo: photoData || "", time: parseInt($("#f_time").value, 10) || 0, difficulty: draft.difficulty || 1,
         baseServings: parseInt($("#f_servings").value, 10) || 1, tags: draft.tags || [], ingredients, steps,
-        serveWith: $("#f_serve").value.trim(), notes: draft.notes || ""
+        serveWith: $("#f_serve").value.trim(), notes: draft.notes || "", allergens
       };
-      // переносим доп. поля из черновика (ИИ/импорт), если есть
-      ["kcal", "prepTime", "cookTime", "equipment", "allergens", "kidNote"].forEach(k => { if (draft[k] != null && draft[k] !== "") r[k] = draft[k]; });
+      // нутриенты из полей формы
+      ["kcal", "protein", "fat", "carbs"].forEach(k => { const v = numOr("#f_" + k, null); if (v != null) r[k] = v; });
+      // прочие доп. поля из черновика (ИИ/импорт), если есть
+      ["prepTime", "cookTime", "equipment", "kidNote"].forEach(k => { if (draft[k] != null && draft[k] !== "") r[k] = draft[k]; });
       return r;
     }
     $("#saveRecipe").onclick = () => { const r = collect(); if (!r.title || !r.ingredients.length) { toast("Нужны название и ингредиенты"); return; } Store.userRecipes.push(r); Store.save("userRecipes"); toast("Рецепт сохранён"); location.hash = "#/recipe/" + r.id; };

@@ -5,6 +5,7 @@ from api.routes.cookbook import (
     PERSONALIZE_MODES,
     SYNC_KEYS,
     _lww_action,
+    _parse_food_list,
     _parse_ingredient_line,
     _recipe_brief,
     _require_tg_id,
@@ -102,3 +103,12 @@ class TestAiRecipe:
     def test_recipe_brief_includes_title_and_ingredients(self):
         brief = _recipe_brief({"title": "Борщ", "ingredients": [{"name": "Свёкла", "qty": 2, "unit": "шт"}], "steps": [{"text": "варить"}]})
         assert "Борщ" in brief and "Свёкла" in brief and "варить" in brief
+
+    def test_parse_food_list_splits_and_dedups(self):
+        items = _parse_food_list("Курица, рис, морковь, рис, лук")
+        assert items == ["курица", "рис", "морковь", "лук"]
+
+    def test_parse_food_list_drops_noise(self):
+        items = _parse_food_list("The image shows: 1. tomato 2. cheese")
+        assert "tomato" in items and "cheese" in items
+        assert not any(x.startswith("image") for x in items)

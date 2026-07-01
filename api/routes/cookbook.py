@@ -745,3 +745,43 @@ async def generate(
     tail = (" Ограничения: " + "; ".join(constraints) + ".") if constraints else ""
     user_msg = f"Продукты в наличии: {ings}.{tail} Придумай одно блюдо, которое можно приготовить преимущественно из них."
     return {"recipe": await _cf_recipe(GENERATE_SYSTEM, user_msg)}
+
+
+# ---------------------------------------------------------------------------
+# Fridge-scan: фото продуктов → список ингредиентов (llava)
+# ---------------------------------------------------------------------------
+SCAN_PROMPT = (
+    "List the food items and ingredients visible in this photo as a simple comma-separated list. "
+    "Only food product names, no descriptions, no quantities."
+)
+
+
+def _parse_food_list(text: str) -> list[str]:
+    """Из ответа llava достаёт чистый список продуктов (RU/EN), дедуп, лимит."""
+    raw = re.split(r"[,\n;•\-\d.]+", text or "")
+    out, seen = [], set()
+    for x in raw:
+        w = x.strip().strip(".:").lower()
+        if 2 <= len(w) <= 40 and not w.startswith(("the ", "a ", "this ", "image", "photo", "фото", "изображени")):
+            if w not in seen:
+                seen.add(w)
+                out.append(w)
+    return out[:30]
+
+
+@router.post("/scan")
+async def scan_fridge(
+    photo: UploadFile = File(...),
+    x_cookbook_secret: str | None = Header(default=None),
+    x_cookbook_session: str | None = Header(default=None),
+) -> dict[str, Any]:
+    await _authorize(x_cookbook_session, x_cookbook_secret)
+    data = await photo.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Пустое фото")
+    await _vision_guard(1)
+    text = await _cf_vision(data, SCAN_PROMPT)
+    items = _parse_food_list(text)
+    if not items:
+        raise HTTPException(status_code=422, detail="Не удалось распознать продукты")
+    return {"ingredients": items}
