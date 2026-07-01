@@ -43,7 +43,10 @@
     userRecipes: LS.get("cb_user_recipes", []),
     plan:     LS.get("cb_plan", {}),
     ingChecks: LS.get("cb_ingChecks", {}),
-    save(key) { LS.set("cb_" + key, Store[key]); }
+    profile:  LS.get("cb_profile", { excludeAllergens: [], diet: "" }),
+    save(key) { LS.set("cb_" + key, Store[key]); },
+    // перезапись значения без побочек (для будущего синка: не триггерит push повторно)
+    set(key, val) { Store[key] = val; LS.set("cb_" + key, val); }
   };
 
   /* ---------- Доступ к данным ---------- */
@@ -101,7 +104,7 @@
   function coverStyle(r) {
     return r.photo ? "" : `background:var(${coverVar(r)});`;
   }
-  function cardHtml(r) {
+  function cardHtml(r, extra) {
     const mem = Store.memory[r.id];
     const made = mem && mem.madeLog && mem.madeLog.length;
     const cover = r.photo
@@ -119,9 +122,11 @@
       ${cover}
       <div class="card-meta">
         <span>${r.time} мин</span>
+        ${r.kcal ? `<span>🔥 ${r.kcal}</span>` : ""}
         ${r.forKid ? '<span class="kid">★ дочке</span>' : ""}
         ${made ? '<span title="готовил">✓</span>' : ""}
       </div>
+      ${extra || ""}
     </a>`;
   }
 
@@ -194,10 +199,48 @@
   }
   function normName(n) { return String(n).toLowerCase().trim().replace(/ё/g, "е"); }
 
+  /* ---------- Аллергены / диеты / кладовка ---------- */
+  // Свёртка мусорных вариантов в канон (регистр/ё уже чистит normName)
+  const ALLERGEN_CANON = {
+    "молочное": "молоко", "молочные продукты": "молоко", "лактоза": "молоко",
+    "яйцо": "яйца", "арахис": "орехи",
+    "ракообразные": "морепродукты", "моллюски": "морепродукты"
+  };
+  function canonAllergen(a) { const n = normName(a); return ALLERGEN_CANON[n] || n; }
+  function recipeAllergens(r) { return new Set((r.allergens || []).map(canonAllergen)); }
+  function tagsHave(r, sub) { return (r.tags || []).some(t => normName(t).includes(sub)); }
+  function recipeMatchesDiet(r, diet) {
+    if (diet === "веганское") return tagsHave(r, "веган") || tagsHave(r, "постн");
+    if (diet === "вегетарианское") return tagsHave(r, "вегетар") || tagsHave(r, "веган") || tagsHave(r, "постн");
+    if (diet === "постное") return tagsHave(r, "постн") || tagsHave(r, "веган");
+    if (diet === "безглютена") return tagsHave(r, "без глютена") || !recipeAllergens(r).has("глютен");
+    return true;
+  }
+  // Постоянный профиль питания фильтрует и список, и рекомендации
+  function profileAllows(r) {
+    const p = Store.profile;
+    if (p.excludeAllergens && p.excludeAllergens.length) {
+      const ra = recipeAllergens(r);
+      if (p.excludeAllergens.some(a => ra.has(a))) return false;
+    }
+    return !p.diet || recipeMatchesDiet(r, p.diet);
+  }
+  // Совпадение с кладовкой по НЕ-staple ингредиентам (staple считаем «всегда есть»)
+  function pantryMatch(r) {
+    const key = (r.ingredients || []).filter(i => !i.staple);
+    const missing = key.filter(i => !Store.pantry.items[normName(i.name)]).map(i => i.name);
+    return { total: key.length, have: key.length - missing.length, missing };
+  }
+  function pantryBadge(m) {
+    if (!m.total) return "";
+    const miss = m.missing.length ? `<div class="pc-missing">не хватает: ${m.missing.map(esc).join(", ")}</div>` : "";
+    return `<div class="pc-badge">есть ${m.have} из ${m.total} ключевых${m.missing.length === 0 ? " ✓" : ""}</div>${miss}`;
+  }
+
   /* ============================================================
      ВЬЮХА: Список (#/)
      ============================================================ */
-  let listState = { q: "", cuisine: "", category: "", kidOnly: false, time: "", difficulty: "", simple: false, fewIngr: false };
+  let listState = { q: "", cuisine: "", category: "", kidOnly: false, time: "", difficulty: "", simple: false, fewIngr: false, pantryCook: false };
   function nonStapleCount(r) { return (r.ingredients || []).filter(i => !i.staple).length; }
   const DIFF_LABEL = ["", "просто", "средне", "сложно"];
 
@@ -222,6 +265,7 @@
         <button class="btn ghost sm" id="openFilters">⚙ Фильтры${fcount ? ` · ${fcount}` : ""}</button>
         <button class="btn ghost sm ${listState.kidOnly ? "on" : ""}" id="kidChip">★ Дочке</button>
         <button class="btn ghost sm ${listState.simple ? "on" : ""}" id="simpleChip">⚡ Просто и быстро</button>
+        <button class="btn ghost sm ${listState.pantryCook ? "on" : ""}" id="pantryCookChip">🏠 Из кладовки</button>
         <button class="btn ghost sm" id="surprise">🎲 Удиви меня</button>
       </div>
       <div id="listResults"></div>
@@ -231,6 +275,7 @@
     $("#q").addEventListener("input", e => { listState.q = e.target.value; debouncedResults(); });
     $("#kidChip").addEventListener("click", () => { listState.kidOnly = !listState.kidOnly; renderList(); });
     $("#simpleChip").addEventListener("click", () => { listState.simple = !listState.simple; renderList(); });
+    $("#pantryCookChip").addEventListener("click", () => { listState.pantryCook = !listState.pantryCook; renderList(); });
     $("#surprise").addEventListener("click", () => {
       const pool = applyFilters(recipes); if (!pool.length) return;
       location.hash = "#/recipe/" + pool[Math.floor(Math.random() * pool.length)].id;
@@ -262,6 +307,18 @@
   // Лист «Фильтры»: все кухни сеткой (+ поиск по кухне), время, сложность
   function openFilterSheet(recipes, cuisines) {
     const html = `
+      <div class="filter-group">
+        <div class="label">Профиль (исключить аллергены)</div>
+        <div class="chips wrap" id="allergenGrid">
+          ${["глютен", "молоко", "яйца", "орехи", "рыба", "морепродукты", "соя"].map(a =>
+            `<button class="chip ${Store.profile.excludeAllergens.includes(a) ? "active" : ""}" data-al="${a}">${a}</button>`).join("")}
+        </div>
+        <div class="label" style="margin-top:10px">Диета</div>
+        <div class="chips" id="dietGrid">
+          ${[["", "Любая"], ["вегетарианское", "Вегетар."], ["веганское", "Веган"], ["постное", "Постное"], ["безглютена", "Без глютена"]]
+            .map(([v, l]) => `<button class="chip ${Store.profile.diet === v ? "active" : ""}" data-diet="${v}">${l}</button>`).join("")}
+        </div>
+      </div>
       <div class="filter-group">
         <div class="label">Кухня</div>
         <input id="cuisineSearch" class="mini-search" placeholder="Найти кухню…">
@@ -297,6 +354,17 @@
     single(root.querySelector("#cuisineGrid"), "data-fc", "cuisine");
     single(root.querySelector("#timeGrid"), "data-ft", "time");
     single(root.querySelector("#diffGrid"), "data-fd", "difficulty");
+    // Профиль питания сохраняется сразу (не зависит от Apply/Reset)
+    root.querySelector("#allergenGrid").querySelectorAll("[data-al]").forEach(b => b.onclick = () => {
+      const a = b.dataset.al, arr = Store.profile.excludeAllergens, i = arr.indexOf(a);
+      if (i >= 0) arr.splice(i, 1); else arr.push(a);
+      Store.save("profile"); b.classList.toggle("active"); updateCount();
+    });
+    root.querySelector("#dietGrid").querySelectorAll("[data-diet]").forEach(b => b.onclick = () => {
+      Store.profile.diet = b.dataset.diet; Store.save("profile");
+      root.querySelectorAll("#dietGrid [data-diet]").forEach(x => x.classList.toggle("active", x.dataset.diet === Store.profile.diet));
+      updateCount();
+    });
     root.querySelector("#fewIngrChip").addEventListener("click", (e) => {
       listState.fewIngr = !listState.fewIngr;
       e.target.classList.toggle("active", listState.fewIngr);
@@ -321,22 +389,32 @@
     const el = $("#listResults");
     if (!el) return;
     const filtered = applyFilters(recipes);
-    const anyFilter = listState.q || listState.cuisine || listState.category || listState.kidOnly || listState.time || listState.difficulty || listState.simple || listState.fewIngr;
-    const recs = anyFilter ? [] : recommend(6);
+    const anyFilter = listState.q || listState.cuisine || listState.category || listState.kidOnly || listState.time || listState.difficulty || listState.simple || listState.fewIngr || listState.pantryCook;
+    const recs = anyFilter ? [] : recommend(6).filter(profileAllows);
     const recsHead = hasTasteProfile() ? "Вам понравится" : "С чего начать";
     listShown = LIST_PAGE; // сброс при каждой смене фильтров/поиска
+    // Режим «Из кладовки»: сортировка по нехватке + бейдж на карточке
+    let decorate = cardHtml;
+    if (listState.pantryCook) {
+      filtered.sort((a, b) => { const ma = pantryMatch(a), mb = pantryMatch(b); return ma.missing.length - mb.missing.length || mb.have - ma.have || a.time - b.time; });
+      decorate = (r) => cardHtml(r, pantryBadge(pantryMatch(r)));
+    }
+    const pantryEmptyHint = (listState.pantryCook && !Object.keys(Store.pantry.items || {}).length)
+      ? `<div class="empty" style="margin-bottom:12px">Кладовка пуста — отмечайте 🏠 на позициях в списке покупок.</div>` : "";
     el.innerHTML = `
       ${recs.length ? `
         <div class="section-head"><h2>${recsHead}</h2></div>
         <div class="grid">${recs.map(cardHtml).join("")}</div>` : ""}
+      ${pantryEmptyHint}
       <div class="section-head"><h2>Рецепты</h2><span class="muted">${filtered.length}</span></div>
-      ${filtered.length ? `<div class="grid" id="listGrid">${filtered.slice(0, listShown).map(cardHtml).join("")}</div><div id="listSentinel" style="height:1px"></div>`
+      ${filtered.length ? `<div class="grid" id="listGrid">${filtered.slice(0, listShown).map(decorate).join("")}</div><div id="listSentinel" style="height:1px"></div>`
         : `<div class="empty">Ничего не найдено.<br>Сбросьте фильтры или <a href="#/add" style="color:var(--accent)">добавьте рецепт</a>.</div>`}
     `;
-    setupInfiniteScroll(filtered);
+    setupInfiniteScroll(filtered, decorate);
   }
   // Догружаем карточки порциями по мере прокрутки — иначе 4600 <img> рендерятся разом
-  function setupInfiniteScroll(filtered) {
+  function setupInfiniteScroll(filtered, decorate) {
+    decorate = decorate || cardHtml;
     if (listObserver) { listObserver.disconnect(); listObserver = null; }
     const sentinel = document.getElementById("listSentinel");
     const grid = document.getElementById("listGrid");
@@ -344,7 +422,7 @@
     listObserver = new IntersectionObserver((entries) => {
       if (!entries[0].isIntersecting) return;
       const next = filtered.slice(listShown, listShown + LIST_PAGE);
-      grid.insertAdjacentHTML("beforeend", next.map(cardHtml).join(""));
+      grid.insertAdjacentHTML("beforeend", next.map(decorate).join(""));
       listShown += next.length;
       if (listShown >= filtered.length) { listObserver.disconnect(); listObserver = null; }
     }, { rootMargin: "800px" });
@@ -356,6 +434,7 @@
   function applyFilters(recipes) {
     const q = normName(listState.q);
     return recipes.filter(r => {
+      if (!profileAllows(r)) return false;
       if (listState.kidOnly && !r.forKid) return false;
       if (listState.cuisine && r.cuisine !== listState.cuisine) return false;
       if (listState.category && r.category !== listState.category) return false;
@@ -363,6 +442,7 @@
       if (listState.difficulty && r.difficulty !== +listState.difficulty) return false;
       if (listState.simple && !(r.difficulty <= 1 && r.time <= 30)) return false;
       if (listState.fewIngr && nonStapleCount(r) > 5) return false;
+      if (listState.pantryCook && pantryMatch(r).missing.length > 2) return false;
       if (q) {
         const hay = [r.title, ...(r.tags || []), ...(r.ingredients || []).map(i => i.name)].map(normName).join(" ");
         if (!hay.includes(q)) return false;
@@ -426,9 +506,13 @@
       ${r.photo ? `<div class="r-cat" style="margin:4px 0 6px">${esc(r.cuisine)} · ${esc(r.category)}</div><h1 style="font-size:28px;margin-bottom:10px">${esc(r.title)}</h1>` : ""}
       <div class="r-meta">
         <span>⏱ <b>${r.time}</b> мин</span>
+        ${(r.prepTime != null && r.cookTime != null) ? `<span>🔪 ${r.prepTime} + 🍳 ${r.cookTime} мин</span>` : ""}
         <span>📊 сложность <b>${DIFF_LABEL[r.difficulty] || "просто"}</b></span>
+        ${r.kcal ? `<span>🔥 <b>${r.kcal}</b> ккал</span>` : ""}
         ${r.forKid ? '<span class="kid" style="color:var(--accent);font-weight:700">★ для дочки</span>' : ""}
       </div>
+      ${r.allergens && r.allergens.length ? `<div class="allergen-badges">${[...recipeAllergens(r)].map(a => `<span class="al-badge">${esc(a)}</span>`).join("")}</div>` : ""}
+      ${r.forKid && r.kidNote ? `<div class="kid-note">👶 ${esc(r.kidNote)}</div>` : ""}
 
       <div class="servings">
         <span class="label">Порции</span>
@@ -450,8 +534,11 @@
 
       <div class="label" style="margin-top:8px">Метод</div>
       <ol class="steps">
-        ${r.steps.map(s => `<li><div class="step-text">${esc(s.text)}${s.timer ? `<br><span class="timer-chip">⏱ ${fmtTimer(s.timer)}</span>` : ""}</div></li>`).join("")}
+        ${r.steps.map(s => `<li>${s.title ? `<div class="step-title">${esc(s.title)}</div>` : ""}<div class="step-text">${esc(s.text)}${s.timer ? `<br><span class="timer-chip">⏱ ${fmtTimer(s.timer)}</span>` : ""}</div></li>`).join("")}
       </ol>
+
+      ${r.serveWith ? `<div class="label" style="margin-top:14px">С чем подавать</div><p class="serve-note">${esc(r.serveWith)}</p>` : ""}
+      ${r.notes ? `<div class="label" style="margin-top:14px">Совет</div><p class="serve-note">${esc(r.notes)}</p>` : ""}
 
       ${memoryBlock(r, mem)}
     `;
@@ -1022,7 +1109,7 @@
       <div class="field"><label>Печать книги</label><button class="btn" id="printBook">🖨 Печать / PDF</button></div>
     `;
     $("#bkExport").onclick = () => {
-      const data = { v: 1, userRecipes: Store.userRecipes, shopping: Store.shopping, pantry: Store.pantry, memory: Store.memory, plan: Store.plan };
+      const data = { v: 1, userRecipes: Store.userRecipes, shopping: Store.shopping, pantry: Store.pantry, memory: Store.memory, plan: Store.plan, profile: Store.profile };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "cookbook-backup.json"; a.click();
     };
@@ -1033,7 +1120,7 @@
       reader.onload = () => {
         try {
           const d = JSON.parse(reader.result);
-          ["userRecipes", "shopping", "pantry", "memory", "plan"].forEach(k => { if (d[k]) { Store[k] = d[k]; Store.save(k); } });
+          ["userRecipes", "shopping", "pantry", "memory", "plan", "profile"].forEach(k => { if (d[k]) { Store[k] = d[k]; Store.save(k); } });
           toast("Импортировано"); updateBadge();
         } catch (err) { toast("Битый файл"); }
       };
