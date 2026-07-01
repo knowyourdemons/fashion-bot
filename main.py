@@ -40,11 +40,21 @@ mimetypes.add_type("image/webp", ".webp")
 
 
 @app.middleware("http")
-async def _static_image_cache(request, call_next):
-    """Длинный кэш для статичных фото рецептов (Cloudflare honors origin Cache-Control)."""
+async def _static_cache(request, call_next):
+    """Cache-Control для статики (Cloudflare honors origin). PWA: оболочку не пиннить,
+    версионированные ассеты — навсегда (cache-bust через ?v=)."""
     response = await call_next(request)
-    if request.url.path.startswith("/img/"):
-        response.headers["Cache-Control"] = "public, max-age=2592000"  # 30 дней
+    p = request.url.path
+    if p.startswith("/img/"):
+        response.headers["Cache-Control"] = "public, max-age=2592000, immutable"  # фото id-неизменны
+    elif p == "/sw.js" or p == "/manifest.json" or p == "/" or p.endswith(".html"):
+        response.headers["Cache-Control"] = "no-cache"  # оболочка/SW должны обновляться
+    elif p.startswith(("/js/", "/css/", "/data/")):
+        # версионированные ?v= — immutable навсегда; голые (без версии) — no-cache
+        response.headers["Cache-Control"] = (
+            "public, max-age=31536000, immutable"
+            if request.query_params.get("v") else "no-cache"
+        )
     return response
 
 
