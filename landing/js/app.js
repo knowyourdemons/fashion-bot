@@ -681,7 +681,7 @@
     const view = $("#view");
     view.innerHTML = `
       <div class="section-head"><h2>Список покупок</h2></div>
-      ${recipeChips ? `<div class="chips">${recipeChips}</div>` : ""}
+      ${recipeChips ? `<div class="chips wrap">${recipeChips}</div>` : ""}
       ${order.length ? order.map(g => `
         <div class="shop-group">
           <h3>${esc(g)}</h3>
@@ -1105,7 +1105,7 @@
     const view = $("#view");
     view.innerHTML = `
       <div class="section-head"><h2>Добавить рецепт</h2></div>
-      <div class="chips">
+      <div class="chips wrap">
         <button class="chip active" data-tab="manual">Вручную</button>
         <button class="chip" data-tab="import">Импорт (ссылка/фото)</button>
         <button class="chip" data-tab="backup">Бэкап / печать</button>
