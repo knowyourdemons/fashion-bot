@@ -365,6 +365,19 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .thumb-strip { display: flex; gap: 8px; flex-wrap: wrap; }
 .thumb-strip img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
 
+/* ---------- Гейт входа (Telegram Login Widget) ---------- */
+.login-gate {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 10px; max-width: 340px; margin: 16px auto; padding: 28px 22px;
+  background: var(--white-warm); border: 1px solid var(--line); border-radius: 18px;
+}
+.login-gate-icon { font-size: 34px; line-height: 1; }
+.login-gate h3 { margin: 0; }
+.login-gate p { margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.45; }
+.login-gate #tgLoginBtn, #loginBox { display: flex; justify-content: center; min-height: 48px; margin-top: 6px; }
+/* В шторке гейт-карточка без двойной рамки/фона */
+.sheet .login-gate { border: none; background: transparent; margin: 0; padding: 8px 0 4px; max-width: 100%; }
+
 /* ---------- Оверлей / шторка ---------- */
 .overlay { position: fixed; inset: 0; z-index: 150; background: rgba(43,38,34,.4); display: flex; align-items: flex-end; justify-content: center; }
 .sheet { width: 100%; max-width: var(--maxw); max-height: 86vh; overflow-y: auto; background: var(--paper); border-radius: 20px 20px 0 0; padding: 20px; animation: slideUp .25s var(--ease); }

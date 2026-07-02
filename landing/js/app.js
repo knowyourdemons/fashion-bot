@@ -685,42 +685,93 @@
   /* ============================================================
      ВЬЮХА: Избранное / Готовил (#/saved)
      ============================================================ */
-  function renderSaved() {
+  // Вкладки «Избранного» — чтобы страница не превращалась в бесконечную простыню.
+  // Показываем одну группу за раз + поиск внутри + подгрузку по скроллу (переиспользуем каталожную машинерию).
+  let savedState = { tab: "all", q: "" };
+  const SAVED_TABS = [["all", "Всё"], ["cooked", "Готовил"], ["liked", "👍 Нравится"], ["kid", "★ Алисе"], ["collections", "📁 Коллекции"]];
+
+  // Наборы по признаку из Store.memory (дешёво — считаем на каждый ре-рендер)
+  function computeSaved() {
     const all = allRecipes();
+    const mem = (id) => Store.memory[id] || {};
     const withMem = all.filter(r => Store.memory[r.id]);
-    const cooked = withMem
-      .filter(r => (Store.memory[r.id].madeLog || []).length)
-      .sort((a, b) => new Date(Store.memory[b.id].madeLog.at(-1)) - new Date(Store.memory[a.id].madeLog.at(-1)));
-    const liked = withMem.filter(r => Store.memory[r.id].vote === 1);
-    const kid = withMem
-      .filter(r => (Store.memory[r.id].kidRating || 0) > 0)
-      .sort((a, b) => (Store.memory[b.id].kidRating || 0) - (Store.memory[a.id].kidRating || 0));
-
-    const section = (title, sub, list) => list.length
-      ? `<div class="section-head"><h2>${title}</h2><span class="muted">${list.length}</span></div>
-         ${sub ? `<div class="muted" style="margin:-6px 0 10px">${sub}</div>` : ""}
-         <div class="grid">${list.map(r => cardHtml(r)).join("")}</div>`
-      : "";
-
-    // Свои коллекции — сверху
+    const cooked = withMem.filter(r => (mem(r.id).madeLog || []).length)
+      .sort((a, b) => new Date(mem(b.id).madeLog.at(-1)) - new Date(mem(a.id).madeLog.at(-1)));
+    const liked = withMem.filter(r => mem(r.id).vote === 1);
+    const kid = withMem.filter(r => (mem(r.id).kidRating || 0) > 0)
+      .sort((a, b) => (mem(b.id).kidRating || 0) - (mem(a.id).kidRating || 0));
+    // «Всё» — объединение с дедупом (рецепт может быть и cooked, и liked): порядок = свежесть готовки, затем прочее
+    const seen = new Set(); const allSaved = [];
+    [...cooked, ...liked, ...kid].forEach(r => { if (!seen.has(r.id)) { seen.add(r.id); allSaved.push(r); } });
     const cols = Object.entries(Store.collections || {}).filter(([, ids]) => (ids || []).length);
-    const colSections = cols.map(([n, ids]) => {
-      const list = ids.map(getRecipe).filter(Boolean);
-      return `<div class="section-head"><h2>📁 ${esc(n)}</h2><span class="muted">${list.length}</span><button class="btn ghost sm" data-delcol="${esc(n)}" style="margin-left:auto">Удалить</button></div>
-        <div class="grid">${list.map(r => cardHtml(r)).join("")}</div>`;
-    }).join("");
-
-    const favBody = section("Готовил", "Отмеченное «✓ Готовил» — от свежего к старому", cooked)
-      + section("Понравилось", "Отмеченное 👍", liked)
-      + section("Алисе зашло", "По звёздам, от высоких к низким", kid);
-    const body = (colSections || favBody) ? (colSections + favBody)
-      : `<div class="empty">Пока пусто.<br>Открой рецепт: отметь «✓ Готовил», 👍, звёзды «Алисе зашло» или собери свою коллекцию (📁).</div>`;
-
-    $("#view").innerHTML = `<div class="section-head" style="margin-top:4px"><h1>Избранное</h1></div>${body}`;
-    $("#view").querySelectorAll("[data-delcol]").forEach(b => b.onclick = () => {
-      if (confirm("Удалить коллекцию «" + b.dataset.delcol + "»? Рецепты останутся в базе.")) { delete Store.collections[b.dataset.delcol]; Store.save("collections"); renderSaved(); }
-    });
+    return { allSaved, cooked, liked, kid, cols };
   }
+
+  function savedMatchesQ(r) {
+    const q = normName(savedState.q);
+    if (!q) return true;
+    const hay = [r.title, ...(r.tags || []), ...(r.ingredients || []).map(i => i.name)].map(normName).join(" ");
+    return hay.includes(q);
+  }
+
+  function renderSaved() {
+    const data = computeSaved();
+    const counts = { all: data.allSaved.length, cooked: data.cooked.length, liked: data.liked.length, kid: data.kid.length, collections: data.cols.length };
+    const tabsHtml = SAVED_TABS.map(([k, label]) =>
+      `<button class="chip ${savedState.tab === k ? "active" : ""}" data-stab="${k}">${label}${counts[k] ? ` <span class="muted">${counts[k]}</span>` : ""}</button>`).join("");
+
+    const view = $("#view");
+    view.innerHTML = `
+      <div class="section-head" style="margin-top:4px"><h1>Избранное</h1></div>
+      <div class="chips wrap" id="savedTabs">${tabsHtml}</div>
+      <div class="search"${savedState.tab === "collections" ? ' style="display:none"' : ""}>
+        <span>🔎</span>
+        <input id="savedQ" type="text" placeholder="Поиск в избранном…" value="${esc(savedState.q)}">
+      </div>
+      <div id="savedResults"></div>`;
+    renderSavedResults(data);
+
+    view.querySelectorAll("[data-stab]").forEach(b => b.addEventListener("click", () => { savedState.tab = b.dataset.stab; renderSaved(); }));
+    const qEl = $("#savedQ");
+    if (qEl) qEl.addEventListener("input", e => { savedState.q = e.target.value; debouncedSaved(); });
+  }
+
+  // Перерисовываем только результаты (поле поиска и вкладки не трогаем — фокус не теряется)
+  function renderSavedResults(data) {
+    data = data || computeSaved();
+    const el = $("#savedResults");
+    if (!el) return;
+    const tab = savedState.tab;
+    if (tab === "collections") {
+      el.innerHTML = data.cols.length
+        ? data.cols.map(([n, ids]) => {
+            const list = ids.map(getRecipe).filter(Boolean);
+            return `<div class="section-head"><h2>📁 ${esc(n)}</h2><span class="muted">${list.length}</span><button class="btn ghost sm" data-delcol="${esc(n)}" style="margin-left:auto">Удалить</button></div>
+              <div class="grid">${list.map(r => cardHtml(r)).join("")}</div>`;
+          }).join("")
+        : `<div class="empty">Пока нет коллекций.<br>Открой рецепт → «📁 В коллекцию».</div>`;
+      el.querySelectorAll("[data-delcol]").forEach(b => b.onclick = () => {
+        if (confirm("Удалить коллекцию «" + b.dataset.delcol + "»? Рецепты останутся в базе.")) { delete Store.collections[b.dataset.delcol]; Store.save("collections"); renderSaved(); }
+      });
+      return;
+    }
+    const source = tab === "cooked" ? data.cooked : tab === "liked" ? data.liked : tab === "kid" ? data.kid : data.allSaved;
+    const filtered = source.filter(savedMatchesQ);
+    const EMPTY = {
+      all: "Пока пусто.<br>Открой рецепт: отметь «✓ Готовил», 👍 или ★ звёзды «Алисе».",
+      cooked: "Пока нет отмеченного «✓ Готовил».",
+      liked: "Пока нет отмеченного 👍.",
+      kid: "Пока нет оценок «Алисе зашло» (★).",
+    };
+    const decorate = (r) => cardHtml(r);  // .map передаёт индекс 2-м арг — не пускаем его в cardHtml(r, extra)
+    listShown = LIST_PAGE; // сброс постраничного счётчика перед каждой отрисовкой
+    el.innerHTML = filtered.length
+      ? `<div class="grid" id="listGrid">${filtered.slice(0, listShown).map(decorate).join("")}</div><div id="listSentinel" style="height:1px"></div>`
+      : `<div class="empty">${savedState.q ? "Ничего не найдено." : EMPTY[tab]}</div>`;
+    setupInfiniteScroll(filtered, decorate);
+  }
+  let savedDebTimer = null;
+  function debouncedSaved() { clearTimeout(savedDebTimer); savedDebTimer = setTimeout(() => renderSavedResults(), 180); }
 
   /* ============================================================
      ВЬЮХА: Карточка рецепта (#/recipe/:id)

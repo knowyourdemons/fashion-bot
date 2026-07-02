@@ -52,12 +52,14 @@
     const cfg = await getConfig();
     window.addEventListener("cb-auth", (e) => onDone(e.detail && e.detail.name), { once: true });
     if (!cfg.ssoEnabled || !cfg.botUsername) {
-      chatEl.innerHTML = `<div class="msg bot">Вход недоступен: SSO не настроен на сервере. Можно задать код доступа вручную (localStorage <b>cb_secret</b>).</div>`;
+      chatEl.innerHTML = `<div class="login-gate"><div class="login-gate-icon">🔒</div><h3>Вход недоступен</h3><p>SSO не настроен на сервере. Можно задать код доступа вручную (localStorage <b>cb_secret</b>).</p></div>`;
       return;
     }
-    chatEl.innerHTML = `<div class="msg bot" style="max-width:100%">
-      Чтобы пользоваться ассистентом и импортом, войдите через Telegram — доступ только для своих.
-      <div id="tgLoginBtn" style="margin-top:12px"></div>
+    chatEl.innerHTML = `<div class="login-gate">
+      <div class="login-gate-icon">🔒</div>
+      <h3>Вход только для своих</h3>
+      <p>Войдите через Telegram — ассистент, импорт рецептов и синхронизация между устройствами.</p>
+      <div id="tgLoginBtn"></div>
     </div>`;
     const s = document.createElement("script");
     s.async = true;
@@ -74,7 +76,7 @@
   function promptLogin(onDone) {
     if (isAuthed()) { if (onDone) onDone(); return; }
     const ov = document.createElement("div"); ov.className = "overlay"; ov.id = "loginOverlay";
-    ov.innerHTML = `<div class="sheet"><button class="btn ghost sm sheet-close" id="lClose">Закрыть</button><h3>Вход через Telegram</h3><div id="loginBox"></div></div>`;
+    ov.innerHTML = `<div class="sheet"><button class="btn ghost sm sheet-close" id="lClose">Закрыть</button><div id="loginBox"></div></div>`;
     document.body.appendChild(ov);
     ov.addEventListener("click", e => { if (e.target === ov) ov.remove(); });
     ov.querySelector("#lClose").onclick = () => ov.remove();

@@ -17,7 +17,6 @@ import hashlib
 import hmac
 import json
 import re
-import secrets
 import time
 from datetime import date
 from typing import Any
@@ -95,10 +94,61 @@ def _allowed_ids() -> set[str]:
     return {x.strip() for x in (settings.cookbook_allowed_telegram_ids or "").split(",") if x.strip()}
 
 
+def _session_key() -> bytes:
+    """Секрет для подписи сессии. bot_token — стабилен и уже секретен."""
+    return (settings.telegram_bot_token or settings.cookbook_secret or "cb").encode()
+
+
+def _b64u(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def _b64u_decode(s: str) -> bytes:
+    return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+
+
+def _sign_session(tg_id: str) -> str:
+    """Stateless подписанный токен base64url(tg_id.exp).base64url(hmac).
+
+    Не зависит от Redis — переживает рестарты/эвикшены/флаши (в этом причина
+    ежедневного ре-логина: непрозрачный токен пропадал из недолговечного Redis).
+    """
+    payload = f"{tg_id}.{int(time.time()) + SESSION_TTL}".encode()
+    sig = hmac.new(_session_key(), payload, hashlib.sha256).digest()
+    return f"{_b64u(payload)}.{_b64u(sig)}"
+
+
+def _verify_signed_session(token: str) -> str | None:
+    """Проверяет подписанный токен → tg_id (в allow-list, не протух) или None."""
+    try:
+        payload_b64, sig_b64 = token.split(".", 1)
+        payload = _b64u_decode(payload_b64)
+        sig = _b64u_decode(sig_b64)
+    except Exception:
+        return None
+    expected = hmac.new(_session_key(), payload, hashlib.sha256).digest()
+    if not hmac.compare_digest(sig, expected):
+        return None
+    try:
+        tg_id, exp_s = payload.decode().rsplit(".", 1)
+        if int(exp_s) < int(time.time()):
+            return None
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return tg_id if tg_id in _allowed_ids() else None
+
+
 async def _session_tg_id(token: str | None) -> str | None:
-    """Возвращает telegram_id по валидной сессии или None."""
+    """Возвращает telegram_id по валидной сессии или None.
+
+    Основной путь — stateless подписанный токен (не зависит от Redis).
+    Фолбэк — старые непрозрачные токены в Redis (действующие сессии не рвутся при выкате).
+    """
     if not token:
         return None
+    signed = _verify_signed_session(token)
+    if signed:
+        return signed
     try:
         from core.redis import get_redis
         redis = get_redis()
@@ -164,11 +214,8 @@ def _verify_telegram(data: dict[str, Any]) -> str | None:
 
 
 async def _issue_session(tg_id: str) -> str:
-    token = secrets.token_urlsafe(32)
-    from core.redis import get_redis
-    redis = get_redis()
-    await redis.setex(f"cb_session:{token}", SESSION_TTL, tg_id)
-    return token
+    """Выдаёт stateless подписанный токен (не хранится на сервере)."""
+    return _sign_session(tg_id)
 
 
 async def _vision_guard(n_images: int) -> None:
