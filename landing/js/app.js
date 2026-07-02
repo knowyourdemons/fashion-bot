@@ -688,27 +688,43 @@
   // «Избранное» = единый пул «что мы готовим» (дедуп), отсортированный по свежести/частоте
   // готовки, + фильтр-чипы (👍/★/⚡) и коллекции как отдельное измерение. Так список не
   // превращается в простыню: сверху — что реально в ротации, остальное сужается чипами/поиском.
-  let savedState = { q: "", liked: false, kid: false, fast: false, collection: "" };
+  let savedState = { q: "", liked: false, kid: false, fast: false, collection: "", sort: (localStorage.getItem("cb_saved_sort") || "smart") };
+  const SAVED_SORTS = [["smart", "Умная"], ["long_ago", "Давно не готовили"], ["often", "Чаще готовим"], ["recent", "Недавно готовили"], ["az", "А-Я"]];
+  const SAVED_COOLDOWN_DAYS = 4; // «умная»: приготовленное за последние N дней уводим вниз (не предлагать вчерашнее)
 
   function computeSaved() {
-    const all = allRecipes();
-    const mem = (id) => Store.memory[id] || {};
-    const withMem = all.filter(r => Store.memory[r.id]);
-    // Скорим каждый сохранённый рецепт для единой сортировки пула
-    const scored = withMem.map(r => {
-      const m = mem(r.id), log = m.madeLog || [];
-      const last = log.length ? (new Date(log.at(-1)).getTime() || 0) : 0;
-      return { r, count: log.length, last, liked: m.vote === 1 ? 1 : 0, kid: m.kidRating || 0 };
-    });
-    scored.sort((a, b) =>
-      b.last - a.last ||                       // недавно готовили — выше
-      b.count - a.count ||                     // чаще готовим — выше
-      b.liked - a.liked ||                     // лайк
-      b.kid - a.kid ||                         // оценка ребёнка
-      a.r.title.localeCompare(b.r.title, "ru"));
-    const pool = scored.map(s => s.r);
+    const pool = allRecipes().filter(r => Store.memory[r.id]);   // весь сохранённый пул; порядок задаёт sortSaved при отрисовке
     const cols = Object.entries(Store.collections || {}).filter(([, ids]) => (ids || []).length);
     return { pool, cols };
+  }
+
+  function savedMetrics(r) {
+    const log = ((Store.memory[r.id] || {}).madeLog) || [];
+    const last = log.length ? (new Date(log.at(-1)).getTime() || 0) : 0;
+    return { count: log.length, last, days: last ? (Date.now() - last) / 86400000 : Infinity };
+  }
+  function sortSaved(list) {
+    const M = new Map(list.map(r => [r.id, savedMetrics(r)]));
+    const az = (a, b) => a.title.localeCompare(b.title, "ru");
+    const cmp = {
+      // Хиты сверху, но приготовленное за последние N дней уходит вниз — ближе всего к «что сделать сегодня»
+      smart: (a, b) => {
+        const ma = M.get(a.id), mb = M.get(b.id);
+        const sa = ma.count - (ma.days < SAVED_COOLDOWN_DAYS ? 1000 : 0);
+        const sb = mb.count - (mb.days < SAVED_COOLDOWN_DAYS ? 1000 : 0);
+        return sb - sa || mb.last - ma.last || az(a, b);
+      },
+      // Давно не готовили — сверху; никогда не готовленные уходят в конец
+      long_ago: (a, b) => {
+        const ma = M.get(a.id), mb = M.get(b.id);
+        if (!!ma.count !== !!mb.count) return ma.count ? -1 : 1;
+        return ma.last - mb.last || az(a, b);
+      },
+      often: (a, b) => { const ma = M.get(a.id), mb = M.get(b.id); return mb.count - ma.count || mb.last - ma.last || az(a, b); },
+      recent: (a, b) => { const ma = M.get(a.id), mb = M.get(b.id); return mb.last - ma.last || mb.count - ma.count || az(a, b); },
+      az,
+    };
+    return list.slice().sort(cmp[savedState.sort] || cmp.smart);
   }
 
   function savedMatchesQ(r) {
@@ -732,12 +748,14 @@
         cols.map(([n, ids]) => `<button class="chip ${savedState.collection === n ? "active" : ""}" data-scol="${esc(n)}">${esc(n)} <span class="muted">${ids.length}</span></button>`).join("") +
         `</div>`
       : "";
+    const sortOpts = SAVED_SORTS.map(([v, l]) => `<option value="${v}"${savedState.sort === v ? " selected" : ""}>${l}</option>`).join("");
     const view = $("#view");
     view.innerHTML = `
       <div class="section-head" style="margin-top:4px"><h1>Избранное</h1></div>
       <div class="search"><span>🔎</span><input id="savedQ" type="text" placeholder="Поиск в избранном…" value="${esc(savedState.q)}"></div>
       <div class="chips wrap">${chip(savedState.liked, "liked", "👍 Нравится")}${chip(savedState.kid, "kid", "★ Алисе")}${chip(savedState.fast, "fast", "⚡ Быстрое")}</div>
       ${colChips}
+      <div class="saved-sortbar"><label for="savedSort">Сортировка</label><select id="savedSort">${sortOpts}</select></div>
       <div id="savedResults"></div>`;
     renderSavedResults({ pool, cols });
 
@@ -745,6 +763,8 @@
     view.querySelectorAll("[data-scol]").forEach(b => b.addEventListener("click", () => { const n = b.dataset.scol; savedState.collection = savedState.collection === n ? "" : n; renderSaved(); }));
     const qEl = $("#savedQ");
     if (qEl) qEl.addEventListener("input", e => { savedState.q = e.target.value; debouncedSaved(); });
+    const sortEl = $("#savedSort");
+    if (sortEl) sortEl.addEventListener("change", e => { savedState.sort = e.target.value; try { localStorage.setItem("cb_saved_sort", savedState.sort); } catch (_) {} renderSavedResults(); });
   }
 
   // Перерисовываем только результаты (поиск и чипы не трогаем — фокус не теряется)
@@ -766,14 +786,15 @@
     const anyFilter = savedState.liked || savedState.kid || savedState.fast || savedState.collection || savedState.q;
     const colActions = savedState.collection
       ? `<button class="btn ghost sm" id="delCol" style="margin-left:auto">Удалить коллекцию</button>` : "";
+    const ordered = sortSaved(filtered);
     const decorate = (r) => cardHtml(r, cookBadge(r));  // .map передаёт индекс 2-м арг — оборачиваем
     listShown = LIST_PAGE; // сброс постраничного счётчика перед каждой отрисовкой
     el.innerHTML = `
-      <div class="section-head"><h2>${savedState.collection ? "📁 " + esc(savedState.collection) : "Что мы готовим"}</h2><span class="muted">${filtered.length}</span>${colActions}</div>
-      ${filtered.length
-        ? `<div class="grid" id="listGrid">${filtered.slice(0, listShown).map(decorate).join("")}</div><div id="listSentinel" style="height:1px"></div>`
+      <div class="section-head"><h2>${savedState.collection ? "📁 " + esc(savedState.collection) : "Что мы готовим"}</h2><span class="muted">${ordered.length}</span>${colActions}</div>
+      ${ordered.length
+        ? `<div class="grid" id="listGrid">${ordered.slice(0, listShown).map(decorate).join("")}</div><div id="listSentinel" style="height:1px"></div>`
         : `<div class="empty">${anyFilter ? "Ничего не найдено — сбрось фильтры." : "Пока пусто.<br>Открой рецепт: отметь «✓ Готовил», 👍 или ★ звёзды «Алисе»."}</div>`}`;
-    setupInfiniteScroll(filtered, decorate);
+    setupInfiniteScroll(ordered, decorate);
     const del = $("#delCol");
     if (del) del.onclick = () => {
       if (confirm("Удалить коллекцию «" + savedState.collection + "»? Рецепты останутся в базе.")) {

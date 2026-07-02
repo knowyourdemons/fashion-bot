@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/cookbook.css?v=20260702y">
+<link rel="stylesheet" href="css/cookbook.css?v=20260702z">
 </head>
 <body>
 <div class="app">
@@ -37,16 +37,16 @@
 </div>
 
 <!-- База рецептов (window.RECIPES). НЕ fetch — работает и под file:// --->
-<script src="data/recipes.js?v=20260702y"></script>
-<script src="js/assistant.js?v=20260702y"></script>
-<script src="js/sync.js?v=20260702y"></script>
-<script src="js/app.js?v=20260702y"></script>
+<script src="data/recipes.js?v=20260702z"></script>
+<script src="js/assistant.js?v=20260702z"></script>
+<script src="js/sync.js?v=20260702z"></script>
+<script src="js/app.js?v=20260702z"></script>
 <script>
   // Service worker: только по http(s), file:// не трогаем. Один reload при активации новой версии.
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     addEventListener('load', () => {
       // ?v= версионирует URL (CF кэширует .js 4ч → на релиз меняем query, чтобы SW обновился сразу)
-      navigator.serviceWorker.register('/sw.js?v=20260702y', { updateViaCache: 'none' }).catch(() => {});
+      navigator.serviceWorker.register('/sw.js?v=20260702z', { updateViaCache: 'none' }).catch(() => {});
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return; refreshing = true; location.reload();

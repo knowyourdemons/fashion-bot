@@ -269,6 +269,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .pc-missing { font-size: 12px; color: var(--accent); }
 .cook-badge { padding: 0 12px 10px; font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .saved-cols-label { font-size: 13px; color: var(--ink-2); align-self: center; margin-right: 2px; }
+.saved-sortbar { display: flex; align-items: center; gap: 8px; margin: 12px 0 2px; font-size: 13px; color: var(--ink-2); }
+.saved-sortbar select { padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--white-warm); color: var(--ink); font-size: 13px; }
 
 .servings { display: flex; align-items: center; gap: 14px; margin: 8px 0 20px; }
 .stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; background: var(--white-warm); }
