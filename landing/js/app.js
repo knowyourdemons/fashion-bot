@@ -685,26 +685,30 @@
   /* ============================================================
      ВЬЮХА: Избранное / Готовил (#/saved)
      ============================================================ */
-  // Вкладки «Избранного» — чтобы страница не превращалась в бесконечную простыню.
-  // Показываем одну группу за раз + поиск внутри + подгрузку по скроллу (переиспользуем каталожную машинерию).
-  let savedState = { tab: "all", q: "" };
-  const SAVED_TABS = [["all", "Всё"], ["cooked", "Готовил"], ["liked", "👍 Нравится"], ["kid", "★ Алисе"], ["collections", "📁 Коллекции"]];
+  // «Избранное» = единый пул «что мы готовим» (дедуп), отсортированный по свежести/частоте
+  // готовки, + фильтр-чипы (👍/★/⚡) и коллекции как отдельное измерение. Так список не
+  // превращается в простыню: сверху — что реально в ротации, остальное сужается чипами/поиском.
+  let savedState = { q: "", liked: false, kid: false, fast: false, collection: "" };
 
-  // Наборы по признаку из Store.memory (дешёво — считаем на каждый ре-рендер)
   function computeSaved() {
     const all = allRecipes();
     const mem = (id) => Store.memory[id] || {};
     const withMem = all.filter(r => Store.memory[r.id]);
-    const cooked = withMem.filter(r => (mem(r.id).madeLog || []).length)
-      .sort((a, b) => new Date(mem(b.id).madeLog.at(-1)) - new Date(mem(a.id).madeLog.at(-1)));
-    const liked = withMem.filter(r => mem(r.id).vote === 1);
-    const kid = withMem.filter(r => (mem(r.id).kidRating || 0) > 0)
-      .sort((a, b) => (mem(b.id).kidRating || 0) - (mem(a.id).kidRating || 0));
-    // «Всё» — объединение с дедупом (рецепт может быть и cooked, и liked): порядок = свежесть готовки, затем прочее
-    const seen = new Set(); const allSaved = [];
-    [...cooked, ...liked, ...kid].forEach(r => { if (!seen.has(r.id)) { seen.add(r.id); allSaved.push(r); } });
+    // Скорим каждый сохранённый рецепт для единой сортировки пула
+    const scored = withMem.map(r => {
+      const m = mem(r.id), log = m.madeLog || [];
+      const last = log.length ? (new Date(log.at(-1)).getTime() || 0) : 0;
+      return { r, count: log.length, last, liked: m.vote === 1 ? 1 : 0, kid: m.kidRating || 0 };
+    });
+    scored.sort((a, b) =>
+      b.last - a.last ||                       // недавно готовили — выше
+      b.count - a.count ||                     // чаще готовим — выше
+      b.liked - a.liked ||                     // лайк
+      b.kid - a.kid ||                         // оценка ребёнка
+      a.r.title.localeCompare(b.r.title, "ru"));
+    const pool = scored.map(s => s.r);
     const cols = Object.entries(Store.collections || {}).filter(([, ids]) => (ids || []).length);
-    return { allSaved, cooked, liked, kid, cols };
+    return { pool, cols };
   }
 
   function savedMatchesQ(r) {
@@ -714,61 +718,68 @@
     return hay.includes(q);
   }
 
-  function renderSaved() {
-    const data = computeSaved();
-    const counts = { all: data.allSaved.length, cooked: data.cooked.length, liked: data.liked.length, kid: data.kid.length, collections: data.cols.length };
-    const tabsHtml = SAVED_TABS.map(([k, label]) =>
-      `<button class="chip ${savedState.tab === k ? "active" : ""}" data-stab="${k}">${label}${counts[k] ? ` <span class="muted">${counts[k]}</span>` : ""}</button>`).join("");
+  // Бейдж частоты готовки — честный сигнал «прижилось» (сильнее лайка). Показываем от 2 раз
+  function cookBadge(r) {
+    const n = ((Store.memory[r.id] || {}).madeLog || []).length;
+    return n >= 2 ? `<div class="cook-badge">🍳 готовил ${n}×</div>` : "";
+  }
 
+  function renderSaved() {
+    const { pool, cols } = computeSaved();
+    const chip = (on, id, label) => `<button class="chip accent ${on ? "active" : ""}" data-sfilter="${id}">${label}</button>`;
+    const colChips = cols.length
+      ? `<div class="chips wrap" id="savedCols"><span class="saved-cols-label">📁 Коллекции:</span>` +
+        cols.map(([n, ids]) => `<button class="chip ${savedState.collection === n ? "active" : ""}" data-scol="${esc(n)}">${esc(n)} <span class="muted">${ids.length}</span></button>`).join("") +
+        `</div>`
+      : "";
     const view = $("#view");
     view.innerHTML = `
       <div class="section-head" style="margin-top:4px"><h1>Избранное</h1></div>
-      <div class="chips wrap" id="savedTabs">${tabsHtml}</div>
-      <div class="search"${savedState.tab === "collections" ? ' style="display:none"' : ""}>
-        <span>🔎</span>
-        <input id="savedQ" type="text" placeholder="Поиск в избранном…" value="${esc(savedState.q)}">
-      </div>
+      <div class="search"><span>🔎</span><input id="savedQ" type="text" placeholder="Поиск в избранном…" value="${esc(savedState.q)}"></div>
+      <div class="chips wrap">${chip(savedState.liked, "liked", "👍 Нравится")}${chip(savedState.kid, "kid", "★ Алисе")}${chip(savedState.fast, "fast", "⚡ Быстрое")}</div>
+      ${colChips}
       <div id="savedResults"></div>`;
-    renderSavedResults(data);
+    renderSavedResults({ pool, cols });
 
-    view.querySelectorAll("[data-stab]").forEach(b => b.addEventListener("click", () => { savedState.tab = b.dataset.stab; renderSaved(); }));
+    view.querySelectorAll("[data-sfilter]").forEach(b => b.addEventListener("click", () => { savedState[b.dataset.sfilter] = !savedState[b.dataset.sfilter]; renderSaved(); }));
+    view.querySelectorAll("[data-scol]").forEach(b => b.addEventListener("click", () => { const n = b.dataset.scol; savedState.collection = savedState.collection === n ? "" : n; renderSaved(); }));
     const qEl = $("#savedQ");
     if (qEl) qEl.addEventListener("input", e => { savedState.q = e.target.value; debouncedSaved(); });
   }
 
-  // Перерисовываем только результаты (поле поиска и вкладки не трогаем — фокус не теряется)
+  // Перерисовываем только результаты (поиск и чипы не трогаем — фокус не теряется)
   function renderSavedResults(data) {
     data = data || computeSaved();
     const el = $("#savedResults");
     if (!el) return;
-    const tab = savedState.tab;
-    if (tab === "collections") {
-      el.innerHTML = data.cols.length
-        ? data.cols.map(([n, ids]) => {
-            const list = ids.map(getRecipe).filter(Boolean);
-            return `<div class="section-head"><h2>📁 ${esc(n)}</h2><span class="muted">${list.length}</span><button class="btn ghost sm" data-delcol="${esc(n)}" style="margin-left:auto">Удалить</button></div>
-              <div class="grid">${list.map(r => cardHtml(r)).join("")}</div>`;
-          }).join("")
-        : `<div class="empty">Пока нет коллекций.<br>Открой рецепт → «📁 В коллекцию».</div>`;
-      el.querySelectorAll("[data-delcol]").forEach(b => b.onclick = () => {
-        if (confirm("Удалить коллекцию «" + b.dataset.delcol + "»? Рецепты останутся в базе.")) { delete Store.collections[b.dataset.delcol]; Store.save("collections"); renderSaved(); }
-      });
-      return;
-    }
-    const source = tab === "cooked" ? data.cooked : tab === "liked" ? data.liked : tab === "kid" ? data.kid : data.allSaved;
-    const filtered = source.filter(savedMatchesQ);
-    const EMPTY = {
-      all: "Пока пусто.<br>Открой рецепт: отметь «✓ Готовил», 👍 или ★ звёзды «Алисе».",
-      cooked: "Пока нет отмеченного «✓ Готовил».",
-      liked: "Пока нет отмеченного 👍.",
-      kid: "Пока нет оценок «Алисе зашло» (★).",
-    };
-    const decorate = (r) => cardHtml(r);  // .map передаёт индекс 2-м арг — не пускаем его в cardHtml(r, extra)
+    const mem = (id) => Store.memory[id] || {};
+    // Источник: выбранная коллекция (её рецепты, даже если не готовили) либо общий пул
+    const source = savedState.collection
+      ? (Store.collections[savedState.collection] || []).map(getRecipe).filter(Boolean)
+      : data.pool;
+    const filtered = source.filter(r => {
+      if (savedState.liked && mem(r.id).vote !== 1) return false;
+      if (savedState.kid && !((mem(r.id).kidRating || 0) > 0)) return false;
+      if (savedState.fast && r.time > 30) return false;
+      return savedMatchesQ(r);
+    });
+    const anyFilter = savedState.liked || savedState.kid || savedState.fast || savedState.collection || savedState.q;
+    const colActions = savedState.collection
+      ? `<button class="btn ghost sm" id="delCol" style="margin-left:auto">Удалить коллекцию</button>` : "";
+    const decorate = (r) => cardHtml(r, cookBadge(r));  // .map передаёт индекс 2-м арг — оборачиваем
     listShown = LIST_PAGE; // сброс постраничного счётчика перед каждой отрисовкой
-    el.innerHTML = filtered.length
-      ? `<div class="grid" id="listGrid">${filtered.slice(0, listShown).map(decorate).join("")}</div><div id="listSentinel" style="height:1px"></div>`
-      : `<div class="empty">${savedState.q ? "Ничего не найдено." : EMPTY[tab]}</div>`;
+    el.innerHTML = `
+      <div class="section-head"><h2>${savedState.collection ? "📁 " + esc(savedState.collection) : "Что мы готовим"}</h2><span class="muted">${filtered.length}</span>${colActions}</div>
+      ${filtered.length
+        ? `<div class="grid" id="listGrid">${filtered.slice(0, listShown).map(decorate).join("")}</div><div id="listSentinel" style="height:1px"></div>`
+        : `<div class="empty">${anyFilter ? "Ничего не найдено — сбрось фильтры." : "Пока пусто.<br>Открой рецепт: отметь «✓ Готовил», 👍 или ★ звёзды «Алисе»."}</div>`}`;
     setupInfiniteScroll(filtered, decorate);
+    const del = $("#delCol");
+    if (del) del.onclick = () => {
+      if (confirm("Удалить коллекцию «" + savedState.collection + "»? Рецепты останутся в базе.")) {
+        delete Store.collections[savedState.collection]; Store.save("collections"); savedState.collection = ""; renderSaved();
+      }
+    };
   }
   let savedDebTimer = null;
   function debouncedSaved() { clearTimeout(savedDebTimer); savedDebTimer = setTimeout(() => renderSavedResults(), 180); }
